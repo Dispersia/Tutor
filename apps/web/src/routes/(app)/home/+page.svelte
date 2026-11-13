@@ -1,14 +1,25 @@
 <script lang="ts">
   import { onMount } from 'svelte'
+  import { getStats, type Stats } from '#lib/exercises'
   import { session } from '#lib/session.svelte'
-  import { LANG_NAMES } from '#lib/voices'
   import { speechStatus, unloadSpeech, wakeSpeech } from '#lib/speech'
   import type { SpeechStatus } from '#lib/types'
+  import { LANG_NAMES } from '#lib/voices'
 
+  let stats = $state<Stats | null>(null)
   let speech = $state<SpeechStatus | null>(null)
   let note = $state('')
 
   const lang = $derived(session.user?.targetLang ?? 'zh')
+
+  onMount(async () => {
+    try {
+      stats = await getStats()
+    } catch {
+      /* not fatal */
+    }
+    void refresh()
+  })
 
   async function refresh() {
     try {
@@ -17,7 +28,6 @@
       speech = null
     }
   }
-  onMount(refresh)
 
   async function wake() {
     note = 'Waking the models up…'
@@ -51,22 +61,34 @@
 <section class="grid grid-cols-3 gap-3">
   <div class="rounded-2xl border border-neutral-800 bg-neutral-900/50 p-3">
     <div class="text-xs text-neutral-500">XP</div>
-    <div class="mt-1 text-2xl font-semibold">0</div>
+    <div class="mt-1 text-2xl font-semibold">{stats?.xp ?? 0}</div>
   </div>
   <div class="rounded-2xl border border-neutral-800 bg-neutral-900/50 p-3">
     <div class="text-xs text-neutral-500">Streak</div>
-    <div class="mt-1 text-2xl font-semibold">0<span class="text-sm"> d</span></div>
+    <div class="mt-1 text-2xl font-semibold">
+      {stats?.streak ?? 0}<span class="text-sm"> d</span>
+    </div>
   </div>
   <div class="rounded-2xl border border-neutral-800 bg-neutral-900/50 p-3">
     <div class="text-xs text-neutral-500">Level</div>
-    <div class="mt-1 text-2xl font-semibold">1</div>
+    <div class="mt-1 text-2xl font-semibold">{stats?.level ?? 1}</div>
   </div>
 </section>
-<p class="mt-1 text-[11px] text-neutral-600">Gamification (XP, streaks) lands in Phase 6.</p>
+{#if stats}
+  <p class="mt-1 text-[11px] text-neutral-600">
+    {stats.levelXp} XP needed for the next level.
+  </p>
+{/if}
 
 <section class="mt-5 space-y-3">
-  <a href="/chat" class="block rounded-2xl bg-emerald-500 px-4 py-4 font-medium text-black">
-    Start practising →
+  <a href="/practice" class="block rounded-2xl bg-emerald-500 px-4 py-4 font-medium text-black">
+    Practise cards →
+  </a>
+  <a
+    href="/chat"
+    class="block rounded-2xl border border-neutral-800 bg-neutral-900/50 px-4 py-4 text-sm"
+  >
+    Talk to your tutor
   </a>
   <a
     href="/history"
