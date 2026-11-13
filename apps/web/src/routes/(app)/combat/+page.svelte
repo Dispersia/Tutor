@@ -15,6 +15,7 @@
   } from '#lib/combat'
   import type { Grade, Instance } from '#lib/exercises'
   import { getSkills, type SkillsResponse } from '#lib/skills'
+  import { accentStyle, tierAccent } from '#lib/theme'
 
   let data = $state<CombatResponse | null>(null)
   let ref = $state<SkillsResponse | null>(null)
@@ -208,7 +209,7 @@
         <p class="mt-2 text-sm text-ink-300">Loot:</p>
         <div class="mt-1 flex flex-wrap gap-2">
           {#each hit.drops as d (d.item)}
-            <span class="chip" style="--accent: #58c46b">
+            <span class="chip" style={accentStyle(tierAccent(itemMap.get(d.item)?.tier))}>
               +{d.count}
               {icon(d.item)}
               {name(d.item)}
@@ -230,7 +231,11 @@
   <!-- monster list -->
   <div class="space-y-2">
     {#each data?.monsters ?? [] as m (m.id)}
-      <div class="panel p-3" class:opacity-70={!m.unlocked}>
+      <div
+        class="panel panel-accent p-3"
+        class:opacity-70={!m.unlocked}
+        style={accentStyle('#ef5f5a')}
+      >
         <div class="flex items-center gap-3">
           <span class="text-2xl">{m.icon}</span>
           <div class="flex-1">
@@ -243,7 +248,7 @@
             </div>
             <div class="mt-1 flex flex-wrap gap-1">
               {#each m.drops as d (d.item)}
-                <span class="chip" style="--accent: #6b7a96">
+                <span class="chip" style={accentStyle(tierAccent(itemMap.get(d.item)?.tier))}>
                   {icon(d.item)}
                   {name(d.item)}
                   {Math.round(d.chance * 100)}%

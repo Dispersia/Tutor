@@ -34,21 +34,22 @@
         <li>
           <a
             href={href(t.href)}
-            class="group flex flex-col items-center gap-0.5 pt-2 pb-1 text-[11px] transition-colors {on
+            class="group flex justify-center py-1.5 text-[11px] transition-colors {on
               ? 'text-gold-300'
               : 'text-ink-400 hover:text-ink-300'}"
           >
             <span
-              class="text-base leading-none transition-transform {on
-                ? 'scale-110'
-                : 'opacity-75 group-hover:opacity-100'}">{t.icon}</span
+              class="flex flex-col items-center gap-0.5 rounded-lg px-3 py-1 {on
+                ? 'bg-gold-500/15'
+                : ''}"
             >
-            <span class="font-medium">{t.label}</span>
-            <span
-              class="h-0.5 w-6 rounded-full transition-colors {on
-                ? 'bg-gold-400'
-                : 'bg-transparent'}"
-            ></span>
+              <span
+                class="text-base leading-none transition-transform {on
+                  ? 'scale-110'
+                  : 'opacity-75 group-hover:opacity-100'}">{t.icon}</span
+              >
+              <span class="font-medium">{t.label}</span>
+            </span>
           </a>
         </li>
       {/each}

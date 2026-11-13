@@ -32,3 +32,15 @@ export const accentStyle = (color: string) => `--accent: ${color}`
 
 export const categoryAccent = (cat: string): string =>
   CATEGORY[cat as SkillCategory]?.accent ?? ACCENT.arcane
+
+/** Item-tier colours (raw/refined/equipment/consumable/coin/other). */
+export const TIER: Record<string, string> = {
+  raw: '#8fa6c4',
+  refined: '#4fb0e8',
+  equipment: '#e8c264',
+  consumable: '#58c46b',
+  coin: '#f0b429',
+  other: '#9aa7bf',
+}
+
+export const tierAccent = (tier?: string | null): string => TIER[tier ?? 'other'] ?? TIER.other!

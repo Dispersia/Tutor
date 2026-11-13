@@ -6,6 +6,7 @@
   import { getStats } from '#lib/exercises'
   import { session, updateProfile } from '#lib/session.svelte'
   import { speechStatus, unloadSpeech } from '#lib/speech'
+  import { accentStyle } from '#lib/theme'
   import type { ModelInfo, PublicUser, Role, Roles, SpeechStatus } from '#lib/types'
   import { VOICE_PRESETS } from '#lib/voices'
 
@@ -219,7 +220,7 @@
 {/if}
 
 <!-- OpenRouter key ------------------------------------------------------->
-<section class="mb-5 panel p-4">
+<section class="mb-5 panel panel-accent p-4" style={accentStyle('#4fb0e8')}>
   <h2 class="display text-sm text-gold-200">Your OpenRouter key</h2>
   <p class="mt-1 text-xs text-ink-400">
     Status:
@@ -239,7 +240,7 @@
 </section>
 
 <!-- Models --------------------------------------------------------------->
-<section class="mb-5 panel p-4">
+<section class="mb-5 panel panel-accent p-4" style={accentStyle('#e8c264')}>
   <h2 class="display text-sm text-gold-200">Models per role</h2>
   <p class="mt-1 text-xs text-ink-400">
     Pick any OpenRouter model — use Qwen, or point a role at DeepSeek/OpenAI/etc.
@@ -278,7 +279,7 @@
 </section>
 
 <!-- Voice ---------------------------------------------------------------->
-<section class="mb-5 panel p-4">
+<section class="mb-5 panel panel-accent p-4" style={accentStyle('#b085ef')}>
   <h2 class="display text-sm text-gold-200">Voice</h2>
   <div class="mt-2 flex gap-2">
     <button
@@ -321,7 +322,7 @@
 </section>
 
 <!-- Speech engine -------------------------------------------------------->
-<section class="mb-5 panel p-4">
+<section class="mb-5 panel panel-accent p-4" style={accentStyle('#58c46b')}>
   <div class="flex items-center justify-between">
     <div>
       <h2 class="display text-sm text-gold-200">Speech engine</h2>
@@ -337,7 +338,7 @@
 </section>
 
 <!-- Daily goal ----------------------------------------------------------->
-<section class="mb-5 panel p-4">
+<section class="mb-5 panel panel-accent p-4" style={accentStyle('#e8c264')}>
   <h2 class="display text-sm text-gold-200">Daily goal</h2>
   <p class="mt-1 text-xs text-ink-400">XP to earn each UTC day to keep your streak.</p>
   <div class="mt-3 flex gap-2">
@@ -354,7 +355,7 @@
 </section>
 
 <!-- Spaced repetition ----------------------------------------------------->
-<section class="mb-5 panel p-4">
+<section class="mb-5 panel panel-accent p-4" style={accentStyle('#4fb0e8')}>
   <h2 class="display text-sm text-gold-200">Spaced repetition</h2>
   <p class="mt-1 text-xs text-ink-400">
     Anki-style FSRS-6 scheduling. Desired retention is the chance you want to recall a card when it
@@ -375,7 +376,7 @@
 </section>
 
 <!-- Combat ---------------------------------------------------------------->
-<section class="mb-5 panel p-4">
+<section class="mb-5 panel panel-accent p-4" style={accentStyle('#ef5f5a')}>
   <h2 class="display text-sm text-gold-200">Combat</h2>
   <p class="mt-1 text-xs text-ink-400">
     Food is auto-eaten when your HP drops below this percentage. Potions are auto-drunk at the start
@@ -396,7 +397,7 @@
 </section>
 
 <!-- Account -------------------------------------------------------------->
-<section class="mb-5 panel p-4">
+<section class="mb-5 panel panel-accent p-4" style={accentStyle('#b085ef')}>
   <h2 class="display text-sm text-gold-200">Account</h2>
   <label class="mt-3 block">
     <span class="mb-1 block text-xs text-ink-400">Display name</span>
@@ -419,7 +420,7 @@
 
 <!-- Admin ---------------------------------------------------------------->
 {#if isAdmin}
-  <section class="mb-5 panel p-4">
+  <section class="mb-5 panel panel-accent p-4" style={accentStyle('#ef9d45')}>
     <h2 class="display text-sm text-gold-200">Users ({users.length})</h2>
     <ul class="mt-3 space-y-2">
       {#each users as u (u.id)}

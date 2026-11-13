@@ -58,15 +58,18 @@
   }
 </script>
 
-<header class="flex items-center justify-between pt-5 pb-4">
+<header
+  class="panel panel-accent mt-3 mb-3 flex items-center justify-between p-4"
+  style={accentStyle(ACCENT.arcane)}
+>
   <div>
     <p class="eyebrow">Welcome back</p>
     <h1 class="display text-2xl text-gold-200">{session.user?.handle}</h1>
-    <p class="text-xs text-ink-400">
+    <p class="text-xs text-ink-300">
       Learning {LANG_NAMES[lang] ?? lang} · {session.user?.level ?? 'HSK 1'}
     </p>
   </div>
-  <div class="grid h-14 w-14 place-items-center rounded-full border border-gold-600/70 bg-ink-800">
+  <div class="grid h-14 w-14 place-items-center rounded-full border border-gold-600 bg-ink-900">
     <span class="text-[9px] leading-none tracking-widest text-ink-400">LV</span>
     <span class="display -mt-0.5 text-lg leading-none text-gold-200">{stats?.level ?? 1}</span>
   </div>
@@ -90,7 +93,7 @@
 </section>
 
 <!-- daily goal -->
-<section class="panel mt-3" style={accentStyle(ACCENT.xp)}>
+<section class="panel panel-accent mt-3" style={accentStyle(ACCENT.xp)}>
   <div class="flex items-baseline justify-between px-4 pt-3 text-sm">
     <span class="display text-gold-200">Daily goal</span>
     <span class="text-ink-400">{stats?.dailyXp ?? 0} / {stats?.dailyGoal ?? 50} XP</span>
@@ -111,7 +114,7 @@
 
 <!-- level progress -->
 {#if stats}
-  <section class="panel mt-3" style={accentStyle(ACCENT.level)}>
+  <section class="panel panel-accent mt-3" style={accentStyle(ACCENT.level)}>
     <div class="flex items-baseline justify-between px-4 pt-3 text-sm">
       <span class="display" style="color: {ACCENT.level}">Level {stats.level}</span>
       <span class="text-ink-400">{stats.intoLevel} / {stats.forNext} XP</span>
@@ -170,7 +173,7 @@
   </a>
 </section>
 
-<section class="panel mt-5 mb-6">
+<section class="panel panel-accent mt-5 mb-6" style={accentStyle(ACCENT.player)}>
   <div class="flex items-center justify-between px-4 py-3">
     <div>
       <div class="display text-sm text-gold-200">Speech engine</div>

@@ -2,7 +2,7 @@
   import { href } from '#lib/paths'
   import { onMount } from 'svelte'
   import { equipItem, getSkills, type SkillsResponse, unequipSlot } from '#lib/skills'
-  import { CATEGORY, accentStyle, type SkillCategory } from '#lib/theme'
+  import { CATEGORY, accentStyle, tierAccent, type SkillCategory } from '#lib/theme'
 
   let data = $state<SkillsResponse | null>(null)
   let error = $state('')
@@ -96,21 +96,30 @@
 {:else}
   {#each groups as g (g.key)}
     {#if g.skills.length}
-      <div class="mt-5 mb-2 flex items-center gap-2">
+      <div
+        class="mt-5 mb-2 flex items-center gap-2 rounded-lg px-2.5 py-1.5"
+        style="background: {g.accent}1c; border: 1px solid {g.accent}45"
+      >
         <span class="h-2.5 w-2.5 rounded-full" style="background: {g.accent}"></span>
-        <h2 class="eyebrow">{g.label}</h2>
+        <h2 class="eyebrow" style="color: {g.accent}">{g.label}</h2>
+        <span class="ml-auto text-[11px] font-semibold" style="color: {g.accent}"
+          >{g.skills.length}</span
+        >
       </div>
       <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
         {#each g.skills as s (s.id)}
           <a href={href(`/skills/${s.id}`)} class="tile p-3" style={accentStyle(g.accent)}>
             {#if s.talent.pendingChoice}
               <span
-                class="absolute top-2 right-2 z-10 grid h-4 w-4 place-items-center rounded-full bg-gold-400 text-[10px] font-bold text-ink-950 shadow"
+                class="absolute top-2 right-2 z-10 grid h-4 w-4 place-items-center rounded-full bg-gold-400 text-[10px] font-bold text-ink-950"
                 title="Talent to choose">!</span
               >
             {/if}
             <div class="flex items-center gap-2">
-              <span class="text-2xl">{s.icon}</span>
+              <span
+                class="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-xl"
+                style="background: {g.accent}29; border: 1px solid {g.accent}55">{s.icon}</span
+              >
               <div class="min-w-0 flex-1">
                 <div class="display truncate text-sm text-ink-300">{s.name}</div>
               </div>
@@ -120,7 +129,7 @@
               <i style="width: {s.progress * 100}%"></i>
             </div>
             <div class="mt-1.5 text-[11px] text-ink-400">
-              now <span style="color: {g.accent}">{pct(s.effect.value)}</span>
+              now <span class="font-semibold" style="color: {g.accent}">{pct(s.effect.value)}</span>
               {#if s.talent.owned.length}
                 · {s.talent.owned.length}★
               {/if}
@@ -132,7 +141,7 @@
   {/each}
 
   <!-- Equipment -->
-  <section class="panel mt-6 mb-4">
+  <section class="panel panel-accent mt-6 mb-4" style={accentStyle('#e8c264')}>
     <div class="panel-hd text-sm">Equipment</div>
     <div class="p-3">
       {#if (data?.equipment ?? []).length === 0}
@@ -142,10 +151,15 @@
       {/if}
       <div class="flex flex-wrap gap-2">
         {#each data?.equipment ?? [] as e (e.slot)}
-          <button onclick={() => unequip(e.slot)} class="btn btn-ghost px-2 py-1 text-xs">
-            {itemMap.get(e.itemId)?.icon ?? ''}
-            {itemMap.get(e.itemId)?.name ?? e.itemId}
-            <span class="text-ink-400">· {e.slot} ✕</span>
+          {@const eq = itemMap.get(e.itemId)}
+          <button
+            onclick={() => unequip(e.slot)}
+            class="chip"
+            style={accentStyle(tierAccent(eq?.tier))}
+          >
+            {eq?.icon ?? ''}
+            {eq?.name ?? e.itemId}
+            <span class="opacity-70">· {e.slot} ✕</span>
           </button>
         {/each}
       </div>
@@ -153,7 +167,7 @@
   </section>
 
   <!-- Bank -->
-  <section class="panel mb-6">
+  <section class="panel panel-accent mb-6" style={accentStyle('#f0b429')}>
     <div class="panel-hd text-sm">
       <span>Bank</span>
       <span class="text-xs text-ink-400">{bank.length} kinds</span>
@@ -165,14 +179,14 @@
       <div class="flex flex-wrap gap-1.5">
         {#each bank as b (b.itemId)}
           {@const it = itemMap.get(b.itemId)}
-          <span
-            class="inline-flex items-center gap-1 rounded-lg border border-ink-700 bg-ink-900/70 px-2 py-1 text-xs"
-          >
+          <span class="chip" style={accentStyle(tierAccent(it?.tier))}>
             {it?.icon ?? ''}
             {it?.name ?? b.itemId}
-            <span class="text-ink-400">×{b.count}</span>
+            <span class="opacity-70">×{b.count}</span>
             {#if it?.slot}
-              <button onclick={() => equip(b.itemId)} class="ml-1 text-emerald-400">equip</button>
+              <button onclick={() => equip(b.itemId)} class="ml-1 font-semibold underline"
+                >equip</button
+              >
             {/if}
           </span>
         {/each}
