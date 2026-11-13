@@ -22,5 +22,17 @@ export function buildDeps(cfg: typeof env): Built {
     idleTimeoutMs: cfg.speechIdleTimeoutMs,
     autostart: cfg.speechAutostart,
   })
-  return { deps: { db, or, supervisor, defaults: cfg.defaultRoles }, close: () => sqlite.close() }
+  return {
+    deps: {
+      db,
+      or,
+      supervisor,
+      defaults: cfg.defaultRoles,
+      serverKey: cfg.openrouterKey,
+      secret: cfg.secret,
+      allowRegistration: cfg.allowRegistration,
+      sessionTtlMs: cfg.sessionTtlDays * 24 * 60 * 60 * 1000,
+    },
+    close: () => sqlite.close(),
+  }
 }

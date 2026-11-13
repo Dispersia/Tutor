@@ -2,19 +2,48 @@ import { index, integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core
 
 /**
  * SQLite schema (docs/DESIGN.md §12). Cards carry a JSON payload so new card
- * types need no migration. History tables are append-only.
+ * types need no migration. History tables are append-only and scoped by user_id.
  */
 
 export const users = sqliteTable('users', {
   id: text('id').primaryKey(),
+  username: text('username'),
+  passwordHash: text('password_hash'),
   handle: text('handle').notNull(),
+  role: text('role').notNull().default('user'),
   nativeLang: text('native_lang').notNull().default('en'),
+  targetLang: text('target_lang'),
+  level: text('level'),
   settingsJson: text('settings_json').notNull().default('{}'),
   createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at'),
+})
+
+export const authSessions = sqliteTable(
+  'auth_sessions',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: integer('created_at').notNull(),
+    expiresAt: integer('expires_at').notNull(),
+    userAgent: text('user_agent'),
+  },
+  (t) => [index('idx_auth_sessions_user').on(t.userId)],
+)
+
+export const userSettings = sqliteTable('user_settings', {
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  key: text('key').notNull(),
+  value: text('value').notNull(),
 })
 
 export const decks = sqliteTable('decks', {
   id: text('id').primaryKey(),
+  userId: text('user_id'),
   name: text('name').notNull(),
   sourceLang: text('source_lang').notNull(),
   targetLang: text('target_lang').notNull(),
@@ -27,6 +56,7 @@ export const cards = sqliteTable(
   {
     id: text('id').primaryKey(),
     deckId: text('deck_id').references(() => decks.id),
+    userId: text('user_id'),
     type: text('type').notNull(),
     sourceLang: text('source_lang').notNull(),
     targetLang: text('target_lang').notNull(),
@@ -38,19 +68,23 @@ export const cards = sqliteTable(
     origin: text('origin').notNull().default('manual'),
     createdAt: integer('created_at').notNull(),
   },
-  (t) => [index('idx_cards_deck').on(t.deckId)],
+  (t) => [index('idx_cards_deck').on(t.deckId), index('idx_cards_user').on(t.userId)],
 )
 
-export const sessions = sqliteTable('sessions', {
-  id: text('id').primaryKey(),
-  userId: text('user_id'),
-  deckId: text('deck_id'),
-  kind: text('kind').notNull().default('chat'),
-  lang: text('lang'),
-  title: text('title'),
-  startedAt: integer('started_at').notNull(),
-  endedAt: integer('ended_at'),
-})
+export const sessions = sqliteTable(
+  'sessions',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id'),
+    deckId: text('deck_id'),
+    kind: text('kind').notNull().default('chat'),
+    lang: text('lang'),
+    title: text('title'),
+    startedAt: integer('started_at').notNull(),
+    endedAt: integer('ended_at'),
+  },
+  (t) => [index('idx_sessions_user').on(t.userId)],
+)
 
 export const messages = sqliteTable(
   'messages',
@@ -87,6 +121,7 @@ export const attempts = sqliteTable('attempts', {
   id: text('id').primaryKey(),
   sessionId: text('session_id'),
   cardId: text('card_id'),
+  userId: text('user_id'),
   exerciseId: text('exercise_id'),
   answerJson: text('answer_json').notNull().default('{}'),
   gradeJson: text('grade_json').notNull().default('{}'),
@@ -113,6 +148,7 @@ export const stats = sqliteTable('stats', {
   updatedAt: integer('updated_at').notNull(),
 })
 
+/** Server-global settings (registration policy, install metadata). */
 export const settings = sqliteTable('settings', {
   key: text('key').primaryKey(),
   value: text('value').notNull(),
@@ -120,6 +156,7 @@ export const settings = sqliteTable('settings', {
 
 export const audioBlobs = sqliteTable('audio_blobs', {
   hash: text('hash').primaryKey(),
+  userId: text('user_id'),
   path: text('path').notNull(),
   bytes: integer('bytes'),
   mime: text('mime'),

@@ -1,0 +1,62 @@
+<script lang="ts">
+  import { onMount } from 'svelte'
+  import { api } from '#lib/api'
+  import type { ChatSession } from '#lib/types'
+
+  let sessions = $state<ChatSession[]>([])
+  let error = $state('')
+  let loading = $state(true)
+
+  onMount(async () => {
+    try {
+      sessions = (await api<{ sessions: ChatSession[] }>('/api/sessions')).sessions
+    } catch (e) {
+      error = (e as Error).message
+    } finally {
+      loading = false
+    }
+  })
+
+  const when = (ts: number) =>
+    new Date(ts).toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+</script>
+
+<div class="pt-4 pb-6">
+  <h1 class="text-lg font-semibold">History</h1>
+  <p class="text-xs text-neutral-500">Everything you have practised, only visible to you.</p>
+</div>
+
+{#if loading}
+  <p class="text-sm text-neutral-500">Loading…</p>
+{:else if error}
+  <p class="text-sm text-red-300">{error}</p>
+{:else if sessions.length === 0}
+  <p class="rounded-2xl border border-neutral-800 bg-neutral-900/50 p-4 text-sm text-neutral-400">
+    No conversations yet. <a class="text-emerald-400 underline" href="/chat">Start one →</a>
+  </p>
+{:else}
+  <ul class="space-y-2">
+    {#each sessions as s (s.id)}
+      <li>
+        <a
+          href="/history/{s.id}"
+          class="block rounded-2xl border border-neutral-800 bg-neutral-900/50 px-4 py-3"
+        >
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-medium">{s.title ?? 'Conversation'}</span>
+            <span class="text-xs text-neutral-500">{when(s.startedAt)}</span>
+          </div>
+          <div class="mt-0.5 text-xs text-neutral-500">
+            {s.kind}
+            {s.lang ? `· ${s.lang.toUpperCase()}` : ''}
+          </div>
+        </a>
+      </li>
+    {/each}
+  </ul>
+{/if}

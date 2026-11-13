@@ -1,4 +1,4 @@
-import { getRoles } from '../db/repo'
+import { countUsers } from '../db/repo'
 import type { App } from '../context'
 
 export function registerHealth(app: App) {
@@ -8,9 +8,9 @@ export function registerHealth(app: App) {
     return c.json({
       ok: true,
       name: 'tutor',
-      phase: 2,
-      openrouter: deps.or.configured,
-      roles: getRoles(deps.db, deps.defaults),
+      phase: 3,
+      openrouter: Boolean(deps.serverKey),
+      registrationOpen: deps.allowRegistration || countUsers(deps.db) === 0,
       speech,
     })
   })
