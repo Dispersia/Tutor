@@ -1,4 +1,4 @@
-import { allUserSettings, getRoles, setUserSetting } from '../db/repo'
+import { allUserSettings, getRoles, setDailyGoal, setUserSetting } from '../db/repo'
 import { ROLES, type Role } from '../env'
 import { hasUserKey, saveUserKey } from '../llm/userkey'
 import type { App } from '../context'
@@ -45,6 +45,7 @@ export function registerSettings(app: App) {
       roles?: Partial<Record<Role, string>>
       voice?: Partial<VoicePrefs>
       prefs?: Record<string, string>
+      dailyGoal?: number
     }
 
     if (body.roles && typeof body.roles === 'object') {
@@ -72,6 +73,10 @@ export function registerSettings(app: App) {
       for (const [k, v] of Object.entries(body.prefs)) {
         setUserSetting(deps.db, user.id, k, String(v))
       }
+    }
+
+    if (typeof body.dailyGoal === 'number') {
+      setDailyGoal(deps.db, user.id, body.dailyGoal)
     }
 
     return c.json({

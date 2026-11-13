@@ -2,6 +2,7 @@ import type { Hono } from 'hono'
 import type { Db } from './db/client'
 import type { PublicUser } from './db/repo'
 import type { Role } from './env'
+import type { EventBus } from './events'
 import type { OpenRouter } from './llm/openrouter'
 import type { AssessFn } from './pronunciation/assess'
 import type { SpeechSupervisor } from './speech/supervisor'
@@ -11,6 +12,8 @@ export interface Deps {
   /** Shared client (catalogue + fallback when a user has no key). */
   or: OpenRouter
   supervisor: SpeechSupervisor
+  /** Domain event bus for game systems (DESIGN §11.4). */
+  events: EventBus
   defaults: Record<Role, string>
   /** Server-level OpenRouter key, used when a user hasn't set their own. */
   serverKey?: string

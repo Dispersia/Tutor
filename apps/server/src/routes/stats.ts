@@ -1,17 +1,9 @@
-import { getStats, levelForXp, xpForLevel } from '../db/repo'
+import { rebuildStats, summary } from '../game/service'
 import type { App } from '../context'
 
 export function registerStats(app: App) {
-  app.get('/api/stats', (c) => {
-    const user = c.get('user')!
-    const s = getStats(c.get('deps').db, user.id)
-    const level = levelForXp(s.xpTotal)
-    return c.json({
-      xp: s.xpTotal,
-      level,
-      levelXp: xpForLevel(level),
-      streak: s.streakDays,
-      dailyGoal: s.dailyGoal,
-    })
-  })
+  app.get('/api/stats', (c) => c.json(summary(c.get('deps').db, c.get('user')!.id)))
+
+  // Proof that all cached stats are derivable from the append-only XP ledger.
+  app.post('/api/stats/rebuild', (c) => c.json(rebuildStats(c.get('deps').db, c.get('user')!.id)))
 }

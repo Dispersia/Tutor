@@ -1,16 +1,8 @@
 import type { Learner } from '@tutor/core'
 import type { Context } from 'hono'
 import type { App, AppEnv } from '../context'
-import {
-  addReview,
-  addXp,
-  getCard,
-  getRoles,
-  getStats,
-  levelForXp,
-  otherBacks,
-  pickCard,
-} from '../db/repo'
+import { addReview, getCard, getRoles, otherBacks, pickCard } from '../db/repo'
+import { awardXp, recordActivity, summary } from '../game/service'
 import { exerciseCatalog, registry } from '../exercises'
 import { OpenRouter } from '../llm/openrouter'
 import { resolveUserKey } from '../llm/userkey'
@@ -120,12 +112,19 @@ export function registerPractice(app: App) {
       latencyMs: body.latencyMs,
       detail: result.detail,
     })
-    addXp(deps.db, user.id, xp, 'review', def.id)
+    const { leveledUp } = awardXp(deps.db, deps.events, user.id, xp, 'review', def.id)
+    recordActivity(deps.db, deps.events, user.id)
+    deps.events.emit('review.completed', {
+      userId: user.id,
+      cardId: card.id,
+      exerciseId: def.id,
+      score: result.score,
+      correct: result.correct,
+    })
 
-    const s = getStats(deps.db, user.id)
     return c.json({
-      result: { ...result, xp },
-      stats: { xp: s.xpTotal, level: levelForXp(s.xpTotal) },
+      result: { ...result, xp, leveledUp },
+      stats: summary(deps.db, user.id),
     })
   })
 
@@ -162,11 +161,18 @@ export function registerPractice(app: App) {
         latencyMs,
         detail: result.detail,
       })
-      addXp(deps.db, user.id, xp, 'review', def.id)
-      const s = getStats(deps.db, user.id)
+      const { leveledUp } = awardXp(deps.db, deps.events, user.id, xp, 'review', def.id)
+      recordActivity(deps.db, deps.events, user.id)
+      deps.events.emit('review.completed', {
+        userId: user.id,
+        cardId: card.id,
+        exerciseId: def.id,
+        score: result.score,
+        correct: result.correct,
+      })
       return c.json({
-        result: { ...result, xp },
-        stats: { xp: s.xpTotal, level: levelForXp(s.xpTotal) },
+        result: { ...result, xp, leveledUp },
+        stats: summary(deps.db, user.id),
       })
     } catch (err) {
       return c.json({ error: (err as Error).message }, 502)

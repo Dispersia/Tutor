@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import { goto } from '$app/navigation'
   import { api } from '#lib/api'
+  import { getStats } from '#lib/exercises'
   import { session, updateProfile } from '#lib/session.svelte'
   import { speechStatus, unloadSpeech } from '#lib/speech'
   import type { ModelInfo, PublicUser, Role, Roles, SpeechStatus } from '#lib/types'
@@ -29,6 +30,7 @@
   let keyStatus = $state<'user' | 'server' | false>(false)
   let keyInput = $state('')
   let handle = $state('')
+  let dailyGoal = $state(50)
   let speech = $state<SpeechStatus | null>(null)
   let users = $state<PublicUser[]>([])
   let note = $state('')
@@ -55,6 +57,9 @@
     }
     void loadModels()
     void refreshSpeech()
+    void getStats()
+      .then((s) => (dailyGoal = s.dailyGoal))
+      .catch(() => {})
     if (isAdmin) void loadUsers()
   })
 
@@ -106,6 +111,19 @@
         body: JSON.stringify({ voice: { mode: voiceMode, voices } }),
       })
       note = 'Voice settings saved.'
+    } catch (e) {
+      error = (e as Error).message
+    }
+  }
+
+  async function saveDailyGoal() {
+    note = ''
+    try {
+      await api('/api/settings', {
+        method: 'PUT',
+        body: JSON.stringify({ dailyGoal: Number(dailyGoal) }),
+      })
+      note = 'Daily goal saved.'
     } catch (e) {
       error = (e as Error).message
     }
@@ -284,6 +302,25 @@
     </div>
     <button onclick={free} class="rounded-lg border border-neutral-700 px-3 py-1.5 text-xs"
       >Free RAM</button
+    >
+  </div>
+</section>
+
+<!-- Daily goal ----------------------------------------------------------->
+<section class="mb-5 rounded-2xl border border-neutral-800 bg-neutral-900/50 p-4">
+  <h2 class="text-sm font-medium">Daily goal</h2>
+  <p class="mt-1 text-xs text-neutral-400">XP to earn each UTC day to keep your streak.</p>
+  <div class="mt-3 flex gap-2">
+    <input
+      type="number"
+      min="10"
+      max="1000"
+      step="10"
+      bind:value={dailyGoal}
+      class="w-28 rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
+    />
+    <button onclick={saveDailyGoal} class="rounded-xl bg-neutral-100 px-3 py-2 text-sm text-black"
+      >Save</button
     >
   </div>
 </section>
