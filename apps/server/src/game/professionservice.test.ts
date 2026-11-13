@@ -12,9 +12,9 @@ import {
   equipItem,
   grantItems,
   skillLevelOf,
+  talentView,
   unequipItem,
 } from './service'
-
 /** XP needed to reach `level` from scratch. */
 function xpForLevel(level: number): number {
   let total = 0
@@ -77,6 +77,32 @@ test('chooseTalent: pick one of three at a 5-level milestone, once', () => {
   awardSkillXp(db, bus, user.id, 'mining', xpForLevel(15) - xpForLevel(5))
   expect(chooseTalent(db, bus, user.id, 'mining:m:5:2').ok).toBe(false)
   expect(chooseTalent(db, bus, user.id, 'mining:m:15:1').ok).toBe(true)
+  sqlite.close()
+})
+
+test('talentView exposes the chosen talents and the next milestones', () => {
+  const { db, bus, user, sqlite } = setup()
+  const view = () => talentView(db, user.id).find((t) => t.skillId === 'mining')!
+
+  const at1 = view()
+  expect(at1.owned).toEqual([])
+  expect(at1.pendingChoice).toBe(false)
+  expect(at1.nextMinor).toBe(5)
+  expect(at1.nextMajor).toBe(10)
+
+  awardSkillXp(db, bus, user.id, 'mining', xpForLevel(5))
+  const at5 = view()
+  expect(at5.pendingChoice).toBe(true)
+  expect(at5.milestone).toBe(5)
+
+  const choice = minorOptions('mining', 5)[0]!
+  expect(chooseTalent(db, bus, user.id, choice.id).ok).toBe(true)
+  const chosen = view()
+  expect(chosen.pendingChoice).toBe(false)
+  expect(chosen.owned.map((t) => t.id)).toEqual([choice.id])
+  expect(chosen.owned[0]!.tier).toBe('minor')
+  expect(chosen.nextMinor).toBe(15)
+  expect(chosen.nextMajor).toBe(10)
   sqlite.close()
 })
 
