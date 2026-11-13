@@ -227,9 +227,14 @@
           {itemMap.get(g.item)?.name ?? g.item}
         </span>
       {/each}
-      {#each skill.grantedTalents as t (t.id)}
-        <span class="rounded-lg bg-amber-900/40 px-2 py-1 text-amber-200">🏅 {t.name}</span>
-      {/each}
+      {#if skill.talentUnlocked}
+        <a
+          href={href(`/skills/${skill.skillId}`)}
+          class="rounded-lg bg-amber-900/40 px-2 py-1 text-amber-200"
+        >
+          🎉 Talent unlocked — choose one
+        </a>
+      {/if}
     </div>
   {/if}
 

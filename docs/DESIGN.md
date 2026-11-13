@@ -666,13 +666,12 @@ gathering +1% yield/level, artisans +0.5% bonus-product chance/level, Agility
 drops/level, Thieving +2% coins/level. Talents stack on top.
 
 **Talents:**
-- **Every 5 levels** (5, 15, 25, …) → pick **one of three** minor talents
-  (e.g. *Prospector* +10% yield, *Studious* +5% global XP, *Doubler* +5% bonus-
-  product chance).
-- **Every 10 levels** (10, 20, 30, …) → a **single major** talent, granted
-  automatically (`<Skill> mastery N`: +15% yield/power and +5% global XP).
+- **Every 10 levels** (10, 20, 30, …) → choose **one of two** talents:
+  *Prospector* (+15% yield; combat professions instead get *Keen strikes*, +15%
+  power) or *Studious* (+5% XP to every profession). A choice can be changed
+  later at the same milestone (a free respec).
 
-Talent ids encode skill + tier + milestone, so progression continues indefinitely.
+Talent ids encode skill + milestone, so progression continues indefinitely.
 All effects aggregate through `computeBonuses(levels, talents)`.
 
 **Equipment & combat:** Smithing forges weapons/armour, Fletching makes bows and
@@ -699,7 +698,7 @@ race you'll lose. Grading an action also validates unlock + affordability, so
 material costs can't be bypassed by calling the grader directly.
 
 Everything still flows through the **event bus**: `skill.xp`, `skill.level.up`,
-`item.gained`, `item.consumed`, `talent.granted`, `talent.chosen`, `item.equipped`.
+`item.gained`, `item.consumed`, `talent.chosen`, `talent.changed`, `item.equipped`.
 
 ## 13.6 Spaced repetition (FSRS-6, Anki-style) & guided curriculum
 

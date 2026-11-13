@@ -103,7 +103,7 @@ export function registerSkills(app: App) {
     })
   })
 
-  // Pick one of three minor talents at the current 5-level milestone.
+  // Pick one of two talents at a 10-level milestone (or change an earlier one).
   app.post('/api/skills/talents', async (c) => {
     const deps = c.get('deps')
     const user = c.get('user')!

@@ -3,7 +3,7 @@ import { openDb } from '../db/client'
 import { addItems, createUser, getItemCount, listEquipment, listTalents } from '../db/repo'
 import { EventBus } from '../events'
 import { ACTION_BY_ID, skillXpForLevel } from './skills'
-import { minorOptions } from './talents'
+import { talentOptions } from './talents'
 import {
   actionState,
   aggregateBonuses,
@@ -29,26 +29,30 @@ function setup() {
   return { db, bus, user, sqlite }
 }
 
-test('awardSkillXp levels up and auto-grants a major at every 10 levels', () => {
+test('awardSkillXp levels up and opens a talent choice every 10 levels', () => {
   const { db, bus, user, sqlite } = setup()
   const events: string[] = []
   bus.on('skill.level.up', (e) => events.push(`lvl:${e.level}`))
-  bus.on('talent.granted', (e) => events.push(`major:${e.talentId}`))
 
   const r = awardSkillXp(db, bus, user.id, 'mining', xpForLevel(10))
   expect(r.level).toBe(10)
   expect(r.leveledUp).toBe(true)
+  expect(r.talentUnlocked).toBe(10)
   expect(events).toContain('lvl:10')
-  expect(events).toContain('major:mining:M:10')
-  expect(listTalents(db, user.id).some((t) => t.talentId === 'mining:M:10')).toBe(true)
-  // no major for the 20 milestone yet
-  expect(listTalents(db, user.id).some((t) => t.talentId === 'mining:M:20')).toBe(false)
+  // nothing is auto-granted — the player must choose
+  expect(listTalents(db, user.id).length).toBe(0)
+
+  // no new milestone between 10 and 20
+  expect(awardSkillXp(db, bus, user.id, 'mining', 10).talentUnlocked).toBeNull()
+  expect(
+    awardSkillXp(db, bus, user.id, 'mining', xpForLevel(20) - xpForLevel(10)).talentUnlocked,
+  ).toBe(20)
   sqlite.close()
 })
 
 test('per-level effects boost skill XP gains', () => {
   const { db, bus, user, sqlite } = setup()
-  // Agility 11 gives +5% global XP (and its level-10 major adds another +5%).
+  // Agility 11 gives +5% global XP.
   awardSkillXp(db, bus, user.id, 'agility', xpForLevel(11))
   const bonus = aggregateBonuses(db, user.id)
   expect(bonus.globalXp).toBeGreaterThan(0)
@@ -60,64 +64,62 @@ test('per-level effects boost skill XP gains', () => {
   sqlite.close()
 })
 
-test('chooseTalent: pick one of three at a milestone, and change it later', () => {
+test('chooseTalent: pick one of two at a 10-level milestone, and change it later', () => {
   const { db, bus, user, sqlite } = setup()
   const changes: string[] = []
   bus.on('talent.changed', (e) => changes.push(`${e.fromTalentId}->${e.talentId}`))
-  awardSkillXp(db, bus, user.id, 'mining', xpForLevel(5))
+  awardSkillXp(db, bus, user.id, 'mining', xpForLevel(10))
 
-  const options = minorOptions('mining', 5)
+  const options = talentOptions('mining', 10)
   const first = chooseTalent(db, bus, user.id, options[0]!.id)
   expect(first.ok).toBe(true)
   expect(first.talent?.id).toBe(options[0]!.id)
 
-  // the same milestone can be respecced to a different option
+  // the same milestone can be respecced to the other option
   const swap = chooseTalent(db, bus, user.id, options[1]!.id)
   expect(swap.ok).toBe(true)
   expect(changes).toEqual([`${options[0]!.id}->${options[1]!.id}`])
   const owned = listTalents(db, user.id).filter((t) => t.skillId === 'mining')
   expect(owned.map((t) => t.talentId)).toEqual([options[1]!.id])
 
-  // the next milestone opens at level 15
-  awardSkillXp(db, bus, user.id, 'mining', xpForLevel(15) - xpForLevel(5))
-  expect(chooseTalent(db, bus, user.id, 'mining:m:15:1').ok).toBe(true)
-  // and it can be respecced too, without touching the level-5 pick
-  expect(chooseTalent(db, bus, user.id, 'mining:m:15:2').ok).toBe(true)
-  const both = listTalents(db, user.id).filter((t) => t.skillId === 'mining' && t.tier === 'minor')
+  // the next milestone opens at level 20
+  awardSkillXp(db, bus, user.id, 'mining', xpForLevel(20) - xpForLevel(10))
+  expect(chooseTalent(db, bus, user.id, 'mining:t:20:1').ok).toBe(true)
+  // and it can be respecced too, without touching the level-10 pick
+  expect(chooseTalent(db, bus, user.id, 'mining:t:20:2').ok).toBe(true)
+  const both = listTalents(db, user.id).filter((t) => t.skillId === 'mining')
   expect(both.length).toBe(2)
   expect(both.some((t) => t.talentId === options[1]!.id)).toBe(true)
 
   // cannot skip ahead to a milestone you have not reached
-  const skipped = chooseTalent(db, bus, user.id, 'mining:m:25:1')
+  const skipped = chooseTalent(db, bus, user.id, 'mining:t:30:1')
   expect(skipped.ok).toBe(false)
   expect(skipped.error).toContain('not reached')
   sqlite.close()
 })
 
-test('talentView exposes the chosen talents and the next milestones', () => {
+test('talentView exposes the chosen talents and the next milestone', () => {
   const { db, bus, user, sqlite } = setup()
   const view = () => talentView(db, user.id).find((t) => t.skillId === 'mining')!
 
   const at1 = view()
   expect(at1.owned).toEqual([])
   expect(at1.pendingChoice).toBe(false)
-  expect(at1.nextMinor).toBe(5)
-  expect(at1.nextMajor).toBe(10)
+  expect(at1.nextMilestone).toBe(10)
 
-  awardSkillXp(db, bus, user.id, 'mining', xpForLevel(5))
-  const at5 = view()
-  expect(at5.pendingChoice).toBe(true)
-  expect(at5.milestone).toBe(5)
+  awardSkillXp(db, bus, user.id, 'mining', xpForLevel(10))
+  const at10 = view()
+  expect(at10.pendingChoice).toBe(true)
+  expect(at10.milestone).toBe(10)
+  expect(at10.options.length).toBe(2)
 
-  const choice = minorOptions('mining', 5)[0]!
+  const choice = talentOptions('mining', 10)[0]!
   expect(chooseTalent(db, bus, user.id, choice.id).ok).toBe(true)
   const chosen = view()
   expect(chosen.pendingChoice).toBe(false)
   expect(chosen.owned.map((t) => t.id)).toEqual([choice.id])
-  expect(chosen.owned[0]!.tier).toBe('minor')
-  expect(chosen.owned[0]!.options.length).toBe(3)
-  expect(chosen.nextMinor).toBe(15)
-  expect(chosen.nextMajor).toBe(10)
+  expect(chosen.owned[0]!.options.length).toBe(2)
+  expect(chosen.nextMilestone).toBe(20)
   sqlite.close()
 })
 
