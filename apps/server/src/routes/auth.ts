@@ -16,6 +16,7 @@ import {
   publicUser,
   updateUser,
 } from '../db/repo'
+import { seedStarterDecks } from '../seed/service'
 
 function isHttps(c: Context<AppEnv>): boolean {
   return new URL(c.req.url).protocol === 'https:'
@@ -75,6 +76,7 @@ export function registerAuth(app: App) {
       level: body.level,
     })
     startSession(c, user.id)
+    seedStarterDecks(deps.db, user.id)
     return c.json({ user: publicUser(user) }, 201)
   })
 

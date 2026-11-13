@@ -1,7 +1,20 @@
-import { and, desc, eq } from 'drizzle-orm'
+import type { Card, CardType } from '@tutor/core'
+import { and, asc, desc, eq, sql } from 'drizzle-orm'
 import type { Role } from '../env'
 import type { Db } from './client'
-import { authSessions, messages, sessions, settings, userSettings, users } from './schema'
+import {
+  authSessions,
+  cards,
+  decks,
+  messages,
+  reviews,
+  sessions,
+  settings,
+  stats,
+  userSettings,
+  users,
+  xpEvents,
+} from './schema'
 
 const now = () => Date.now()
 const id = () => crypto.randomUUID()
@@ -271,4 +284,239 @@ export function listMessages(db: Db, sessionId: string) {
     .where(eq(messages.sessionId, sessionId))
     .orderBy(messages.createdAt)
     .all()
+}
+
+// --- decks + cards (Phase 4) -------------------------------------------------
+
+export interface NewDeck {
+  name: string
+  sourceLang: string
+  targetLang: string
+  level?: string
+  description?: string
+}
+
+export function createDeck(db: Db, userId: string, d: NewDeck) {
+  const row = {
+    id: id(),
+    userId,
+    name: d.name,
+    sourceLang: d.sourceLang,
+    targetLang: d.targetLang,
+    level: d.level ?? null,
+    description: d.description ?? null,
+  }
+  db.insert(decks).values(row).run()
+  return row
+}
+
+export function listDecks(db: Db, userId: string) {
+  return db
+    .select({
+      id: decks.id,
+      name: decks.name,
+      sourceLang: decks.sourceLang,
+      targetLang: decks.targetLang,
+      level: decks.level,
+      description: decks.description,
+      cardCount: sql<number>`count(${cards.id})`,
+    })
+    .from(decks)
+    .leftJoin(cards, eq(cards.deckId, decks.id))
+    .where(eq(decks.userId, userId))
+    .groupBy(decks.id)
+    .orderBy(asc(decks.name))
+    .all()
+}
+
+export function getDeck(db: Db, deckId: string, userId: string) {
+  const row = db.select().from(decks).where(eq(decks.id, deckId)).get()
+  return row && row.userId === userId ? row : undefined
+}
+
+export interface NewCard {
+  deckId: string
+  type?: CardType
+  sourceLang: string
+  targetLang: string
+  front: string
+  back: string
+  readings?: Record<string, string>
+  tags?: string[]
+  payload?: Record<string, unknown>
+  origin?: 'curated' | 'llm' | 'manual'
+}
+
+export function addCard(db: Db, userId: string, c: NewCard) {
+  const row = {
+    id: id(),
+    deckId: c.deckId,
+    userId,
+    type: c.type ?? 'vocab',
+    sourceLang: c.sourceLang,
+    targetLang: c.targetLang,
+    front: c.front,
+    back: c.back,
+    readingsJson: JSON.stringify(c.readings ?? {}),
+    tagsJson: JSON.stringify(c.tags ?? []),
+    payloadJson: JSON.stringify(c.payload ?? {}),
+    origin: c.origin ?? 'manual',
+    createdAt: now(),
+  }
+  db.insert(cards).values(row).run()
+  return row
+}
+
+function toCard(row: typeof cards.$inferSelect): Card {
+  const parse = <T>(json: string, fallback: T): T => {
+    try {
+      return JSON.parse(json) as T
+    } catch {
+      return fallback
+    }
+  }
+  return {
+    id: row.id,
+    deckId: row.deckId,
+    type: row.type as CardType,
+    sourceLang: row.sourceLang,
+    targetLang: row.targetLang,
+    front: row.front,
+    back: row.back,
+    readings: parse<Record<string, string>>(row.readingsJson, {}),
+    tags: parse<string[]>(row.tagsJson, []),
+    payload: parse<Record<string, unknown>>(row.payloadJson, {}),
+    origin: row.origin as Card['origin'],
+    createdAt: row.createdAt,
+  }
+}
+
+export function listCards(db: Db, userId: string, deckId?: string): Card[] {
+  const rows = deckId
+    ? db
+        .select()
+        .from(cards)
+        .where(and(eq(cards.userId, userId), eq(cards.deckId, deckId)))
+        .all()
+    : db.select().from(cards).where(eq(cards.userId, userId)).all()
+  return rows.map(toCard)
+}
+
+export function getCard(db: Db, cardId: string, userId: string): Card | undefined {
+  const row = db.select().from(cards).where(eq(cards.id, cardId)).get()
+  return row && row.userId === userId ? toCard(row) : undefined
+}
+
+/** Picks a card, preferring ones the learner has reviewed least. */
+export function pickCard(db: Db, userId: string, deckId?: string): Card | undefined {
+  const least = sql<number>`(select count(*) from ${reviews} r where r.card_id = ${cards.id})`
+  const where = deckId
+    ? and(eq(cards.userId, userId), eq(cards.deckId, deckId))
+    : eq(cards.userId, userId)
+  const row = db
+    .select()
+    .from(cards)
+    .where(where)
+    .orderBy(asc(least), sql`random()`)
+    .limit(1)
+    .get()
+  return row ? toCard(row) : undefined
+}
+
+/** Wrong answers for multiple-choice: other cards' target text. */
+export function otherBacks(
+  db: Db,
+  userId: string,
+  targetLang: string,
+  excludeCardId: string,
+  limit = 3,
+): string[] {
+  return db
+    .select({ back: cards.back })
+    .from(cards)
+    .where(and(eq(cards.userId, userId), eq(cards.targetLang, targetLang)))
+    .orderBy(sql`random()`)
+    .limit(limit + 1)
+    .all()
+    .map((r) => r.back)
+    .filter((b) => b !== excludeCardId)
+    .slice(0, limit)
+}
+
+// --- reviews, XP, stats (Phase 4/6) -----------------------------------------
+
+export function addReview(
+  db: Db,
+  r: {
+    cardId: string
+    userId: string
+    exerciseId: string
+    score: number
+    latencyMs?: number
+    detail?: Record<string, unknown>
+    audioRef?: string
+  },
+): void {
+  db.insert(reviews)
+    .values({
+      id: id(),
+      cardId: r.cardId,
+      userId: r.userId,
+      exerciseId: r.exerciseId,
+      score: r.score,
+      latencyMs: r.latencyMs ?? 0,
+      detailJson: JSON.stringify(r.detail ?? {}),
+      audioRef: r.audioRef ?? null,
+      createdAt: now(),
+    })
+    .run()
+}
+
+export function addXp(
+  db: Db,
+  userId: string,
+  amount: number,
+  reason: string,
+  sourceId?: string,
+): void {
+  if (amount <= 0) return
+  db.insert(xpEvents)
+    .values({ id: id(), userId, amount, reason, sourceId: sourceId ?? null, createdAt: now() })
+    .run()
+  db.insert(stats)
+    .values({ userId, xpTotal: amount, level: 1, streakDays: 0, dailyGoal: 50, updatedAt: now() })
+    .onConflictDoUpdate({
+      target: stats.userId,
+      set: { xpTotal: sql`${stats.xpTotal} + ${amount}`, updatedAt: now() },
+    })
+    .run()
+}
+
+export function getStats(db: Db, userId: string) {
+  const row = db.select().from(stats).where(eq(stats.userId, userId)).get()
+  return (
+    row ?? {
+      userId,
+      xpTotal: 0,
+      level: 1,
+      streakDays: 0,
+      lastActiveDay: null,
+      dailyGoal: 50,
+      updatedAt: 0,
+    }
+  )
+}
+
+export function xpForLevel(level: number): number {
+  return 100 + (level - 1) * 50
+}
+
+export function levelForXp(xp: number): number {
+  let level = 1
+  let remaining = xp
+  while (remaining >= xpForLevel(level)) {
+    remaining -= xpForLevel(level)
+    level++
+  }
+  return level
 }

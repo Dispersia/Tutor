@@ -1,0 +1,287 @@
+import {
+  ExerciseRegistry,
+  type ExerciseContext,
+  type ExerciseDef,
+  type ExerciseInstance,
+  type GradeResult,
+} from '@tutor/core'
+import { feedbackFor, gradeText, similarity } from './grading'
+
+const LANG_LABEL: Record<string, string> = {
+  zh: 'Mandarin',
+  yue: 'Cantonese',
+  ja: 'Japanese',
+  ko: 'Korean',
+  en: 'English',
+  es: 'Spanish',
+  fr: 'French',
+  de: 'German',
+}
+
+const label = (lang: string) => LANG_LABEL[lang] ?? lang
+
+const readingsOf = (ctx: ExerciseContext): string[] =>
+  Object.values(ctx.card.readings).filter(Boolean)
+
+function shuffle<T>(items: T[]): T[] {
+  const a = [...items]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[a[i], a[j]] = [a[j]!, a[i]!]
+  }
+  return a
+}
+
+const JUDGE_SCHEMA = {
+  type: 'object',
+  properties: {
+    score: { type: 'integer', minimum: 0, maximum: 100 },
+    correct: { type: 'boolean' },
+    feedback: { type: 'string' },
+  },
+  required: ['score', 'correct', 'feedback'],
+  additionalProperties: false,
+}
+
+// --- translate: native -> target ---------------------------------------------
+
+const translateFrontToBack: ExerciseDef<string> = {
+  id: 'translate.front_to_back',
+  title: 'Translate to the target language',
+  modality: 'text',
+  supports: () => true,
+  async generate(ctx) {
+    return {
+      exerciseId: this.id,
+      cardId: ctx.card.id,
+      modality: 'text',
+      prompt: `How do you say “${ctx.card.front}” in ${label(ctx.card.targetLang)}?`,
+      data: {},
+    }
+  },
+  async grade(ctx, _instance, answer) {
+    const g = gradeText(ctx.card.back, readingsOf(ctx), String(answer ?? ''))
+    return {
+      score: g.score,
+      correct: g.correct,
+      expected: ctx.card.back,
+      feedback: feedbackFor(
+        g.score,
+        `${ctx.card.back}${readingsOf(ctx)[0] ? ` (${readingsOf(ctx)[0]})` : ''}`,
+      ),
+    }
+  },
+  xp: (r) => (r.correct ? 10 + (r.score === 100 ? 5 : 0) : 1),
+}
+
+// --- translate: target -> native ---------------------------------------------
+
+const translateBackToFront: ExerciseDef<string> = {
+  id: 'translate.back_to_front',
+  title: 'Translate to your language',
+  modality: 'text',
+  supports: () => true,
+  async generate(ctx) {
+    return {
+      exerciseId: this.id,
+      cardId: ctx.card.id,
+      modality: 'text',
+      prompt: `What does “${ctx.card.back}” mean in ${label(ctx.card.sourceLang)}?`,
+      data: { reading: readingsOf(ctx)[0] ?? '' },
+    }
+  },
+  async grade(ctx, _instance, answer) {
+    const g = gradeText(ctx.card.front, [], String(answer ?? ''))
+    const correct =
+      g.score >= 70 || normalizeLoose(String(answer ?? '')) === normalizeLoose(ctx.card.front)
+    return {
+      score: correct ? Math.max(g.score, 80) : g.score,
+      correct,
+      expected: ctx.card.front,
+      feedback: correct ? undefined : `It means “${ctx.card.front}”.`,
+    }
+  },
+  xp: (r) => (r.correct ? 10 + (r.score === 100 ? 5 : 0) : 1),
+}
+
+function normalizeLoose(s: string): string {
+  return s.toLowerCase().replace(/[\s.,!?]+/g, '')
+}
+
+// --- multiple choice ---------------------------------------------------------
+
+const multipleChoice: ExerciseDef<string> = {
+  id: 'multiple_choice',
+  title: 'Pick the right answer',
+  modality: 'text',
+  supports: (card) => card.back.length <= 12,
+  async generate(ctx) {
+    const choices = shuffle([ctx.card.back, ...ctx.distractors]).slice(0, 4)
+    return {
+      exerciseId: this.id,
+      cardId: ctx.card.id,
+      modality: 'text',
+      prompt: `Which one means “${ctx.card.front}”?`,
+      data: { choices, reading: readingsOf(ctx)[0] ?? '' },
+    }
+  },
+  async grade(ctx, _instance, answer) {
+    const correct = String(answer ?? '').trim() === ctx.card.back
+    return {
+      score: correct ? 100 : 0,
+      correct,
+      expected: ctx.card.back,
+      feedback: correct ? undefined : `“${ctx.card.front}” is ${ctx.card.back}.`,
+    }
+  },
+  xp: (r) => (r.correct ? 8 : 1),
+}
+
+// --- listen & type -----------------------------------------------------------
+
+const typeListen: ExerciseDef<string> = {
+  id: 'type_listen',
+  title: 'Listen and type',
+  modality: 'voice',
+  supports: () => true,
+  async generate(ctx) {
+    return {
+      exerciseId: this.id,
+      cardId: ctx.card.id,
+      modality: 'voice',
+      prompt: 'Listen, then type what you hear.',
+      data: {
+        audioText: ctx.card.back,
+        language: ctx.card.targetLang,
+        reading: readingsOf(ctx)[0] ?? '',
+      },
+    }
+  },
+  async grade(ctx, _instance, answer) {
+    const g = gradeText(ctx.card.back, readingsOf(ctx), String(answer ?? ''))
+    return {
+      score: g.score,
+      correct: g.correct,
+      expected: ctx.card.back,
+      feedback: feedbackFor(g.score, ctx.card.back),
+    }
+  },
+  xp: (r) => (r.correct ? 12 + (r.score === 100 ? 5 : 0) : 1),
+}
+
+// --- speak the word (basic ASR grading; upgraded in Phase 5) ------------------
+
+const speakWord: ExerciseDef<string> = {
+  id: 'speak_word',
+  title: 'Say it out loud',
+  modality: 'voice',
+  supports: () => true,
+  async generate(ctx) {
+    return {
+      exerciseId: this.id,
+      cardId: ctx.card.id,
+      modality: 'voice',
+      prompt: `Say “${ctx.card.back}” out loud.`,
+      data: {
+        target: ctx.card.back,
+        language: ctx.card.targetLang,
+        reading: readingsOf(ctx)[0] ?? '',
+      },
+    }
+  },
+  async grade(ctx, _instance, answer) {
+    const transcript = String(answer ?? '').trim()
+    if (!transcript) {
+      return {
+        score: 0,
+        correct: false,
+        expected: ctx.card.back,
+        feedback: "Didn't hear anything.",
+      }
+    }
+    const g = gradeText(ctx.card.back, readingsOf(ctx), transcript)
+    const best = Math.max(g.score, Math.round(similarity(ctx.card.back, transcript) * 100))
+    const correct = best >= 70
+    return {
+      score: best,
+      correct,
+      expected: ctx.card.back,
+      feedback: correct
+        ? `Sounded good — you said “${transcript}”.`
+        : `You said “${transcript}” — aim for “${ctx.card.back}”.`,
+      detail: { transcript },
+    }
+  },
+  xp: (r) => (r.correct ? 15 + (r.score >= 90 ? 5 : 0) : 1),
+}
+
+// --- free conversation turn --------------------------------------------------
+
+const converse: ExerciseDef<string> = {
+  id: 'converse',
+  title: 'Use it in conversation',
+  modality: 'mixed',
+  supports: () => true,
+  async generate(ctx) {
+    return {
+      exerciseId: this.id,
+      cardId: ctx.card.id,
+      modality: 'mixed',
+      prompt: `Reply in ${label(ctx.card.targetLang)} using “${ctx.card.back}”.`,
+      data: { topic: ctx.card.back, language: ctx.card.targetLang },
+    }
+  },
+  async grade(ctx, _instance, answer): Promise<GradeResult> {
+    const text = String(answer ?? '').trim()
+    if (!text)
+      return {
+        score: 0,
+        correct: false,
+        feedback: 'Say or type a sentence in the target language.',
+      }
+    if (ctx.judge) {
+      const out = (await ctx.judge(
+        `The learner is practising ${label(ctx.card.targetLang)}. They should use the word “${ctx.card.back}” (${ctx.card.front}). The learner wrote/said: “${text}”. Grade the attempt (0-100) and give one short tip.`,
+        JUDGE_SCHEMA,
+      )) as { score?: number; correct?: boolean; feedback?: string } | undefined
+      if (out && typeof out.score === 'number') {
+        return {
+          score: out.score,
+          correct: out.correct ?? out.score >= 70,
+          expected: ctx.card.back,
+          feedback: out.feedback,
+        }
+      }
+    }
+    const hasTarget = /[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]/.test(text)
+    const usedWord = text.includes(ctx.card.back)
+    const score = usedWord ? 90 : hasTarget ? 65 : 35
+    return {
+      score,
+      correct: score >= 60,
+      expected: ctx.card.back,
+      feedback: usedWord
+        ? 'Nice — you used the word.'
+        : hasTarget
+          ? `Good try. Can you work “${ctx.card.back}” in?`
+          : 'Try replying in the target language.',
+    }
+  },
+  xp: (r) => (r.correct ? 5 + (r.score >= 90 ? 5 : 0) : 1),
+}
+
+/**
+ * The registry. To add an exercise: create the def, `register` it here, and add a
+ * matching Svelte component keyed by the same `id` — no core changes (DESIGN §11.2).
+ */
+export const registry = new ExerciseRegistry()
+  .register(translateFrontToBack)
+  .register(translateBackToFront)
+  .register(multipleChoice)
+  .register(typeListen)
+  .register(speakWord)
+  .register(converse)
+
+export function exerciseCatalog() {
+  return registry.list().map((d) => ({ id: d.id, title: d.title, modality: d.modality }))
+}

@@ -37,7 +37,14 @@ Open http://127.0.0.1:4318 — the SvelteKit PWA (sign up → chat or talk).
 | `PUT /api/settings/openrouter-key` | each user's own key (server key is a fallback) |
 | `POST /api/chat` · `/api/chat/json` | streamed chat (SSE) + structured output |
 | `GET/POST /api/sessions`, `GET /api/sessions/:id` | per-user history |
+| `GET/POST /api/decks`, `GET /api/decks/:id/cards` | starter decks (HSK 1, JLPT N5) + AI-generated decks |
+| `GET /api/exercises` | the exercise registry |
+| `POST /api/practice/next` · `/api/practice/grade` | generate an exercise · grade it (+XP) |
+| `GET /api/stats` | XP, level, streak |
 | `GET /api/speech/health` · `POST /api/speech/{tts,asr,align,wake,unload}` | speech, lazily started/stopped |
+
+Adding an exercise type takes a backend `ExerciseDef` + a Svelte component keyed by
+the same `id` — no core changes (see `docs/DESIGN.md` §11.2).
 
 Everything except `/api/health`, `/api/models` and the auth routes requires a
 session. All data is scoped to the signed-in user.
@@ -70,7 +77,7 @@ docs/          DESIGN.md (architecture + execution plan)
 - [x] Phase 1 — speech gateway (ASR/TTS/aligner + idle unload) — verified on M6
 - [x] Phase 2 — backend (Hono, SQLite, OpenRouter, speech supervisor) — 21 tests green
 - [x] Phase 3 — multi-user auth + SvelteKit PWA (chat, voice, history, settings)
-- [ ] Phase 4 — exercise engine + cards
+- [x] Phase 4 — exercise engine + cards (HSK 1 · JLPT N5 · 6 exercise types · XP)
 - [ ] Phase 5 — pronunciation scoring
 - [ ] Phase 6 — gamification
 - [ ] Phase 7 — packaging + docs

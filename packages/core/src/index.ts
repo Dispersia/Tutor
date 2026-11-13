@@ -1,4 +1,4 @@
-/** Shared domain contracts for tutor. No runtime deps — pure types + a registry. */
+/** Shared domain contracts for tutor. No runtime deps (except the registry). */
 
 export type Modality = 'chat' | 'voice' | 'text' | 'mixed'
 export type CardType = 'vocab' | 'phrase' | 'grammar' | 'kanji' | 'character'
@@ -7,6 +7,7 @@ export type Lang = string
 
 export interface Card {
   id: string
+  deckId: string | null
   type: CardType
   sourceLang: Lang
   targetLang: Lang
@@ -14,10 +15,10 @@ export interface Card {
   front: string
   /** target-language side */
   back: string
-  /** pinyin / romaji / kana */
-  readings?: Record<string, string>
+  /** pinyin / romaji / kana — alternative correct spellings */
+  readings: Record<string, string>
   tags: string[]
-  /** type-specific extras, zod-validated per CardType (Phase 4) */
+  /** type-specific extras, versioned per CardType */
   payload: Record<string, unknown>
   origin: 'curated' | 'llm' | 'manual'
   createdAt: number
@@ -32,65 +33,79 @@ export interface Learner {
 }
 
 export interface TutorConfig {
-  /** OpenRouter model id per role — user-selectable in the app (§10.1) */
   roles: Record<LlmRole, string>
   voiceMode: 'preset' | 'design'
-  /** preferred voice per language */
   voices: Record<Lang, string>
-  /** speech gateway idle shutdown, ms (§8) */
   idleTimeoutMs: number
 }
 
 export type LlmRole = 'conversation' | 'judge' | 'generator' | 'translator'
 
-export interface ExerciseContext {
-  card?: Card
-  learner: Learner
-  sessionId?: string
-  config: TutorConfig
+/** What a generated exercise instance looks like on the wire (JSON). */
+export interface ExerciseInstance {
+  exerciseId: string
+  cardId: string
+  modality: Modality
+  /** short instruction shown to the learner */
+  prompt: string
+  /** exercise-specific data, read by the matching frontend component */
+  data: Record<string, unknown>
 }
 
 export interface GradeResult {
   /** 0..100 */
   score: number
   correct: boolean
+  /** what the answer should have been */
+  expected?: string
   feedback?: string
   detail?: Record<string, unknown>
 }
 
+export interface ExerciseContext {
+  card: Card
+  learner: Learner
+  /** distractors for choice exercises (same target language) */
+  distractors: string[]
+  /** optional LLM helper, injected by the server (absent when no key is set) */
+  judge?: (prompt: string, schema: object) => Promise<unknown>
+}
+
 /**
- * The extensibility contract (§11.2). Backend resolves `id -> generate/grade`;
- * the Svelte frontend maps `id -> component`. Adding an exercise touches only a
- * new file plus one registry line.
+ * The extensibility contract (§11.2). The backend resolves `id -> generate/grade`;
+ * the frontend maps `id -> component`. Adding an exercise touches only a new file
+ * plus one `registry.register(...)` line — nothing in the core changes.
  */
-export interface ExerciseDef<Instance = unknown, Answer = unknown> {
+export interface ExerciseDef<Answer = unknown> {
   id: string
   title: string
   modality: Modality
-  supports(card: Card | undefined, learner: Learner): boolean
-  generate(ctx: ExerciseContext): Promise<Instance>
-  grade(ctx: ExerciseContext, instance: Instance, answer: Answer): Promise<GradeResult>
-  xp(result: GradeResult, instance: Instance): number
+  /** can this exercise be generated for this card? */
+  supports(card: Card, learner: Learner): boolean
+  generate(ctx: ExerciseContext): Promise<ExerciseInstance>
+  grade(ctx: ExerciseContext, instance: ExerciseInstance, answer: Answer): Promise<GradeResult>
+  xp(result: GradeResult, instance: ExerciseInstance): number
 }
 
 export class ExerciseRegistry {
-  #defs = new Map<string, ExerciseDef>()
+  #defs = new Map<string, ExerciseDef<unknown>>()
 
-  register(def: ExerciseDef): this {
+  register<A>(def: ExerciseDef<A>): this {
     if (this.#defs.has(def.id)) throw new Error(`duplicate exercise id: ${def.id}`)
-    this.#defs.set(def.id, def)
+    this.#defs.set(def.id, def as unknown as ExerciseDef<unknown>)
     return this
   }
 
-  get(id: string): ExerciseDef | undefined {
+  get(id: string): ExerciseDef<unknown> | undefined {
     return this.#defs.get(id)
   }
 
-  list(): ExerciseDef[] {
+  list(): ExerciseDef<unknown>[] {
     return [...this.#defs.values()]
   }
 
-  forCard(card: Card | undefined, learner: Learner): ExerciseDef[] {
+  /** Exercises that can be built for this card, in registration order. */
+  forCard(card: Card, learner: Learner): ExerciseDef<unknown>[] {
     return this.list().filter((d) => d.supports(card, learner))
   }
 }
