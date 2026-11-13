@@ -33,6 +33,7 @@
   let handle = $state('')
   let dailyGoal = $state(50)
   let foodThreshold = $state(50)
+  let desiredRetention = $state(90)
   let speech = $state<SpeechStatus | null>(null)
   let users = $state<PublicUser[]>([])
   let note = $state('')
@@ -49,6 +50,7 @@
         voice: { mode: 'preset' | 'design'; voices: Record<string, string> }
         openrouter: { key: 'user' | 'server' | false }
         foodThreshold?: number
+        desiredRetention?: number
       }>('/api/settings')
       roles = s.roles
       roleDefaults = s.roleDefaults
@@ -56,6 +58,7 @@
       voices = s.voice.voices
       keyStatus = s.openrouter.key
       foodThreshold = s.foodThreshold ?? 50
+      desiredRetention = s.desiredRetention ?? 90
     } catch (e) {
       error = (e as Error).message
     }
@@ -141,6 +144,19 @@
         body: JSON.stringify({ foodThreshold: Number(foodThreshold) }),
       })
       note = 'Combat auto-eat threshold saved.'
+    } catch (e) {
+      error = (e as Error).message
+    }
+  }
+
+  async function saveRetention() {
+    note = ''
+    try {
+      await api('/api/settings', {
+        method: 'PUT',
+        body: JSON.stringify({ desiredRetention: Number(desiredRetention) }),
+      })
+      note = 'Desired retention saved.'
     } catch (e) {
       error = (e as Error).message
     }
@@ -337,6 +353,29 @@
       class="w-28 rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
     />
     <button onclick={saveDailyGoal} class="rounded-xl bg-neutral-100 px-3 py-2 text-sm text-black"
+      >Save</button
+    >
+  </div>
+</section>
+
+<!-- Spaced repetition ----------------------------------------------------->
+<section class="mb-5 rounded-2xl border border-neutral-800 bg-neutral-900/50 p-4">
+  <h2 class="text-sm font-medium">Spaced repetition</h2>
+  <p class="mt-1 text-xs text-neutral-400">
+    Anki-style FSRS-6 scheduling. Desired retention is the chance you want to recall a card when it
+    comes up — higher means shorter intervals and more reviews.
+  </p>
+  <div class="mt-3 flex items-center gap-2">
+    <input
+      type="number"
+      min="70"
+      max="97"
+      step="1"
+      bind:value={desiredRetention}
+      class="w-24 rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
+    />
+    <span class="text-sm text-neutral-400">%</span>
+    <button onclick={saveRetention} class="rounded-xl bg-neutral-100 px-3 py-2 text-sm text-black"
       >Save</button
     >
   </div>

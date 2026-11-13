@@ -35,6 +35,7 @@ export function registerSettings(app: App) {
       voice: readVoicePrefs(deps.db, user.id),
       openrouter: { key: hasUserKey(deps, user.id) },
       foodThreshold: Number(getUserSetting(deps.db, user.id, 'foodThreshold') ?? 50),
+      desiredRetention: Number(getUserSetting(deps.db, user.id, 'desiredRetention') ?? 90),
       raw: allUserSettings(deps.db, user.id),
     })
   })
@@ -48,6 +49,7 @@ export function registerSettings(app: App) {
       prefs?: Record<string, string>
       dailyGoal?: number
       foodThreshold?: number
+      desiredRetention?: number
     }
 
     if (body.roles && typeof body.roles === 'object') {
@@ -83,6 +85,10 @@ export function registerSettings(app: App) {
     if (typeof body.foodThreshold === 'number') {
       const pct = Math.max(10, Math.min(90, Math.round(body.foodThreshold)))
       setUserSetting(deps.db, user.id, 'foodThreshold', String(pct))
+    }
+    if (typeof body.desiredRetention === 'number') {
+      const pct = Math.max(70, Math.min(97, Math.round(body.desiredRetention)))
+      setUserSetting(deps.db, user.id, 'desiredRetention', String(pct))
     }
 
     return c.json({

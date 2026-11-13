@@ -4,6 +4,8 @@
  * to touch the exercise engine.
  */
 
+import type { CardState, Rating } from './game/srs'
+
 export interface GameEventMap {
   'review.completed': {
     userId: string
@@ -42,6 +44,8 @@ export interface GameEventMap {
     reps: number
     dueAt: number
     intervalDays: number
+    rating: Rating
+    state: CardState
   }
   'lesson.completed': { userId: string; lessonId: string }
 }

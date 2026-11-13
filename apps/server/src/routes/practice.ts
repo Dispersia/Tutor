@@ -295,7 +295,7 @@ export function registerPractice(app: App) {
       correct: result.correct,
     })
     const skill = settleAction(deps, user.id, body.actionId, result)
-    recordReview(deps.db, deps.events, user.id, card.id, result.score, result.correct)
+    const srs = recordReview(deps.db, deps.events, user.id, card.id, result.score, result.correct)
     const lessonCompleted = body.lessonId
       ? checkLessonCompletion(deps.db, deps.events, user.id, body.lessonId)
       : false
@@ -303,6 +303,7 @@ export function registerPractice(app: App) {
     return c.json({
       result: { ...result, xp, leveledUp },
       skill,
+      srs,
       lessonCompleted,
       stats: summary(deps.db, user.id),
     })
@@ -371,13 +372,14 @@ export function registerPractice(app: App) {
         correct: result.correct,
       })
       const skill = settleAction(deps, user.id, actionId, result)
-      recordReview(deps.db, deps.events, user.id, card.id, result.score, result.correct)
+      const srs = recordReview(deps.db, deps.events, user.id, card.id, result.score, result.correct)
       const lessonCompleted = lessonId
         ? checkLessonCompletion(deps.db, deps.events, user.id, lessonId)
         : false
       return c.json({
         result: { ...result, xp, leveledUp },
         skill,
+        srs,
         lessonCompleted,
         stats: summary(deps.db, user.id),
       })

@@ -32,13 +32,14 @@ import type { EventBus } from '../events'
 import { seedStarterDecks } from '../seed/service'
 import { buildLessons } from './curriculum'
 import {
-  NEW_SRS,
+  NEW_STATE,
   countDue,
   countNew,
   isLearned,
-  qualityFromScore,
+  ratingFromScore,
   schedule,
-  type SrsState,
+  type FsrsState,
+  type Rating,
 } from './srs'
 import {
   MONSTER_BY_ID,
@@ -700,7 +701,27 @@ export function combatResolve(
 
 // --- spaced repetition + curriculum (Phase 9, docs/DESIGN.md §13.6) ----------
 
-/** Updates a card's SRS schedule after a review and emits `srs.updated`. */
+/** The scheduling outcome returned to the API/UI after a review. */
+export interface ReviewSchedule {
+  rating: Rating
+  state: FsrsState['state']
+  intervalDays: number
+  dueAt: number
+  stability: number
+  difficulty: number
+  step: number
+  reps: number
+  lapses: number
+}
+
+/** A user's desired retention as a fraction (Anki-style percent, default 90%). */
+export function desiredRetentionFor(db: Db, userId: string): number {
+  const raw = Number(getUserSetting(db, userId, 'desiredRetention') ?? 90)
+  const pct = Number.isFinite(raw) ? Math.min(97, Math.max(70, Math.round(raw))) : 90
+  return pct / 100
+}
+
+/** Advances a card's FSRS-6 schedule after a review and emits `srs.updated`. */
 export function recordReview(
   db: Db,
   bus: EventBus,
@@ -708,50 +729,77 @@ export function recordReview(
   cardId: string,
   score: number,
   correct: boolean,
-): SrsState {
+): ReviewSchedule {
   const row = getSrs(db, userId, cardId)
-  const prev: SrsState = row
+  const prev: FsrsState = row
     ? {
+        state: row.state as FsrsState['state'],
+        step: row.step,
+        stability: row.stability,
+        difficulty: row.difficulty,
         reps: row.reps,
         lapses: row.lapses,
-        ease: row.ease,
         intervalDays: row.intervalDays,
         dueAt: row.dueAt,
         lastReviewAt: row.lastReviewAt,
+        lastRating: (row.lastRating as Rating | null) ?? null,
       }
-    : NEW_SRS
+    : NEW_STATE
   const now = Date.now()
-  const next = schedule(prev, qualityFromScore(score, correct), now)
+  const rating = ratingFromScore(score, correct)
+  const { state, intervalDays, dueAt } = schedule(prev, rating, now, {
+    desiredRetention: desiredRetentionFor(db, userId),
+  })
   upsertSrs(db, userId, cardId, {
-    reps: next.reps,
-    lapses: next.lapses,
-    ease: next.ease,
-    intervalDays: next.intervalDays,
-    dueAt: next.dueAt,
-    lastReviewAt: next.lastReviewAt ?? now,
+    state: state.state,
+    step: state.step,
+    stability: state.stability,
+    difficulty: state.difficulty,
+    reps: state.reps,
+    lapses: state.lapses,
+    intervalDays: state.intervalDays,
+    dueAt: state.dueAt,
+    lastRating: state.lastRating,
+    lastReviewAt: state.lastReviewAt ?? now,
   })
   bus.emit('srs.updated', {
     userId,
     cardId,
-    reps: next.reps,
-    dueAt: next.dueAt,
-    intervalDays: next.intervalDays,
+    reps: state.reps,
+    dueAt: state.dueAt,
+    intervalDays: state.intervalDays,
+    rating,
+    state: state.state,
   })
-  return next
+  return {
+    rating,
+    state: state.state,
+    intervalDays,
+    dueAt,
+    stability: state.stability,
+    difficulty: state.difficulty,
+    step: state.step,
+    reps: state.reps,
+    lapses: state.lapses,
+  }
 }
 
-export function srsStateMap(db: Db, userId: string): Map<string, SrsState> {
+export function srsStateMap(db: Db, userId: string): Map<string, FsrsState> {
   return new Map(
     listSrs(db, userId).map((r) => [
       r.cardId,
       {
+        state: r.state as FsrsState['state'],
+        step: r.step,
+        stability: r.stability,
+        difficulty: r.difficulty,
         reps: r.reps,
         lapses: r.lapses,
-        ease: r.ease,
         intervalDays: r.intervalDays,
         dueAt: r.dueAt,
         lastReviewAt: r.lastReviewAt,
-      },
+        lastRating: (r.lastRating as Rating | null) ?? null,
+      } satisfies FsrsState,
     ]),
   )
 }

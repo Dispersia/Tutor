@@ -756,11 +756,15 @@ export function upsertSrs(
   userId: string,
   cardId: string,
   s: {
+    state: string
+    step: number
+    stability: number
+    difficulty: number
     reps: number
     lapses: number
-    ease: number
     intervalDays: number
     dueAt: number
+    lastRating: number | null
     lastReviewAt: number
   },
 ): void {
