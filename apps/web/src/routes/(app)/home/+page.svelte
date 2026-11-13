@@ -66,9 +66,7 @@
       Learning {LANG_NAMES[lang] ?? lang} · {session.user?.level ?? 'HSK 1'}
     </p>
   </div>
-  <div
-    class="grid h-14 w-14 place-items-center rounded-full border border-gold-600/70 bg-gradient-to-b from-ink-700 to-ink-900 shadow-[0_0_18px_-4px_rgba(232,194,100,0.55)]"
-  >
+  <div class="grid h-14 w-14 place-items-center rounded-full border border-gold-600/70 bg-ink-800">
     <span class="text-[9px] leading-none tracking-widest text-ink-400">LV</span>
     <span class="display -mt-0.5 text-lg leading-none text-gold-200">{stats?.level ?? 1}</span>
   </div>
@@ -130,7 +128,7 @@
     class="tile col-span-2 flex items-center gap-3 p-4"
     style={accentStyle('#12b886')}
   >
-    <span class="text-3xl drop-shadow">📖</span>
+    <span class="text-3xl">📖</span>
     <span class="flex-1">
       <span class="display block text-lg text-white">
         {srs && srs.due > 0 ? `${srs.due} cards due` : 'Continue learning'}

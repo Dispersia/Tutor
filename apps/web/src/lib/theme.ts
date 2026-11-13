@@ -6,7 +6,7 @@ export interface CategoryStyle {
   label: string
   /** hex accent (matches the CSS custom properties) */
   accent: string
-  /** soft tint for gradients behind a card */
+  /** soft tint (unused for now; kept alongside the accent) */
   tint: string
 }
 

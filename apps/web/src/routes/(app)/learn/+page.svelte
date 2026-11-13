@@ -121,11 +121,7 @@
       </ul>
 
       {#if d.due > 0}
-        <a
-          href={href(`/practice?deck=${d.deckId}`)}
-          class="btn mt-3 w-full"
-          style="color:#2a1d03; background: linear-gradient(180deg, #f4d98d, #d0a13a); border: 1px solid #a37a24"
-        >
+        <a href={href(`/practice?deck=${d.deckId}`)} class="btn btn-gold mt-3 w-full">
           Review {d.due} due on {d.name}
         </a>
       {/if}
