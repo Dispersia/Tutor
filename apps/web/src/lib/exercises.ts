@@ -14,6 +14,7 @@ export interface Grade {
   expected?: string
   feedback?: string
   xp: number
+  leveledUp?: boolean
   detail?: Record<string, unknown>
 }
 
@@ -30,9 +31,14 @@ export interface Deck {
 export interface Stats {
   xp: number
   level: number
-  levelXp: number
+  intoLevel: number
+  forNext: number
+  progress: number
   streak: number
   dailyGoal: number
+  dailyXp: number
+  goalPct: number
+  todayActive: boolean
 }
 
 export const listDecks = () => api<{ decks: Deck[] }>('/api/decks')
@@ -49,14 +55,14 @@ export const gradeExercise = (body: {
   answer: unknown
   latencyMs?: number
 }) =>
-  api<{ result: Grade; stats: { xp: number; level: number } }>('/api/practice/grade', {
+  api<{ result: Grade; stats: Stats }>('/api/practice/grade', {
     method: 'POST',
     body: JSON.stringify(body),
   })
 
 /** Recorded-audio grading (pronunciation) — multipart to /api/practice/speak. */
 export const gradeSpeak = (form: FormData) =>
-  api<{ result: Grade; stats: { xp: number; level: number } }>('/api/practice/speak', {
+  api<{ result: Grade; stats: Stats }>('/api/practice/speak', {
     method: 'POST',
     body: form,
   })

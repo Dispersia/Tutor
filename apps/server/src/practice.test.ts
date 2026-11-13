@@ -3,6 +3,7 @@ import { createApp } from './app'
 import type { App, Deps } from './context'
 import { openDb } from './db/client'
 import type { Role } from './env'
+import { EventBus } from './events'
 import { OpenRouter } from './llm/openrouter'
 import { SpeechSupervisor } from './speech/supervisor'
 
@@ -33,6 +34,7 @@ function makeApp(assess?: Deps['assess']) {
     allowRegistration: true,
     sessionTtlMs: 86_400_000,
     assess,
+    events: new EventBus(),
   }
   const app = createApp(deps, { staticDir: '/nope', log: false })
   return { app, db, sqlite }

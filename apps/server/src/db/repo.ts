@@ -472,7 +472,8 @@ export function addReview(
     .run()
 }
 
-export function addXp(
+/** Append-only XP ledger write (the source of truth for totals). */
+export function addXpEvent(
   db: Db,
   userId: string,
   amount: number,
@@ -483,13 +484,24 @@ export function addXp(
   db.insert(xpEvents)
     .values({ id: id(), userId, amount, reason, sourceId: sourceId ?? null, createdAt: now() })
     .run()
-  db.insert(stats)
-    .values({ userId, xpTotal: amount, level: 1, streakDays: 0, dailyGoal: 50, updatedAt: now() })
-    .onConflictDoUpdate({
-      target: stats.userId,
-      set: { xpTotal: sql`${stats.xpTotal} + ${amount}`, updatedAt: now() },
-    })
-    .run()
+}
+
+export function sumXp(db: Db, userId: string): number {
+  const row = db
+    .select({ total: sql<number>`coalesce(sum(${xpEvents.amount}), 0)` })
+    .from(xpEvents)
+    .where(eq(xpEvents.userId, userId))
+    .get()
+  return Number(row?.total ?? 0)
+}
+
+/** Every XP event for a user (used to derive days/streak in one timezone). */
+export function xpEventsFor(db: Db, userId: string): { createdAt: number; amount: number }[] {
+  return db
+    .select({ createdAt: xpEvents.createdAt, amount: xpEvents.amount })
+    .from(xpEvents)
+    .where(eq(xpEvents.userId, userId))
+    .all()
 }
 
 export function getStats(db: Db, userId: string) {
@@ -500,23 +512,38 @@ export function getStats(db: Db, userId: string) {
       xpTotal: 0,
       level: 1,
       streakDays: 0,
-      lastActiveDay: null,
+      lastActiveDay: null as string | null,
       dailyGoal: 50,
       updatedAt: 0,
     }
   )
 }
 
-export function xpForLevel(level: number): number {
-  return 100 + (level - 1) * 50
+export function upsertStats(
+  db: Db,
+  userId: string,
+  patch: Partial<{
+    xpTotal: number
+    level: number
+    streakDays: number
+    lastActiveDay: string | null
+    dailyGoal: number
+  }>,
+): void {
+  db.insert(stats)
+    .values({
+      userId,
+      xpTotal: patch.xpTotal ?? 0,
+      level: patch.level ?? 1,
+      streakDays: patch.streakDays ?? 0,
+      lastActiveDay: patch.lastActiveDay ?? null,
+      dailyGoal: patch.dailyGoal ?? 50,
+      updatedAt: now(),
+    })
+    .onConflictDoUpdate({ target: stats.userId, set: { ...patch, updatedAt: now() } })
+    .run()
 }
 
-export function levelForXp(xp: number): number {
-  let level = 1
-  let remaining = xp
-  while (remaining >= xpForLevel(level)) {
-    remaining -= xpForLevel(level)
-    level++
-  }
-  return level
+export function setDailyGoal(db: Db, userId: string, goal: number): void {
+  upsertStats(db, userId, { dailyGoal: Math.max(10, Math.min(1000, Math.round(goal))) })
 }

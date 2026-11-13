@@ -3,6 +3,7 @@ import { createApp } from './app'
 import type { App, Deps } from './context'
 import { openDb } from './db/client'
 import type { Role } from './env'
+import { EventBus } from './events'
 import { OpenRouter } from './llm/openrouter'
 import { SpeechSupervisor } from './speech/supervisor'
 
@@ -76,6 +77,7 @@ function makeApp(allowRegistration = true) {
     secret: undefined,
     allowRegistration,
     sessionTtlMs: 86_400_000,
+    events: new EventBus(),
   }
   const app = createApp(deps, { staticDir: '/definitely/not/here', log: false })
   return { app, db, sqlite }

@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import type { Deps } from './context'
 import { openDb } from './db/client'
 import { env } from './env'
+import { EventBus } from './events'
 import { OpenRouter } from './llm/openrouter'
 import { SpeechSupervisor } from './speech/supervisor'
 
@@ -27,6 +28,7 @@ export function buildDeps(cfg: typeof env): Built {
       db,
       or,
       supervisor,
+      events: new EventBus(),
       defaults: cfg.defaultRoles,
       serverKey: cfg.openrouterKey,
       secret: cfg.secret,

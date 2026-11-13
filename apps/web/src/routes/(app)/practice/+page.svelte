@@ -63,7 +63,7 @@
         latencyMs: Date.now() - startedAt,
       })
       result = r.result
-      if (stats) stats = { ...stats, xp: r.stats.xp, level: r.stats.level }
+      stats = r.stats
     } catch (e) {
       error = (e as Error).message
     } finally {
@@ -89,7 +89,7 @@
       form.set('latencyMs', String(Date.now() - startedAt))
       const r = await gradeSpeak(form)
       result = r.result
-      if (stats) stats = { ...stats, xp: r.stats.xp, level: r.stats.level }
+      stats = r.stats
     } catch (e) {
       error = (e as Error).message
     } finally {

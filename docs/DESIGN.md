@@ -615,7 +615,7 @@ Public endpoints (no session): `GET /api/health`, `GET /api/models`,
 ## 13. Gamification (skeleton now, game later)
 
 - **XP ledger** (append-only) + **level curve** (e.g. `level = f(xp)`), shown in a HUD.
-- **Streak**: one "active day" per calendar day with ≥1 completed exercise.
+- **Streak**: one "active day" per **UTC calendar day** with ≥1 completed exercise.
 - **Daily goal**: configurable XP target with a progress ring.
 - **Combo / accuracy bonus**: small multipliers; formula lives with the exercise.
 - **Achievements**: table + triggers on events (later).

@@ -74,10 +74,40 @@
     <div class="mt-1 text-2xl font-semibold">{stats?.level ?? 1}</div>
   </div>
 </section>
+
+<!-- daily goal -->
+<section class="mt-3 rounded-2xl border border-neutral-800 bg-neutral-900/50 p-4">
+  <div class="flex items-baseline justify-between text-sm">
+    <span class="font-medium">Daily goal</span>
+    <span class="text-neutral-400">{stats?.dailyXp ?? 0} / {stats?.dailyGoal ?? 50} XP</span>
+  </div>
+  <div class="mt-2 h-2 overflow-hidden rounded-full bg-neutral-800">
+    <div
+      class="h-full rounded-full bg-emerald-500 transition-all"
+      style="width: {(stats?.goalPct ?? 0) * 100}%"
+    ></div>
+  </div>
+  {#if stats && !stats.todayActive}
+    <p class="mt-2 text-xs text-amber-400">Practise today to keep your streak alive.</p>
+  {:else if stats && stats.goalPct >= 1}
+    <p class="mt-2 text-xs text-emerald-400">Goal reached — nice work today! 🎉</p>
+  {/if}
+</section>
+
+<!-- level progress -->
 {#if stats}
-  <p class="mt-1 text-[11px] text-neutral-600">
-    {stats.levelXp} XP needed for the next level.
-  </p>
+  <section class="mt-3 rounded-2xl border border-neutral-800 bg-neutral-900/50 p-4">
+    <div class="flex items-baseline justify-between text-sm">
+      <span class="font-medium">Level {stats.level}</span>
+      <span class="text-neutral-400">{stats.intoLevel} / {stats.forNext} XP</span>
+    </div>
+    <div class="mt-2 h-2 overflow-hidden rounded-full bg-neutral-800">
+      <div
+        class="h-full rounded-full bg-sky-500 transition-all"
+        style="width: {stats.progress * 100}%"
+      ></div>
+    </div>
+  </section>
 {/if}
 
 <section class="mt-5 space-y-3">

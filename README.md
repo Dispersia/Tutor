@@ -79,7 +79,7 @@ docs/          DESIGN.md (architecture + execution plan)
 - [x] Phase 3 — multi-user auth + SvelteKit PWA (chat, voice, history, settings)
 - [x] Phase 4 — exercise engine + cards (HSK 1 · JLPT N5 · 6 exercise types · XP)
 - [x] Phase 5 — pronunciation scoring (ASR + forced aligner + optional judge)
-- [ ] Phase 6 — gamification
+- [x] Phase 6 — gamification (XP ledger, levels, UTC streaks, daily goal, event bus)
 - [ ] Phase 7 — packaging + docs
 
 ## Configuration
