@@ -55,6 +55,17 @@ let
         mkdir -p "$out/$d"
         printf '{"name":"stub","version":"0.0.0","private":true}' > "$out/$d/package.json"
       done
+
+      # bun records absolute build paths (e.g. node_modules/.modules.yaml), which
+      # would make this fixed-output derivation non-reproducible. Normalise them.
+      for var in "$NIX_BUILD_TOP" "$TMPDIR" "$HOME"; do
+        [ -n "$var" ] || continue
+        files=$(grep -rl -- "$var" "$out" 2>/dev/null || true)
+        [ -n "$files" ] || continue
+        for f in $files; do
+          sed -i "s|$var|/build|g" "$f" 2>/dev/null || true
+        done
+      done
       runHook postInstall
     '';
     outputHashMode = "recursive";
