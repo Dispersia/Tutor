@@ -53,7 +53,7 @@
   <textarea
     bind:value={answer}
     rows="2"
-    class="w-full rounded-xl border border-neutral-700 bg-neutral-900 px-4 py-3 outline-none focus:border-emerald-500"
+    class="w-full rounded-xl border border-ink-600 bg-ink-900 px-4 py-3 outline-none focus:border-gold-500"
     placeholder="Write or say a sentence…"
   ></textarea>
   <div class="flex gap-2">
@@ -64,7 +64,7 @@
         disabled={busy || working}
         class="rounded-xl px-4 py-3 text-sm {recording
           ? 'recording bg-red-600 text-white'
-          : 'border border-neutral-700'} disabled:opacity-50"
+          : 'border border-ink-600'} disabled:opacity-50"
       >
         {working ? '…' : recording ? '● Stop' : '🎤'}
       </button>

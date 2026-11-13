@@ -28,40 +28,44 @@
 </script>
 
 <div class="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-6 pt-safe pb-safe">
-  <h1 class="text-3xl font-semibold tracking-tight">tutor</h1>
-  <p class="mt-1 mb-6 text-sm text-neutral-400">
-    {mode === 'login' ? 'Sign in to continue.' : 'Create your account.'}
-  </p>
+  <div class="mb-7 text-center">
+    <div class="display text-4xl text-gold-200 drop-shadow-[0_0_20px_rgba(232,194,100,0.35)]">
+      tutor
+    </div>
+    <p class="mt-1 text-sm text-ink-400">
+      {mode === 'login' ? 'Sign in to continue.' : 'Create your account.'}
+    </p>
+  </div>
 
   <form onsubmit={submit} class="space-y-4">
     <label class="block">
-      <span class="mb-1 block text-xs text-neutral-400">Username</span>
+      <span class="eyebrow mb-1 block">Username</span>
       <input
         bind:value={username}
         autocomplete="username"
         autocapitalize="none"
         required
-        class="w-full rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-3 outline-none focus:border-neutral-500"
+        class="w-full rounded-xl border border-ink-600 bg-ink-900 px-3 py-3 outline-none focus:border-gold-500"
       />
     </label>
     <label class="block">
-      <span class="mb-1 block text-xs text-neutral-400">Password</span>
+      <span class="eyebrow mb-1 block">Password</span>
       <input
         type="password"
         bind:value={password}
         autocomplete={mode === 'login' ? 'current-password' : 'new-password'}
         required
-        class="w-full rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-3 outline-none focus:border-neutral-500"
+        class="w-full rounded-xl border border-ink-600 bg-ink-900 px-3 py-3 outline-none focus:border-gold-500"
       />
     </label>
 
     {#if mode === 'register'}
       <div class="grid grid-cols-2 gap-3">
         <label class="block">
-          <span class="mb-1 block text-xs text-neutral-400">Learning</span>
+          <span class="eyebrow mb-1 block">Learning</span>
           <select
             bind:value={targetLang}
-            class="w-full rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-3"
+            class="w-full rounded-xl border border-ink-600 bg-ink-900 px-3 py-3"
           >
             <option value="zh">Mandarin</option>
             <option value="ja">Japanese</option>
@@ -70,10 +74,10 @@
           </select>
         </label>
         <label class="block">
-          <span class="mb-1 block text-xs text-neutral-400">Level</span>
+          <span class="eyebrow mb-1 block">Level</span>
           <select
             bind:value={level}
-            class="w-full rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-3"
+            class="w-full rounded-xl border border-ink-600 bg-ink-900 px-3 py-3"
           >
             <option value="hsk1">HSK 1</option>
             <option value="n5">JLPT N5</option>
@@ -87,11 +91,7 @@
       <p class="rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300">{error}</p>
     {/if}
 
-    <button
-      type="submit"
-      disabled={busy}
-      class="w-full rounded-xl bg-emerald-500 py-3 font-medium text-black disabled:opacity-50"
-    >
+    <button type="submit" disabled={busy} class="btn btn-gold w-full py-3">
       {busy ? '…' : mode === 'login' ? 'Sign in' : 'Create account'}
     </button>
   </form>
@@ -101,12 +101,12 @@
       mode = mode === 'login' ? 'register' : 'login'
       error = ''
     }}
-    class="mt-4 text-sm text-neutral-400 underline"
+    class="mt-4 text-sm text-ink-400 underline hover:text-ink-300"
   >
     {mode === 'login' ? 'Need an account? Sign up' : 'Have an account? Sign in'}
   </button>
 
-  <p class="mt-8 text-xs leading-relaxed text-neutral-600">
+  <p class="mt-8 text-xs leading-relaxed text-ink-500">
     Accounts are stored on this Mac only. Each person gets their own history, settings and
     OpenRouter key. The first account created is the admin.
   </p>

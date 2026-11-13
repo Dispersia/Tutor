@@ -57,16 +57,16 @@
 
 <div class="space-y-4">
   <p class="text-lg leading-snug">{instance.prompt}</p>
-  <div class="rounded-xl border border-neutral-800 bg-neutral-900/50 p-4 text-center">
+  <div class="panel p-4 text-center">
     <div class="text-3xl">{target}</div>
-    {#if reading}<div class="mt-1 text-sm text-neutral-400">{reading}</div>{/if}
+    {#if reading}<div class="mt-1 text-sm text-ink-400">{reading}</div>{/if}
   </div>
 
   <div class="flex gap-2">
     <button
       type="button"
       onclick={() => speak(target, { language })}
-      class="flex-1 rounded-xl border border-neutral-700 py-3 text-sm">🔊 Hear it</button
+      class="flex-1 rounded-xl border border-ink-600 py-3 text-sm">🔊 Hear it</button
     >
     {#if canMic}
       <button
@@ -93,7 +93,7 @@
     >
       <input
         placeholder="No mic here — type it instead"
-        class="flex-1 rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
+        class="flex-1 rounded-xl border border-ink-600 bg-ink-900 px-3 py-2 text-sm"
       />
       <button class="rounded-xl bg-emerald-500 px-3 py-2 text-sm text-black">Check</button>
     </form>

@@ -22,8 +22,8 @@
 </script>
 
 <div class="flex items-center gap-3 pt-4 pb-4">
-  <button onclick={() => goto(href('/history'))} class="text-sm text-neutral-400">← Back</button>
-  <h1 class="text-sm font-medium text-neutral-400">Conversation</h1>
+  <button onclick={() => goto(href('/history'))} class="text-sm text-ink-400">← Back</button>
+  <h1 class="text-sm font-medium text-ink-400">Conversation</h1>
 </div>
 
 {#if error}
@@ -36,7 +36,7 @@
           class="max-w-[85%] rounded-2xl px-4 py-2.5 text-[15px] whitespace-pre-wrap {m.role ===
           'user'
             ? 'bg-emerald-600/90 text-white'
-            : 'border border-neutral-800 bg-neutral-900'}"
+            : 'border border-ink-700 bg-ink-900'}"
         >
           {m.text}
         </div>

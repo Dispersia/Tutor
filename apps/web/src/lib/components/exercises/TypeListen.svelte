@@ -39,7 +39,7 @@
     type="button"
     onclick={play}
     disabled={playing}
-    class="w-full rounded-xl border border-neutral-700 bg-neutral-900 py-4 text-lg disabled:opacity-50"
+    class="w-full rounded-xl border border-ink-600 bg-ink-900 py-4 text-lg disabled:opacity-50"
   >
     {playing ? '🔊 playing…' : '🔊 Play again'}
   </button>
@@ -48,7 +48,7 @@
     bind:value={answer}
     autocomplete="off"
     autocapitalize="off"
-    class="w-full rounded-xl border border-neutral-700 bg-neutral-900 px-4 py-4 text-lg outline-none focus:border-emerald-500"
+    class="w-full rounded-xl border border-ink-600 bg-ink-900 px-4 py-4 text-lg outline-none focus:border-gold-500"
     placeholder="Type what you hear…"
   />
   <button

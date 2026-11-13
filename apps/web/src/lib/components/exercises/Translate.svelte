@@ -21,7 +21,7 @@
     bind:value={answer}
     autocomplete="off"
     autocapitalize="off"
-    class="w-full rounded-xl border border-neutral-700 bg-neutral-900 px-4 py-4 text-lg outline-none focus:border-emerald-500"
+    class="w-full rounded-xl border border-ink-600 bg-ink-900 px-4 py-4 text-lg outline-none focus:border-gold-500"
     placeholder="Type your answer…"
   />
   <button

@@ -3,6 +3,7 @@
   import { page } from '$app/state'
   import { goto } from '$app/navigation'
   import { chooseTalent, getSkill, type ActionDTO, type SkillPageResponse } from '#lib/skills'
+  import { CATEGORY, accentStyle, categoryAccent } from '#lib/theme'
 
   let data = $state<SkillPageResponse | null>(null)
   let error = $state('')
@@ -14,14 +15,9 @@
   const id = $derived(page.params.id)
   const pct = (v: number) => `${Math.round(v * 100)}%`
   const skill = $derived(data?.skill ?? null)
+  const accent = $derived(skill ? categoryAccent(skill.category) : '#4fb0e8')
+  const catLabel = $derived(skill ? CATEGORY[skill.category].label : '')
   const itemMap = $derived(new Map((data?.items ?? []).map((i) => [i.id, i])))
-
-  const CATEGORY_LABEL = {
-    gathering: 'Gathering',
-    artisan: 'Artisan',
-    support: 'Support',
-    combat: 'Combat',
-  } as const
 
   $effect(() => {
     const current = id
@@ -72,10 +68,10 @@
   }
 </script>
 
-<div class="flex items-center gap-3 pt-4 pb-3">
-  <button onclick={() => goto(href('/skills'))} class="text-sm text-neutral-400"
-    >← Professions</button
-  >
+<div class="pt-5 pb-3">
+  <button onclick={() => goto(href('/skills'))} class="text-sm text-ink-400 hover:text-ink-300">
+    ← Professions
+  </button>
 </div>
 
 {#if error}
@@ -86,52 +82,54 @@
 {/if}
 
 {#if loading}
-  <p class="text-sm text-neutral-500">Loading…</p>
+  <p class="text-sm text-ink-400">Loading…</p>
 {:else if skill}
-  <!-- Header -------------------------------------------------------------->
-  <section class="rounded-2xl border border-neutral-800 bg-neutral-900/50 p-4">
+  <!-- Header ---------------------------------------------------------------->
+  <section class="panel panel-accent p-4" style={accentStyle(accent)}>
     <div class="flex items-center gap-3">
-      <span class="text-4xl">{skill.icon}</span>
+      <span
+        class="grid h-14 w-14 shrink-0 place-items-center rounded-xl border text-3xl"
+        style="border-color: {accent}66; background: {accent}1f; box-shadow: 0 0 18px -6px {accent}"
+        >{skill.icon}</span
+      >
       <div class="min-w-0 flex-1">
-        <h1 class="text-lg font-semibold">{skill.name}</h1>
-        <p class="text-xs text-neutral-500">
-          {CATEGORY_LABEL[skill.category]} · {skill.description}
-        </p>
+        <h1 class="display text-2xl" style="color: {accent}">{skill.name}</h1>
+        <p class="text-xs text-ink-400">{catLabel} · {skill.description}</p>
       </div>
-      <span class="rounded-full bg-neutral-800 px-3 py-1 text-sm">Lv {skill.level}</span>
+      <div class="level-badge px-2.5 py-1 text-base">{skill.level}</div>
     </div>
 
-    <div class="mt-3 h-2 overflow-hidden rounded-full bg-neutral-800">
-      <div
-        class="h-full rounded-full bg-emerald-500 transition-all"
-        style="width: {skill.progress * 100}%"
-      ></div>
+    <div class="bar mt-4">
+      <i style="width: {skill.progress * 100}%"></i>
     </div>
-    <div class="mt-1 flex justify-between text-[11px] text-neutral-500">
+    <div class="mt-1.5 flex justify-between text-[11px] text-ink-400">
       <span>{skill.intoLevel} / {skill.forNext} xp</span>
       <span>{skill.xp} xp total</span>
     </div>
 
-    <p class="mt-3 rounded-xl bg-neutral-800/60 px-3 py-2 text-xs text-neutral-300">
-      {skill.effectLabel} · currently
-      <span class="font-medium text-emerald-300">{pct(skill.effect.value)}</span>
+    <p
+      class="mt-3 flex items-center gap-2 rounded-lg border border-ink-700 bg-ink-950/40 px-3 py-2 text-xs text-ink-300"
+    >
+      <span class="chip" style={accentStyle(accent)}>{pct(skill.effect.value)}</span>
+      {skill.effectLabel}
     </p>
 
     {#if skill.category === 'combat'}
       <a
         href={href('/combat')}
-        class="mt-3 block rounded-xl border border-neutral-700 px-3 py-2 text-center text-sm"
+        class="btn mt-3 w-full"
+        style="color:#08111b; background: linear-gradient(180deg, #f29b97, {accent}); border: 1px solid {accent}"
         >⚔️ Go to combat →</a
       >
     {/if}
   </section>
 
-  <!-- Talents ------------------------------------------------------------->
-  <h2 class="mt-6 mb-2 text-xs tracking-wide text-neutral-500 uppercase">Talents</h2>
+  <!-- Talents --------------------------------------------------------------->
+  <h2 class="eyebrow mt-6 mb-2">Talents</h2>
 
   {#if skill.talent.pendingChoice}
-    <div class="rounded-2xl border border-amber-700 bg-amber-950/20 p-4">
-      <p class="mb-3 text-sm text-amber-200">
+    <div class="panel panel-accent p-4" style={accentStyle('#e8c264')}>
+      <p class="mb-3 text-sm text-gold-200">
         🎉 Level {skill.talent.milestone} — choose one talent:
       </p>
       <div class="grid gap-2">
@@ -139,42 +137,39 @@
           <button
             onclick={() => pick(o.id)}
             disabled={busy}
-            class="rounded-xl border border-amber-700/60 px-3 py-3 text-left hover:bg-amber-900/20 disabled:opacity-50"
+            class="rounded-xl border border-gold-600/60 bg-gradient-to-b from-gold-500/10 to-transparent px-3 py-3 text-left hover:from-gold-500/20 disabled:opacity-50"
           >
-            <span class="text-sm font-medium">{o.name}</span>
-            <span class="block text-xs text-neutral-400">{o.description}</span>
+            <span class="display block text-sm text-gold-200">{o.name}</span>
+            <span class="block text-xs text-ink-400">{o.description}</span>
           </button>
         {/each}
       </div>
     </div>
   {:else}
-    <p
-      class="mb-3 rounded-xl border border-neutral-800 bg-neutral-900/40 px-3 py-2 text-xs text-neutral-500"
-    >
-      No talent waiting. Next choice at <span class="text-neutral-300"
-        >Lv {skill.talent.nextMilestone}</span
-      >.
+    <p class="panel mb-2 px-3 py-2 text-xs text-ink-400">
+      No talent waiting. Next choice at
+      <span class="gold">Lv {skill.talent.nextMilestone}</span>.
     </p>
   {/if}
 
   {#if skill.talent.owned.length}
     <div class="mt-2 space-y-2">
       {#each skill.talent.owned as t (t.id)}
-        <div class="rounded-2xl border border-neutral-800 bg-neutral-900/50 p-3">
+        <div class="panel p-3">
           <div class="flex items-start gap-3">
             <span class="text-lg">🔹</span>
             <div class="min-w-0 flex-1">
               <div class="flex items-baseline justify-between gap-2">
-                <span class="text-sm font-medium">{t.name}</span>
-                <span class="shrink-0 text-[11px] text-neutral-500">Lv {t.milestone}</span>
+                <span class="display text-sm text-ink-300">{t.name}</span>
+                <span class="level-badge text-[11px]">Lv {t.milestone}</span>
               </div>
-              <p class="text-xs text-neutral-400">{t.description}</p>
+              <p class="text-xs text-ink-400">{t.description}</p>
             </div>
           </div>
 
           <button
             onclick={() => (changing = changing === t.id ? null : t.id)}
-            class="mt-2 text-[11px] text-emerald-400"
+            class="mt-2 text-[11px] text-emerald-400 hover:text-emerald-300"
           >
             {changing === t.id ? 'Cancel' : 'Change talent'}
           </button>
@@ -184,10 +179,10 @@
                 <button
                   onclick={() => pick(o.id)}
                   disabled={busy}
-                  class="rounded-xl border border-neutral-700 px-3 py-2 text-left hover:bg-neutral-800/60 disabled:opacity-50"
+                  class="rounded-xl border border-ink-600 bg-ink-900/60 px-3 py-2 text-left hover:border-ink-500 disabled:opacity-50"
                 >
-                  <span class="text-sm font-medium">{o.name}</span>
-                  <span class="block text-xs text-neutral-400">{o.description}</span>
+                  <span class="display block text-sm text-ink-300">{o.name}</span>
+                  <span class="block text-xs text-ink-400">{o.description}</span>
                 </button>
               {/each}
             </div>
@@ -196,49 +191,49 @@
       {/each}
     </div>
   {:else}
-    <p class="rounded-2xl border border-neutral-800 bg-neutral-900/50 p-3 text-xs text-neutral-500">
-      No talents yet — reach <span class="text-neutral-300">Lv {skill.talent.nextMilestone}</span> to
-      pick your first.
+    <p class="panel p-3 text-xs text-ink-400">
+      No talents yet — reach <span class="gold">Lv {skill.talent.nextMilestone}</span> to pick your first.
     </p>
   {/if}
 
-  <!-- Actions ------------------------------------------------------------->
-  <h2 class="mt-6 mb-2 text-xs tracking-wide text-neutral-500 uppercase">Actions</h2>
+  <!-- Actions --------------------------------------------------------------->
+  <h2 class="eyebrow mt-6 mb-2">Actions</h2>
   <div class="space-y-2">
     {#each skill.actions as a (a.id)}
-      <div class="rounded-2xl border border-neutral-800 bg-neutral-900/50 p-3">
+      <div class="panel p-3" class:opacity-60={!a.unlocked}>
         <div class="flex items-start justify-between gap-3">
           <div class="min-w-0">
-            <div class="text-sm">{a.name}</div>
-            <div class="text-[11px] text-neutral-500">{a.description}</div>
+            <div class="display text-sm text-ink-300">{a.name}</div>
+            <div class="text-[11px] text-ink-400">{a.description}</div>
             <div class="mt-1 flex flex-wrap gap-1 text-[11px]">
               {#each a.consumes ?? [] as c (c.item)}
-                <span class="rounded bg-neutral-800 px-1.5 py-0.5">
+                <span class="chip" style="--accent: #6b7a96">
                   −{c.count}
                   {itemMap.get(c.item)?.icon ?? ''}
                   {itemMap.get(c.item)?.name ?? c.item}
                 </span>
               {/each}
               {#each a.produces ?? [] as p (p.item)}
-                <span class="rounded bg-emerald-900/40 px-1.5 py-0.5 text-emerald-200">
+                <span class="chip" style="--accent: #58c46b">
                   +{p.count}
                   {itemMap.get(p.item)?.icon ?? ''}
                   {itemMap.get(p.item)?.name ?? p.item}
                 </span>
               {/each}
-              <span class="rounded bg-sky-900/40 px-1.5 py-0.5 text-sky-200">+{a.xp} xp</span>
+              <span class="chip" style="--accent: #4fb0e8">+{a.xp} xp</span>
             </div>
           </div>
           <button
             onclick={() => train(a)}
             disabled={!a.unlocked || !a.affordable}
-            class="shrink-0 rounded-xl bg-emerald-500 px-3 py-2 text-sm text-black disabled:opacity-40"
+            class="btn btn-accent shrink-0 px-3 py-2 text-sm"
+            style={accentStyle(accent)}
           >
             Train
           </button>
         </div>
         {#if !a.unlocked || !a.affordable}
-          <p class="mt-1 text-[11px] text-amber-400">
+          <p class="mt-1 text-[11px] text-amber-300">
             {a.unlocked ? 'needs' : 'locked —'}
             {lockedReason(a)}
           </p>
@@ -246,6 +241,7 @@
       </div>
     {/each}
   </div>
+  <div class="h-6"></div>
 {:else}
-  <p class="text-sm text-neutral-500">Profession not found.</p>
+  <p class="text-sm text-ink-400">Profession not found.</p>
 {/if}

@@ -5,6 +5,7 @@
   import { href } from '#lib/paths'
   import { session } from '#lib/session.svelte'
   import { speechStatus, unloadSpeech, wakeSpeech } from '#lib/speech'
+  import { ACCENT, CATEGORY, accentStyle } from '#lib/theme'
   import type { SpeechStatus } from '#lib/types'
   import { LANG_NAMES } from '#lib/voices'
 
@@ -57,126 +58,143 @@
   }
 </script>
 
-<header class="pt-4 pb-5">
-  <h1 class="text-2xl font-semibold tracking-tight">Hi, {session.user?.handle}</h1>
-  <p class="text-sm text-neutral-400">
-    Learning {LANG_NAMES[lang] ?? lang} · {session.user?.level ?? 'HSK 1'}
-  </p>
+<header class="flex items-center justify-between pt-5 pb-4">
+  <div>
+    <p class="eyebrow">Welcome back</p>
+    <h1 class="display text-2xl text-gold-200">{session.user?.handle}</h1>
+    <p class="text-xs text-ink-400">
+      Learning {LANG_NAMES[lang] ?? lang} · {session.user?.level ?? 'HSK 1'}
+    </p>
+  </div>
+  <div
+    class="grid h-14 w-14 place-items-center rounded-full border border-gold-600/70 bg-gradient-to-b from-ink-700 to-ink-900 shadow-[0_0_18px_-4px_rgba(232,194,100,0.55)]"
+  >
+    <span class="text-[9px] leading-none tracking-widest text-ink-400">LV</span>
+    <span class="display -mt-0.5 text-lg leading-none text-gold-200">{stats?.level ?? 1}</span>
+  </div>
 </header>
 
-<section class="grid grid-cols-3 gap-3">
-  <div class="rounded-2xl border border-neutral-800 bg-neutral-900/50 p-3">
-    <div class="text-xs text-neutral-500">XP</div>
-    <div class="mt-1 text-2xl font-semibold">{stats?.xp ?? 0}</div>
+<section class="grid grid-cols-3 gap-2.5">
+  <div class="stat-card p-3" style={accentStyle(ACCENT.xp)}>
+    <div class="eyebrow">XP</div>
+    <div class="display mt-1 text-xl text-gold-200">{stats?.xp ?? 0}</div>
   </div>
-  <div class="rounded-2xl border border-neutral-800 bg-neutral-900/50 p-3">
-    <div class="text-xs text-neutral-500">Streak</div>
-    <div class="mt-1 text-2xl font-semibold">
-      {stats?.streak ?? 0}<span class="text-sm"> d</span>
+  <div class="stat-card p-3" style={accentStyle(ACCENT.streak)}>
+    <div class="eyebrow">Streak</div>
+    <div class="display mt-1 text-xl" style="color: {ACCENT.streak}">
+      {stats?.streak ?? 0}<span class="ml-0.5 text-xs text-ink-400">days</span>
     </div>
   </div>
-  <div class="rounded-2xl border border-neutral-800 bg-neutral-900/50 p-3">
-    <div class="text-xs text-neutral-500">Level</div>
-    <div class="mt-1 text-2xl font-semibold">{stats?.level ?? 1}</div>
+  <div class="stat-card p-3" style={accentStyle(ACCENT.level)}>
+    <div class="eyebrow">Reviews</div>
+    <div class="display mt-1 text-xl" style="color: {ACCENT.level}">{srs?.due ?? 0}</div>
   </div>
 </section>
 
 <!-- daily goal -->
-<section class="mt-3 rounded-2xl border border-neutral-800 bg-neutral-900/50 p-4">
-  <div class="flex items-baseline justify-between text-sm">
-    <span class="font-medium">Daily goal</span>
-    <span class="text-neutral-400">{stats?.dailyXp ?? 0} / {stats?.dailyGoal ?? 50} XP</span>
+<section class="panel mt-3" style={accentStyle(ACCENT.xp)}>
+  <div class="flex items-baseline justify-between px-4 pt-3 text-sm">
+    <span class="display text-gold-200">Daily goal</span>
+    <span class="text-ink-400">{stats?.dailyXp ?? 0} / {stats?.dailyGoal ?? 50} XP</span>
   </div>
-  <div class="mt-2 h-2 overflow-hidden rounded-full bg-neutral-800">
-    <div
-      class="h-full rounded-full bg-emerald-500 transition-all"
-      style="width: {(stats?.goalPct ?? 0) * 100}%"
-    ></div>
+  <div class="bar mx-4 mt-2 mb-3">
+    <i style="width: {(stats?.goalPct ?? 0) * 100}%"></i>
   </div>
   {#if stats && !stats.todayActive}
-    <p class="mt-2 text-xs text-amber-400">Practise today to keep your streak alive.</p>
+    <p class="border-t border-ink-700 px-4 py-2 text-xs text-amber-300">
+      Practise today to keep your streak alive.
+    </p>
   {:else if stats && stats.goalPct >= 1}
-    <p class="mt-2 text-xs text-emerald-400">Goal reached — nice work today! 🎉</p>
+    <p class="border-t border-ink-700 px-4 py-2 text-xs text-emerald-300">
+      Goal reached — nice work today! 🎉
+    </p>
   {/if}
 </section>
 
 <!-- level progress -->
 {#if stats}
-  <section class="mt-3 rounded-2xl border border-neutral-800 bg-neutral-900/50 p-4">
-    <div class="flex items-baseline justify-between text-sm">
-      <span class="font-medium">Level {stats.level}</span>
-      <span class="text-neutral-400">{stats.intoLevel} / {stats.forNext} XP</span>
+  <section class="panel mt-3" style={accentStyle(ACCENT.level)}>
+    <div class="flex items-baseline justify-between px-4 pt-3 text-sm">
+      <span class="display" style="color: {ACCENT.level}">Level {stats.level}</span>
+      <span class="text-ink-400">{stats.intoLevel} / {stats.forNext} XP</span>
     </div>
-    <div class="mt-2 h-2 overflow-hidden rounded-full bg-neutral-800">
-      <div
-        class="h-full rounded-full bg-sky-500 transition-all"
-        style="width: {stats.progress * 100}%"
-      ></div>
+    <div class="bar mx-4 mt-2 mb-3">
+      <i style="width: {stats.progress * 100}%"></i>
     </div>
   </section>
 {/if}
 
-<section class="mt-5 space-y-3">
+<section class="mt-5 grid grid-cols-2 gap-2.5">
   <a
     href={href('/learn')}
-    class="block rounded-2xl bg-emerald-500 px-4 py-4 font-medium text-black"
+    class="tile col-span-2 flex items-center gap-3 p-4"
+    style={accentStyle('#12b886')}
   >
-    {#if srs}
-      {srs.due > 0 ? `Review ${srs.due} due` : 'Continue learning'} · {srs.learned}/{srs.total}
-    {:else}
-      Learn →
-    {/if}
+    <span class="text-3xl drop-shadow">📖</span>
+    <span class="flex-1">
+      <span class="display block text-lg text-white">
+        {srs && srs.due > 0 ? `${srs.due} cards due` : 'Continue learning'}
+      </span>
+      <span class="text-xs text-ink-300">
+        {srs ? `${srs.learned} / ${srs.total} cards learned` : 'Start the guided path'}
+      </span>
+    </span>
+    <span class="text-ink-400">→</span>
   </a>
+
   <a
     href={href('/skills')}
-    class="block rounded-2xl border border-neutral-800 bg-neutral-900/50 px-4 py-4 text-sm"
+    class="tile flex items-center gap-2 p-3 text-sm"
+    style={accentStyle(CATEGORY.artisan.accent)}
   >
-    ⛏️ Train a profession
+    <span class="text-xl">⛏️</span><span>Professions</span>
   </a>
   <a
     href={href('/combat')}
-    class="block rounded-2xl border border-neutral-800 bg-neutral-900/50 px-4 py-4 text-sm"
+    class="tile flex items-center gap-2 p-3 text-sm"
+    style={accentStyle(CATEGORY.combat.accent)}
   >
-    ⚔️ Fight monsters
+    <span class="text-xl">⚔️</span><span>Combat</span>
   </a>
   <a
     href={href('/chat')}
-    class="block rounded-2xl border border-neutral-800 bg-neutral-900/50 px-4 py-4 text-sm"
+    class="tile flex items-center gap-2 p-3 text-sm"
+    style={accentStyle(ACCENT.arcane)}
   >
-    Talk to your tutor
+    <span class="text-xl">💬</span><span>Talk to tutor</span>
   </a>
   <a
     href={href('/history')}
-    class="block rounded-2xl border border-neutral-800 bg-neutral-900/50 px-4 py-4 text-sm"
+    class="tile flex items-center gap-2 p-3 text-sm"
+    style={accentStyle(ACCENT.level)}
   >
-    Browse your history
+    <span class="text-xl">📜</span><span>History</span>
   </a>
 </section>
 
-<section class="mt-5 rounded-2xl border border-neutral-800 bg-neutral-900/50 p-4">
-  <div class="flex items-center justify-between">
+<section class="panel mt-5 mb-6">
+  <div class="flex items-center justify-between px-4 py-3">
     <div>
-      <div class="text-sm font-medium">Speech engine</div>
-      <div class="text-xs text-neutral-400">
+      <div class="display text-sm text-gold-200">Speech engine</div>
+      <div class="text-xs">
         {#if speech?.ready}
-          <span class="text-emerald-400">● awake</span> — {speech.models.join(', ')}
+          <span class="text-emerald-400">● awake</span>
+          <span class="text-ink-400"> — {speech.models.join(', ')}</span>
         {:else if speech?.running}
           <span class="text-amber-400">● starting</span>
         {:else}
-          <span class="text-neutral-500">● asleep</span> — starts on demand, unloads when idle
+          <span class="text-ink-400">● asleep — starts on demand, unloads when idle</span>
         {/if}
       </div>
     </div>
     <div class="flex gap-2">
       {#if !speech?.ready}
-        <button onclick={wake} class="rounded-lg border border-neutral-700 px-3 py-1.5 text-xs"
-          >Wake</button
-        >
+        <button onclick={wake} class="btn btn-ghost px-3 py-1.5 text-xs">Wake</button>
       {/if}
-      <button onclick={free} class="rounded-lg border border-neutral-700 px-3 py-1.5 text-xs"
-        >Free RAM</button
-      >
+      <button onclick={free} class="btn btn-ghost px-3 py-1.5 text-xs">Free RAM</button>
     </div>
   </div>
-  {#if note}<p class="mt-2 text-xs text-neutral-400">{note}</p>{/if}
+  {#if note}
+    <p class="border-t border-ink-700 px-4 py-2 text-xs text-ink-300">{note}</p>
+  {/if}
 </section>

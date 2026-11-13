@@ -159,8 +159,8 @@
 </script>
 
 <div class="pt-4">
-  <h1 class="text-lg font-semibold">Conversation</h1>
-  <p class="text-xs text-neutral-500">
+  <h1 class="display text-2xl text-gold-200">Conversation</h1>
+  <p class="text-xs text-ink-400">
     {lang ? lang.toUpperCase() : 'EN'} · replies are spoken
     {#if speaking}<span class="text-emerald-400">· speaking…</span>{/if}
   </p>
@@ -168,7 +168,7 @@
 
 <div class="space-y-3 pt-4 pb-28">
   {#if messages.length === 0}
-    <p class="rounded-2xl border border-neutral-800 bg-neutral-900/50 p-4 text-sm text-neutral-400">
+    <p class="panel p-4 text-sm text-ink-400">
       Say or type something in your target language to begin. Your tutor answers out loud and keeps
       the whole history.
     </p>
@@ -179,22 +179,18 @@
         class="max-w-[85%] rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed whitespace-pre-wrap {m.role ===
         'user'
           ? 'bg-emerald-600/90 text-white'
-          : 'border border-neutral-800 bg-neutral-900 text-neutral-100'}"
+          : 'border border-ink-700 bg-ink-900 text-white'}"
       >
         {m.text}
         {#if m.role === 'assistant' && m.model}
-          <div class="mt-1 text-[10px] text-neutral-500">{m.model}</div>
+          <div class="mt-1 text-[10px] text-ink-400">{m.model}</div>
         {/if}
       </div>
     </div>
   {/each}
   {#if busy && messages.at(-1)?.text === ''}
     <div class="flex justify-start">
-      <div
-        class="rounded-2xl border border-neutral-800 bg-neutral-900 px-4 py-2.5 text-neutral-500"
-      >
-        …
-      </div>
+      <div class="panel px-4 py-2.5 text-ink-400">…</div>
     </div>
   {/if}
 </div>
@@ -208,9 +204,7 @@
 {/if}
 
 <div class="sticky bottom-16 z-10 mx-auto w-full max-w-2xl pb-3">
-  <div
-    class="flex items-end gap-2 rounded-2xl border border-neutral-800 bg-neutral-900/95 p-2 backdrop-blur"
-  >
+  <div class="flex items-end gap-2 panel p-2 backdrop-blur">
     <textarea
       bind:value={input}
       onkeydown={onKey}
@@ -222,7 +216,7 @@
     <button
       onclick={() => (ttsOn = !ttsOn)}
       title="Speak replies"
-      class="rounded-xl px-2 py-2 text-lg {ttsOn ? 'text-emerald-400' : 'text-neutral-600'}"
+      class="rounded-xl px-2 py-2 text-lg {ttsOn ? 'text-emerald-400' : 'text-ink-500'}"
     >
       {ttsOn ? '🔊' : '🔇'}
     </button>
@@ -234,8 +228,8 @@
         class="rounded-xl px-3 py-2 text-lg {recording
           ? 'recording bg-red-600'
           : transcribing
-            ? 'bg-neutral-700'
-            : 'bg-neutral-800'}"
+            ? 'bg-ink-700'
+            : 'bg-ink-800'}"
       >
         {transcribing ? '…' : recording ? '●' : '🎤'}
       </button>
