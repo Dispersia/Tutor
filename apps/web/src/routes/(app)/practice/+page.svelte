@@ -15,6 +15,8 @@
     type WordFeedback,
   } from '#lib/exercises'
   import { getSkills, type SkillOutcome, type SkillsResponse } from '#lib/skills'
+  import { getCurriculum, type LessonDTO } from '#lib/curriculum'
+  import { href } from '#lib/paths'
 
   let decks = $state<Deck[]>([])
   let deckId = $state<string>('')
@@ -23,12 +25,17 @@
   let skill = $state<SkillOutcome | null>(null)
   let stats = $state<Stats | null>(null)
   let ref = $state<SkillsResponse | null>(null)
+  let lesson = $state<LessonDTO | null>(null)
+  let lessonCompleted = $state(false)
   let loading = $state(true)
   let busy = $state(false)
   let error = $state('')
   let startedAt = $state(0)
 
   const actionId = $derived(page.url.searchParams.get('action') ?? undefined)
+  const lessonId = $derived(page.url.searchParams.get('lesson') ?? undefined)
+  const deckParam = $derived(page.url.searchParams.get('deck') ?? undefined)
+  const focused = $derived(Boolean(actionId || lessonId || deckParam))
   const skillMap = $derived(new Map((ref?.skills ?? []).map((s) => [s.id, s])))
   const itemMap = $derived(new Map((ref?.items ?? []).map((i) => [i.id, i])))
   const actionName = $derived(
@@ -45,9 +52,13 @@
     try {
       const [d, s, sk] = await Promise.all([listDecks(), getStats(), getSkills().catch(() => null)])
       decks = d.decks
-      deckId = decks[0]?.id ?? ''
+      deckId = deckParam ?? decks[0]?.id ?? ''
       stats = s
       ref = sk
+      if (lessonId) {
+        const c = await getCurriculum().catch(() => null)
+        lesson = c?.decks.flatMap((x) => x.lessons).find((l) => l.id === lessonId) ?? null
+      }
       await loadNext()
     } catch (e) {
       error = (e as Error).message
@@ -60,9 +71,10 @@
     error = ''
     result = null
     skill = null
+    lessonCompleted = false
     instance = null
     try {
-      const body = actionId ? { actionId } : deckId ? { deckId } : {}
+      const body = actionId ? { actionId } : lessonId ? { lessonId } : deckId ? { deckId } : {}
       const r = await nextExercise(body)
       instance = r.instance
       startedAt = Date.now()
@@ -82,9 +94,11 @@
         answer,
         latencyMs: Date.now() - startedAt,
         actionId,
+        lessonId,
       })
       result = r.result
       skill = r.skill
+      lessonCompleted = Boolean(r.lessonCompleted)
       stats = r.stats
     } catch (e) {
       error = (e as Error).message
@@ -104,9 +118,11 @@
       form.set('exerciseId', instance.exerciseId)
       form.set('latencyMs', String(Date.now() - startedAt))
       if (actionId) form.set('actionId', actionId)
+      if (lessonId) form.set('lessonId', lessonId)
       const r = await gradeSpeak(form)
       result = r.result
       skill = r.skill
+      lessonCompleted = Boolean(r.lessonCompleted)
       stats = r.stats
     } catch (e) {
       error = (e as Error).message
@@ -124,10 +140,14 @@
 <div class="flex items-center justify-between pt-4 pb-3">
   <div>
     <h1 class="text-lg font-semibold">
-      {actionId ? skillName : 'Practice'}
+      {actionId ? skillName : lesson ? lesson.title : 'Practice'}
     </h1>
     <p class="text-xs text-neutral-500">
-      {actionId ? actionName : 'Free practice — the next drill picks itself'}
+      {actionId
+        ? actionName
+        : lesson
+          ? `${lesson.level.toUpperCase()} · ${lesson.learned}/${lesson.cards} learned`
+          : 'Free practice — spaced repetition picks what’s due'}
     </p>
   </div>
   <div class="flex items-center gap-2 text-xs">
@@ -144,7 +164,7 @@
   </div>
 </div>
 
-{#if !actionId}
+{#if !focused}
   <select
     value={deckId}
     onchange={changeDeck}
@@ -164,6 +184,16 @@
     >Back</button
   >
 {:else if result}
+  {#if lessonCompleted}
+    <div class="mb-3 rounded-2xl border border-emerald-700 bg-emerald-950/40 p-4 text-center">
+      <p class="text-lg font-medium">🎉 Lesson complete — {lesson?.title ?? 'nice work'}!</p>
+      <a
+        href={href('/learn')}
+        class="mt-2 inline-block rounded-xl bg-emerald-500 px-4 py-2 text-sm font-medium text-black"
+        >Back to Learn</a
+      >
+    </div>
+  {/if}
   {#if skill}
     <div class="mb-3 flex flex-wrap gap-2 text-xs">
       <span class="rounded-lg bg-sky-900/40 px-2 py-1 text-sky-200">

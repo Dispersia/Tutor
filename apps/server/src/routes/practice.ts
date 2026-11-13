@@ -1,30 +1,65 @@
 import type { Card, ExerciseDef, Learner } from '@tutor/core'
 import type { Context } from 'hono'
-import type { App, AppEnv } from '../context'
+import type { App, AppEnv, Deps } from '../context'
 import {
   addReview,
   getCard,
   getRoles,
   lastExerciseUse,
+  listCards,
   listDecks,
   otherBacks,
-  pickCard,
 } from '../db/repo'
 import { exerciseCatalog, registry } from '../exercises'
 import {
   actionState,
   awardSkillXp,
   awardXp,
+  checkLessonCompletion,
   consumeItems,
   grantItems,
   recordActivity,
+  recordReview,
+  srsStateMap,
   summary,
 } from '../game/service'
+import { buildLessons } from '../game/curriculum'
 import { ACTION_BY_ID } from '../game/skills'
+import { selectCardId } from '../game/srs'
 import { OpenRouter } from '../llm/openrouter'
 import { resolveUserKey } from '../llm/userkey'
 import { makeAssessor, type AssessFn } from '../pronunciation/assess'
 import { seedStarterDecks } from '../seed/service'
+
+/** Due-first card selection (spaced repetition), optionally within a lesson. */
+function pickStudyCard(
+  deps: Deps,
+  userId: string,
+  deckId?: string,
+  cardIds?: string[],
+): Card | undefined {
+  const ids = cardIds ?? listCards(deps.db, userId, deckId).map((c) => c.id)
+  if (ids.length === 0) return undefined
+  const id = selectCardId(ids, srsStateMap(deps.db, userId), Date.now())
+  return id ? getCard(deps.db, id, userId) : undefined
+}
+
+/** Resolves `level:index` into the lesson's card ids (and its deck). */
+function resolveLesson(
+  deps: Deps,
+  userId: string,
+  lessonId: string,
+): { deckId: string; cardIds: string[]; level: string } | undefined {
+  const [level, indexStr] = lessonId.split(':')
+  const index = Number(indexStr) - 1
+  if (!level || !Number.isFinite(index) || index < 0) return undefined
+  const deck = listDecks(deps.db, userId).find((d) => d.level === level)
+  if (!deck) return undefined
+  const ids = listCards(deps.db, userId, deck.id).map((c) => c.id)
+  const lesson = buildLessons(level, ids)[index]
+  if (!lesson) return undefined
+  return { deckId: deck.id, cardIds: lesson.cardIds, level }
+}
 
 function learnerOf(user: {
   id: string
@@ -128,6 +163,7 @@ export function registerPractice(app: App) {
       deckId?: string
       exerciseId?: string
       actionId?: string
+      lessonId?: string
     }
     seedStarterDecks(deps.db, user.id)
 
@@ -156,7 +192,16 @@ export function registerPractice(app: App) {
       }
     }
 
-    const card = pickCard(deps.db, user.id, deckId)
+    // a guided-curriculum lesson restricts practice to its cards
+    let lessonIds: string[] | undefined
+    if (body.lessonId) {
+      const lesson = resolveLesson(deps, user.id, body.lessonId)
+      if (!lesson) return c.json({ error: 'unknown lesson' }, 404)
+      deckId = lesson.deckId
+      lessonIds = lesson.cardIds
+    }
+
+    const card = pickStudyCard(deps, user.id, deckId, lessonIds)
     if (!card) return c.json({ error: 'no cards in this deck' }, 404)
 
     const learner = learnerOf(user)
@@ -195,6 +240,7 @@ export function registerPractice(app: App) {
       answer?: unknown
       latencyMs?: number
       actionId?: string
+      lessonId?: string
     }
     const card = body.cardId ? getCard(deps.db, body.cardId, user.id) : undefined
     if (!card) return c.json({ error: 'card not found' }, 404)
@@ -249,10 +295,15 @@ export function registerPractice(app: App) {
       correct: result.correct,
     })
     const skill = settleAction(deps, user.id, body.actionId, result)
+    recordReview(deps.db, deps.events, user.id, card.id, result.score, result.correct)
+    const lessonCompleted = body.lessonId
+      ? checkLessonCompletion(deps.db, deps.events, user.id, body.lessonId)
+      : false
 
     return c.json({
       result: { ...result, xp, leveledUp },
       skill,
+      lessonCompleted,
       stats: summary(deps.db, user.id),
     })
   })
@@ -266,6 +317,7 @@ export function registerPractice(app: App) {
     const cardId = String(form.get('cardId') ?? '')
     const exerciseId = String(form.get('exerciseId') ?? '')
     const actionId = form.get('actionId') ? String(form.get('actionId')) : undefined
+    const lessonId = form.get('lessonId') ? String(form.get('lessonId')) : undefined
     const latencyMs = Number(form.get('latencyMs') ?? 0)
 
     if (!(file instanceof File)) return c.json({ error: 'audio file required' }, 400)
@@ -319,9 +371,14 @@ export function registerPractice(app: App) {
         correct: result.correct,
       })
       const skill = settleAction(deps, user.id, actionId, result)
+      recordReview(deps.db, deps.events, user.id, card.id, result.score, result.correct)
+      const lessonCompleted = lessonId
+        ? checkLessonCompletion(deps.db, deps.events, user.id, lessonId)
+        : false
       return c.json({
         result: { ...result, xp, leveledUp },
         skill,
+        lessonCompleted,
         stats: summary(deps.db, user.id),
       })
     } catch (err) {

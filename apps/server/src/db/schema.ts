@@ -197,6 +197,29 @@ export const equipment = sqliteTable('equipment', {
   updatedAt: integer('updated_at').notNull(),
 })
 
+/** Per-user spaced-repetition state (one row per card reviewed). */
+export const srs = sqliteTable('srs', {
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  cardId: text('card_id').notNull(),
+  reps: integer('reps').notNull().default(0),
+  lapses: integer('lapses').notNull().default(0),
+  ease: real('ease').notNull().default(2.5),
+  intervalDays: real('interval_days').notNull().default(0),
+  dueAt: integer('due_at').notNull().default(0),
+  lastReviewAt: integer('last_review_at'),
+})
+
+/** Completed curriculum lessons. */
+export const lessonProgress = sqliteTable('lesson_progress', {
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  lessonId: text('lesson_id').notNull(),
+  completedAt: integer('completed_at'),
+})
+
 /** The player's active combat encounter (one at a time). */
 export const encounters = sqliteTable('encounters', {
   userId: text('user_id')

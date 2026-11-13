@@ -9,11 +9,13 @@ import {
   encounters,
   equipment,
   inventory,
+  lessonProgress,
   messages,
   reviews,
   sessions,
   settings,
   skillProgress,
+  srs,
   stats,
   talents,
   userSettings,
@@ -733,4 +735,48 @@ export function upsertEncounter(
 
 export function clearEncounter(db: Db, userId: string): void {
   db.delete(encounters).where(eq(encounters.userId, userId)).run()
+}
+
+// --- spaced repetition + curriculum (Phase 9) --------------------------------
+
+export function getSrs(db: Db, userId: string, cardId: string) {
+  return db
+    .select()
+    .from(srs)
+    .where(and(eq(srs.userId, userId), eq(srs.cardId, cardId)))
+    .get()
+}
+
+export function listSrs(db: Db, userId: string) {
+  return db.select().from(srs).where(eq(srs.userId, userId)).all()
+}
+
+export function upsertSrs(
+  db: Db,
+  userId: string,
+  cardId: string,
+  s: {
+    reps: number
+    lapses: number
+    ease: number
+    intervalDays: number
+    dueAt: number
+    lastReviewAt: number
+  },
+): void {
+  db.insert(srs)
+    .values({ userId, cardId, ...s })
+    .onConflictDoUpdate({ target: [srs.userId, srs.cardId], set: { ...s } })
+    .run()
+}
+
+export function listLessonProgress(db: Db, userId: string) {
+  return db.select().from(lessonProgress).where(eq(lessonProgress.userId, userId)).all()
+}
+
+export function completeLesson(db: Db, userId: string, lessonId: string): void {
+  db.insert(lessonProgress)
+    .values({ userId, lessonId, completedAt: now() })
+    .onConflictDoNothing()
+    .run()
 }

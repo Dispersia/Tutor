@@ -26,4 +26,8 @@ export const MIGRATIONS: { name: string; sql: string }[] = [
     name: '0005_encounter_consumables.sql',
     sql: '-- Phase 8: auto-used consumables in combat (docs/DESIGN.md §13.5).\n\nALTER TABLE encounters ADD COLUMN player_max_hp INTEGER NOT NULL DEFAULT 0;\nALTER TABLE encounters ADD COLUMN power_bonus REAL NOT NULL DEFAULT 0;\nALTER TABLE encounters ADD COLUMN potion_id TEXT;\nALTER TABLE encounters ADD COLUMN food_eaten INTEGER NOT NULL DEFAULT 0;\n',
   },
+  {
+    name: '0006_srs_curriculum.sql',
+    sql: '-- Phase 9: spaced repetition + guided curriculum (docs/DESIGN.md §13.6).\n\nCREATE TABLE IF NOT EXISTS srs (\n  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,\n  card_id TEXT NOT NULL,\n  reps INTEGER NOT NULL DEFAULT 0,\n  lapses INTEGER NOT NULL DEFAULT 0,\n  ease REAL NOT NULL DEFAULT 2.5,\n  interval_days REAL NOT NULL DEFAULT 0,\n  due_at INTEGER NOT NULL DEFAULT 0,\n  last_review_at INTEGER,\n  PRIMARY KEY (user_id, card_id)\n);\n\nCREATE TABLE IF NOT EXISTS lesson_progress (\n  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,\n  lesson_id TEXT NOT NULL,\n  completed_at INTEGER,\n  PRIMARY KEY (user_id, lesson_id)\n);\n',
+  },
 ]

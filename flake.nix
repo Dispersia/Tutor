@@ -48,8 +48,13 @@
           '';
         };
 
-        # Runnable artifact (dev-shape for now; hermetic bundling in Phase 7).
+        # Runnable artifact. `default` is built for the tailnet gateway (/tutor);
+        # `root` serves at / for a plain `tailscale serve` deployment.
         packages.default = pkgs.callPackage ./nix/package.nix { src = self; };
+        packages.root = pkgs.callPackage ./nix/package.nix {
+          src = self;
+          basePath = "";
+        };
         packages.speech = pkgs.callPackage ./nix/speech.nix { };
 
         apps.default = {

@@ -1,13 +1,15 @@
 <script lang="ts">
-  import { href } from '#lib/paths'
   import { onMount } from 'svelte'
+  import { getSrsStats, type SrsStats } from '#lib/curriculum'
   import { getStats, type Stats } from '#lib/exercises'
+  import { href } from '#lib/paths'
   import { session } from '#lib/session.svelte'
   import { speechStatus, unloadSpeech, wakeSpeech } from '#lib/speech'
   import type { SpeechStatus } from '#lib/types'
   import { LANG_NAMES } from '#lib/voices'
 
   let stats = $state<Stats | null>(null)
+  let srs = $state<SrsStats | null>(null)
   let speech = $state<SpeechStatus | null>(null)
   let note = $state('')
 
@@ -19,6 +21,9 @@
     } catch {
       /* not fatal */
     }
+    getSrsStats()
+      .then((s) => (srs = s))
+      .catch(() => {})
     void refresh()
   })
 
@@ -113,10 +118,20 @@
 
 <section class="mt-5 space-y-3">
   <a
-    href={href('/skills')}
+    href={href('/learn')}
     class="block rounded-2xl bg-emerald-500 px-4 py-4 font-medium text-black"
   >
-    Train a profession →
+    {#if srs}
+      {srs.due > 0 ? `Review ${srs.due} due` : 'Continue learning'} · {srs.learned}/{srs.total}
+    {:else}
+      Learn →
+    {/if}
+  </a>
+  <a
+    href={href('/skills')}
+    class="block rounded-2xl border border-neutral-800 bg-neutral-900/50 px-4 py-4 text-sm"
+  >
+    ⛏️ Train a profession
   </a>
   <a
     href={href('/combat')}

@@ -13,6 +13,7 @@
 
   const tabs = [
     { href: '/home', label: 'Home' },
+    { href: '/learn', label: 'Learn' },
     { href: '/skills', label: 'Skills' },
     { href: '/chat', label: 'Chat' },
     { href: '/history', label: 'History' },
@@ -29,7 +30,7 @@
   <nav
     class="sticky bottom-0 z-10 border-t border-neutral-800 bg-neutral-950/95 backdrop-blur pb-safe"
   >
-    <ul class="mx-auto grid max-w-2xl grid-cols-5">
+    <ul class="mx-auto grid max-w-2xl grid-cols-6">
       {#each tabs as t (t.href)}
         <li>
           <a

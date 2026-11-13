@@ -6,6 +6,7 @@ import {
   combatResolve,
   getPlayerCombat,
   monsterState,
+  recordReview,
   startEncounter,
   summary,
 } from '../game/service'
@@ -124,6 +125,7 @@ export function registerCombat(app: App) {
 
     const hit = combatResolve(deps.db, deps.events, user.id, result.correct)
     if (!hit) return c.json({ error: 'no active encounter' }, 409)
+    recordReview(deps.db, deps.events, user.id, card.id, result.score, result.correct)
 
     const view = encounterView(deps, user.id)
     let next: { instance: unknown } | null = null
