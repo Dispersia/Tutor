@@ -22,4 +22,8 @@ export const MIGRATIONS: { name: string; sql: string }[] = [
     name: '0004_encounters.sql',
     sql: '-- Phase 8: combat encounters (docs/DESIGN.md §13.5).\n\nCREATE TABLE IF NOT EXISTS encounters (\n  user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,\n  monster_id TEXT NOT NULL,\n  monster_hp INTEGER NOT NULL,\n  player_hp INTEGER NOT NULL,\n  total_damage INTEGER NOT NULL DEFAULT 0,\n  xp_earned INTEGER NOT NULL DEFAULT 0,\n  created_at INTEGER NOT NULL,\n  updated_at INTEGER NOT NULL\n);\n',
   },
+  {
+    name: '0005_encounter_consumables.sql',
+    sql: '-- Phase 8: auto-used consumables in combat (docs/DESIGN.md §13.5).\n\nALTER TABLE encounters ADD COLUMN player_max_hp INTEGER NOT NULL DEFAULT 0;\nALTER TABLE encounters ADD COLUMN power_bonus REAL NOT NULL DEFAULT 0;\nALTER TABLE encounters ADD COLUMN potion_id TEXT;\nALTER TABLE encounters ADD COLUMN food_eaten INTEGER NOT NULL DEFAULT 0;\n',
+  },
 ]

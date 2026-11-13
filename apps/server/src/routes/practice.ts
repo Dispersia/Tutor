@@ -201,6 +201,25 @@ export function registerPractice(app: App) {
     const def = body.exerciseId ? registry.get(body.exerciseId) : undefined
     if (!def) return c.json({ error: 'exercise not found' }, 404)
 
+    // an action must be unlocked and affordable before it can settle
+    if (body.actionId) {
+      const action = ACTION_BY_ID.get(body.actionId)
+      if (!action) return c.json({ error: 'unknown action' }, 404)
+      const state = actionState(deps.db, user.id, action)
+      if (!state.unlocked) {
+        return c.json(
+          {
+            error: 'action locked',
+            missingUnlocks: state.missingUnlocks,
+            equipMissing: state.equipMissing,
+          },
+          403,
+        )
+      }
+      if (!state.affordable)
+        return c.json({ error: 'missing materials', missing: state.missing }, 409)
+    }
+
     const learner = learnerOf(user)
     const ctx = {
       card,
@@ -254,6 +273,24 @@ export function registerPractice(app: App) {
     if (!card) return c.json({ error: 'card not found' }, 404)
     const def = exerciseId ? registry.get(exerciseId) : undefined
     if (!def?.gradeAudio) return c.json({ error: 'exercise does not support audio grading' }, 400)
+
+    if (actionId) {
+      const action = ACTION_BY_ID.get(actionId)
+      if (!action) return c.json({ error: 'unknown action' }, 404)
+      const state = actionState(deps.db, user.id, action)
+      if (!state.unlocked) {
+        return c.json(
+          {
+            error: 'action locked',
+            missingUnlocks: state.missingUnlocks,
+            equipMissing: state.equipMissing,
+          },
+          403,
+        )
+      }
+      if (!state.affordable)
+        return c.json({ error: 'missing materials', missing: state.missing }, 409)
+    }
 
     const audio = new Uint8Array(await file.arrayBuffer())
     const learner = learnerOf(user)

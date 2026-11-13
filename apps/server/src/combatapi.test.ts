@@ -103,7 +103,7 @@ test('fight a slime: hits land, a kill drops materials', async () => {
     encounter: { monsterHp: number; playerHp: number }
     instance: Instance
   }
-  expect(start.encounter.monsterHp).toBe(12)
+  expect(start.encounter.monsterHp).toBe(15)
   expect(start.instance).toBeTruthy()
 
   const cards = await cardIndex(app, cookie)

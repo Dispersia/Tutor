@@ -1,4 +1,4 @@
-import { allUserSettings, getRoles, setDailyGoal, setUserSetting } from '../db/repo'
+import { allUserSettings, getRoles, getUserSetting, setDailyGoal, setUserSetting } from '../db/repo'
 import { ROLES, type Role } from '../env'
 import { hasUserKey, saveUserKey } from '../llm/userkey'
 import type { App } from '../context'
@@ -34,6 +34,7 @@ export function registerSettings(app: App) {
       allowedRoles: ROLES,
       voice: readVoicePrefs(deps.db, user.id),
       openrouter: { key: hasUserKey(deps, user.id) },
+      foodThreshold: Number(getUserSetting(deps.db, user.id, 'foodThreshold') ?? 50),
       raw: allUserSettings(deps.db, user.id),
     })
   })
@@ -46,6 +47,7 @@ export function registerSettings(app: App) {
       voice?: Partial<VoicePrefs>
       prefs?: Record<string, string>
       dailyGoal?: number
+      foodThreshold?: number
     }
 
     if (body.roles && typeof body.roles === 'object') {
@@ -77,6 +79,10 @@ export function registerSettings(app: App) {
 
     if (typeof body.dailyGoal === 'number') {
       setDailyGoal(deps.db, user.id, body.dailyGoal)
+    }
+    if (typeof body.foodThreshold === 'number') {
+      const pct = Math.max(10, Math.min(90, Math.round(body.foodThreshold)))
+      setUserSetting(deps.db, user.id, 'foodThreshold', String(pct))
     }
 
     return c.json({

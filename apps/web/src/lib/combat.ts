@@ -33,6 +33,8 @@ export interface EncounterDTO {
   monsterMaxHp: number
   playerHp: number
   playerMaxHp: number
+  potionId?: string | null
+  foodEaten?: number
   totalDamage: number
 }
 
@@ -42,25 +44,34 @@ export interface CombatResponse {
   encounter: EncounterDTO | null
 }
 
+export interface Buff {
+  kind: 'power' | 'maxHp'
+  value: number
+}
+
 export interface HitResult {
   correct: boolean
   damage: number
   monsterHp: number
   playerDamage: number
   playerHp: number
+  playerMaxHp: number
   outcome: 'ongoing' | 'won' | 'lost'
   drops: { item: string; count: number }[]
   xp: number
+  ate: { item: string; heal: number; playerHp: number } | null
   grantedTalents: { id: string; name: string }[]
 }
 
 export const getCombat = () => api<CombatResponse>('/api/combat')
 
 export const startFight = (monsterId: string) =>
-  api<{ monster: MonsterDTO; encounter: EncounterDTO; instance: Instance | null }>(
-    '/api/combat/start',
-    { method: 'POST', body: JSON.stringify({ monsterId }) },
-  )
+  api<{
+    monster: MonsterDTO
+    encounter: EncounterDTO
+    instance: Instance | null
+    drank: { item: string; buff: Buff } | null
+  }>('/api/combat/start', { method: 'POST', body: JSON.stringify({ monsterId }) })
 
 export const combatHit = (body: { exerciseId: string; cardId: string; answer: unknown }) =>
   api<{

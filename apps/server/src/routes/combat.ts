@@ -54,7 +54,9 @@ function encounterView(deps: Deps, userId: string) {
     monsterHp: enc.monsterHp,
     monsterMaxHp: monster?.hp ?? enc.monsterHp,
     playerHp: enc.playerHp,
-    playerMaxHp: player.maxHp,
+    playerMaxHp: enc.playerMaxHp || player.maxHp,
+    potionId: enc.potionId,
+    foodEaten: enc.foodEaten,
     totalDamage: enc.totalDamage,
   }
 }
@@ -85,7 +87,7 @@ export function registerCombat(app: App) {
     const user = c.get('user')!
     const { monsterId } = (await c.req.json().catch(() => ({}))) as { monsterId?: string }
     if (!monsterId) return c.json({ error: 'monsterId required' }, 400)
-    const res = startEncounter(deps.db, user.id, monsterId)
+    const res = startEncounter(deps.db, deps.events, user.id, monsterId)
     if (!res.ok) {
       return c.json({ error: res.error, missing: res.missing, equipMissing: res.equipMissing }, 403)
     }
@@ -94,6 +96,7 @@ export function registerCombat(app: App) {
       monster: res.monster,
       encounter: encounterView(deps, user.id),
       instance: drill?.instance ?? null,
+      drank: res.drank,
     })
   })
 

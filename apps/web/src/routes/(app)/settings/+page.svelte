@@ -31,6 +31,7 @@
   let keyInput = $state('')
   let handle = $state('')
   let dailyGoal = $state(50)
+  let foodThreshold = $state(50)
   let speech = $state<SpeechStatus | null>(null)
   let users = $state<PublicUser[]>([])
   let note = $state('')
@@ -46,12 +47,14 @@
         roleDefaults: Roles
         voice: { mode: 'preset' | 'design'; voices: Record<string, string> }
         openrouter: { key: 'user' | 'server' | false }
+        foodThreshold?: number
       }>('/api/settings')
       roles = s.roles
       roleDefaults = s.roleDefaults
       voiceMode = s.voice.mode
       voices = s.voice.voices
       keyStatus = s.openrouter.key
+      foodThreshold = s.foodThreshold ?? 50
     } catch (e) {
       error = (e as Error).message
     }
@@ -124,6 +127,19 @@
         body: JSON.stringify({ dailyGoal: Number(dailyGoal) }),
       })
       note = 'Daily goal saved.'
+    } catch (e) {
+      error = (e as Error).message
+    }
+  }
+
+  async function saveFoodThreshold() {
+    note = ''
+    try {
+      await api('/api/settings', {
+        method: 'PUT',
+        body: JSON.stringify({ foodThreshold: Number(foodThreshold) }),
+      })
+      note = 'Combat auto-eat threshold saved.'
     } catch (e) {
       error = (e as Error).message
     }
@@ -321,6 +337,30 @@
     />
     <button onclick={saveDailyGoal} class="rounded-xl bg-neutral-100 px-3 py-2 text-sm text-black"
       >Save</button
+    >
+  </div>
+</section>
+
+<!-- Combat ---------------------------------------------------------------->
+<section class="mb-5 rounded-2xl border border-neutral-800 bg-neutral-900/50 p-4">
+  <h2 class="text-sm font-medium">Combat</h2>
+  <p class="mt-1 text-xs text-neutral-400">
+    Food is auto-eaten when your HP drops below this percentage. Potions are auto-drunk at the start
+    of a fight.
+  </p>
+  <div class="mt-3 flex items-center gap-2">
+    <input
+      type="number"
+      min="10"
+      max="90"
+      step="5"
+      bind:value={foodThreshold}
+      class="w-24 rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
+    />
+    <span class="text-sm text-neutral-400">%</span>
+    <button
+      onclick={saveFoodThreshold}
+      class="rounded-xl bg-neutral-100 px-3 py-2 text-sm text-black">Save</button
     >
   </div>
 </section>

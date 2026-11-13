@@ -691,6 +691,14 @@ bonus) + combat XP + overall XP; **lose** → the fight ends with nothing. One
 active encounter per player (`encounters` table). Events: `combat.hit`,
 `combat.ended`.
 
+**Auto-consumables:** food (`cooked_shrimp`/`trout`/`lobster` heal 4/8/14) and
+potions (`attack_potion` +25% power, `restore_potion` +25% max HP). A potion is
+**auto-drunk at the start of a fight**; the best food in your bank is **auto-eaten
+whenever HP drops below the threshold** (default 50%, a per-user setting). Monsters
+are balanced around you bringing food — without it the harder fights are a straight
+race you'll lose. Grading an action also validates unlock + affordability, so
+material costs can't be bypassed by calling the grader directly.
+
 Everything still flows through the **event bus**: `skill.xp`, `skill.level.up`,
 `item.gained`, `item.consumed`, `talent.granted`, `talent.chosen`, `item.equipped`.
 

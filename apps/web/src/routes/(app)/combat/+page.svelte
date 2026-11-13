@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import { goto } from '$app/navigation'
   import { componentFor } from '#lib/components/exercises'
+  import { api } from '#lib/api'
   import {
     combatHit,
     getCombat,
@@ -21,6 +22,8 @@
   let monster = $state<MonsterDTO | null>(null)
   let result = $state<Grade | null>(null)
   let hit = $state<HitResult | null>(null)
+  let drank = $state<{ item: string; buff: { kind: string; value: number } } | null>(null)
+  let foodThreshold = $state(50)
   let busy = $state(false)
   let error = $state('')
   let loading = $state(true)
@@ -29,15 +32,29 @@
   const skillMap = $derived(new Map((ref?.skills ?? []).map((s) => [s.id, s])))
   const name = (id: string) => itemMap.get(id)?.name ?? id
   const icon = (id: string) => itemMap.get(id)?.icon ?? ''
+  const foodCount = $derived(
+    (ref?.inventory ?? []).reduce(
+      (n, i) => n + ((itemMap.get(i.itemId)?.heal ?? 0) > 0 ? i.count : 0),
+      0,
+    ),
+  )
+  const potionCount = $derived(
+    (ref?.inventory ?? []).reduce((n, i) => n + (itemMap.get(i.itemId)?.buff ? i.count : 0), 0),
+  )
 
   onMount(refresh)
 
   async function refresh() {
     try {
-      const [c, s] = await Promise.all([getCombat(), getSkills().catch(() => null)])
+      const [c, s, set] = await Promise.all([
+        getCombat(),
+        getSkills().catch(() => null),
+        api<{ foodThreshold?: number }>('/api/settings').catch(() => null),
+      ])
       data = c
       ref = s
       encounter = c.encounter
+      if (set?.foodThreshold) foodThreshold = set.foodThreshold
     } catch (e) {
       error = (e as Error).message
     } finally {
@@ -52,6 +69,7 @@
       monster = r.monster
       encounter = r.encounter
       instance = r.instance
+      drank = r.drank
       result = null
       hit = null
     } catch (e) {
@@ -90,6 +108,7 @@
     monster = null
     result = null
     hit = null
+    drank = null
     void refresh()
   }
 </script>
@@ -99,6 +118,7 @@
     <h1 class="text-lg font-semibold">Combat</h1>
     <p class="text-xs text-neutral-500">
       {encounter ? 'Answer drills to strike; a miss lets it hit back.' : 'Pick a monster to fight.'}
+      · 🍤 {foodCount} food · 🧪 {potionCount} potions · auto-eat under {foodThreshold}%
     </p>
   </div>
   {#if data}
@@ -118,6 +138,13 @@
 {:else if encounter}
   <!-- active fight -->
   <div class="mb-3 rounded-2xl border border-neutral-800 bg-neutral-900/50 p-4">
+    {#if drank}
+      <p class="mb-2 text-xs text-sky-300">
+        🧪 auto-drunk {name(drank.item)} at the start ({drank.buff.kind === 'power'
+          ? `+${Math.round(drank.buff.value * 100)}% power`
+          : `+${Math.round(drank.buff.value * 100)}% max HP`})
+      </p>
+    {/if}
     <div class="flex items-center justify-between text-sm">
       <span>{encounter.monsterIcon} {encounter.monsterName}</span>
       <span class="text-neutral-400">{encounter.monsterHp}/{encounter.monsterMaxHp}</span>
@@ -154,6 +181,11 @@
       {#if hit.xp > 0}
         <span class="rounded-lg bg-sky-900/40 px-2 py-1 text-sky-200">
           {skillMap.get(monster?.combatSkill ?? '')?.icon ?? ''} +{hit.xp} xp
+        </span>
+      {/if}
+      {#if hit.ate}
+        <span class="rounded-lg bg-amber-900/40 px-2 py-1 text-amber-200">
+          🍤 auto-ate {name(hit.ate.item)} (+{hit.ate.heal})
         </span>
       {/if}
       {#each hit.grantedTalents as t (t.id)}
