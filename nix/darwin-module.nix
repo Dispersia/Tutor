@@ -28,7 +28,8 @@ let
     TUTOR_PORT = toString cfg.port;
     TUTOR_DATA_DIR = dataDir;
     TUTOR_MODELS_DIR = modelsDir;
-  };
+  }
+  // lib.optionalAttrs (cfg.basePath != "") { TUTOR_BASE_PATH = cfg.basePath; };
 
   # launchd runs this through /bin/sh; source an env file if given, then exec.
   tutorScript = ''
@@ -80,6 +81,17 @@ in
       default = null;
       example = "/Users/dispersias/.config/tutor/env";
       description = "File with OPENROUTER_API_KEY and TUTOR_SECRET (sourced before launch).";
+    };
+
+    basePath = mkOption {
+      type = types.str;
+      default = "";
+      example = "/tutor";
+      description = ''
+        URL prefix the app is served under. Set this to the tailnet-gateway route
+        name (e.g. "/tutor") so direct access to <host:port>/tutor works too; the
+        gateway itself already strips the prefix before forwarding.
+      '';
     };
 
     tailscaleServe = {

@@ -1,9 +1,10 @@
 <script lang="ts">
+  import { href } from '#lib/paths'
   import { goto } from '$app/navigation'
   import { session } from '#lib/session.svelte'
 
   $effect(() => {
-    if (session.loaded) void goto(session.user ? '/home' : '/login')
+    if (session.loaded) void goto(href(session.user ? '/home' : '/login'))
   })
 </script>
 

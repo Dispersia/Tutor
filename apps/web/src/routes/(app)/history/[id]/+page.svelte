@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { href } from '#lib/paths'
   import { onMount } from 'svelte'
   import { page } from '$app/state'
   import { goto } from '$app/navigation'
@@ -21,7 +22,7 @@
 </script>
 
 <div class="flex items-center gap-3 pt-4 pb-4">
-  <button onclick={() => goto('/history')} class="text-sm text-neutral-400">← Back</button>
+  <button onclick={() => goto(href('/history'))} class="text-sm text-neutral-400">← Back</button>
   <h1 class="text-sm font-medium text-neutral-400">Conversation</h1>
 </div>
 

@@ -1,4 +1,5 @@
 import { api } from './api'
+import { apiPath } from './paths'
 import type { SpeechStatus } from './types'
 
 let currentAudio: HTMLAudioElement | null = null
@@ -30,7 +31,7 @@ export async function speak(
   opts: { voice?: string; language?: string; mode?: 'preset' | 'design' } = {},
   signal?: AbortSignal,
 ): Promise<void> {
-  const res = await fetch('/api/speech/tts', {
+  const res = await fetch(apiPath('/api/speech/tts'), {
     method: 'POST',
     credentials: 'same-origin',
     headers: { 'content-type': 'application/json' },
@@ -51,7 +52,7 @@ export async function transcribe(blob: Blob, language?: string): Promise<string>
   const fd = new FormData()
   fd.set('file', blob, 'clip.webm')
   if (language) fd.set('language', language)
-  const res = await fetch('/api/speech/asr', {
+  const res = await fetch(apiPath('/api/speech/asr'), {
     method: 'POST',
     credentials: 'same-origin',
     body: fd,

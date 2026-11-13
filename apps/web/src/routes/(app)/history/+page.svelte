@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { href } from '#lib/paths'
   import { onMount } from 'svelte'
   import { api } from '#lib/api'
   import type { ChatSession } from '#lib/types'
@@ -37,14 +38,14 @@
   <p class="text-sm text-red-300">{error}</p>
 {:else if sessions.length === 0}
   <p class="rounded-2xl border border-neutral-800 bg-neutral-900/50 p-4 text-sm text-neutral-400">
-    No conversations yet. <a class="text-emerald-400 underline" href="/chat">Start one →</a>
+    No conversations yet. <a class="text-emerald-400 underline" href={href('/chat')}>Start one →</a>
   </p>
 {:else}
   <ul class="space-y-2">
     {#each sessions as s (s.id)}
       <li>
         <a
-          href="/history/{s.id}"
+          href={href(`/history/${s.id}`)}
           class="block rounded-2xl border border-neutral-800 bg-neutral-900/50 px-4 py-3"
         >
           <div class="flex items-center justify-between">

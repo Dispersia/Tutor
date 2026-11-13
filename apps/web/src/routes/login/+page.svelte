@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { href } from '#lib/paths'
   import { goto } from '$app/navigation'
   import { login, register } from '#lib/session.svelte'
 
@@ -17,7 +18,7 @@
     try {
       if (mode === 'login') await login(username, password)
       else await register(username, password, { targetLang, level })
-      void goto('/home')
+      void goto(href('/home'))
     } catch (err) {
       error = (err as Error).message
     } finally {

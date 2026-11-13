@@ -29,6 +29,14 @@ export const ROLES: Role[] = ['conversation', 'judge', 'generator', 'translator'
 const num = (v: string | undefined, fallback: number): number =>
   v === undefined || v === '' ? fallback : Number(v)
 
+/** Normalises TUTOR_BASE_PATH to '' or '/prefix' (no trailing slash). */
+function normalizeBase(v: string | undefined): string {
+  if (!v) return ''
+  const trimmed = v.trim().replace(/\/+$/, '')
+  if (trimmed === '' || trimmed === '/') return ''
+  return trimmed.startsWith('/') ? trimmed : `/${trimmed}`
+}
+
 export const env = {
   host: process.env.TUTOR_HOST ?? '127.0.0.1',
   port: num(process.env.TUTOR_PORT, 4318),
@@ -36,6 +44,8 @@ export const env = {
   dataDir: process.env.TUTOR_DATA_DIR ?? join(repoRoot, 'data'),
   modelsDir: process.env.TUTOR_MODELS_DIR ?? join(repoRoot, 'models'),
   staticDir: process.env.TUTOR_STATIC_DIR ?? join(repoRoot, 'apps/web/build'),
+  /** Served under this prefix (e.g. /tutor behind a tailnet gateway). */
+  basePath: normalizeBase(process.env.TUTOR_BASE_PATH),
   pythonDir: process.env.TUTOR_PYTHON_DIR ?? join(repoRoot, 'python'),
 
   openrouterKey: process.env.OPENROUTER_API_KEY ?? process.env.TUTOR_OPENROUTER_KEY,

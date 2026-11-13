@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { href } from '#lib/paths'
   import { onMount } from 'svelte'
   import { getStats, type Stats } from '#lib/exercises'
   import { session } from '#lib/session.svelte'
@@ -111,23 +112,23 @@
 {/if}
 
 <section class="mt-5 space-y-3">
-  <a href="/skills" class="block rounded-2xl bg-emerald-500 px-4 py-4 font-medium text-black">
+  <a href={href('/skills')} class="block rounded-2xl bg-emerald-500 px-4 py-4 font-medium text-black">
     Train a profession →
   </a>
   <a
-    href="/combat"
+    href={href('/combat')}
     class="block rounded-2xl border border-neutral-800 bg-neutral-900/50 px-4 py-4 text-sm"
   >
     ⚔️ Fight monsters
   </a>
   <a
-    href="/chat"
+    href={href('/chat')}
     class="block rounded-2xl border border-neutral-800 bg-neutral-900/50 px-4 py-4 text-sm"
   >
     Talk to your tutor
   </a>
   <a
-    href="/history"
+    href={href('/history')}
     class="block rounded-2xl border border-neutral-800 bg-neutral-900/50 px-4 py-4 text-sm"
   >
     Browse your history
