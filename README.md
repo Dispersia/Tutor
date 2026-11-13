@@ -78,7 +78,7 @@ docs/          DESIGN.md (architecture + execution plan)
 - [x] Phase 2 — backend (Hono, SQLite, OpenRouter, speech supervisor) — 21 tests green
 - [x] Phase 3 — multi-user auth + SvelteKit PWA (chat, voice, history, settings)
 - [x] Phase 4 — exercise engine + cards (HSK 1 · JLPT N5 · 6 exercise types · XP)
-- [ ] Phase 5 — pronunciation scoring
+- [x] Phase 5 — pronunciation scoring (ASR + forced aligner + optional judge)
 - [ ] Phase 6 — gamification
 - [ ] Phase 7 — packaging + docs
 

@@ -14,7 +14,7 @@ const defaults: Record<Role, string> = {
 }
 
 /** No server key → no LLM judge, so grading is fully deterministic here. */
-function makeApp() {
+function makeApp(assess?: Deps['assess']) {
   const { db, sqlite } = openDb(':memory:')
   const deps: Deps = {
     db,
@@ -32,6 +32,7 @@ function makeApp() {
     secret: undefined,
     allowRegistration: true,
     sessionTtlMs: 86_400_000,
+    assess,
   }
   const app = createApp(deps, { staticDir: '/nope', log: false })
   return { app, db, sqlite }
@@ -166,5 +167,98 @@ test('LLM deck generation needs a key', async () => {
     auth(cookie, json({ topic: 'food', targetLang: 'zh' })),
   )
   expect(res.status).toBe(502)
+  sqlite.close()
+})
+
+function audioForm(cardId: string, exerciseId: string) {
+  const form = new FormData()
+  form.set('file', new File([new Uint8Array([1, 2, 3])], 'clip.webm', { type: 'audio/webm' }))
+  form.set('cardId', cardId)
+  form.set('exerciseId', exerciseId)
+  return form
+}
+
+test('practice/speak grades recorded audio via the assessor', async () => {
+  const assess = async (_audio: Uint8Array, expected: string) => ({
+    transcript: expected,
+    items: [...expected].map((ch, i) => ({ text: ch, start: i * 0.3, end: i * 0.3 + 0.25 })),
+    duration: 0.3 * expected.length,
+  })
+  const { app, sqlite } = makeApp(assess)
+  const cookie = await signup(app)
+
+  const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
+    decks: { id: string; name: string }[]
+  }
+  const deckId = decks.decks.find((d) => d.name === 'HSK 1')!.id
+  const cards = (await (await app.request(`/api/decks/${deckId}/cards`, auth(cookie))).json()) as {
+    cards: { id: string }[]
+  }
+  const cardId = cards.cards[0]!.id
+
+  const res = await app.request(
+    '/api/practice/speak',
+    auth(cookie, { method: 'POST', body: audioForm(cardId, 'speak_word') }),
+  )
+  expect(res.status).toBe(200)
+  const body = (await res.json()) as {
+    result: { correct: boolean; score: number; detail: { words: unknown[] }; xp: number }
+    stats: { xp: number }
+  }
+  expect(body.result.correct).toBe(true)
+  expect(Array.isArray(body.result.detail.words)).toBe(true)
+  expect(body.result.xp).toBeGreaterThan(0)
+  expect(body.stats.xp).toBe(body.result.xp)
+  sqlite.close()
+})
+
+test('practice/speak rejects bad input', async () => {
+  const assess = async (_a: Uint8Array, expected: string) => ({
+    transcript: expected,
+    items: [],
+    duration: 1,
+  })
+  const { app, sqlite } = makeApp(assess)
+  const cookie = await signup(app)
+  const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
+    decks: { id: string; name: string }[]
+  }
+  const deckId = decks.decks[0]!.id
+  const cards = (await (await app.request(`/api/decks/${deckId}/cards`, auth(cookie))).json()) as {
+    cards: { id: string }[]
+  }
+
+  // no file
+  const noFile = new FormData()
+  noFile.set('cardId', cards.cards[0]!.id)
+  noFile.set('exerciseId', 'speak_word')
+  expect(
+    (await app.request('/api/practice/speak', auth(cookie, { method: 'POST', body: noFile })))
+      .status,
+  ).toBe(400)
+
+  // unknown card
+  expect(
+    (
+      await app.request(
+        '/api/practice/speak',
+        auth(cookie, { method: 'POST', body: audioForm('nope', 'speak_word') }),
+      )
+    ).status,
+  ).toBe(404)
+
+  // exercise that doesn't grade audio
+  expect(
+    (
+      await app.request(
+        '/api/practice/speak',
+        auth(cookie, {
+          method: 'POST',
+          body: audioForm(cards.cards[0]!.id, 'translate.front_to_back'),
+        }),
+      )
+    ).status,
+  ).toBe(400)
+
   sqlite.close()
 })

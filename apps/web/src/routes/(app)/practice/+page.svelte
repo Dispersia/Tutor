@@ -3,6 +3,7 @@
   import { componentFor } from '#lib/components/exercises'
   import {
     gradeExercise,
+    gradeSpeak,
     getStats,
     listDecks,
     nextExercise,
@@ -10,6 +11,7 @@
     type Grade,
     type Instance,
     type Stats,
+    type WordFeedback,
   } from '#lib/exercises'
 
   let decks = $state<Deck[]>([])
@@ -73,6 +75,29 @@
     deckId = (e.target as HTMLSelectElement).value
     void loadNext()
   }
+
+  /** Recorded audio → ASR + aligner + judge (pronunciation). */
+  async function submitAudio(blob: Blob) {
+    if (!instance) return
+    busy = true
+    error = ''
+    try {
+      const form = new FormData()
+      form.set('file', blob, 'clip.webm')
+      form.set('cardId', instance.cardId)
+      form.set('exerciseId', instance.exerciseId)
+      form.set('latencyMs', String(Date.now() - startedAt))
+      const r = await gradeSpeak(form)
+      result = r.result
+      if (stats) stats = { ...stats, xp: r.stats.xp, level: r.stats.level }
+    } catch (e) {
+      error = (e as Error).message
+    } finally {
+      busy = false
+    }
+  }
+
+  const words = $derived((result?.detail?.words as WordFeedback[] | undefined) ?? [])
 </script>
 
 <div class="flex items-center justify-between pt-4 pb-3">
@@ -122,6 +147,19 @@
     {#if result.feedback}
       <p class="mt-1 text-sm text-neutral-400">{result.feedback}</p>
     {/if}
+    {#if words.length}
+      <div class="mt-3 flex flex-wrap gap-2">
+        {#each words as w (w.text)}
+          <span
+            class="rounded-lg px-2 py-1 text-sm {w.ok
+              ? 'bg-emerald-900/50 text-emerald-200'
+              : 'bg-red-900/50 text-red-200'}"
+          >
+            {w.text}{w.tip ? ` · ${w.tip}` : ''}
+          </span>
+        {/each}
+      </div>
+    {/if}
   </div>
   <button
     onclick={loadNext}
@@ -130,6 +168,6 @@
 {:else if instance}
   {@const Comp = componentFor(instance.exerciseId)}
   <div class="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-5">
-    <Comp {instance} {busy} onsubmit={submit} />
+    <Comp {instance} {busy} onsubmit={submit} onspeak={submitAudio} />
   </div>
 {/if}

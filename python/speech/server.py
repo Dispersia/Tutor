@@ -162,6 +162,41 @@ async def align(
         path.unlink(missing_ok=True)
 
 
+@app.post("/v1/assess")
+async def assess(
+    file: UploadFile = File(...),
+    text: str = Form(...),
+    language: str | None = Form(None),
+) -> dict:
+    """One shot for pronunciation: transcribe the attempt + align it to `text`."""
+    if not text.strip():
+        raise HTTPException(status_code=400, detail="text is required")
+    path = await _save_upload(file)
+    try:
+        wav = to_wav16k(path)
+        try:
+            import soundfile as sf
+
+            info = sf.info(str(wav))
+            duration = float(info.frames) / float(info.samplerate or 1)
+        except Exception:
+            duration = 0.0
+        t0 = time.time()
+        with manager.inference():
+            asr = manager.get("asr")
+            transcript = models.asr_transcribe(asr, str(wav), lang_name(language))
+            aligner = manager.get("align")
+            items = models.align_text(aligner, str(wav), text, lang_name(language))
+        return {
+            "transcript": transcript["text"],
+            "items": items,
+            "duration": duration,
+            "ms": (time.time() - t0) * 1000,
+        }
+    finally:
+        path.unlink(missing_ok=True)
+
+
 class TtsRequest(BaseModel):
     text: str
     voice: str | None = None
