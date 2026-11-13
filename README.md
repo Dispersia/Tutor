@@ -14,18 +14,35 @@ Full design: [`docs/DESIGN.md`](docs/DESIGN.md).
 
 Requires [Nix](https://nixos.org/download) with flakes enabled.
 
+**Run it (packaged):**
+
+```bash
+nix run .#fetch-models   # one-time: cache the MLX weights (~11 GB) in ~/.local/share/tutor/models
+nix run .                # build + run; first run creates the speech venv (uv sync)
+```
+
+Open http://127.0.0.1:4318 — the PWA (sign up → chat, talk, practise). The
+packaged `nix build` produces a single ~85 MB Bun binary plus the built PWA; the
+Python/MLX venv and the weights live under `$TUTOR_DATA_DIR` (default
+`~/.local/share/tutor`), never in the Nix store.
+
+**Develop:**
+
 ```bash
 nix develop          # bun + python3.12 + uv + ffmpeg + just
 just setup           # install JS + Python deps
-just models          # download the MLX checkpoints (~6 GB) into ./models
-just dev             # start the API on http://127.0.0.1:4318
-just speech          # (optional) run the speech gateway standalone
-just bench           # (optional) measure latency + peak RAM
+just models          # download the MLX checkpoints into ./models
+just dev             # API on http://127.0.0.1:4318 (serves the built PWA)
+just dev-web         # SvelteKit dev server on :5173
+just bench           # measure ASR/TTS latency + peak RAM
+just check           # typecheck server + web
 ```
 
-Open http://127.0.0.1:4318 — the SvelteKit PWA (sign up → chat or talk).
+Set `OPENROUTER_API_KEY` (server fallback) in `.env` or `~/.config/tutor/env` —
+or let each user paste their own key in Settings. Set `TUTOR_SECRET` to encrypt
+those keys at rest.
 
-## API (Phase 2/3)
+## API
 
 | Endpoint | Purpose |
 | --- | --- |
@@ -33,7 +50,7 @@ Open http://127.0.0.1:4318 — the SvelteKit PWA (sign up → chat or talk).
 | `GET /api/users` · `DELETE /api/users/:id` | admin: manage accounts |
 | `GET /api/health` | server + speech status |
 | `GET /api/models?q=` | live OpenRouter catalogue for the model picker |
-| `GET/PUT /api/settings` | per-user roles + voice prefs |
+| `GET/PUT /api/settings` | per-user roles, voice + daily goal |
 | `PUT /api/settings/openrouter-key` | each user's own key (server key is a fallback) |
 | `POST /api/chat` · `/api/chat/json` | streamed chat (SSE) + structured output |
 | `GET/POST /api/sessions`, `GET /api/sessions/:id` | per-user history |
@@ -48,15 +65,6 @@ the same `id` — no core changes (see `docs/DESIGN.md` §11.2).
 
 Everything except `/api/health`, `/api/models` and the auth routes requires a
 session. All data is scoped to the signed-in user.
-
-## Dev
-
-```bash
-just dev         # API on :4318, serving the built PWA
-just dev-web     # SvelteKit dev server on :5173 (proxies /api → :4318)
-just build       # build the PWA into apps/web/build
-just check       # typecheck server + web
-```
 
 ## Layout
 
@@ -80,7 +88,7 @@ docs/          DESIGN.md (architecture + execution plan)
 - [x] Phase 4 — exercise engine + cards (HSK 1 · JLPT N5 · 6 exercise types · XP)
 - [x] Phase 5 — pronunciation scoring (ASR + forced aligner + optional judge)
 - [x] Phase 6 — gamification (XP ledger, levels, UTC streaks, daily goal, event bus)
-- [ ] Phase 7 — packaging + docs
+- [x] Phase 7 — packaging (`nix build` / `nix run .`) + docs
 
 ## Configuration
 

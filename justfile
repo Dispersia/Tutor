@@ -4,6 +4,18 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 default:
     @just --list
 
+# regenerate the embedded migrations (for compiled builds)
+gen:
+    bun scripts/gen-migrations.mjs
+
+# build + run the packaged app
+package:
+    nix build
+
+# run the packaged app
+run:
+    nix run
+
 # install JS + Python dependencies
 setup:
     bun install
