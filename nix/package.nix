@@ -14,6 +14,30 @@ let
   bun = pkgs.bun;
   node = pkgs.nodejs_24;
 
+  # `path:` flake inputs copy the whole directory (they ignore .gitignore), so
+  # drop dev artefacts — otherwise a stray python/.venv or node_modules in the
+  # checkout ends up in the store and breaks fixup (dangling symlinks).
+  cleanSrc = lib.cleanSourceWith {
+    src = src;
+    filter =
+      path: type:
+      let
+        base = builtins.baseNameOf path;
+      in
+      !(builtins.elem base [
+        ".venv"
+        "node_modules"
+        ".svelte-kit"
+        "data"
+        "models"
+        "result"
+        "build"
+        ".git"
+        ".direnv"
+        "__pycache__"
+      ]);
+  };
+
   # Only manifests + the lockfile feed the dependency FOD, so *code* changes never
   # invalidate it (otherwise every commit would need a new hash).
   depsSrc = builtins.filterSource (
@@ -21,7 +45,7 @@ let
     type == "directory"
     || builtins.baseNameOf path == "package.json"
     || builtins.baseNameOf path == "bun.lock"
-  ) src;
+  ) cleanSrc;
 
   # Fixed-output derivation: just the installed node_modules (needs network once).
   deps = pkgs.stdenvNoCC.mkDerivation {
@@ -76,7 +100,7 @@ let
   appFiles = pkgs.stdenvNoCC.mkDerivation {
     pname = "tutor";
     version = "0.1.0";
-    inherit src;
+    src = cleanSrc;
     nativeBuildInputs = [
       bun
       node
