@@ -5,6 +5,7 @@ import { publicUser } from './db/repo'
 import { registerAuth, currentUser } from './routes/auth'
 import { registerChat } from './routes/chat'
 import { registerCombat } from './routes/combat'
+import { registerCurriculum } from './routes/curriculum'
 import { registerDecks } from './routes/decks'
 import { registerHealth } from './routes/health'
 import { registerModels } from './routes/models'
@@ -48,6 +49,7 @@ export function createApp(deps: Deps, opts: { staticDir: string; log?: boolean }
   registerSettings(app)
   registerDecks(app)
   registerPractice(app)
+  registerCurriculum(app)
   registerSkills(app)
   registerCombat(app)
   registerStats(app)

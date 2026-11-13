@@ -2,6 +2,9 @@
   pkgs,
   lib,
   src,
+  # URL prefix the app is served under. `/tutor` for the tailnet gateway; set to
+  # "" for a root deployment (see `packages.root`).
+  basePath ? "/tutor",
 }:
 # Packages tutor as a self-contained artifact:
 #   * the SvelteKit PWA, built with bun
@@ -122,8 +125,8 @@ let
         [ -d "$d/node_modules" ] && chmod -R u+w "$d/node_modules"
       done
       bun scripts/gen-migrations.mjs
-      # served under /tutor behind the tailnet gateway (override to build for root)
-      export TUTOR_BASE_PATH="''${TUTOR_BASE_PATH:-/tutor}"
+      # served under this prefix (the tailnet gateway strips it for us)
+      export TUTOR_BASE_PATH="${basePath}"
       bun run --cwd apps/web build
       bun build --compile --minify apps/server/src/index.ts --outfile tutor
       runHook postBuild
@@ -154,6 +157,7 @@ pkgs.writeShellApplication {
     mkdir -p "$TUTOR_DATA_DIR" "$TUTOR_MODELS_DIR"
     export HF_HOME="$TUTOR_MODELS_DIR"
     export TUTOR_STATIC_DIR="${appFiles}/share/tutor/web"
+    export TUTOR_BASE_PATH="${basePath}"
 
     # The Python/MLX project must be writable (it grows a venv), so copy it out of
     # the read-only store on first run and let uv create the environment.

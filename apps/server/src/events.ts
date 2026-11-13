@@ -36,6 +36,14 @@ export interface GameEventMap {
   'item.equipped': { userId: string; itemId: string; slot: string }
   'combat.hit': { userId: string; monsterId: string; damage: number; monsterHp: number }
   'combat.ended': { userId: string; monsterId: string; outcome: 'won' | 'lost' }
+  'srs.updated': {
+    userId: string
+    cardId: string
+    reps: number
+    dueAt: number
+    intervalDays: number
+  }
+  'lesson.completed': { userId: string; lessonId: string }
 }
 
 export type GameEventType = keyof GameEventMap

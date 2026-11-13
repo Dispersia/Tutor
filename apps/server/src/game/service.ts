@@ -4,24 +4,42 @@ import {
   addTalent,
   addXpEvent,
   clearEncounter,
+  completeLesson,
   getEncounter,
   getItemCount,
   getSkillXp,
+  getSrs,
   getStats,
   getUserSetting,
   hasTalent,
+  listCards,
+  listDecks,
   listEquipment,
   listInventory,
+  listLessonProgress,
   listSkillProgress,
+  listSrs,
   listTalents,
   setEquipment,
   setSkillXp,
   sumXp,
   upsertEncounter,
+  upsertSrs,
   upsertStats,
   xpEventsFor,
 } from '../db/repo'
 import type { EventBus } from '../events'
+import { seedStarterDecks } from '../seed/service'
+import { buildLessons } from './curriculum'
+import {
+  NEW_SRS,
+  countDue,
+  countNew,
+  isLearned,
+  qualityFromScore,
+  schedule,
+  type SrsState,
+} from './srs'
 import {
   MONSTER_BY_ID,
   incomingDamage,
@@ -678,4 +696,139 @@ export function combatResolve(
     ate,
     grantedTalents: award?.grantedTalents ?? [],
   }
+}
+
+// --- spaced repetition + curriculum (Phase 9, docs/DESIGN.md §13.6) ----------
+
+/** Updates a card's SRS schedule after a review and emits `srs.updated`. */
+export function recordReview(
+  db: Db,
+  bus: EventBus,
+  userId: string,
+  cardId: string,
+  score: number,
+  correct: boolean,
+): SrsState {
+  const row = getSrs(db, userId, cardId)
+  const prev: SrsState = row
+    ? {
+        reps: row.reps,
+        lapses: row.lapses,
+        ease: row.ease,
+        intervalDays: row.intervalDays,
+        dueAt: row.dueAt,
+        lastReviewAt: row.lastReviewAt,
+      }
+    : NEW_SRS
+  const now = Date.now()
+  const next = schedule(prev, qualityFromScore(score, correct), now)
+  upsertSrs(db, userId, cardId, {
+    reps: next.reps,
+    lapses: next.lapses,
+    ease: next.ease,
+    intervalDays: next.intervalDays,
+    dueAt: next.dueAt,
+    lastReviewAt: next.lastReviewAt ?? now,
+  })
+  bus.emit('srs.updated', {
+    userId,
+    cardId,
+    reps: next.reps,
+    dueAt: next.dueAt,
+    intervalDays: next.intervalDays,
+  })
+  return next
+}
+
+export function srsStateMap(db: Db, userId: string): Map<string, SrsState> {
+  return new Map(
+    listSrs(db, userId).map((r) => [
+      r.cardId,
+      {
+        reps: r.reps,
+        lapses: r.lapses,
+        ease: r.ease,
+        intervalDays: r.intervalDays,
+        dueAt: r.dueAt,
+        lastReviewAt: r.lastReviewAt,
+      },
+    ]),
+  )
+}
+
+export interface SrsStats {
+  total: number
+  learned: number
+  due: number
+  new: number
+}
+
+export function srsStats(db: Db, userId: string): SrsStats {
+  const ids = listCards(db, userId).map((c) => c.id)
+  const map = srsStateMap(db, userId)
+  const now = Date.now()
+  return {
+    total: ids.length,
+    learned: ids.filter((id) => isLearned(map.get(id))).length,
+    due: countDue(ids, map, now),
+    new: countNew(ids, map),
+  }
+}
+
+/** The guided path: each deck split into lessons with completion state. */
+export function curriculumView(db: Db, userId: string) {
+  seedStarterDecks(db, userId)
+  const decks = listDecks(db, userId)
+  const srsMap = srsStateMap(db, userId)
+  const completed = new Set(listLessonProgress(db, userId).map((r) => r.lessonId))
+  const now = Date.now()
+
+  return decks.map((d) => {
+    const ids = listCards(db, userId, d.id).map((c) => c.id)
+    const lessons = buildLessons(d.level ?? '', ids).map((l) => {
+      const learned = l.cardIds.filter((id) => isLearned(srsMap.get(id))).length
+      const due = countDue(l.cardIds, srsMap, now)
+      return {
+        ...l,
+        cards: l.cardIds.length,
+        learned,
+        due,
+        complete: completed.has(l.id) || (l.cardIds.length > 0 && learned >= l.cardIds.length),
+      }
+    })
+    return {
+      deckId: d.id,
+      name: d.name,
+      level: d.level,
+      targetLang: d.targetLang,
+      cardCount: Number(d.cardCount),
+      learned: ids.filter((id) => isLearned(srsMap.get(id))).length,
+      due: countDue(ids, srsMap, now),
+      lessons,
+    }
+  })
+}
+
+/** Marks a lesson complete when every card in it has been learned. */
+export function checkLessonCompletion(
+  db: Db,
+  bus: EventBus,
+  userId: string,
+  lessonId: string,
+): boolean {
+  const [level, indexStr] = lessonId.split(':')
+  const index = Number(indexStr) - 1
+  if (!level || !Number.isFinite(index) || index < 0) return false
+  const deck = listDecks(db, userId).find((d) => d.level === level)
+  if (!deck) return false
+  const ids = listCards(db, userId, deck.id).map((c) => c.id)
+  const lesson = buildLessons(level, ids)[index]
+  if (!lesson || lesson.cardIds.length === 0) return false
+  const srsMap = srsStateMap(db, userId)
+  const done = lesson.cardIds.every((id) => isLearned(srsMap.get(id)))
+  if (done) {
+    completeLesson(db, userId, lessonId)
+    bus.emit('lesson.completed', { userId, lessonId })
+  }
+  return done
 }
