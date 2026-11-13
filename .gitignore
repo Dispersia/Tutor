@@ -1,0 +1,30 @@
+# deps
+node_modules/
+.bun/
+
+# nix
+result
+result-*
+
+# data + models (multi-GB / private)
+data/
+models/
+python/.venv/
+.venv/
+
+# build output
+.svelte-kit/
+build/
+dist/
+
+# secrets
+.env
+.env.*
+!.env.example
+
+# misc
+*.log
+.DS_Store
+__pycache__/
+*.pyc
+*.tsbuildinfo

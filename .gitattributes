@@ -1,0 +1,2 @@
+apps/web/src/assets/*.woff2 filter=lfs diff=lfs merge=lfs -text
+apps/server/src/deck/*.txt filter=lfs diff=lfs merge=lfs -text
