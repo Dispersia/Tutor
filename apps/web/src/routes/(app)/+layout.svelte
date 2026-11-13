@@ -40,7 +40,7 @@
           >
             <span
               class="text-base leading-none transition-transform {on
-                ? 'scale-110 drop-shadow-[0_0_7px_rgba(244,217,141,0.6)]'
+                ? 'scale-110'
                 : 'opacity-75 group-hover:opacity-100'}">{t.icon}</span
             >
             <span class="font-medium">{t.label}</span>

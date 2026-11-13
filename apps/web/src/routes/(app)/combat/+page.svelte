@@ -232,7 +232,7 @@
     {#each data?.monsters ?? [] as m (m.id)}
       <div class="panel p-3" class:opacity-70={!m.unlocked}>
         <div class="flex items-center gap-3">
-          <span class="text-2xl drop-shadow">{m.icon}</span>
+          <span class="text-2xl">{m.icon}</span>
           <div class="flex-1">
             <div class="flex items-baseline justify-between">
               <span class="display text-sm text-ink-200">{m.name}</span>
@@ -255,7 +255,7 @@
             onclick={() => fight(m)}
             disabled={!m.unlocked}
             class="btn shrink-0 px-3 py-2 text-sm"
-            style="color:#08111b; background: linear-gradient(180deg, #f29b97, #ef5f5a); border: 1px solid #ef5f5a"
+            style="color:#08111b; background: #ef5f5a; border: 1px solid #b93b37"
           >
             Fight
           </button>

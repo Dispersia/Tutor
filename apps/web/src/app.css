@@ -1,8 +1,9 @@
 @import 'tailwindcss';
 
 /* ---------------------------------------------------------------------------
-   tutor theme — an idle-RPG look (Melvor / Archmage). Deep obsidian surfaces,
-   gold filigree for structure, and a colour per profession category.
+   tutor theme — an idle-RPG look (Melvor / Archmage) with **flat** surfaces:
+   solid obsidian panels, gold filigree for structure, and a colour per
+   profession category. No gradients.
    --------------------------------------------------------------------------- */
 
 @theme {
@@ -12,12 +13,12 @@
     serif;
 
   /* obsidian surfaces (dark → light) */
-  --color-ink-950: #05070c;
-  --color-ink-900: #0a0e16;
-  --color-ink-850: #0f1420;
-  --color-ink-800: #151c2c;
-  --color-ink-700: #202a3d;
-  --color-ink-600: #2f3b53;
+  --color-ink-950: #080b12;
+  --color-ink-900: #0d1119;
+  --color-ink-850: #121722;
+  --color-ink-800: #181f2d;
+  --color-ink-700: #232d40;
+  --color-ink-600: #313d54;
   --color-ink-500: #45536f;
   --color-ink-400: #6b7a96;
   --color-ink-300: #9aa7bf;
@@ -61,13 +62,7 @@ body {
     -apple-system,
     'Segoe UI',
     sans-serif;
-  background-color: var(--color-ink-950);
-  background-image:
-    radial-gradient(900px 620px at 50% -12%, rgba(79, 176, 232, 0.14), transparent 70%),
-    radial-gradient(700px 520px at 100% 0%, rgba(176, 133, 239, 0.1), transparent 70%),
-    radial-gradient(1200px 900px at 50% 120%, rgba(208, 161, 58, 0.06), transparent 70%),
-    linear-gradient(180deg, #0c1119 0%, #070a10 60%, #05070c 100%);
-  background-attachment: fixed;
+  background: var(--color-ink-950);
 }
 
 /* respect the phone's safe areas (notches, gesture bar) */
@@ -81,22 +76,14 @@ body {
 @layer components {
   /* ---- surfaces ---------------------------------------------------------- */
   .panel {
-    border-radius: 0.9rem;
+    border-radius: 0.75rem;
     border: 1px solid var(--color-ink-700);
-    background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0) 45%),
-      linear-gradient(180deg, var(--color-ink-850), var(--color-ink-900));
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.05),
-      0 10px 30px -18px rgba(0, 0, 0, 0.9);
+    background: var(--color-ink-850);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
   }
 
   .panel-accent {
-    border-color: color-mix(in oklab, var(--accent) 40%, var(--color-ink-700));
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.05),
-      0 0 0 1px color-mix(in oklab, var(--accent) 18%, transparent),
-      0 10px 30px -18px rgba(0, 0, 0, 0.9);
+    border-color: color-mix(in oklab, var(--accent) 45%, var(--color-ink-700));
   }
 
   .panel-hd {
@@ -106,7 +93,6 @@ body {
     gap: 0.5rem;
     padding: 0.6rem 0.9rem;
     border-bottom: 1px solid var(--color-ink-700);
-    background: linear-gradient(180deg, rgba(232, 194, 100, 0.1), rgba(232, 194, 100, 0));
     font-family: var(--font-display);
     letter-spacing: 0.02em;
     color: var(--color-gold-300);
@@ -133,16 +119,12 @@ body {
   .tile {
     position: relative;
     overflow: hidden;
-    border-radius: 0.9rem;
+    border-radius: 0.75rem;
     border: 1px solid var(--color-ink-700);
-    background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0) 50%),
-      linear-gradient(180deg, var(--color-ink-850), var(--color-ink-900));
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    background: var(--color-ink-850);
     transition:
       transform 0.12s ease,
-      border-color 0.15s ease,
-      box-shadow 0.15s ease;
+      border-color 0.15s ease;
   }
   .tile::before {
     content: '';
@@ -150,16 +132,11 @@ body {
     inset: 0 0 auto 0;
     height: 3px;
     background: var(--accent);
-    opacity: 0.85;
   }
   .tile:hover,
   .tile:focus-visible {
     transform: translateY(-1px);
     border-color: color-mix(in oklab, var(--accent) 55%, var(--color-ink-700));
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.06),
-      0 0 0 1px color-mix(in oklab, var(--accent) 30%, transparent),
-      0 10px 24px -12px color-mix(in oklab, var(--accent) 45%, transparent);
   }
 
   /* ---- buttons ----------------------------------------------------------- */
@@ -168,7 +145,7 @@ body {
     align-items: center;
     justify-content: center;
     gap: 0.4rem;
-    border-radius: 0.7rem;
+    border-radius: 0.6rem;
     padding: 0.55rem 0.9rem;
     font-size: 0.875rem;
     font-weight: 600;
@@ -186,27 +163,25 @@ body {
     cursor: not-allowed;
   }
   .btn-gold {
-    color: #2a1d03;
+    color: #241a02;
     border: 1px solid var(--color-gold-600);
-    background: linear-gradient(180deg, var(--color-gold-300), var(--color-gold-500));
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    background: var(--color-gold-400);
   }
   .btn-gold:hover {
-    filter: brightness(1.06);
+    filter: brightness(1.08);
   }
   .btn-primary {
-    color: #052b21;
+    color: #04241b;
     border: 1px solid #0b7b60;
-    background: linear-gradient(180deg, #5eead4, #12b886);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+    background: #16c79a;
   }
   .btn-primary:hover {
-    filter: brightness(1.06);
+    filter: brightness(1.08);
   }
   .btn-ghost {
     color: var(--color-ink-300);
     border: 1px solid var(--color-ink-600);
-    background: linear-gradient(180deg, var(--color-ink-800), var(--color-ink-850));
+    background: var(--color-ink-800);
   }
   .btn-ghost:hover {
     color: #eef2f9;
@@ -214,12 +189,8 @@ body {
   }
   .btn-accent {
     color: #08111b;
-    border: 1px solid color-mix(in oklab, var(--accent) 60%, black);
-    background: linear-gradient(
-      180deg,
-      color-mix(in oklab, var(--accent) 80%, white),
-      var(--accent)
-    );
+    border: 1px solid color-mix(in oklab, var(--accent) 65%, black);
+    background: var(--accent);
   }
 
   /* ---- chips / bars ------------------------------------------------------ */
@@ -231,9 +202,9 @@ body {
     padding: 0.15rem 0.45rem;
     font-size: 0.68rem;
     line-height: 1.3;
-    border: 1px solid color-mix(in oklab, var(--accent) 30%, transparent);
-    background: color-mix(in oklab, var(--accent) 16%, var(--color-ink-900));
-    color: color-mix(in oklab, var(--accent) 70%, white);
+    border: 1px solid color-mix(in oklab, var(--accent) 32%, transparent);
+    background: color-mix(in oklab, var(--accent) 14%, var(--color-ink-900));
+    color: color-mix(in oklab, var(--accent) 72%, white);
   }
 
   .bar {
@@ -242,41 +213,33 @@ body {
     border-radius: 999px;
     overflow: hidden;
     background: var(--color-ink-800);
-    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.7);
   }
   .bar > i {
     display: block;
     height: 100%;
     border-radius: 999px;
-    background: linear-gradient(
-      90deg,
-      color-mix(in oklab, var(--accent) 82%, black),
-      color-mix(in oklab, var(--accent) 75%, white)
-    );
-    box-shadow: 0 0 8px -1px var(--accent);
+    background: var(--accent);
     transition: width 0.4s ease;
   }
 
   /* small rounded rank level badge */
   .level-badge {
     min-width: 1.6rem;
-    border-radius: 0.5rem;
+    border-radius: 0.45rem;
     padding: 0.1rem 0.35rem;
     text-align: center;
     font-variant-numeric: tabular-nums;
     font-weight: 700;
     color: var(--color-gold-200);
     border: 1px solid var(--color-gold-600);
-    background: linear-gradient(180deg, rgba(208, 161, 58, 0.35), rgba(208, 161, 58, 0.12));
+    background: rgba(208, 161, 58, 0.16);
   }
 
   .stat-card {
-    border-radius: 0.9rem;
+    border-radius: 0.75rem;
     border: 1px solid var(--color-ink-700);
-    background:
-      linear-gradient(180deg, color-mix(in oklab, var(--accent) 14%, transparent), transparent 60%),
-      linear-gradient(180deg, var(--color-ink-850), var(--color-ink-900));
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    border-left: 3px solid var(--accent);
+    background: var(--color-ink-850);
   }
 }
 

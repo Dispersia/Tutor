@@ -97,10 +97,7 @@
   {#each groups as g (g.key)}
     {#if g.skills.length}
       <div class="mt-5 mb-2 flex items-center gap-2">
-        <span
-          class="h-2.5 w-2.5 rounded-full"
-          style="background: {g.accent}; box-shadow: 0 0 8px {g.accent}"
-        ></span>
+        <span class="h-2.5 w-2.5 rounded-full" style="background: {g.accent}"></span>
         <h2 class="eyebrow">{g.label}</h2>
       </div>
       <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
@@ -113,7 +110,7 @@
               >
             {/if}
             <div class="flex items-center gap-2">
-              <span class="text-2xl drop-shadow">{s.icon}</span>
+              <span class="text-2xl">{s.icon}</span>
               <div class="min-w-0 flex-1">
                 <div class="display truncate text-sm text-ink-300">{s.name}</div>
               </div>

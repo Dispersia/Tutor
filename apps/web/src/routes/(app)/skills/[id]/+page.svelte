@@ -89,8 +89,7 @@
     <div class="flex items-center gap-3">
       <span
         class="grid h-14 w-14 shrink-0 place-items-center rounded-xl border text-3xl"
-        style="border-color: {accent}66; background: {accent}1f; box-shadow: 0 0 18px -6px {accent}"
-        >{skill.icon}</span
+        style="border-color: {accent}66; background: {accent}1f">{skill.icon}</span
       >
       <div class="min-w-0 flex-1">
         <h1 class="display text-2xl" style="color: {accent}">{skill.name}</h1>
@@ -118,7 +117,7 @@
       <a
         href={href('/combat')}
         class="btn mt-3 w-full"
-        style="color:#08111b; background: linear-gradient(180deg, #f29b97, {accent}); border: 1px solid {accent}"
+        style="color:#08111b; background: {accent}; border: 1px solid color-mix(in oklab, {accent} 65%, black)"
         >⚔️ Go to combat →</a
       >
     {/if}
@@ -137,7 +136,7 @@
           <button
             onclick={() => pick(o.id)}
             disabled={busy}
-            class="rounded-xl border border-gold-600/60 bg-gradient-to-b from-gold-500/10 to-transparent px-3 py-3 text-left hover:from-gold-500/20 disabled:opacity-50"
+            class="rounded-xl border border-gold-600/60 bg-gold-500/10 px-3 py-3 text-left hover:bg-gold-500/15 disabled:opacity-50"
           >
             <span class="display block text-sm text-gold-200">{o.name}</span>
             <span class="block text-xs text-ink-400">{o.description}</span>
