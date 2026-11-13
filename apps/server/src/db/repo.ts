@@ -6,6 +6,7 @@ import {
   authSessions,
   cards,
   decks,
+  encounters,
   equipment,
   inventory,
   messages,
@@ -671,4 +672,50 @@ export function lastExerciseUse(db: Db, userId: string): Map<string, number> {
   return new Map(
     rows.filter((r) => r.exerciseId).map((r) => [r.exerciseId as string, Number(r.last)]),
   )
+}
+
+// --- combat encounters (Phase 8) ---------------------------------------------
+
+export function getEncounter(db: Db, userId: string) {
+  return db.select().from(encounters).where(eq(encounters.userId, userId)).get()
+}
+
+export function upsertEncounter(
+  db: Db,
+  userId: string,
+  patch: {
+    monsterId: string
+    monsterHp: number
+    playerHp: number
+    totalDamage?: number
+    xpEarned?: number
+  },
+): void {
+  db.insert(encounters)
+    .values({
+      userId,
+      monsterId: patch.monsterId,
+      monsterHp: patch.monsterHp,
+      playerHp: patch.playerHp,
+      totalDamage: patch.totalDamage ?? 0,
+      xpEarned: patch.xpEarned ?? 0,
+      createdAt: now(),
+      updatedAt: now(),
+    })
+    .onConflictDoUpdate({
+      target: encounters.userId,
+      set: {
+        monsterId: patch.monsterId,
+        monsterHp: patch.monsterHp,
+        playerHp: patch.playerHp,
+        ...(patch.totalDamage !== undefined ? { totalDamage: patch.totalDamage } : {}),
+        ...(patch.xpEarned !== undefined ? { xpEarned: patch.xpEarned } : {}),
+        updatedAt: now(),
+      },
+    })
+    .run()
+}
+
+export function clearEncounter(db: Db, userId: string): void {
+  db.delete(encounters).where(eq(encounters.userId, userId)).run()
 }

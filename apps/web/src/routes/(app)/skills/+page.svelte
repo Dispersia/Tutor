@@ -109,6 +109,13 @@
   </div>
 {/if}
 
+<a
+  href="/combat"
+  class="mb-4 block rounded-2xl border border-neutral-800 bg-neutral-900/50 px-4 py-3 text-sm"
+>
+  ⚔️ Combat — fight monsters for bones, hides and gems →
+</a>
+
 {#if loading}
   <p class="text-sm text-neutral-500">Loading…</p>
 {:else}

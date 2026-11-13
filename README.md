@@ -59,6 +59,7 @@ those keys at rest.
 | `POST /api/practice/next` · `/api/practice/grade` · `/api/practice/speak` | next drill · grade it (+XP) · pronunciation |
 | `GET /api/skills` | the profession board (skills, actions, talents, bank, gear) |
 | `POST /api/skills/talents` · `/api/skills/equip` | choose a talent · equip/unequip gear |
+| `GET /api/combat` · `POST /api/combat/{start,hit}` | monsters, player HP · start a fight · land a hit |
 | `GET /api/stats` | XP, level, streak |
 | `GET /api/speech/health` · `POST /api/speech/{tts,asr,align,assess,wake,unload}` | speech, lazily started/stopped |
 
@@ -92,7 +93,7 @@ docs/          DESIGN.md (architecture + execution plan)
 - [x] Phase 5 — pronunciation scoring (ASR + forced aligner + optional judge)
 - [x] Phase 6 — gamification (XP ledger, levels, UTC streaks, daily goal, event bus)
 - [x] Phase 7 — packaging (`nix build` / `nix run .`) + docs
-- [x] Phase 8 — professions, per-level effects, talents (5/10), materials & combat gating
+- [x] Phase 8 — professions, per-level effects, talents (5/10), materials & combat (monsters, HP, drops)
 
 ## Configuration
 

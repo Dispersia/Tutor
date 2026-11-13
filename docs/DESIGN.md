@@ -681,6 +681,16 @@ arrows, Crafting makes leather armour. Combat actions declare `equip: {slot, tag
 so you must have the right gear equipped (Ranged also spends arrows, Magic spends
 runes). `actionState()` reports `locked / affordable / equipOk` for every action.
 
+**Fights (active, language-driven):** 6 monsters with HP, damage and drop tables.
+Starting a fight requires the monster's skill levels and (sometimes) gear. Each
+drill you answer **correctly lands a hit** for
+`playerPower = (3 + skillLevel*1.5 + weaponPower) * (1 + damageBonus)`; a **miss**
+lets the monster hit you for `monster.damage − armour` (min 1). Your HP is
+`20 + constitution*4 + hpBonus*20 + armour*2`. **Win** → drops (with the Slayer
+bonus) + combat XP + overall XP; **lose** → the fight ends with nothing. One
+active encounter per player (`encounters` table). Events: `combat.hit`,
+`combat.ended`.
+
 Everything still flows through the **event bus**: `skill.xp`, `skill.level.up`,
 `item.gained`, `item.consumed`, `talent.granted`, `talent.chosen`, `item.equipped`.
 

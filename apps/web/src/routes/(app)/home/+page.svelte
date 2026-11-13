@@ -115,6 +115,12 @@
     Train a profession →
   </a>
   <a
+    href="/combat"
+    class="block rounded-2xl border border-neutral-800 bg-neutral-900/50 px-4 py-4 text-sm"
+  >
+    ⚔️ Fight monsters
+  </a>
+  <a
     href="/chat"
     class="block rounded-2xl border border-neutral-800 bg-neutral-900/50 px-4 py-4 text-sm"
   >

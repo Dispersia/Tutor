@@ -197,6 +197,20 @@ export const equipment = sqliteTable('equipment', {
   updatedAt: integer('updated_at').notNull(),
 })
 
+/** The player's active combat encounter (one at a time). */
+export const encounters = sqliteTable('encounters', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  monsterId: text('monster_id').notNull(),
+  monsterHp: integer('monster_hp').notNull(),
+  playerHp: integer('player_hp').notNull(),
+  totalDamage: integer('total_damage').notNull().default(0),
+  xpEarned: integer('xp_earned').notNull().default(0),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+})
+
 export const audioBlobs = sqliteTable('audio_blobs', {
   hash: text('hash').primaryKey(),
   userId: text('user_id'),

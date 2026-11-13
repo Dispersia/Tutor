@@ -63,6 +63,10 @@ export interface ItemDef {
   tier: 'raw' | 'refined' | 'equipment' | 'consumable' | 'coin' | 'other'
   slot?: Slot
   tags?: string[]
+  /** weapon power (added to your combat power when equipped) */
+  power?: number
+  /** armour (reduces incoming monster damage when equipped) */
+  armour?: number
 }
 
 export type Slot = 'weapon' | 'body' | 'legs'
@@ -287,26 +291,32 @@ export const ITEMS: ItemDef[] = [
   item('bronze_sword', 'Bronze sword', '🗡️', 'equipment', 'A melee weapon.', {
     slot: 'weapon',
     tags: ['melee'],
+    power: 3,
   }),
   item('iron_sword', 'Iron sword', '🗡️', 'equipment', 'A stronger melee weapon.', {
     slot: 'weapon',
     tags: ['melee'],
+    power: 6,
   }),
   item('oak_shortbow', 'Oak shortbow', '🏹', 'equipment', 'A ranged weapon.', {
     slot: 'weapon',
     tags: ['bow'],
+    power: 4,
   }),
   item('willow_longbow', 'Willow longbow', '🏹', 'equipment', 'A stronger bow.', {
     slot: 'weapon',
     tags: ['bow'],
+    power: 8,
   }),
   item('leather_body', 'Leather body', '🥋', 'equipment', 'Light armour.', {
     slot: 'body',
     tags: ['armour'],
+    armour: 1,
   }),
   item('steel_platebody', 'Steel platebody', '🛡️', 'equipment', 'Heavy armour.', {
     slot: 'body',
     tags: ['armour'],
+    armour: 3,
   }),
 ]
 

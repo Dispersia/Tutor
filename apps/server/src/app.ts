@@ -4,6 +4,7 @@ import type { App, AppEnv, Deps } from './context'
 import { publicUser } from './db/repo'
 import { registerAuth, currentUser } from './routes/auth'
 import { registerChat } from './routes/chat'
+import { registerCombat } from './routes/combat'
 import { registerDecks } from './routes/decks'
 import { registerHealth } from './routes/health'
 import { registerModels } from './routes/models'
@@ -48,6 +49,7 @@ export function createApp(deps: Deps, opts: { staticDir: string; log?: boolean }
   registerDecks(app)
   registerPractice(app)
   registerSkills(app)
+  registerCombat(app)
   registerStats(app)
   registerChat(app)
   registerSessions(app)
