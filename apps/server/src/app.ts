@@ -10,6 +10,7 @@ import { registerModels } from './routes/models'
 import { registerPractice } from './routes/practice'
 import { registerSessions } from './routes/sessions'
 import { registerSettings } from './routes/settings'
+import { registerSkills } from './routes/skills'
 import { registerSpeech } from './routes/speech'
 import { registerStats } from './routes/stats'
 import { registerStatic } from './static'
@@ -46,6 +47,7 @@ export function createApp(deps: Deps, opts: { staticDir: string; log?: boolean }
   registerSettings(app)
   registerDecks(app)
   registerPractice(app)
+  registerSkills(app)
   registerStats(app)
   registerChat(app)
   registerSessions(app)

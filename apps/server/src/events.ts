@@ -15,6 +15,25 @@ export interface GameEventMap {
   'xp.awarded': { userId: string; amount: number; reason: string; total: number }
   'level.up': { userId: string; level: number }
   'streak.updated': { userId: string; days: number }
+  'skill.xp': { userId: string; skillId: string; amount: number; xp: number; level: number }
+  'skill.level.up': { userId: string; skillId: string; level: number }
+  'item.gained': { userId: string; itemId: string; count: number; total: number }
+  'item.consumed': { userId: string; itemId: string; count: number; total: number }
+  'talent.granted': {
+    userId: string
+    talentId: string
+    skillId: string
+    tier: 'minor' | 'major'
+    milestone: number
+  }
+  'talent.chosen': {
+    userId: string
+    talentId: string
+    skillId: string
+    tier: 'minor' | 'major'
+    milestone: number
+  }
+  'item.equipped': { userId: string; itemId: string; slot: string }
 }
 
 export type GameEventType = keyof GameEventMap

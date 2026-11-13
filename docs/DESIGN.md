@@ -625,6 +625,65 @@ Public endpoints (no session): `GET /api/health`, `GET /api/models`,
 XP examples: correct translation +10, spoken word ≥80 score +15, full
 conversation turn +5, perfect streak bonus +25.
 
+## 13.5 Professions & talents (the game layer)
+
+The game is a **RuneScape/WoW-style profession system** layered on top of the
+language drills. It is *not* an idle game: you pick a profession action, the app
+gives you "the next drill", and a correct answer awards that profession's XP and
+materials.
+
+**Actions are exercise-agnostic.** A profession action defines its tier, XP,
+materials and unlock/equipment requirements — but not the exercise type. The
+trainer picks the eligible drill you have practised *least recently*
+(`pickNextExercise`), so you always get variety instead of the same question type.
+
+**22 professions** in four groups:
+
+| Group | Professions |
+| --- | --- |
+| Gathering | Mining, Woodcutting, Fishing, Farming |
+| Artisan | Smithing, Cooking, Herblore, Fletching, Runecrafting, Crafting, Firemaking, Construction |
+| Support | Thieving, Agility |
+| Combat | Attack, Strength, Defence, Constitution, Ranged, Magic, Prayer, Slayer |
+
+**Materials & chains** (42 items) — gathering produces raw goods, artisans refine
+them, combat consumes gear:
+
+```
+Mining ──ores/essence──► Smithing ──bars──► weapons & armour ──► Attack/Strength
+  └────► Runecrafting ──runes──► Magic
+Woodcutting ──logs─┬─► Fletching ──bows + arrows──► Ranged
+                   ├─► Firemaking ──ash──► Herblore
+                   └─► Construction ──planks──► furniture
+Fishing ──fish──► Cooking ──food──► combat
+Farming ──herbs──► Herblore ──potions──► combat
+Thieving ──gems──► Crafting ──vials──► Herblore ; ──leather──► armour
+Slayer ──bones──► Prayer ; combat drops ──hides/bones/gems──► Crafting/Prayer
+```
+
+**Every level increases something meaningful** — a per-profession passive:
+gathering +1% yield/level, artisans +0.5% bonus-product chance/level, Agility
++0.5% **XP to every profession**/level, combat +1% power/level, Slayer +1% rare
+drops/level, Thieving +2% coins/level. Talents stack on top.
+
+**Talents:**
+- **Every 5 levels** (5, 15, 25, …) → pick **one of three** minor talents
+  (e.g. *Prospector* +10% yield, *Studious* +5% global XP, *Doubler* +5% bonus-
+  product chance).
+- **Every 10 levels** (10, 20, 30, …) → a **single major** talent, granted
+  automatically (`<Skill> mastery N`: +15% yield/power and +5% global XP).
+
+Talent ids encode skill + tier + milestone, so progression continues indefinitely.
+All effects aggregate through `computeBonuses(levels, talents)`.
+
+**Equipment & combat:** Smithing forges weapons/armour, Fletching makes bows and
+arrows, Crafting makes leather armour. Combat actions declare `equip: {slot, tag}`
+so you must have the right gear equipped (Ranged also spends arrows, Magic spends
+runes). `actionState()` reports `locked / affordable / equipOk` for every action.
+
+Everything still flows through the **event bus**: `skill.xp`, `skill.level.up`,
+`item.gained`, `item.consumed`, `talent.granted`, `talent.chosen`, `item.equipped`.
+
 ---
 
 ## 14. Web UI / UX — SvelteKit PWA, mobile-first
@@ -887,11 +946,14 @@ stack before any UI work.**
 - **Acceptance:** `nix run .` serves the app from a clean checkout (after
   `fetch-models`); no store-time Metal needed.
 
-### Phase 8 — Future (post-MVP)
+### Phase 8 — post-MVP
 
-- SRS scheduler (FSRS) + guided curriculum; streaming/barge-in voice; phoneme GOP
-  precision mode; achievements/quests/leaderboards; second speech provider
-  (OpenRouter audio / whisper.cpp); cloud sync / federation; launchd/nix-darwin module.
+- **Done:** professions (22), per-level effects, talents (minor every 5 / major
+  every 10), materials + crafting chains, equipment & gear-gated combat actions.
+- **Next:** deeper combat (monsters, HP, damage rolls, drops), an SRS scheduler
+  (FSRS) + guided curriculum, streaming/barge-in voice, phoneme GOP precision
+  mode, achievements/quests/leaderboards on the event bus, second speech provider
+  (OpenRouter audio / whisper.cpp), cloud sync / federation, launchd/nix-darwin module.
 
 ---
 

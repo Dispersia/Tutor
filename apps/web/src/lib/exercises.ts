@@ -1,4 +1,5 @@
 import { api } from './api'
+import type { SkillOutcome } from './skills'
 
 export interface Instance {
   exerciseId: string
@@ -46,23 +47,27 @@ export const listExercises = () =>
   api<{ exercises: { id: string; title: string; modality: string }[] }>('/api/exercises')
 export const getStats = () => api<Stats>('/api/stats')
 
-export const nextExercise = (body: { deckId?: string; exerciseId?: string }) =>
-  api<{ instance: Instance }>('/api/practice/next', { method: 'POST', body: JSON.stringify(body) })
+export const nextExercise = (body: { deckId?: string; exerciseId?: string; actionId?: string }) =>
+  api<{ instance: Instance; action: { id: string; skillId: string; xp: number } | null }>(
+    '/api/practice/next',
+    { method: 'POST', body: JSON.stringify(body) },
+  )
 
 export const gradeExercise = (body: {
   exerciseId: string
   cardId: string
   answer: unknown
   latencyMs?: number
+  actionId?: string
 }) =>
-  api<{ result: Grade; stats: Stats }>('/api/practice/grade', {
+  api<{ result: Grade; skill: SkillOutcome | null; stats: Stats }>('/api/practice/grade', {
     method: 'POST',
     body: JSON.stringify(body),
   })
 
 /** Recorded-audio grading (pronunciation) — multipart to /api/practice/speak. */
 export const gradeSpeak = (form: FormData) =>
-  api<{ result: Grade; stats: Stats }>('/api/practice/speak', {
+  api<{ result: Grade; skill: SkillOutcome | null; stats: Stats }>('/api/practice/speak', {
     method: 'POST',
     body: form,
   })

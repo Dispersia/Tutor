@@ -154,6 +154,49 @@ export const settings = sqliteTable('settings', {
   value: text('value').notNull(),
 })
 
+/** Per-user skill levels (docs/DESIGN.md §13.5). */
+export const skillProgress = sqliteTable('skill_progress', {
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  skillId: text('skill_id').notNull(),
+  xp: integer('xp').notNull().default(0),
+  level: integer('level').notNull().default(1),
+  updatedAt: integer('updated_at').notNull(),
+})
+
+/** Per-user materials bank. */
+export const inventory = sqliteTable('inventory', {
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  itemId: text('item_id').notNull(),
+  count: integer('count').notNull().default(0),
+  updatedAt: integer('updated_at').notNull(),
+})
+
+/** Per-user talents (5-level choices + 10-level majors). */
+export const talents = sqliteTable('talents', {
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  talentId: text('talent_id').notNull(),
+  skillId: text('skill_id').notNull(),
+  tier: text('tier').notNull(),
+  milestone: integer('milestone').notNull(),
+  grantedAt: integer('granted_at').notNull(),
+})
+
+/** Equipped gear, one item per slot. */
+export const equipment = sqliteTable('equipment', {
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  slot: text('slot').notNull(),
+  itemId: text('item_id').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+})
+
 export const audioBlobs = sqliteTable('audio_blobs', {
   hash: text('hash').primaryKey(),
   userId: text('user_id'),

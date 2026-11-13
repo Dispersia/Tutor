@@ -6,11 +6,15 @@ import {
   authSessions,
   cards,
   decks,
+  equipment,
+  inventory,
   messages,
   reviews,
   sessions,
   settings,
+  skillProgress,
   stats,
+  talents,
   userSettings,
   users,
   xpEvents,
@@ -546,4 +550,125 @@ export function upsertStats(
 
 export function setDailyGoal(db: Db, userId: string, goal: number): void {
   upsertStats(db, userId, { dailyGoal: Math.max(10, Math.min(1000, Math.round(goal))) })
+}
+
+// --- skills + materials bank (Phase 8) ---------------------------------------
+
+export function getSkillXp(db: Db, userId: string, skillId: string): number {
+  const row = db
+    .select()
+    .from(skillProgress)
+    .where(and(eq(skillProgress.userId, userId), eq(skillProgress.skillId, skillId)))
+    .get()
+  return row?.xp ?? 0
+}
+
+export function listSkillProgress(db: Db, userId: string) {
+  return db.select().from(skillProgress).where(eq(skillProgress.userId, userId)).all()
+}
+
+export function setSkillXp(
+  db: Db,
+  userId: string,
+  skillId: string,
+  xp: number,
+  level: number,
+): void {
+  db.insert(skillProgress)
+    .values({ userId, skillId, xp, level, updatedAt: now() })
+    .onConflictDoUpdate({
+      target: [skillProgress.userId, skillProgress.skillId],
+      set: { xp, level, updatedAt: now() },
+    })
+    .run()
+}
+
+export function getItemCount(db: Db, userId: string, itemId: string): number {
+  const row = db
+    .select()
+    .from(inventory)
+    .where(and(eq(inventory.userId, userId), eq(inventory.itemId, itemId)))
+    .get()
+  return row?.count ?? 0
+}
+
+export function listInventory(db: Db, userId: string) {
+  return db.select().from(inventory).where(eq(inventory.userId, userId)).all()
+}
+
+/** Adds (or removes, with a negative delta) materials; never goes below zero. */
+export function addItems(db: Db, userId: string, itemId: string, delta: number): void {
+  db.insert(inventory)
+    .values({ userId, itemId, count: Math.max(0, delta), updatedAt: now() })
+    .onConflictDoUpdate({
+      target: [inventory.userId, inventory.itemId],
+      set: { count: sql`max(0, ${inventory.count} + ${delta})`, updatedAt: now() },
+    })
+    .run()
+}
+
+// --- talents + equipment (Phase 8) -------------------------------------------
+
+export function listTalents(db: Db, userId: string) {
+  return db.select().from(talents).where(eq(talents.userId, userId)).all()
+}
+
+export function hasTalent(db: Db, userId: string, talentId: string): boolean {
+  const row = db
+    .select()
+    .from(talents)
+    .where(and(eq(talents.userId, userId), eq(talents.talentId, talentId)))
+    .get()
+  return Boolean(row)
+}
+
+export function addTalent(
+  db: Db,
+  userId: string,
+  t: { talentId: string; skillId: string; tier: string; milestone: number },
+): void {
+  db.insert(talents)
+    .values({
+      userId,
+      talentId: t.talentId,
+      skillId: t.skillId,
+      tier: t.tier,
+      milestone: t.milestone,
+      grantedAt: now(),
+    })
+    .onConflictDoNothing()
+    .run()
+}
+
+export function listEquipment(db: Db, userId: string) {
+  return db.select().from(equipment).where(eq(equipment.userId, userId)).all()
+}
+
+export function setEquipment(db: Db, userId: string, slot: string, itemId: string | null): void {
+  if (itemId === null) {
+    db.delete(equipment)
+      .where(and(eq(equipment.userId, userId), eq(equipment.slot, slot)))
+      .run()
+    return
+  }
+  db.insert(equipment)
+    .values({ userId, slot, itemId, updatedAt: now() })
+    .onConflictDoUpdate({
+      target: [equipment.userId, equipment.slot],
+      set: { itemId, updatedAt: now() },
+    })
+    .run()
+}
+
+/** exerciseId -> most recent use timestamp, for "the next drill" rotation. */
+export function lastExerciseUse(db: Db, userId: string): Map<string, number> {
+  const rows = db
+    .select({ exerciseId: reviews.exerciseId, last: sql<number>`max(${reviews.createdAt})` })
+    .from(reviews)
+    .where(eq(reviews.userId, userId))
+    .groupBy(reviews.exerciseId)
+    .all()
+  return new Map(
+    rows.filter((r) => r.exerciseId).map((r) => [r.exerciseId as string, Number(r.last)]),
+  )
 }

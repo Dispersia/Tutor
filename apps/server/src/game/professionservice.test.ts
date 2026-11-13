@@ -1,0 +1,131 @@
+import { expect, test } from 'bun:test'
+import { openDb } from '../db/client'
+import { addItems, createUser, getItemCount, listEquipment, listTalents } from '../db/repo'
+import { EventBus } from '../events'
+import { ACTION_BY_ID, skillXpForLevel } from './skills'
+import { minorOptions } from './talents'
+import {
+  actionState,
+  aggregateBonuses,
+  awardSkillXp,
+  chooseTalent,
+  equipItem,
+  grantItems,
+  skillLevelOf,
+  unequipItem,
+} from './service'
+
+/** XP needed to reach `level` from scratch. */
+function xpForLevel(level: number): number {
+  let total = 0
+  for (let i = 1; i < level; i++) total += skillXpForLevel(i)
+  return total
+}
+
+function setup() {
+  const { db, sqlite } = openDb(':memory:')
+  const bus = new EventBus()
+  const user = createUser(db, { username: 'alice', passwordHash: 'x' })
+  return { db, bus, user, sqlite }
+}
+
+test('awardSkillXp levels up and auto-grants a major at every 10 levels', () => {
+  const { db, bus, user, sqlite } = setup()
+  const events: string[] = []
+  bus.on('skill.level.up', (e) => events.push(`lvl:${e.level}`))
+  bus.on('talent.granted', (e) => events.push(`major:${e.talentId}`))
+
+  const r = awardSkillXp(db, bus, user.id, 'mining', xpForLevel(10))
+  expect(r.level).toBe(10)
+  expect(r.leveledUp).toBe(true)
+  expect(events).toContain('lvl:10')
+  expect(events).toContain('major:mining:M:10')
+  expect(listTalents(db, user.id).some((t) => t.talentId === 'mining:M:10')).toBe(true)
+  // no major for the 20 milestone yet
+  expect(listTalents(db, user.id).some((t) => t.talentId === 'mining:M:20')).toBe(false)
+  sqlite.close()
+})
+
+test('per-level effects boost skill XP gains', () => {
+  const { db, bus, user, sqlite } = setup()
+  // Agility 11 gives +5% global XP (and its level-10 major adds another +5%).
+  awardSkillXp(db, bus, user.id, 'agility', xpForLevel(11))
+  const bonus = aggregateBonuses(db, user.id)
+  expect(bonus.globalXp).toBeGreaterThan(0)
+  const before = skillLevelOf(db, user.id, 'mining')
+  const r = awardSkillXp(db, bus, user.id, 'mining', 100)
+  expect(before).toBe(1)
+  expect(r.gained).toBe(Math.round(100 * (1 + bonus.xp('mining') + bonus.globalXp)))
+  expect(r.gained).toBeGreaterThan(100)
+  sqlite.close()
+})
+
+test('chooseTalent: pick one of three at a 5-level milestone, once', () => {
+  const { db, bus, user, sqlite } = setup()
+  awardSkillXp(db, bus, user.id, 'mining', xpForLevel(5))
+
+  const options = minorOptions('mining', 5)
+  const first = chooseTalent(db, bus, user.id, options[0]!.id)
+  expect(first.ok).toBe(true)
+  expect(first.talent?.id).toBe(options[0]!.id)
+
+  const again = chooseTalent(db, bus, user.id, options[1]!.id)
+  expect(again.ok).toBe(false)
+  expect(again.error).toContain('no pending')
+
+  // a wrong-milestone / invalid option is rejected
+  awardSkillXp(db, bus, user.id, 'mining', xpForLevel(15) - xpForLevel(5))
+  expect(chooseTalent(db, bus, user.id, 'mining:m:5:2').ok).toBe(false)
+  expect(chooseTalent(db, bus, user.id, 'mining:m:15:1').ok).toBe(true)
+  sqlite.close()
+})
+
+test('grantItems applies yield + double bonuses', () => {
+  const { db, bus, user, sqlite } = setup()
+  // no bonuses: exactly the base count
+  grantItems(db, bus, user.id, 'mining', [{ item: 'copper_ore', count: 1 }], () => 0.99)
+  expect(getItemCount(db, user.id, 'copper_ore')).toBe(1)
+
+  // mining 11 → +10% yield; rand=0 carries the fraction to +1
+  awardSkillXp(db, bus, user.id, 'mining', xpForLevel(11))
+  grantItems(db, bus, user.id, 'mining', [{ item: 'copper_ore', count: 1 }], () => 0)
+  expect(getItemCount(db, user.id, 'copper_ore')).toBe(3) // 1 + 1 (carry) + 1 (double roll)
+  sqlite.close()
+})
+
+test('equip / unequip moves gear between bank and slots', () => {
+  const { db, bus, user, sqlite } = setup()
+  addItems(db, user.id, 'bronze_sword', 1)
+  const res = equipItem(db, bus, user.id, 'bronze_sword')
+  expect(res.ok).toBe(true)
+  expect(listEquipment(db, user.id)).toEqual([
+    expect.objectContaining({ slot: 'weapon', itemId: 'bronze_sword' }),
+  ])
+  expect(getItemCount(db, user.id, 'bronze_sword')).toBe(0)
+
+  unequipItem(db, user.id, 'weapon')
+  expect(listEquipment(db, user.id).length).toBe(0)
+  expect(getItemCount(db, user.id, 'bronze_sword')).toBe(1)
+
+  expect(equipItem(db, bus, user.id, 'copper_ore').ok).toBe(false) // not equippable
+  sqlite.close()
+})
+
+test('combat actions require the right equipped gear', () => {
+  const { db, bus, user, sqlite } = setup()
+  const attack = ACTION_BY_ID.get('train-attack')!
+  expect(actionState(db, user.id, attack).equipOk).toBe(false)
+  expect(actionState(db, user.id, attack).unlocked).toBe(false)
+
+  addItems(db, user.id, 'bronze_sword', 1)
+  equipItem(db, bus, user.id, 'bronze_sword')
+  expect(actionState(db, user.id, attack).equipOk).toBe(true)
+  expect(actionState(db, user.id, attack).unlocked).toBe(true)
+
+  // a bow does not satisfy a melee requirement
+  unequipItem(db, user.id, 'weapon')
+  addItems(db, user.id, 'oak_shortbow', 1)
+  equipItem(db, bus, user.id, 'oak_shortbow')
+  expect(actionState(db, user.id, attack).equipOk).toBe(false)
+  sqlite.close()
+})
