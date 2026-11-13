@@ -30,6 +30,7 @@
             sqlite
             pkg-config
             mkcert # local HTTPS so the Android phone can use its mic (§14.1)
+            caddy # optional reverse proxy in front of the app (see deploy/)
           ];
 
           shellHook = ''
@@ -67,5 +68,9 @@
           touch $out
         '';
       }
-    );
+    )
+    // {
+      # Import into a nix-darwin configuration: imports = [ tutor.darwinModules.default ];
+      darwinModules.default = import ./nix/darwin-module.nix { inherit self; };
+    };
 }
