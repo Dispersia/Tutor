@@ -18,4 +18,8 @@ export const MIGRATIONS: { name: string; sql: string }[] = [
     name: '0003_talents_equipment.sql',
     sql: '-- Phase 8: talents + equipment (docs/DESIGN.md §13.5).\n\nCREATE TABLE IF NOT EXISTS talents (\n  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,\n  talent_id TEXT NOT NULL,\n  skill_id TEXT NOT NULL,\n  tier TEXT NOT NULL,\n  milestone INTEGER NOT NULL,\n  granted_at INTEGER NOT NULL,\n  PRIMARY KEY (user_id, talent_id)\n);\n\nCREATE TABLE IF NOT EXISTS equipment (\n  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,\n  slot TEXT NOT NULL,\n  item_id TEXT NOT NULL,\n  updated_at INTEGER NOT NULL,\n  PRIMARY KEY (user_id, slot)\n);\n',
   },
+  {
+    name: '0004_encounters.sql',
+    sql: '-- Phase 8: combat encounters (docs/DESIGN.md §13.5).\n\nCREATE TABLE IF NOT EXISTS encounters (\n  user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,\n  monster_id TEXT NOT NULL,\n  monster_hp INTEGER NOT NULL,\n  player_hp INTEGER NOT NULL,\n  total_damage INTEGER NOT NULL DEFAULT 0,\n  xp_earned INTEGER NOT NULL DEFAULT 0,\n  created_at INTEGER NOT NULL,\n  updated_at INTEGER NOT NULL\n);\n',
+  },
 ]

@@ -3,6 +3,8 @@ import {
   addItems,
   addTalent,
   addXpEvent,
+  clearEncounter,
+  getEncounter,
   getItemCount,
   getSkillXp,
   getStats,
@@ -14,10 +16,19 @@ import {
   setEquipment,
   setSkillXp,
   sumXp,
+  upsertEncounter,
   upsertStats,
   xpEventsFor,
 } from '../db/repo'
 import type { EventBus } from '../events'
+import {
+  MONSTER_BY_ID,
+  incomingDamage,
+  playerMaxHp,
+  playerPower,
+  rollDrops,
+  type MonsterDef,
+} from './combat'
 import { levelInfo } from './levels'
 import { computeBonuses, applyYield, type Bonuses } from './modifiers'
 import {
@@ -396,4 +407,183 @@ export function unequipItem(db: Db, userId: string, slot: string): void {
   const current = listEquipment(db, userId).find((e) => e.slot === slot)
   if (current) addItems(db, userId, current.itemId, 1)
   setEquipment(db, userId, slot, null)
+}
+
+// --- combat (Phase 8, docs/DESIGN.md §13.5) ----------------------------------
+
+export interface PlayerCombat {
+  maxHp: number
+  power: number
+  armour: number
+  weaponPower: number
+  bodyArmour: number
+}
+
+/** The player's combat numbers for a given combat profession. */
+export function getPlayerCombat(db: Db, userId: string, combatSkill: SkillId): PlayerCombat {
+  const b = aggregateBonuses(db, userId)
+  const eq = listEquipment(db, userId)
+  const weapon = eq.find((e) => e.slot === 'weapon')
+  const body = eq.find((e) => e.slot === 'body')
+  const weaponPower = weapon ? (ITEM_BY_ID.get(weapon.itemId)?.power ?? 0) : 0
+  const bodyArmour = body ? (ITEM_BY_ID.get(body.itemId)?.armour ?? 0) : 0
+  return {
+    maxHp: playerMaxHp(skillLevelOf(db, userId, 'constitution'), b.hp, bodyArmour),
+    power: playerPower(skillLevelOf(db, userId, combatSkill), weaponPower, b.damage),
+    armour: bodyArmour,
+    weaponPower,
+    bodyArmour,
+  }
+}
+
+export function monsterState(
+  db: Db,
+  userId: string,
+  m: MonsterDef,
+): { unlocked: boolean; missing: UnlockReq[]; equipMissing: { slot: string; tag: string } | null } {
+  const missing = (m.requires ?? []).filter((r) => skillLevelOf(db, userId, r.skill) < r.level)
+  let equipMissing: { slot: string; tag: string } | null = null
+  if (m.equip) {
+    const eq = listEquipment(db, userId).find((e) => e.slot === m.equip!.slot)
+    const item = eq ? ITEM_BY_ID.get(eq.itemId) : undefined
+    if (!item?.tags?.includes(m.equip.tag)) equipMissing = m.equip
+  }
+  return { unlocked: missing.length === 0 && !equipMissing, missing, equipMissing }
+}
+
+export function startEncounter(
+  db: Db,
+  userId: string,
+  monsterId: string,
+):
+  | {
+      ok: true
+      monster: MonsterDef
+      encounter: { monsterId: string; monsterHp: number; playerHp: number }
+    }
+  | {
+      ok: false
+      error: string
+      missing?: UnlockReq[]
+      equipMissing?: { slot: string; tag: string }
+    } {
+  const m = MONSTER_BY_ID.get(monsterId)
+  if (!m) return { ok: false, error: 'unknown monster' }
+  const state = monsterState(db, userId, m)
+  if (!state.unlocked) {
+    return {
+      ok: false,
+      error: 'locked',
+      missing: state.missing,
+      equipMissing: state.equipMissing ?? undefined,
+    }
+  }
+  const pc = getPlayerCombat(db, userId, m.combatSkill)
+  upsertEncounter(db, userId, {
+    monsterId,
+    monsterHp: m.hp,
+    playerHp: pc.maxHp,
+    totalDamage: 0,
+    xpEarned: 0,
+  })
+  return { ok: true, monster: m, encounter: { monsterId, monsterHp: m.hp, playerHp: pc.maxHp } }
+}
+
+export function grantExactItems(db: Db, bus: EventBus, userId: string, costs: Cost[]): void {
+  for (const c of costs) {
+    if (c.count <= 0) continue
+    addItems(db, userId, c.item, c.count)
+    bus.emit('item.gained', {
+      userId,
+      itemId: c.item,
+      count: c.count,
+      total: getItemCount(db, userId, c.item),
+    })
+  }
+}
+
+export interface HitOutcome {
+  correct: boolean
+  damage: number
+  monsterHp: number
+  playerDamage: number
+  playerHp: number
+  outcome: 'ongoing' | 'won' | 'lost'
+  drops: Cost[]
+  xp: number
+  grantedTalents: TalentDef[]
+}
+
+/** Resolves one drill inside an active encounter. */
+export function combatResolve(
+  db: Db,
+  bus: EventBus,
+  userId: string,
+  correct: boolean,
+  rand: () => number = Math.random,
+): HitOutcome | null {
+  const enc = getEncounter(db, userId)
+  if (!enc) return null
+  const m = MONSTER_BY_ID.get(enc.monsterId)
+  if (!m) {
+    clearEncounter(db, userId)
+    return null
+  }
+  const pc = getPlayerCombat(db, userId, m.combatSkill)
+  let monsterHp = enc.monsterHp
+  let playerHp = enc.playerHp
+  let damage = 0
+  let playerDamage = 0
+  let xp = 0
+  const drops: Cost[] = []
+
+  if (correct) {
+    damage = pc.power
+    monsterHp = Math.max(0, monsterHp - damage)
+    xp = Math.max(1, Math.round(m.xp / 4))
+    bus.emit('combat.hit', { userId, monsterId: m.id, damage, monsterHp })
+  } else {
+    playerDamage = incomingDamage(m.damage, pc.armour)
+    playerHp = Math.max(0, playerHp - playerDamage)
+  }
+
+  let outcome: HitOutcome['outcome'] = 'ongoing'
+  if (monsterHp <= 0) {
+    outcome = 'won'
+    xp += m.xp
+    drops.push(...rollDrops(m.drops, aggregateBonuses(db, userId).drop, rand))
+  } else if (playerHp <= 0) {
+    outcome = 'lost'
+  }
+
+  const award = xp > 0 ? awardSkillXp(db, bus, userId, m.combatSkill, xp) : null
+  if (outcome === 'won') {
+    grantExactItems(db, bus, userId, drops)
+    awardXp(db, bus, userId, m.xp, 'combat', m.id)
+    bus.emit('combat.ended', { userId, monsterId: m.id, outcome: 'won' })
+    clearEncounter(db, userId)
+  } else if (outcome === 'lost') {
+    bus.emit('combat.ended', { userId, monsterId: m.id, outcome: 'lost' })
+    clearEncounter(db, userId)
+  } else {
+    upsertEncounter(db, userId, {
+      monsterId: m.id,
+      monsterHp,
+      playerHp,
+      totalDamage: enc.totalDamage + damage,
+      xpEarned: enc.xpEarned + xp,
+    })
+  }
+
+  return {
+    correct,
+    damage,
+    monsterHp,
+    playerDamage,
+    playerHp,
+    outcome,
+    drops,
+    xp,
+    grantedTalents: award?.grantedTalents ?? [],
+  }
 }

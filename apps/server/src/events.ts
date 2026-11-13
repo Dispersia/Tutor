@@ -34,6 +34,8 @@ export interface GameEventMap {
     milestone: number
   }
   'item.equipped': { userId: string; itemId: string; slot: string }
+  'combat.hit': { userId: string; monsterId: string; damage: number; monsterHp: number }
+  'combat.ended': { userId: string; monsterId: string; outcome: 'won' | 'lost' }
 }
 
 export type GameEventType = keyof GameEventMap
