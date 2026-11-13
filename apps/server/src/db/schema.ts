@@ -197,17 +197,22 @@ export const equipment = sqliteTable('equipment', {
   updatedAt: integer('updated_at').notNull(),
 })
 
-/** Per-user spaced-repetition state (one row per card reviewed). */
+/** Per-user spaced-repetition state (FSRS-6, one row per card reviewed). */
 export const srs = sqliteTable('srs', {
   userId: text('user_id')
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
   cardId: text('card_id').notNull(),
+  state: text('state').notNull().default('new'),
+  step: integer('step').notNull().default(0),
+  stability: real('stability').notNull().default(0),
+  difficulty: real('difficulty').notNull().default(0),
   reps: integer('reps').notNull().default(0),
   lapses: integer('lapses').notNull().default(0),
   ease: real('ease').notNull().default(2.5),
   intervalDays: real('interval_days').notNull().default(0),
   dueAt: integer('due_at').notNull().default(0),
+  lastRating: integer('last_rating'),
   lastReviewAt: integer('last_review_at'),
 })
 

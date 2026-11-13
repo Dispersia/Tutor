@@ -54,7 +54,6 @@ rewriting the core.
 
 ### Non-goals (later)
 
-- Full guided curriculum / SRS scheduling (planned, not now).
 - Cloud sync / federation / SSO.
 - Native (App Store) mobile apps.
 - Training or fine-tuning models.
@@ -702,6 +701,36 @@ material costs can't be bypassed by calling the grader directly.
 Everything still flows through the **event bus**: `skill.xp`, `skill.level.up`,
 `item.gained`, `item.consumed`, `talent.granted`, `talent.chosen`, `item.equipped`.
 
+## 13.6 Spaced repetition (FSRS-6, Anki-style) & guided curriculum
+
+Scheduling is a faithful reimplementation of **FSRS-6** — the algorithm Anki
+25.07+ uses — with Anki's **default 21 weights** (`w20 = 0.1542` trainable decay),
+Anki's default **learning steps** (`1m`, `10m`) and **relearning steps** (`10m`),
+and intervals derived from a **desired retention** (default `0.9`, per-user).
+
+```
+   rating  ──┐
+  (Again/Hard/Good/Easy)        memory state (per card, per user)
+             │        ┌────────────────────────────────────────────┐
+   ┌─────────▼──────┐ │  state: new→learning→review↔relearning     │
+   │   FSRS-6 core  │ │  stability S, difficulty D, step, reps,    │
+   │  schedule()    │ │  lapses, intervalDays, dueAt, lastRating   │
+   └─────────┬──────┘ └────────────────────────────────────────────┘
+             │
+   dueAt + intervalDays ──► selectCardId() (overdue → new → soonest)
+```
+
+- **Ratings come from the exercise score**: `!correct → Again`, `≥90 → Easy`,
+  `≥80 → Good`, else `Hard`. Every review (practice *and* combat hits) feeds the
+  scheduler, and the API returns the decision so the UI can show
+  *“Good · next in 6 days · stability 38.9d · difficulty 2.1”*.
+- **Retrievability** uses the power-law curve `R = (1 + factor·t/S)^−w20` with
+  `factor = 0.9^(−1/w20) − 1`, so `R(t = S) = 0.9`. Intervals solve that curve for
+  the desired retention.
+- **Curriculum**: each deck is split into themed **8-card lessons** that unlock in
+  order; a lesson completes once every card is *learned* (graduated to `review`
+  with a ≥1-day interval). Events: `srs.updated`, `lesson.completed`.
+
 ---
 
 ## 14. Web UI / UX — SvelteKit PWA, mobile-first
@@ -987,9 +1016,11 @@ stack before any UI work.**
 ### Phase 8 — post-MVP
 
 - **Done:** professions (22), per-level effects, talents (minor every 5 / major
-  every 10), materials + crafting chains, equipment & gear-gated combat actions.
-- **Next:** deeper combat (monsters, HP, damage rolls, drops), an SRS scheduler
-  (FSRS) + guided curriculum, streaming/barge-in voice, phoneme GOP precision
+  every 10), materials + crafting chains, equipment & gear-gated combat actions,
+  deeper combat (monsters, HP, damage rolls, drops), **FSRS-6 spaced repetition**
+  (Anki 25.07-style scheduler with the V6 default weights, learning/relearning
+  steps and desired retention) + a guided curriculum with unlocked lessons.
+- **Next:** streaming/barge-in voice, phoneme GOP precision
   mode, achievements/quests/leaderboards on the event bus, second speech provider
   (OpenRouter audio / whisper.cpp), cloud sync / federation, launchd/nix-darwin module.
 

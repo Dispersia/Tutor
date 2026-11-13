@@ -125,7 +125,7 @@ export function registerCombat(app: App) {
 
     const hit = combatResolve(deps.db, deps.events, user.id, result.correct)
     if (!hit) return c.json({ error: 'no active encounter' }, 409)
-    recordReview(deps.db, deps.events, user.id, card.id, result.score, result.correct)
+    const srs = recordReview(deps.db, deps.events, user.id, card.id, result.score, result.correct)
 
     const view = encounterView(deps, user.id)
     let next: { instance: unknown } | null = null
@@ -137,6 +137,7 @@ export function registerCombat(app: App) {
     return c.json({
       result,
       hit,
+      srs,
       encounter: view,
       instance: next?.instance ?? null,
       stats: summary(deps.db, user.id),

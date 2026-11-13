@@ -11,6 +11,7 @@
     type Deck,
     type Grade,
     type Instance,
+    type SrsOutcome,
     type Stats,
     type WordFeedback,
   } from '#lib/exercises'
@@ -23,6 +24,7 @@
   let instance = $state<Instance | null>(null)
   let result = $state<Grade | null>(null)
   let skill = $state<SkillOutcome | null>(null)
+  let srs = $state<SrsOutcome | null>(null)
   let stats = $state<Stats | null>(null)
   let ref = $state<SkillsResponse | null>(null)
   let lesson = $state<LessonDTO | null>(null)
@@ -71,6 +73,7 @@
     error = ''
     result = null
     skill = null
+    srs = null
     lessonCompleted = false
     instance = null
     try {
@@ -98,6 +101,7 @@
       })
       result = r.result
       skill = r.skill
+      srs = r.srs ?? null
       lessonCompleted = Boolean(r.lessonCompleted)
       stats = r.stats
     } catch (e) {
@@ -122,6 +126,7 @@
       const r = await gradeSpeak(form)
       result = r.result
       skill = r.skill
+      srs = r.srs ?? null
       lessonCompleted = Boolean(r.lessonCompleted)
       stats = r.stats
     } catch (e) {
@@ -134,6 +139,19 @@
   function changeDeck(e: Event) {
     deckId = (e.target as HTMLSelectElement).value
     void loadNext()
+  }
+
+  const RATING_NAMES = { 1: 'Again', 2: 'Hard', 3: 'Good', 4: 'Easy' } as const
+
+  /** Human summary of the FSRS-6 scheduling decision. */
+  function reviewLabel(s: SrsOutcome): string {
+    const rating = RATING_NAMES[s.rating]
+    if (s.state === 'learning' || s.state === 'relearning') {
+      const mins = Math.max(1, Math.round((s.dueAt - Date.now()) / 60_000))
+      return `${rating} · again in ${mins} min`
+    }
+    const d = s.intervalDays
+    return `${rating} · next in ${d} day${d === 1 ? '' : 's'}`
   }
 </script>
 
@@ -244,6 +262,12 @@
           </span>
         {/each}
       </div>
+    {/if}
+    {#if srs}
+      <p class="mt-3 text-xs text-neutral-400">
+        🗓️ <span class="text-neutral-300">{reviewLabel(srs)}</span>
+        · stability {srs.stability.toFixed(1)}d · difficulty {srs.difficulty.toFixed(1)}
+      </p>
     {/if}
   </div>
   <button
