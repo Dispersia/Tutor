@@ -67,6 +67,10 @@ export interface ItemDef {
   power?: number
   /** armour (reduces incoming monster damage when equipped) */
   armour?: number
+  /** food: HP restored when auto-eaten in combat */
+  heal?: number
+  /** potion: a buff applied for the whole fight */
+  buff?: { kind: 'power' | 'maxHp'; value: number }
 }
 
 export type Slot = 'weapon' | 'body' | 'legs'
@@ -268,12 +272,16 @@ export const ITEMS: ItemDef[] = [
   item('bronze_bar', 'Bronze bar', '🟫', 'refined'),
   item('iron_bar', 'Iron bar', '⬜', 'refined'),
   item('steel_bar', 'Steel bar', '🔩', 'refined'),
-  item('cooked_shrimp', 'Cooked shrimp', '🍤', 'refined'),
-  item('cooked_trout', 'Cooked trout', '🍣', 'refined'),
-  item('cooked_lobster', 'Cooked lobster', '🦞', 'refined'),
+  item('cooked_shrimp', 'Cooked shrimp', '🍤', 'consumable', 'Heals 4 HP.', { heal: 4 }),
+  item('cooked_trout', 'Cooked trout', '🍣', 'consumable', 'Heals 8 HP.', { heal: 8 }),
+  item('cooked_lobster', 'Cooked lobster', '🦞', 'consumable', 'Heals 14 HP.', { heal: 14 }),
   item('vial', 'Vial', '🧫', 'refined'),
-  item('attack_potion', 'Attack potion', '🧪', 'refined'),
-  item('restore_potion', 'Restore potion', '🧪', 'refined'),
+  item('attack_potion', 'Attack potion', '🧪', 'consumable', '+25% combat power for a fight.', {
+    buff: { kind: 'power', value: 0.25 },
+  }),
+  item('restore_potion', 'Restore potion', '🧪', 'consumable', '+25% max HP for a fight.', {
+    buff: { kind: 'maxHp', value: 0.25 },
+  }),
   item('arrow', 'Arrow', '➰', 'refined'),
   item('air_rune', 'Air rune', '🌀', 'refined'),
   item('water_rune', 'Water rune', '💧', 'refined'),

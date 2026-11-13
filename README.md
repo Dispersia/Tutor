@@ -93,7 +93,7 @@ docs/          DESIGN.md (architecture + execution plan)
 - [x] Phase 5 — pronunciation scoring (ASR + forced aligner + optional judge)
 - [x] Phase 6 — gamification (XP ledger, levels, UTC streaks, daily goal, event bus)
 - [x] Phase 7 — packaging (`nix build` / `nix run .`) + docs
-- [x] Phase 8 — professions, per-level effects, talents (5/10), materials & combat (monsters, HP, drops)
+- [x] Phase 8 — professions, per-level effects, talents (5/10), materials, combat (monsters, HP, auto food/potions, drops)
 
 ## Configuration
 

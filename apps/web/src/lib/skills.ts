@@ -61,6 +61,8 @@ export interface ItemDTO {
   tier: string
   slot?: string
   tags?: string[]
+  heal?: number
+  buff?: { kind: string; value: number }
 }
 
 export interface SkillsResponse {

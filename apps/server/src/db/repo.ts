@@ -687,16 +687,32 @@ export function upsertEncounter(
     monsterId: string
     monsterHp: number
     playerHp: number
+    playerMaxHp?: number
+    powerBonus?: number
+    potionId?: string | null
+    foodEaten?: number
     totalDamage?: number
     xpEarned?: number
   },
 ): void {
+  const extras = {
+    ...(patch.playerMaxHp !== undefined ? { playerMaxHp: patch.playerMaxHp } : {}),
+    ...(patch.powerBonus !== undefined ? { powerBonus: patch.powerBonus } : {}),
+    ...(patch.potionId !== undefined ? { potionId: patch.potionId } : {}),
+    ...(patch.foodEaten !== undefined ? { foodEaten: patch.foodEaten } : {}),
+    ...(patch.totalDamage !== undefined ? { totalDamage: patch.totalDamage } : {}),
+    ...(patch.xpEarned !== undefined ? { xpEarned: patch.xpEarned } : {}),
+  }
   db.insert(encounters)
     .values({
       userId,
       monsterId: patch.monsterId,
       monsterHp: patch.monsterHp,
       playerHp: patch.playerHp,
+      playerMaxHp: patch.playerMaxHp ?? 0,
+      powerBonus: patch.powerBonus ?? 0,
+      potionId: patch.potionId ?? null,
+      foodEaten: patch.foodEaten ?? 0,
       totalDamage: patch.totalDamage ?? 0,
       xpEarned: patch.xpEarned ?? 0,
       createdAt: now(),
@@ -708,8 +724,7 @@ export function upsertEncounter(
         monsterId: patch.monsterId,
         monsterHp: patch.monsterHp,
         playerHp: patch.playerHp,
-        ...(patch.totalDamage !== undefined ? { totalDamage: patch.totalDamage } : {}),
-        ...(patch.xpEarned !== undefined ? { xpEarned: patch.xpEarned } : {}),
+        ...extras,
         updatedAt: now(),
       },
     })

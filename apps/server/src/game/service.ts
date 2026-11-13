@@ -8,6 +8,7 @@ import {
   getItemCount,
   getSkillXp,
   getStats,
+  getUserSetting,
   hasTalent,
   listEquipment,
   listInventory,
@@ -37,6 +38,7 @@ import {
   SKILLS,
   type ActionDef,
   type Cost,
+  type ItemDef,
   type SkillId,
   type UnlockReq,
   missingMaterials,
@@ -451,15 +453,59 @@ export function monsterState(
   return { unlocked: missing.length === 0 && !equipMissing, missing, equipMissing }
 }
 
+// --- auto-used consumables ---------------------------------------------------
+
+const DEFAULT_FOOD_THRESHOLD = 0.5
+
+/** Food is auto-eaten when HP falls below this fraction (user setting, %). */
+export function foodThreshold(db: Db, userId: string): number {
+  const raw = getUserSetting(db, userId, 'foodThreshold')
+  const n = raw ? Number(raw) : NaN
+  return Number.isFinite(n) && n > 0 && n <= 100 ? n / 100 : DEFAULT_FOOD_THRESHOLD
+}
+
+function bestConsumable(
+  db: Db,
+  userId: string,
+  score: (item: ItemDef) => number | undefined,
+): ItemDef | undefined {
+  let best: ItemDef | undefined
+  let bestScore = -Infinity
+  for (const row of listInventory(db, userId)) {
+    if (row.count <= 0) continue
+    const item = ITEM_BY_ID.get(row.itemId)
+    if (!item) continue
+    const s = score(item)
+    if (s === undefined) continue
+    if (s > bestScore) {
+      bestScore = s
+      best = item
+    }
+  }
+  return best
+}
+
+/** The best food in the bank (highest heal). */
+export function bestFood(db: Db, userId: string): ItemDef | undefined {
+  return bestConsumable(db, userId, (i) => i.heal)
+}
+
+/** The best potion in the bank (highest buff). */
+export function bestPotion(db: Db, userId: string): ItemDef | undefined {
+  return bestConsumable(db, userId, (i) => (i.buff ? i.buff.value : undefined))
+}
+
 export function startEncounter(
   db: Db,
+  bus: EventBus,
   userId: string,
   monsterId: string,
 ):
   | {
       ok: true
       monster: MonsterDef
-      encounter: { monsterId: string; monsterHp: number; playerHp: number }
+      encounter: { monsterId: string; monsterHp: number; playerHp: number; playerMaxHp: number }
+      drank: { item: string; buff: { kind: 'power' | 'maxHp'; value: number } } | null
     }
   | {
       ok: false
@@ -478,15 +524,39 @@ export function startEncounter(
       equipMissing: state.equipMissing ?? undefined,
     }
   }
+
+  // auto-drink the best potion at the start of the fight
   const pc = getPlayerCombat(db, userId, m.combatSkill)
+  let maxHp = pc.maxHp
+  let powerBonus = 0
+  let potionId: string | null = null
+  let drank: { item: string; buff: { kind: 'power' | 'maxHp'; value: number } } | null = null
+  const potion = bestPotion(db, userId)
+  if (potion?.buff) {
+    consumeItems(db, bus, userId, [{ item: potion.id, count: 1 }])
+    potionId = potion.id
+    drank = { item: potion.id, buff: potion.buff }
+    if (potion.buff.kind === 'power') powerBonus = potion.buff.value
+    else maxHp = Math.round(maxHp * (1 + potion.buff.value))
+  }
+
   upsertEncounter(db, userId, {
     monsterId,
     monsterHp: m.hp,
-    playerHp: pc.maxHp,
+    playerHp: maxHp,
+    playerMaxHp: maxHp,
+    powerBonus,
+    potionId,
+    foodEaten: 0,
     totalDamage: 0,
     xpEarned: 0,
   })
-  return { ok: true, monster: m, encounter: { monsterId, monsterHp: m.hp, playerHp: pc.maxHp } }
+  return {
+    ok: true,
+    monster: m,
+    encounter: { monsterId, monsterHp: m.hp, playerHp: maxHp, playerMaxHp: maxHp },
+    drank,
+  }
 }
 
 export function grantExactItems(db: Db, bus: EventBus, userId: string, costs: Cost[]): void {
@@ -508,9 +578,11 @@ export interface HitOutcome {
   monsterHp: number
   playerDamage: number
   playerHp: number
+  playerMaxHp: number
   outcome: 'ongoing' | 'won' | 'lost'
   drops: Cost[]
   xp: number
+  ate: { item: string; heal: number; playerHp: number } | null
   grantedTalents: TalentDef[]
 }
 
@@ -530,15 +602,29 @@ export function combatResolve(
     return null
   }
   const pc = getPlayerCombat(db, userId, m.combatSkill)
+  const maxHp = enc.playerMaxHp || pc.maxHp
   let monsterHp = enc.monsterHp
   let playerHp = enc.playerHp
+  let foodEaten = enc.foodEaten
   let damage = 0
   let playerDamage = 0
   let xp = 0
+  let ate: { item: string; heal: number; playerHp: number } | null = null
   const drops: Cost[] = []
 
+  // auto-eat when HP falls below the threshold (before the exchange)
+  if (playerHp > 0 && playerHp / maxHp < foodThreshold(db, userId)) {
+    const food = bestFood(db, userId)
+    if (food?.heal) {
+      consumeItems(db, bus, userId, [{ item: food.id, count: 1 }])
+      playerHp = Math.min(maxHp, playerHp + food.heal)
+      foodEaten += 1
+      ate = { item: food.id, heal: food.heal, playerHp }
+    }
+  }
+
   if (correct) {
-    damage = pc.power
+    damage = Math.max(1, Math.round(pc.power * (1 + enc.powerBonus)))
     monsterHp = Math.max(0, monsterHp - damage)
     xp = Math.max(1, Math.round(m.xp / 4))
     bus.emit('combat.hit', { userId, monsterId: m.id, damage, monsterHp })
@@ -570,6 +656,10 @@ export function combatResolve(
       monsterId: m.id,
       monsterHp,
       playerHp,
+      playerMaxHp: maxHp,
+      powerBonus: enc.powerBonus,
+      potionId: enc.potionId,
+      foodEaten,
       totalDamage: enc.totalDamage + damage,
       xpEarned: enc.xpEarned + xp,
     })
@@ -581,9 +671,11 @@ export function combatResolve(
     monsterHp,
     playerDamage,
     playerHp,
+    playerMaxHp: maxHp,
     outcome,
     drops,
     xp,
+    ate,
     grantedTalents: award?.grantedTalents ?? [],
   }
 }
