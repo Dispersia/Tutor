@@ -1,0 +1,11 @@
+{
+  "name": "@tutor/ui",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "svelte": "./src/index.ts",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}
