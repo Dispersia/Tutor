@@ -36,7 +36,7 @@ export const env = {
   dataDir: process.env.TUTOR_DATA_DIR ?? join(repoRoot, 'data'),
   modelsDir: process.env.TUTOR_MODELS_DIR ?? join(repoRoot, 'models'),
   staticDir: process.env.TUTOR_STATIC_DIR ?? join(repoRoot, 'apps/web/build'),
-  pythonDir: join(repoRoot, 'python'),
+  pythonDir: process.env.TUTOR_PYTHON_DIR ?? join(repoRoot, 'python'),
 
   openrouterKey: process.env.OPENROUTER_API_KEY ?? process.env.TUTOR_OPENROUTER_KEY,
 

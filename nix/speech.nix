@@ -24,7 +24,7 @@ let
     ];
     text = ''
       set -euo pipefail
-      dir="''${TUTOR_MODELS_DIR:-$PWD/models}"
+      dir="''${TUTOR_MODELS_DIR:-$HOME/.local/share/tutor/models}"
       mkdir -p "$dir"
       export HF_HOME="$dir"
       for repo in ${lib.concatStringsSep " " repos}; do

@@ -731,12 +731,19 @@ register a service worker for the PWA, which otherwise also requires HTTPS.
 
 ### 15.3 Packaging details
 
-- **Web**: `bun install --frozen-lockfile` + `svelte-kit sync && vite build`
+- **JS deps**: a fixed-output derivation runs `bun install --frozen-lockfile` over
+  the flake source and returns the repo with `node_modules` baked in (hash pinned
+  in `nix/package.nix`).
+- **Web**: `bun scripts/gen-migrations.mjs` then `bun run --cwd apps/web build`
   (SvelteKit `adapter-static`) → static PWA assets.
-- **Server**: `bun build --compile apps/server/src/index.ts` → single executable
-  `tutor` (no node needed at runtime).
-- `packages.default` = `symlinkJoin` of the binary + web assets + a
-  `writeShellApplication` wrapper that sets `TUTOR_STATIC_DIR`.
+- **Server**: `bun build --compile --minify apps/server/src/index.ts` → a single
+  ~85 MB binary (no node at runtime). Migrations are **embedded**
+  (`migrations.gen.ts`) so the binary needs no source tree.
+- `packages.default` = a `writeShellApplication` `tutor` that sets `TUTOR_DATA_DIR`
+  (`~/.local/share/tutor`), `TUTOR_MODELS_DIR`, `HF_HOME` and `TUTOR_STATIC_DIR`
+  (the store's built PWA); copies the Python project out of the read-only store
+  into the data dir on first run and `uv sync`s the venv there; then execs the
+  compiled binary.
 - **Python sidecar** is _not_ baked into the store as wheels (Metal/venv). Instead
   `nix/speech.nix` ships:
   - a `tutor-fetch-models` script (uses `hf` CLI + `uv`) that downloads the pinned
@@ -744,13 +751,18 @@ register a service worker for the PWA, which otherwise also requires HTTPS.
   - a wrapper that runs `uv sync` in `python/` on first use then launches the sidecar.
     Alternatively ship a prebuilt venv under `$TUTOR_DATA_DIR/.venv` created by
     `just setup`.
-- **`justfile` targets**: `setup` (uv sync + bun install), `dev` (run web + server
-  - speech supervisor), `models` (fetch models), `certs` (mkcert for LAN HTTPS),
-    `bench` (latency/RAM), `test`, `build`, `check`.
+- **`justfile` targets**: `setup`, `dev`, `dev-web`, `models`, `gen`, `build`,
+  `package`, `run`, `certs`, `bench`, `test`, `check`.
+
+**Verified:** `nix build .#default` produces the binary + assets, and running it
+serves the PWA, applies the embedded migrations, registers a user, and spawns the
+speech sidecar (TTS returned a WAV) — all with the venv and weights outside the
+store.
 
 > Tradeoff documented: fully hermetic packaging of MLX is not worth it here.
-> We pin `uv.lock` and model revisions instead, which gives reproducibility in
-> practice while letting Metal and multi-GB weights live where they must.
+> We pin `bun.lock`, `uv.lock` and model revisions instead, which gives
+> reproducibility in practice while letting Metal and multi-GB weights live where
+> they must.
 
 ---
 
