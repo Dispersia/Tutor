@@ -145,7 +145,10 @@
       </div>
     </div>
   {:else}
-    <p class="panel mb-2 px-3 py-2 text-xs text-ink-400">
+    <p
+      class="panel panel-accent mb-2 px-3 py-2 text-xs text-ink-300"
+      style={accentStyle('#e8c264')}
+    >
       No talent waiting. Next choice at
       <span class="gold">Lv {skill.talent.nextMilestone}</span>.
     </p>
@@ -154,15 +157,15 @@
   {#if skill.talent.owned.length}
     <div class="mt-2 space-y-2">
       {#each skill.talent.owned as t (t.id)}
-        <div class="panel p-3">
+        <div class="panel panel-accent p-3" style={accentStyle('#e8c264')}>
           <div class="flex items-start gap-3">
             <span class="text-lg">🔹</span>
             <div class="min-w-0 flex-1">
               <div class="flex items-baseline justify-between gap-2">
-                <span class="display text-sm text-ink-300">{t.name}</span>
+                <span class="display text-sm text-gold-200">{t.name}</span>
                 <span class="level-badge text-[11px]">Lv {t.milestone}</span>
               </div>
-              <p class="text-xs text-ink-400">{t.description}</p>
+              <p class="text-xs text-ink-300">{t.description}</p>
             </div>
           </div>
 
@@ -190,7 +193,7 @@
       {/each}
     </div>
   {:else}
-    <p class="panel p-3 text-xs text-ink-400">
+    <p class="panel panel-accent p-3 text-xs text-ink-300" style={accentStyle('#e8c264')}>
       No talents yet — reach <span class="gold">Lv {skill.talent.nextMilestone}</span> to pick your first.
     </p>
   {/if}
@@ -199,7 +202,11 @@
   <h2 class="eyebrow mt-6 mb-2">Actions</h2>
   <div class="space-y-2">
     {#each skill.actions as a (a.id)}
-      <div class="panel p-3" class:opacity-60={!a.unlocked}>
+      <div
+        class="panel panel-accent p-3"
+        class:opacity-60={!a.unlocked}
+        style={accentStyle(accent)}
+      >
         <div class="flex items-start justify-between gap-3">
           <div class="min-w-0">
             <div class="display text-sm text-ink-300">{a.name}</div>

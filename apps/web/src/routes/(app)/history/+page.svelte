@@ -2,6 +2,7 @@
   import { href } from '#lib/paths'
   import { onMount } from 'svelte'
   import { api } from '#lib/api'
+  import { accentStyle } from '#lib/theme'
   import type { ChatSession } from '#lib/types'
 
   let sessions = $state<ChatSession[]>([])
@@ -25,9 +26,13 @@
       hour: '2-digit',
       minute: '2-digit',
     })
+
+  const kindAccent = (kind: string) =>
+    kind === 'chat' ? '#4fb0e8' : kind === 'voice' ? '#b085ef' : '#58c46b'
 </script>
 
-<div class="pt-4 pb-6">
+<div class="pt-5 pb-5">
+  <p class="eyebrow">Your log</p>
   <h1 class="display text-2xl text-gold-200">History</h1>
   <p class="text-xs text-ink-400">Everything you have practised, only visible to you.</p>
 </div>
@@ -44,14 +49,19 @@
   <ul class="space-y-2">
     {#each sessions as s (s.id)}
       <li>
-        <a href={href(`/history/${s.id}`)} class="block panel px-4 py-3">
+        <a
+          href={href(`/history/${s.id}`)}
+          class="panel panel-accent block px-4 py-3"
+          style={accentStyle(kindAccent(s.kind))}
+        >
           <div class="flex items-center justify-between">
-            <span class="text-sm font-medium">{s.title ?? 'Conversation'}</span>
+            <span class="display text-sm text-ink-200">{s.title ?? 'Conversation'}</span>
             <span class="text-xs text-ink-400">{when(s.startedAt)}</span>
           </div>
-          <div class="mt-0.5 text-xs text-ink-400">
-            {s.kind}
-            {s.lang ? `· ${s.lang.toUpperCase()}` : ''}
+          <div class="mt-1">
+            <span class="chip" style={accentStyle(kindAccent(s.kind))}>
+              {s.kind}{s.lang ? ` · ${s.lang.toUpperCase()}` : ''}
+            </span>
           </div>
         </a>
       </li>

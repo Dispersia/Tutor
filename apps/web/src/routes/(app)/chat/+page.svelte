@@ -5,6 +5,7 @@
   import { Recorder, micSupported } from '#lib/recorder'
   import { session } from '#lib/session.svelte'
   import { speak, stopAudio, transcribe } from '#lib/speech'
+  import { accentStyle } from '#lib/theme'
   import type { ChatSession, Message } from '#lib/types'
   import { voiceFor } from '#lib/voices'
 
@@ -158,8 +159,9 @@
   }
 </script>
 
-<div class="pt-4">
-  <h1 class="display text-2xl text-gold-200">Conversation</h1>
+<div class="pt-5">
+  <p class="eyebrow">Conversation</p>
+  <h1 class="display text-2xl text-gold-200">Talk to your tutor</h1>
   <p class="text-xs text-ink-400">
     {lang ? lang.toUpperCase() : 'EN'} · replies are spoken
     {#if speaking}<span class="text-emerald-400">· speaking…</span>{/if}
@@ -168,7 +170,7 @@
 
 <div class="space-y-3 pt-4 pb-28">
   {#if messages.length === 0}
-    <p class="panel p-4 text-sm text-ink-400">
+    <p class="panel panel-accent p-4 text-sm text-ink-300" style={accentStyle('#4fb0e8')}>
       Say or type something in your target language to begin. Your tutor answers out loud and keeps
       the whole history.
     </p>
@@ -204,7 +206,7 @@
 {/if}
 
 <div class="sticky bottom-16 z-10 mx-auto w-full max-w-2xl pb-3">
-  <div class="flex items-end gap-2 panel p-2 backdrop-blur">
+  <div class="panel panel-accent flex items-end gap-2 p-2" style={accentStyle('#4fb0e8')}>
     <textarea
       bind:value={input}
       onkeydown={onKey}
