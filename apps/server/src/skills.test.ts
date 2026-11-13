@@ -161,6 +161,37 @@ test('actions are gated by unlocks, materials and equipment', async () => {
   sqlite.close()
 })
 
+test('GET /api/skills/:id returns one profession with its talent roadmap', async () => {
+  const { app, sqlite } = makeApp()
+  const cookie = await signup(app)
+  const body = (await (await app.request('/api/skills/mining', auth(cookie))).json()) as {
+    skill: {
+      id: string
+      name: string
+      actions: unknown[]
+      talent: {
+        owned: unknown[]
+        nextMinor: number
+        nextMajor: number
+        pendingChoice: boolean
+      }
+    }
+    items: unknown[]
+  }
+  expect(body.skill.id).toBe('mining')
+  expect(body.skill.name).toBe('Mining')
+  expect(body.skill.actions.length).toBeGreaterThan(0)
+  expect(body.skill.talent.owned).toEqual([])
+  expect(body.skill.talent.nextMinor).toBe(5)
+  expect(body.skill.talent.nextMajor).toBe(10)
+  expect(body.skill.talent.pendingChoice).toBe(false)
+  expect(body.items.length).toBeGreaterThan(20)
+
+  const missing = await app.request('/api/skills/nope', auth(cookie))
+  expect(missing.status).toBe(404)
+  sqlite.close()
+})
+
 test('talent + equip endpoints validate input', async () => {
   const { app, sqlite } = makeApp()
   const cookie = await signup(app)

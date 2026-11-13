@@ -1,5 +1,13 @@
 import { listEquipment } from '../db/repo'
-import { ITEMS, SKILLS, actionsForSkill, type ModKind, type SkillDef } from '../game/skills'
+import {
+  ITEMS,
+  SKILLS,
+  SKILL_BY_ID,
+  actionsForSkill,
+  type ModKind,
+  type SkillDef,
+  type SkillId,
+} from '../game/skills'
 import type { Bonuses } from '../game/modifiers'
 import {
   actionState,
@@ -12,6 +20,7 @@ import {
   unequipItem,
 } from '../game/service'
 import type { App } from '../context'
+import type { Db } from '../db/client'
 
 /** The player's current total for a skill's passive effect (levels + talents). */
 function currentEffect(skill: SkillDef, b: Bonuses): number {
@@ -36,42 +45,61 @@ function currentEffect(skill: SkillDef, b: Bonuses): number {
   }
 }
 
+/** Every profession with its level, effect, talents and actions. */
+function boardSkills(db: Db, userId: string) {
+  const progress = new Map(skillSummaries(db, userId).map((s) => [s.skillId, s]))
+  const talents = new Map(talentView(db, userId).map((t) => [t.skillId, t]))
+  const bonuses = aggregateBonuses(db, userId)
+  return SKILLS.map((s) => {
+    const p = progress.get(s.id)!
+    return {
+      ...s,
+      level: p.level,
+      xp: p.xp,
+      intoLevel: p.intoLevel,
+      forNext: p.forNext,
+      progress: p.progress,
+      effect: { ...s.effect, value: currentEffect(s, bonuses) },
+      talent: talents.get(s.id)!,
+      actions: actionsForSkill(s.id).map((a) => ({ ...a, ...actionState(db, userId, a) })),
+    }
+  })
+}
+
+function bonusSummary(b: Bonuses) {
+  return { globalXp: b.globalXp, damage: b.damage, drop: b.drop, hp: b.hp }
+}
+
 export function registerSkills(app: App) {
   // The profession board: skills (+level/xp/effect), their actions (locked /
   // affordable / equipped), talents and the materials bank. DESIGN §13.5.
   app.get('/api/skills', (c) => {
     const db = c.get('deps').db
     const user = c.get('user')!
-    const progress = new Map(skillSummaries(db, user.id).map((s) => [s.skillId, s]))
-    const talents = new Map(talentView(db, user.id).map((t) => [t.skillId, t]))
     const bonuses = aggregateBonuses(db, user.id)
-
-    const skills = SKILLS.map((s) => {
-      const p = progress.get(s.id)!
-      return {
-        ...s,
-        level: p.level,
-        xp: p.xp,
-        intoLevel: p.intoLevel,
-        forNext: p.forNext,
-        progress: p.progress,
-        effect: { ...s.effect, value: currentEffect(s, bonuses) },
-        talent: talents.get(s.id)!,
-        actions: actionsForSkill(s.id).map((a) => ({ ...a, ...actionState(db, user.id, a) })),
-      }
-    })
-
     return c.json({
-      skills,
+      skills: boardSkills(db, user.id),
       items: ITEMS,
       inventory: inventoryView(db, user.id),
       equipment: listEquipment(db, user.id).map((e) => ({ slot: e.slot, itemId: e.itemId })),
-      bonuses: {
-        globalXp: bonuses.globalXp,
-        damage: bonuses.damage,
-        drop: bonuses.drop,
-        hp: bonuses.hp,
-      },
+      bonuses: bonusSummary(bonuses),
+    })
+  })
+
+  // A single profession's page: its actions, talent roadmap and the materials
+  // needed to label the action costs.
+  app.get('/api/skills/:id', (c) => {
+    const db = c.get('deps').db
+    const user = c.get('user')!
+    const id = c.req.param('id') as SkillId
+    if (!SKILL_BY_ID.has(id)) return c.json({ error: 'unknown profession' }, 404)
+    const skill = boardSkills(db, user.id).find((s) => s.id === id)!
+    return c.json({
+      skill,
+      items: ITEMS,
+      inventory: inventoryView(db, user.id),
+      equipment: listEquipment(db, user.id).map((e) => ({ slot: e.slot, itemId: e.itemId })),
+      bonuses: bonusSummary(aggregateBonuses(db, user.id)),
     })
   })
 
