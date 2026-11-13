@@ -38,6 +38,8 @@ export interface OwnedTalent {
   tier: 'minor' | 'major'
   milestone: number
   mods: { kind: ModKind; value: number; skill?: string }[]
+  /** for minors: the other options at this milestone, so it can be changed */
+  options: TalentOption[]
 }
 
 export interface SkillDTO {

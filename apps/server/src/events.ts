@@ -35,6 +35,14 @@ export interface GameEventMap {
     tier: 'minor' | 'major'
     milestone: number
   }
+  'talent.changed': {
+    userId: string
+    talentId: string
+    fromTalentId: string
+    skillId: string
+    tier: 'minor' | 'major'
+    milestone: number
+  }
   'item.equipped': { userId: string; itemId: string; slot: string }
   'combat.hit': { userId: string; monsterId: string; damage: number; monsterHp: number }
   'combat.ended': { userId: string; monsterId: string; outcome: 'won' | 'lost' }

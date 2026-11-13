@@ -20,6 +20,7 @@ import {
   listSkillProgress,
   listSrs,
   listTalents,
+  replaceTalent,
   setEquipment,
   setSkillXp,
   sumXp,
@@ -279,15 +280,40 @@ export function chooseTalent(
   const parsed = parseTalentId(talentId)
   if (!parsed || parsed.tier !== 'minor') return { ok: false, error: 'not a minor talent' }
   const level = skillLevelOf(db, userId, parsed.skillId)
-  const ownedMinor = listTalents(db, userId).filter(
-    (r) => r.skillId === parsed.skillId && r.tier === 'minor',
-  ).length
   const milestones = minorMilestones(level)
-  if (ownedMinor >= milestones.length) return { ok: false, error: 'no pending talent choice' }
-  const nextMilestone = milestones[ownedMinor]!
-  if (parsed.milestone !== nextMilestone) return { ok: false, error: 'not the current milestone' }
-  const option = minorOptions(parsed.skillId, nextMilestone).find((o) => o.id === talentId)
+  if (!milestones.includes(parsed.milestone)) return { ok: false, error: 'milestone not reached' }
+  const option = minorOptions(parsed.skillId, parsed.milestone).find((o) => o.id === talentId)
   if (!option) return { ok: false, error: 'invalid talent option' }
+
+  const owned = listTalents(db, userId).filter(
+    (r) => r.skillId === parsed.skillId && r.tier === 'minor',
+  )
+
+  // Changing a talent already chosen at this milestone (a free respec).
+  const existing = owned.find((r) => r.milestone === parsed.milestone)
+  if (existing) {
+    if (existing.talentId === talentId) return { ok: true, talent: option }
+    replaceTalent(db, userId, existing.talentId, {
+      talentId: option.id,
+      skillId: option.skillId,
+      tier: 'minor',
+      milestone: parsed.milestone,
+    })
+    bus.emit('talent.changed', {
+      userId,
+      talentId: option.id,
+      fromTalentId: existing.talentId,
+      skillId: option.skillId,
+      tier: 'minor',
+      milestone: parsed.milestone,
+    })
+    return { ok: true, talent: option }
+  }
+
+  // A brand-new choice must be the next un-earned milestone (no skipping ahead).
+  if (owned.length >= milestones.length) return { ok: false, error: 'no pending talent choice' }
+  const nextMilestone = milestones[owned.length]!
+  if (parsed.milestone !== nextMilestone) return { ok: false, error: 'not the current milestone' }
   addTalent(db, userId, {
     talentId: option.id,
     skillId: option.skillId,
@@ -333,6 +359,16 @@ export function talentView(db: Db, userId: string) {
         tier: t.tier,
         milestone: t.milestone,
         mods: t.mods,
+        // For minor talents, the other options at the same milestone (respec).
+        options:
+          t.tier === 'minor'
+            ? minorOptions(t.skillId, t.milestone).map((o) => ({
+                id: o.id,
+                name: o.name,
+                description: o.description,
+                mods: o.mods,
+              }))
+            : [],
       })),
     }
   })
