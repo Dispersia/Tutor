@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { href } from '#lib/paths'
   import { onMount } from 'svelte'
   import { goto } from '$app/navigation'
   import {
@@ -110,7 +111,7 @@
 {/if}
 
 <a
-  href="/combat"
+  href={href('/combat')}
   class="mb-4 block rounded-2xl border border-neutral-800 bg-neutral-900/50 px-4 py-3 text-sm"
 >
   ⚔️ Combat — fight monsters for bones, hides and gems →

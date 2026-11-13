@@ -1,3 +1,5 @@
+import { apiPath } from './paths'
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -13,7 +15,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (typeof init.body === 'string' && !headers.has('content-type')) {
     headers.set('content-type', 'application/json')
   }
-  const res = await fetch(path, { credentials: 'same-origin', ...init, headers })
+  const res = await fetch(apiPath(path), { credentials: 'same-origin', ...init, headers })
   if (!res.ok) {
     const text = await res.text().catch(() => '')
     let msg = text

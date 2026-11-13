@@ -1,5 +1,7 @@
 /** SSE chat streaming against POST /api/chat. */
 
+import { apiPath } from './paths'
+
 export interface StreamCallbacks {
   onSession?: (id: string) => void
   onDelta: (text: string) => void
@@ -12,7 +14,7 @@ export async function streamChat(
   cb: StreamCallbacks,
   signal?: AbortSignal,
 ): Promise<void> {
-  const res = await fetch('/api/chat', {
+  const res = await fetch(apiPath('/api/chat'), {
     method: 'POST',
     credentials: 'same-origin',
     headers: { 'content-type': 'application/json' },

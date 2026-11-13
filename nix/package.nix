@@ -87,6 +87,8 @@ let
         [ -d "$d/node_modules" ] && chmod -R u+w "$d/node_modules"
       done
       bun scripts/gen-migrations.mjs
+      # served under /tutor behind the tailnet gateway (override to build for root)
+      export TUTOR_BASE_PATH="''${TUTOR_BASE_PATH:-/tutor}"
       bun run --cwd apps/web build
       bun build --compile --minify apps/server/src/index.ts --outfile tutor
       runHook postBuild

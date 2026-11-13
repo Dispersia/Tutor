@@ -6,6 +6,23 @@ import { readTls } from './static'
 const { deps, close } = buildDeps(env)
 const app = createApp(deps, { staticDir: env.staticDir })
 
+/**
+ * Serves the app at the root and under `base`: requests to `<base>/…` have the
+ * prefix stripped before dispatch, so the app's own routes stay root-relative.
+ */
+function makeFetch(base: string): (req: Request) => Response | Promise<Response> {
+  return (req) => {
+    const url = new URL(req.url)
+    if (url.pathname === base || url.pathname.startsWith(`${base}/`)) {
+      url.pathname = url.pathname.slice(base.length) || '/'
+      return app.fetch(new Request(url, req))
+    }
+    return app.fetch(req)
+  }
+}
+
+const fetchHandler = env.basePath ? makeFetch(env.basePath) : app.fetch
+
 deps.supervisor.startWatchdog()
 if (env.speechAutostart) void deps.supervisor.ensure()
 
@@ -14,13 +31,13 @@ const tls = readTls(env.tlsCert, env.tlsKey)
 const server = Bun.serve({
   hostname: env.host,
   port: env.port,
-  fetch: app.fetch,
+  fetch: fetchHandler,
   ...(tls ? { tls } : {}),
 })
 
 const scheme = tls ? 'https' : 'http'
 console.log(
-  `[server] tutor api on ${scheme}://${env.host}:${env.port} (openrouter=${
+  `[server] tutor api on ${scheme}://${env.host}:${env.port}${env.basePath}/ (openrouter=${
     deps.or.configured ? 'key set' : 'NO KEY'
   })`,
 )

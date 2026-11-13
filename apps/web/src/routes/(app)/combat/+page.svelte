@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { href } from '#lib/paths'
   import { onMount } from 'svelte'
   import { goto } from '$app/navigation'
   import { componentFor } from '#lib/components/exercises'
@@ -272,7 +273,7 @@
     {/each}
   </div>
   <button
-    onclick={() => goto('/skills')}
+    onclick={() => goto(href('/skills'))}
     class="mt-4 w-full rounded-xl border border-neutral-700 py-3 text-sm"
     >Gather & craft gear →</button
   >

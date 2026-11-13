@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { href } from '#lib/paths'
   import { onMount } from 'svelte'
   import { goto } from '$app/navigation'
   import { api } from '#lib/api'
@@ -173,7 +174,7 @@
   async function doLogout() {
     await api('/api/auth/logout', { method: 'POST' }).catch(() => {})
     session.user = null
-    void goto('/login')
+    void goto(href('/login'))
   }
 
   async function removeUser(id: string) {
