@@ -56,12 +56,15 @@ those keys at rest.
 | `GET/POST /api/sessions`, `GET /api/sessions/:id` | per-user history |
 | `GET/POST /api/decks`, `GET /api/decks/:id/cards` | starter decks (HSK 1, JLPT N5) + AI-generated decks |
 | `GET /api/exercises` | the exercise registry |
-| `POST /api/practice/next` · `/api/practice/grade` | generate an exercise · grade it (+XP) |
+| `POST /api/practice/next` · `/api/practice/grade` · `/api/practice/speak` | next drill · grade it (+XP) · pronunciation |
+| `GET /api/skills` | the profession board (skills, actions, talents, bank, gear) |
+| `POST /api/skills/talents` · `/api/skills/equip` | choose a talent · equip/unequip gear |
 | `GET /api/stats` | XP, level, streak |
-| `GET /api/speech/health` · `POST /api/speech/{tts,asr,align,wake,unload}` | speech, lazily started/stopped |
+| `GET /api/speech/health` · `POST /api/speech/{tts,asr,align,assess,wake,unload}` | speech, lazily started/stopped |
 
 Adding an exercise type takes a backend `ExerciseDef` + a Svelte component keyed by
-the same `id` — no core changes (see `docs/DESIGN.md` §11.2).
+the same `id` — no core changes (see `docs/DESIGN.md` §11.2). Adding a profession
+is content only (`apps/server/src/game/skills.ts`) — see §13.5.
 
 Everything except `/api/health`, `/api/models` and the auth routes requires a
 session. All data is scoped to the signed-in user.
@@ -89,6 +92,7 @@ docs/          DESIGN.md (architecture + execution plan)
 - [x] Phase 5 — pronunciation scoring (ASR + forced aligner + optional judge)
 - [x] Phase 6 — gamification (XP ledger, levels, UTC streaks, daily goal, event bus)
 - [x] Phase 7 — packaging (`nix build` / `nix run .`) + docs
+- [x] Phase 8 — professions, per-level effects, talents (5/10), materials & combat gating
 
 ## Configuration
 

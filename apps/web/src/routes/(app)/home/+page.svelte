@@ -111,8 +111,8 @@
 {/if}
 
 <section class="mt-5 space-y-3">
-  <a href="/practice" class="block rounded-2xl bg-emerald-500 px-4 py-4 font-medium text-black">
-    Practise cards →
+  <a href="/skills" class="block rounded-2xl bg-emerald-500 px-4 py-4 font-medium text-black">
+    Train a profession →
   </a>
   <a
     href="/chat"

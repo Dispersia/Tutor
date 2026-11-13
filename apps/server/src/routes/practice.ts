@@ -1,9 +1,26 @@
-import type { Learner } from '@tutor/core'
+import type { Card, ExerciseDef, Learner } from '@tutor/core'
 import type { Context } from 'hono'
 import type { App, AppEnv } from '../context'
-import { addReview, getCard, getRoles, otherBacks, pickCard } from '../db/repo'
-import { awardXp, recordActivity, summary } from '../game/service'
+import {
+  addReview,
+  getCard,
+  getRoles,
+  lastExerciseUse,
+  listDecks,
+  otherBacks,
+  pickCard,
+} from '../db/repo'
 import { exerciseCatalog, registry } from '../exercises'
+import {
+  actionState,
+  awardSkillXp,
+  awardXp,
+  consumeItems,
+  grantItems,
+  recordActivity,
+  summary,
+} from '../game/service'
+import { ACTION_BY_ID } from '../game/skills'
 import { OpenRouter } from '../llm/openrouter'
 import { resolveUserKey } from '../llm/userkey'
 import { makeAssessor, type AssessFn } from '../pronunciation/assess'
@@ -21,6 +38,21 @@ function learnerOf(user: {
     targetLang: user.targetLang ?? 'zh',
     level: user.level ?? 'hsk1',
   }
+}
+
+/** "The next drill": the eligible exercise you've trained least recently. */
+export function pickNextExercise(
+  db: Parameters<typeof lastExerciseUse>[0],
+  userId: string,
+  card: Card,
+  learner: Learner,
+): ExerciseDef<unknown> | undefined {
+  const eligible = registry.forCard(card, learner)
+  if (eligible.length <= 1) return eligible[0]
+  const lastUse = lastExerciseUse(db, userId)
+  const oldest = Math.min(...eligible.map((d) => lastUse.get(d.id) ?? 0))
+  const ties = eligible.filter((d) => (lastUse.get(d.id) ?? 0) === oldest)
+  return ties[Math.floor(Math.random() * ties.length)]
 }
 
 /** Builds the optional LLM judge for this user (absent when no key is set). */
@@ -49,16 +81,82 @@ async function judgeFor(c: Context<AppEnv>) {
   }
 }
 
+/** Applies profession XP + the material economy for a completed action. */
+function settleAction(
+  deps: AppEnv['Variables']['deps'],
+  userId: string,
+  actionId: string | undefined,
+  result: { correct: boolean; score: number },
+) {
+  const action = actionId ? ACTION_BY_ID.get(actionId) : undefined
+  if (!action) return null
+  const minScore = action.minScore ?? 70
+  const success = result.correct && result.score >= minScore
+  if (!success) {
+    return {
+      skillId: action.skillId,
+      xp: 0,
+      leveledUp: false,
+      gained: [],
+      consumed: [],
+      grantedTalents: [],
+    }
+  }
+  const award = awardSkillXp(deps.db, deps.events, userId, action.skillId, action.xp)
+  const produces = action.produces ?? []
+  const consumes = action.consumes ?? []
+  grantItems(deps.db, deps.events, userId, action.skillId, produces)
+  consumeItems(deps.db, deps.events, userId, consumes)
+  return {
+    skillId: award.skillId,
+    xp: award.xp,
+    level: award.level,
+    leveledUp: award.leveledUp,
+    gained: produces,
+    consumed: consumes,
+    grantedTalents: award.grantedTalents,
+  }
+}
+
 export function registerPractice(app: App) {
   app.get('/api/exercises', (c) => c.json({ exercises: exerciseCatalog() }))
 
   app.post('/api/practice/next', async (c) => {
     const deps = c.get('deps')
     const user = c.get('user')!
-    const body = (await c.req.json().catch(() => ({}))) as { deckId?: string; exerciseId?: string }
+    const body = (await c.req.json().catch(() => ({}))) as {
+      deckId?: string
+      exerciseId?: string
+      actionId?: string
+    }
     seedStarterDecks(deps.db, user.id)
 
-    const card = pickCard(deps.db, user.id, body.deckId)
+    const action = body.actionId ? ACTION_BY_ID.get(body.actionId) : undefined
+    if (body.actionId && !action) return c.json({ error: 'unknown action' }, 404)
+
+    let deckId = body.deckId
+    if (action) {
+      const state = actionState(deps.db, user.id, action)
+      if (!state.unlocked) {
+        return c.json(
+          {
+            error: 'action locked',
+            missingUnlocks: state.missingUnlocks,
+            equipMissing: state.equipMissing,
+          },
+          403,
+        )
+      }
+      if (!state.affordable) {
+        return c.json({ error: 'missing materials', missing: state.missing }, 409)
+      }
+      if (action.deckLevel) {
+        const deck = listDecks(deps.db, user.id).find((d) => d.level === action.deckLevel)
+        if (deck) deckId = deck.id
+      }
+    }
+
+    const card = pickCard(deps.db, user.id, deckId)
     if (!card) return c.json({ error: 'no cards in this deck' }, 404)
 
     const learner = learnerOf(user)
@@ -68,15 +166,24 @@ export function registerPractice(app: App) {
       distractors: otherBacks(deps.db, user.id, card.targetLang, card.back, 3),
       judge: await judgeFor(c),
     }
-    const eligible = body.exerciseId
-      ? [registry.get(body.exerciseId)].filter((d) => d !== undefined)
-      : registry.forCard(card, learner)
-    const defs = eligible.length ? eligible : registry.forCard(card, learner)
-    const def = defs[Math.floor(Math.random() * defs.length)]
+    const def = body.exerciseId
+      ? registry.get(body.exerciseId)
+      : pickNextExercise(deps.db, user.id, card, learner)
     if (!def) return c.json({ error: 'no exercise available' }, 500)
 
     const instance = await def.generate(ctx)
-    return c.json({ instance })
+    return c.json({
+      instance,
+      action: action
+        ? {
+            id: action.id,
+            skillId: action.skillId,
+            xp: action.xp,
+            produces: action.produces ?? [],
+            consumes: action.consumes ?? [],
+          }
+        : null,
+    })
   })
 
   app.post('/api/practice/grade', async (c) => {
@@ -87,6 +194,7 @@ export function registerPractice(app: App) {
       cardId?: string
       answer?: unknown
       latencyMs?: number
+      actionId?: string
     }
     const card = body.cardId ? getCard(deps.db, body.cardId, user.id) : undefined
     if (!card) return c.json({ error: 'card not found' }, 404)
@@ -121,9 +229,11 @@ export function registerPractice(app: App) {
       score: result.score,
       correct: result.correct,
     })
+    const skill = settleAction(deps, user.id, body.actionId, result)
 
     return c.json({
       result: { ...result, xp, leveledUp },
+      skill,
       stats: summary(deps.db, user.id),
     })
   })
@@ -136,6 +246,7 @@ export function registerPractice(app: App) {
     const file = form.get('file')
     const cardId = String(form.get('cardId') ?? '')
     const exerciseId = String(form.get('exerciseId') ?? '')
+    const actionId = form.get('actionId') ? String(form.get('actionId')) : undefined
     const latencyMs = Number(form.get('latencyMs') ?? 0)
 
     if (!(file instanceof File)) return c.json({ error: 'audio file required' }, 400)
@@ -170,8 +281,10 @@ export function registerPractice(app: App) {
         score: result.score,
         correct: result.correct,
       })
+      const skill = settleAction(deps, user.id, actionId, result)
       return c.json({
         result: { ...result, xp, leveledUp },
+        skill,
         stats: summary(deps.db, user.id),
       })
     } catch (err) {

@@ -43,6 +43,8 @@ export type Role = 'conversation' | 'judge' | 'generator' | 'translator'
 
 export interface Roles extends Record<Role, string> {}
 
+export type ModKind = 'yield' | 'double' | 'xp' | 'global_xp' | 'damage' | 'drop' | 'hp' | 'coins'
+
 export interface SpeechStatus {
   running: boolean
   ready: boolean

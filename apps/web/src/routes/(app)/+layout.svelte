@@ -12,7 +12,7 @@
 
   const tabs = [
     { href: '/home', label: 'Home' },
-    { href: '/practice', label: 'Practice' },
+    { href: '/skills', label: 'Skills' },
     { href: '/chat', label: 'Chat' },
     { href: '/history', label: 'History' },
     { href: '/settings', label: 'Settings' },
