@@ -11,6 +11,10 @@
   "dependencies": {
     "@tutor/core": "workspace:*",
     "@tutor/speech": "workspace:*",
-    "hono": "^4.6.14"
+    "drizzle-orm": "^0.45.4",
+    "hono": "^4.13.18"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.11"
   }
 }

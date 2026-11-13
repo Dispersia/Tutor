@@ -1,31 +1,41 @@
-import { Hono } from 'hono'
-import { GatewaySpeechProvider } from '@tutor/speech'
+import { createApp } from './app'
+import { buildDeps } from './bootstrap'
+import { env } from './env'
+import { readTls } from './static'
 
-const app = new Hono()
-const speech = new GatewaySpeechProvider({
-  baseUrl: process.env.TUTOR_SPEECH_URL ?? 'http://127.0.0.1:4319',
+const { deps, close } = buildDeps(env)
+const app = createApp(deps, { staticDir: env.staticDir })
+
+deps.supervisor.startWatchdog()
+if (env.speechAutostart) void deps.supervisor.ensure()
+
+const tls = readTls(env.tlsCert, env.tlsKey)
+
+const server = Bun.serve({
+  hostname: env.host,
+  port: env.port,
+  fetch: app.fetch,
+  ...(tls ? { tls } : {}),
 })
 
-app.get('/', (c) => c.text('tutor api — see /api/health'))
-
-app.get('/api/health', (c) =>
-  c.json({ ok: true, name: 'tutor', version: '0.0.0', phase: 0 }),
+const scheme = tls ? 'https' : 'http'
+console.log(
+  `[server] tutor api on ${scheme}://${env.host}:${env.port} (openrouter=${
+    deps.or.configured ? 'key set' : 'NO KEY'
+  })`,
 )
-
-// Best-effort view of the speech gateway. Returns { ready: false } when the
-// sidecar is asleep — the supervisor (Phase 2) is what starts/stops it.
-app.get('/api/speech/health', async (c) => {
-  try {
-    return c.json(await speech.health())
-  } catch {
-    return c.json({ ready: false, models: [], lastActivity: 0, asleep: true })
-  }
-})
-
-const port = Number(process.env.TUTOR_PORT ?? 4318)
-
-export default { port, fetch: app.fetch }
-
-if (import.meta.main) {
-  console.log(`tutor api listening on http://127.0.0.1:${port}`)
+if (env.host !== '127.0.0.1') {
+  console.log(`[server] LAN: ${scheme}://<your-ip>:${env.port} (needed for the phone)`)
 }
+
+async function shutdown(): Promise<void> {
+  console.log('\n[server] shutting down…')
+  deps.supervisor.stopWatchdog()
+  await deps.supervisor.stop()
+  close()
+  server.stop()
+  process.exit(0)
+}
+
+process.on('SIGINT', () => void shutdown())
+process.on('SIGTERM', () => void shutdown())
