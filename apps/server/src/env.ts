@@ -40,6 +40,12 @@ export const env = {
 
   openrouterKey: process.env.OPENROUTER_API_KEY ?? process.env.TUTOR_OPENROUTER_KEY,
 
+  /** Optional server secret: encrypts per-user OpenRouter keys at rest. */
+  secret: process.env.TUTOR_SECRET,
+  /** Allow new accounts to be created (first account is always the admin). */
+  allowRegistration: (process.env.TUTOR_ALLOW_REGISTRATION ?? 'true').toLowerCase() === 'true',
+  sessionTtlDays: num(process.env.TUTOR_SESSION_TTL_DAYS, 30),
+
   speechPort: num(process.env.TUTOR_SPEECH_PORT, 4319),
   speechUrl:
     process.env.TUTOR_SPEECH_URL ?? `http://127.0.0.1:${num(process.env.TUTOR_SPEECH_PORT, 4319)}`,

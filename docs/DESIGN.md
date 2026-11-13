@@ -43,6 +43,7 @@ rewriting the core.
 - Local TTS + ASR using the **latest Qwen3 speech models that fit in 16 GB**.
 - Brain via **OpenRouter** with **user-selectable models** (any key: Qwen,
   DeepSeek, OpenAI, …).
+- **Multi-user**: separate accounts, isolated history, per-user settings and keys.
 - **SvelteKit PWA**, mobile-first for Android, installable to the home screen.
 - Web UI: chat mode and voice mode, both persisted forever.
 - Extensible **card** and **exercise** type system.
@@ -54,7 +55,8 @@ rewriting the core.
 ### Non-goals (later)
 
 - Full guided curriculum / SRS scheduling (planned, not now).
-- Multi-user accounts, cloud sync, native (App Store) mobile apps.
+- Cloud sync / federation / SSO.
+- Native (App Store) mobile apps.
 - Training or fine-tuning models.
 - Leaderboards, leagues, social features (game is built out later).
 
@@ -550,9 +552,12 @@ events.emit('streak.updated', { days })
 ## 12. Data model (SQLite)
 
 ```
-users(id, handle, native_lang, created_at, settings_json)
-decks(id, name, source_lang, target_lang, level, description)
-cards(id, deck_id, type, source_lang, target_lang, front, back,
+users(id, username UNIQUE, password_hash, handle, role /*admin|user*/,
+      native_lang, target_lang, level, settings_json, created_at, updated_at)
+auth_sessions(id /*sha256(token)*/, user_id, created_at, expires_at, user_agent)
+user_settings(user_id, key, value, PRIMARY KEY(user_id,key))
+decks(id, user_id, name, source_lang, target_lang, level, description)
+cards(id, deck_id, user_id, type, source_lang, target_lang, front, back,
       readings_json, tags_json, payload_json, origin, created_at)
 reviews(id, card_id, user_id, exercise_id, score, latency_ms, detail_json,
         audio_ref, created_at)                 -- one row per attempt
@@ -560,13 +565,13 @@ sessions(id, user_id, deck_id, kind /*chat|voice|mixed*/, lang,
          title, started_at, ended_at)
 messages(id, session_id, role, text, audio_ref, model, tokens_in, tokens_out,
          cost_usd, created_at)                 -- PERMANENT history
-attempts(id, session_id, card_id, exercise_id, answer_json, grade_json,
-         score, created_at)
+attempts(id, session_id, card_id, user_id, exercise_id, answer_json,
+         grade_json, score, created_at)
 xp_events(id, user_id, amount, reason, source_id, created_at)  -- append-only
 stats(user_id, xp_total, level, streak_days, last_active_day, daily_goal,
       updated_at)                              -- cached/derived
-settings(key, value)                           -- non-secret prefs
-audio_blobs(hash, path, bytes, mime, seconds, created_at)  -- files on disk
+settings(key, value)                           -- server-global (registration, etc.)
+audio_blobs(hash, user_id, path, bytes, mime, seconds, created_at)  -- files on disk
 ```
 
 Notes:
@@ -575,7 +580,35 @@ Notes:
   XP total = `SUM(xp_events.amount)`; `stats` is a cache we can rebuild.
 - **Audio** is stored as files under `$TUTOR_DATA_DIR/audio/<sha1>.wav`, referenced
   by hash — keeps the DB small and lets us prune old audio independently.
-- Migrations via **Drizzle Kit**; every table dated so we can evolve safely.
+- Migrations are hand-written `.sql` files in `apps/server/migrations`, applied in
+  order and tracked in `_migrations`.
+
+## 12.5 Multi-user & authentication
+
+Several people share one server (the Mac), each with **their own account, history,
+settings and OpenRouter key**.
+
+- **Accounts:** local username + password. Passwords hashed with **argon2id**
+  (Bun's built-in). The **first account is the admin**; the admin can list/remove
+  users. Registration can be closed with `TUTOR_ALLOW_REGISTRATION=false` once
+  everyone has signed up.
+- **Login sessions:** opaque random token in an httpOnly cookie; only its
+  **SHA-256 hash** is stored in `auth_sessions`, with a 30-day sliding expiry.
+  Cookie is `Secure` automatically when served over HTTPS.
+- **Isolation:** every request resolves the session to a user and **all** queries
+  are scoped by `user_id` — a user can only ever read/write their own rows.
+  `/api/chat`, `/api/sessions`, `/api/settings` etc. return `401` without a
+  session; there is no cross-user read path.
+- **Per-user keys:** each user stores their own OpenRouter key in `user_settings`
+  (encrypted at rest when `TUTOR_SECRET` is set, otherwise marked `plain:`). If a
+  user has no key, the server-level `OPENROUTER_API_KEY` is used as a fallback.
+  This is what makes "use Qwen, or point it at DeepSeek" a per-user choice.
+- **The speech gateway is shared** — it's one piece of hardware (the Mac's GPU).
+  Idle shutdown is a server-level concern, not per-user. Speech *settings*
+  (voice, mode) are per-user.
+
+Public endpoints (no session): `GET /api/health`, `GET /api/models`,
+`POST /api/auth/{register,login,logout}`, `GET /api/auth/me`.
 
 ---
 
@@ -799,12 +832,16 @@ stack before any UI work.**
   the per-role model and see it take effect; supervisor starts/stops the sidecar
   on demand; unit tests on graders.
 
-### Phase 3 — Web MVP: SvelteKit PWA chat + voice (2–3 days)
+### Phase 3 — Web MVP: SvelteKit PWA, multi-user auth + chat/voice (3–4 days)
 
-- SvelteKit + Tailwind + shadcn-svelte, `adapter-static` SPA, PWA manifest +
-  service worker; mobile-first Home HUD + Conversation screen; mic record → ASR;
-  reply → streaming TTS playback; History viewer; HTTPS cert setup.
-- **Acceptance:** install the PWA on an Android phone; hold a typed and a spoken
+- **Multi-user backend** (done first, so the UI is auth-aware): accounts, argon2id
+  passwords, cookie sessions, per-user isolation + settings + OpenRouter keys.
+- SvelteKit + Tailwind, `adapter-static` SPA, PWA manifest + service worker;
+  sign-in/sign-up screens; mobile-first Home HUD + Conversation screen; mic
+  record → ASR; reply → streaming TTS playback; History viewer; Settings
+  (per-role model picker, voice, own key, free memory); HTTPS cert setup.
+- **Acceptance:** two accounts hold separate conversations and never see each
+  other's history; install the PWA on an Android phone; hold a typed and a spoken
   conversation over HTTPS; reload → history intact; TTS audio plays; no orphan
   Python process after idle.
 
@@ -842,7 +879,7 @@ stack before any UI work.**
 
 - SRS scheduler (FSRS) + guided curriculum; streaming/barge-in voice; phoneme GOP
   precision mode; achievements/quests/leaderboards; second speech provider
-  (OpenRouter audio / whisper.cpp); multi-user + sync; launchd/nix-darwin module.
+  (OpenRouter audio / whisper.cpp); cloud sync / federation; launchd/nix-darwin module.
 
 ---
 
@@ -860,6 +897,7 @@ stack before any UI work.**
 | 6   | Idle timeout                | **10 min** (configurable 2–30)                                                                                                                                                     |
 | 7   | Speech provider abstraction | Build the **provider interface now** (local mlx-audio + cloud fallback), so swapping is trivial                                                                                    |
 | 8   | Client deployment           | Mac = server; phones = PWA over **HTTPS** (mkcert) — required for mic (§14.1)                                                                                                      |
+| 9   | Multi-user                  | **Local accounts** (username + password, argon2id), **fully isolated** per-user history/settings/keys; first user is admin; per-user OpenRouter key with server fallback (§12.5)   |
 
 ### Still open (non-blocking)
 

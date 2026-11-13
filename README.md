@@ -23,26 +23,39 @@ just speech          # (optional) run the speech gateway standalone
 just bench           # (optional) measure latency + peak RAM
 ```
 
-Open http://127.0.0.1:4318 — a placeholder page with a streaming chat box until
-the SvelteKit PWA lands in Phase 3.
+Open http://127.0.0.1:4318 — the SvelteKit PWA (sign up → chat or talk).
 
-## API (Phase 2)
+## API (Phase 2/3)
 
-| Endpoint                                                                  | Purpose                                         |
-| ------------------------------------------------------------------------- | ----------------------------------------------- |
-| `GET /api/health`                                                         | server + speech status + active role models     |
-| `GET /api/models?q=`                                                      | live OpenRouter catalogue for the model picker  |
-| `GET/PUT /api/settings`                                                   | per-role model selection (persisted)            |
-| `POST /api/chat`                                                          | streamed chat over SSE, persists both turns     |
-| `POST /api/chat/json`                                                     | structured (JSON-schema) completion for graders |
-| `GET/POST /api/sessions`, `GET /api/sessions/:id`                         | conversation history                            |
-| `GET /api/speech/health` · `POST /api/speech/{tts,asr,align,wake,unload}` | speech, lazily started/stopped                  |
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /api/auth/register` · `/login` · `/logout` · `GET/PUT /api/auth/me` | accounts (first user is admin) |
+| `GET /api/users` · `DELETE /api/users/:id` | admin: manage accounts |
+| `GET /api/health` | server + speech status |
+| `GET /api/models?q=` | live OpenRouter catalogue for the model picker |
+| `GET/PUT /api/settings` | per-user roles + voice prefs |
+| `PUT /api/settings/openrouter-key` | each user's own key (server key is a fallback) |
+| `POST /api/chat` · `/api/chat/json` | streamed chat (SSE) + structured output |
+| `GET/POST /api/sessions`, `GET /api/sessions/:id` | per-user history |
+| `GET /api/speech/health` · `POST /api/speech/{tts,asr,align,wake,unload}` | speech, lazily started/stopped |
+
+Everything except `/api/health`, `/api/models` and the auth routes requires a
+session. All data is scoped to the signed-in user.
+
+## Dev
+
+```bash
+just dev         # API on :4318, serving the built PWA
+just dev-web     # SvelteKit dev server on :5173 (proxies /api → :4318)
+just build       # build the PWA into apps/web/build
+just check       # typecheck server + web
+```
 
 ## Layout
 
 ```
-apps/server    Bun + Hono API, SSE/WS, SQLite, PWA host, speech supervisor
-apps/web       SvelteKit PWA (mobile-first) — Phase 3
+apps/server    Bun + Hono API, SSE, SQLite, multi-user auth, PWA host, speech supervisor
+apps/web       SvelteKit PWA (mobile-first) — chat, voice, history, settings
 packages/core  shared types, card + exercise registry contracts
 packages/speech TS client for the speech gateway (provider interface)
 packages/ui    shared Svelte components
@@ -55,8 +68,8 @@ docs/          DESIGN.md (architecture + execution plan)
 
 - [x] Phase 0 — scaffold, flake, tooling
 - [x] Phase 1 — speech gateway (ASR/TTS/aligner + idle unload) — verified on M6
-- [x] Phase 2 — backend (Hono, SQLite, OpenRouter, speech supervisor) — 17 tests green
-- [ ] Phase 3 — SvelteKit PWA (chat + voice)
+- [x] Phase 2 — backend (Hono, SQLite, OpenRouter, speech supervisor) — 21 tests green
+- [x] Phase 3 — multi-user auth + SvelteKit PWA (chat, voice, history, settings)
 - [ ] Phase 4 — exercise engine + cards
 - [ ] Phase 5 — pronunciation scoring
 - [ ] Phase 6 — gamification
@@ -65,4 +78,6 @@ docs/          DESIGN.md (architecture + execution plan)
 ## Configuration
 
 Copy `.env.example` to `.env` (dev) or `~/.config/tutor/env` and set
-`OPENROUTER_API_KEY`. Per-role model selection happens in the app UI.
+`OPENROUTER_API_KEY` (server fallback), plus `TUTOR_SECRET` to encrypt per-user
+keys at rest. Each user then picks their own models and key in the app. Set
+`TUTOR_ALLOW_REGISTRATION=false` once everyone has an account.

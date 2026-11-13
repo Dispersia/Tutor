@@ -1,0 +1,7 @@
+# don't reformat prose / generated / vendored files
+docs/
+README.md
+models/
+data/
+python/.venv/
+result

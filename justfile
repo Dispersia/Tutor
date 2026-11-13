@@ -21,17 +21,26 @@ speech:
 bench:
     cd python && uv run python -m speech.bench
 
-# start the API (and the web app once Phase 3 exists)
+# start the API (serves the built PWA from apps/web/build)
 dev:
     bun run --cwd apps/server dev
+
+# start the SvelteKit dev server (proxies /api to the API on :4318)
+dev-web:
+    bun run --cwd apps/web dev
+
+# build the PWA into apps/web/build
+build:
+    bun run --cwd apps/web build
 
 # run tests
 test:
     bun test
 
-# typecheck the workspace
+# typecheck the workspace (server + web)
 check:
     bun run typecheck
+    bun run --cwd apps/web check
 
 # format everything
 fmt:

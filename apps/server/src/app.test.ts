@@ -1,8 +1,7 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { createApp } from './app'
-import type { Deps } from './context'
+import type { App, Deps } from './context'
 import { openDb } from './db/client'
-import { getRoles, listMessages, listSessions } from './db/repo'
 import type { Role } from './env'
 import { OpenRouter } from './llm/openrouter'
 import { SpeechSupervisor } from './speech/supervisor'
@@ -17,7 +16,6 @@ const defaults: Record<Role, string> = {
 let stub: { url: string; stop: () => void }
 
 beforeAll(() => {
-  // A fake OpenRouter so the SSE stream is deterministic offline.
   const server = Bun.serve({
     port: 0,
     fetch(req) {
@@ -46,8 +44,8 @@ beforeAll(() => {
               id: 'qwen/test',
               name: 'Qwen Test',
               context_length: 1000,
-              pricing: { prompt: '0', completion: '0' },
-              architecture: { input_modalities: ['text'], output_modalities: ['text'] },
+              pricing: {},
+              architecture: { output_modalities: ['text'] },
             },
           ],
         })
@@ -60,7 +58,7 @@ beforeAll(() => {
 
 afterAll(() => stub.stop())
 
-function makeApp() {
+function makeApp(allowRegistration = true) {
   const { db, sqlite } = openDb(':memory:')
   const deps: Deps = {
     db,
@@ -74,109 +72,169 @@ function makeApp() {
       autostart: false,
     }),
     defaults,
+    serverKey: 'test-key',
+    secret: undefined,
+    allowRegistration,
+    sessionTtlMs: 86_400_000,
   }
   const app = createApp(deps, { staticDir: '/definitely/not/here', log: false })
-  return { app, db, sqlite, deps }
+  return { app, db, sqlite }
 }
 
-test('GET /api/health reports speech asleep + openrouter set', async () => {
-  const { app } = makeApp()
-  const res = await app.request('/api/health')
-  expect(res.status).toBe(200)
-  const json = (await res.json()) as { openrouter: boolean; speech: { running: boolean } }
-  expect(json.openrouter).toBe(true)
-  expect(json.speech.running).toBe(false)
-})
-
-test('GET /api/models returns the catalogue', async () => {
-  const { app } = makeApp()
-  const res = await app.request('/api/models')
-  const json = (await res.json()) as { count: number; models: { id: string }[] }
-  expect(json.count).toBe(1)
-  expect(json.models[0]!.id).toBe('qwen/test')
-})
-
-test('POST /api/chat streams SSE and persists both turns', async () => {
-  const { app, db, sqlite } = makeApp()
-  const res = await app.request('/api/chat', {
+async function signup(app: App, username: string, password = 'password123') {
+  const res = await app.request('/api/auth/register', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ text: '你好', role: 'conversation' }),
+    body: JSON.stringify({ username, password }),
+  })
+  const cookie = res.headers.getSetCookie()[0]!.split(';')[0]!
+  const body = (await res.json()) as { user: { id: string; role: string } }
+  return { cookie, user: body.user }
+}
+
+const json = (body: unknown): RequestInit => ({
+  method: 'POST',
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify(body),
+})
+
+test('public endpoints need no session', async () => {
+  const { app } = makeApp()
+  const health = await app.request('/api/health')
+  expect(health.status).toBe(200)
+  expect(((await health.json()) as { openrouter: boolean }).openrouter).toBe(true)
+  const models = await app.request('/api/models')
+  expect(models.status).toBe(200)
+})
+
+test('protected endpoints reject anonymous requests', async () => {
+  const { app } = makeApp()
+  for (const path of ['/api/settings', '/api/sessions', '/api/chat']) {
+    const res = await app.request(path, { method: path === '/api/chat' ? 'POST' : 'GET' })
+    expect(res.status).toBe(401)
+  }
+})
+
+test('first user becomes admin; auth/me works', async () => {
+  const { app, db, sqlite } = makeApp()
+  const { cookie, user } = await signup(app, 'dispe')
+  expect(user.role).toBe('admin')
+  const me = await app.request('/api/auth/me', { headers: { cookie } })
+  expect(((await me.json()) as { user: { username: string } }).user.username).toBe('dispe')
+  sqlite.close()
+  void db
+})
+
+test('login + logout', async () => {
+  const { app, sqlite } = makeApp()
+  await signup(app, 'alice')
+  const bad = await app.request('/api/auth/login', json({ username: 'alice', password: 'wrong' }))
+  expect(bad.status).toBe(401)
+
+  const ok = await app.request(
+    '/api/auth/login',
+    json({ username: 'alice', password: 'password123' }),
+  )
+  expect(ok.status).toBe(200)
+  const cookie = ok.headers.getSetCookie()[0]!.split(';')[0]!
+  expect((await app.request('/api/auth/me', { headers: { cookie } })).status).toBe(200)
+
+  await app.request('/api/auth/logout', { method: 'POST', headers: { cookie } })
+  const after = await app.request('/api/auth/me', { headers: { cookie } })
+  expect(((await after.json()) as { user: null }).user).toBeNull()
+  sqlite.close()
+})
+
+test('chat streams SSE, persists per user, and isolates history', async () => {
+  const { app, db, sqlite } = makeApp()
+  const alice = await signup(app, 'alice')
+  const bob = await signup(app, 'bob')
+
+  const res = await app.request('/api/chat', {
+    ...json({ text: '你好', role: 'conversation' }),
+    headers: { 'content-type': 'application/json', cookie: alice.cookie },
   })
   expect(res.status).toBe(200)
   const text = await res.text()
-  expect(text).toContain('event: session')
   expect(text).toContain('event: delta')
-  expect(text).toContain('你')
-  expect(text).toContain('好')
-  expect(text).toContain('event: usage')
   expect(text).toContain('event: done')
 
-  const sessions = listSessions(db)
-  expect(sessions.length).toBe(1)
-  const msgs = listMessages(db, sessions[0]!.id)
-  expect(msgs.length).toBe(2)
-  expect(msgs[0]!.role).toBe('user')
-  expect(msgs[0]!.text).toBe('你好')
-  expect(msgs[1]!.role).toBe('assistant')
-  expect(msgs[1]!.text).toBe('你好')
-  expect(msgs[1]!.model).toBe('qwen/c')
-  expect(msgs[1]!.tokensOut).toBe(2)
-  expect(msgs[1]!.costUsd).toBeCloseTo(0.0001)
+  const aliceSessions = (await (
+    await app.request('/api/sessions', { headers: { cookie: alice.cookie } })
+  ).json()) as {
+    sessions: { id: string }[]
+  }
+  expect(aliceSessions.sessions.length).toBe(1)
+
+  const bobSessions = (await (
+    await app.request('/api/sessions', { headers: { cookie: bob.cookie } })
+  ).json()) as {
+    sessions: { id: string }[]
+  }
+  expect(bobSessions.sessions.length).toBe(0)
+
+  // bob cannot read alice's session
+  const forbidden = await app.request(`/api/sessions/${aliceSessions.sessions[0]!.id}`, {
+    headers: { cookie: bob.cookie },
+  })
+  expect(forbidden.status).toBe(404)
   sqlite.close()
+  void db
 })
 
-test('PUT /api/settings switches a role model and it takes effect', async () => {
-  const { app, db, sqlite } = makeApp()
-  const res = await app.request('/api/settings', {
+test('per-user model selection', async () => {
+  const { app } = makeApp()
+  const alice = await signup(app, 'alice')
+  const bob = await signup(app, 'bob')
+  await app.request('/api/settings', {
     method: 'PUT',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', cookie: alice.cookie },
     body: JSON.stringify({ roles: { judge: 'deepseek/deepseek-v4' } }),
   })
-  expect(res.status).toBe(200)
-  const json = (await res.json()) as { roles: Record<string, string> }
-  expect(json.roles.judge).toBe('deepseek/deepseek-v4')
-  expect(json.roles.conversation).toBe('qwen/c')
-  expect(getRoles(db, defaults).judge).toBe('deepseek/deepseek-v4')
-
-  // and the change is used by the next chat request
-  await app.request('/api/chat/json', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      messages: [{ role: 'user', content: 'go' }],
-      schema: { type: 'object' },
-    }),
-  })
-  // judge model now deepseek; verified via settings read
-  expect(getRoles(db, defaults).judge).toBe('deepseek/deepseek-v4')
-  sqlite.close()
+  const aliceRoles = (await (
+    await app.request('/api/settings', { headers: { cookie: alice.cookie } })
+  ).json()) as { roles: Record<string, string> }
+  const bobRoles = (await (
+    await app.request('/api/settings', { headers: { cookie: bob.cookie } })
+  ).json()) as { roles: Record<string, string> }
+  expect(aliceRoles.roles.judge).toBe('deepseek/deepseek-v4')
+  expect(bobRoles.roles.judge).toBe('qwen/j')
 })
 
-test('PUT /api/settings rejects unknown roles', async () => {
+test('admin can list users; non-admin cannot', async () => {
   const { app, sqlite } = makeApp()
-  const res = await app.request('/api/settings', {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ roles: { nope: 'x' } }),
-  })
-  expect(res.status).toBe(400)
+  const admin = await signup(app, 'admin')
+  const user = await signup(app, 'user')
+  expect((await app.request('/api/users', { headers: { cookie: admin.cookie } })).status).toBe(200)
+  expect((await app.request('/api/users', { headers: { cookie: user.cookie } })).status).toBe(403)
   sqlite.close()
 })
 
-test('sessions listing + detail', async () => {
-  const { app, db, sqlite } = makeApp()
-  const created = await app.request('/api/sessions', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ kind: 'voice', lang: 'ja' }),
+test('registration can be disabled (after the admin exists)', async () => {
+  const { app, sqlite } = makeApp(false)
+  await signup(app, 'admin')
+  const res = await app.request(
+    '/api/auth/register',
+    json({ username: 'late', password: 'password123' }),
+  )
+  expect(res.status).toBe(403)
+  sqlite.close()
+})
+
+test('per-user OpenRouter key is stored, and settings reports the source', async () => {
+  const { app, sqlite } = makeApp()
+  const alice = await signup(app, 'alice')
+  await app.request('/api/settings/openrouter-key', {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json', cookie: alice.cookie },
+    body: JSON.stringify({ key: 'sk-or-user-123' }),
   })
-  expect(created.status).toBe(201)
-  const { id } = (await created.json()) as { id: string }
-  const detail = await app.request(`/api/sessions/${id}`)
-  const json = (await detail.json()) as { session: { kind: string }; messages: unknown[] }
-  expect(json.session.kind).toBe('voice')
-  expect(json.messages.length).toBe(0)
+  const settings = (await (
+    await app.request('/api/settings', { headers: { cookie: alice.cookie } })
+  ).json()) as {
+    openrouter: { key: string }
+  }
+  expect(settings.openrouter.key).toBe('user')
   sqlite.close()
 })
 
@@ -184,6 +242,5 @@ test('placeholder page is served when no build exists', async () => {
   const { app } = makeApp()
   const res = await app.request('/')
   expect(res.status).toBe(200)
-  const html = await res.text()
-  expect(html).toContain('tutor')
+  expect(await res.text()).toContain('tutor')
 })

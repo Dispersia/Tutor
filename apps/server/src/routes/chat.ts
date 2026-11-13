@@ -1,17 +1,20 @@
 import { streamSSE } from 'hono/streaming'
-import { addMessage, createSession, getRoles, getSession, listMessages } from '../db/repo'
+import { addMessage, createSession, getOwnedSession, getRoles, listMessages } from '../db/repo'
 import type { Role } from '../env'
+import { OpenRouter, type ChatMessage, type Usage } from '../llm/openrouter'
 import { systemPrompt } from '../llm/prompts'
-import type { ChatMessage, Usage } from '../llm/openrouter'
+import { resolveUserKey } from '../llm/userkey'
 import type { App } from '../context'
 
 const EMPTY_USAGE: Usage = { promptTokens: 0, completionTokens: 0, totalTokens: 0, costUsd: 0 }
 
 export function registerChat(app: App) {
-  // Streamed chat (SSE). Persists the user + assistant turns; permanent history.
+  // Streamed chat (SSE). Scoped to the signed-in user; persists both turns.
   app.post('/api/chat', async (c) => {
     const deps = c.get('deps')
-    if (!deps.or.configured) return c.json({ error: 'OPENROUTER_API_KEY is not set' }, 502)
+    const user = c.get('user')!
+    const key = await resolveUserKey(deps, user.id)
+    if (!key) return c.json({ error: 'No OpenRouter key — add one in Settings.' }, 502)
 
     const body = (await c.req.json().catch(() => ({}))) as {
       sessionId?: string
@@ -22,10 +25,12 @@ export function registerChat(app: App) {
       messages?: ChatMessage[]
     }
     const role = (body.role ?? 'conversation') as Role
-    const model = body.model ?? getRoles(deps.db, deps.defaults)[role]
+    const model = body.model ?? getRoles(deps.db, user.id, deps.defaults)[role]
 
     let sid = body.sessionId ?? ''
-    if (!sid || !getSession(deps.db, sid)) sid = createSession(deps.db, { kind: 'chat' }).id
+    if (!sid || !getOwnedSession(deps.db, sid, user.id)) {
+      sid = createSession(deps.db, user.id, { kind: 'chat', lang: user.targetLang ?? undefined }).id
+    }
 
     let msgs: ChatMessage[]
     if (body.messages?.length) {
@@ -41,12 +46,13 @@ export function registerChat(app: App) {
     if (body.text?.trim()) addMessage(deps.db, { sessionId: sid, role: 'user', text: body.text })
 
     const session = sid
+    const or = new OpenRouter(key, deps.or.baseUrl)
     return streamSSE(c, async (stream) => {
       await stream.writeSSE({ event: 'session', data: session })
       let full = ''
       let usage = EMPTY_USAGE
       try {
-        for await (const ev of deps.or.streamChat({ model, messages: msgs })) {
+        for await (const ev of or.streamChat({ model, messages: msgs })) {
           if (ev.type === 'delta') {
             full += ev.text
             await stream.writeSSE({ event: 'delta', data: ev.text })
@@ -74,7 +80,9 @@ export function registerChat(app: App) {
   // Structured (JSON-schema) completion — used by graders in Phase 4/5.
   app.post('/api/chat/json', async (c) => {
     const deps = c.get('deps')
-    if (!deps.or.configured) return c.json({ error: 'OPENROUTER_API_KEY is not set' }, 502)
+    const user = c.get('user')!
+    const key = await resolveUserKey(deps, user.id)
+    if (!key) return c.json({ error: 'No OpenRouter key — add one in Settings.' }, 502)
     const body = (await c.req.json().catch(() => ({}))) as {
       role?: Role
       model?: string
@@ -83,9 +91,10 @@ export function registerChat(app: App) {
       schemaName?: string
     }
     const role = (body.role ?? 'judge') as Role
-    const model = body.model ?? getRoles(deps.db, deps.defaults)[role]
+    const model = body.model ?? getRoles(deps.db, user.id, deps.defaults)[role]
     try {
-      const { json, usage } = await deps.or.chatJSON({
+      const or = new OpenRouter(key, deps.or.baseUrl)
+      const { json, usage } = await or.chatJSON({
         model,
         messages: body.messages ?? [],
         schema: body.schema,
