@@ -60,8 +60,10 @@ test('per-level effects boost skill XP gains', () => {
   sqlite.close()
 })
 
-test('chooseTalent: pick one of three at a 5-level milestone, once', () => {
+test('chooseTalent: pick one of three at a milestone, and change it later', () => {
   const { db, bus, user, sqlite } = setup()
+  const changes: string[] = []
+  bus.on('talent.changed', (e) => changes.push(`${e.fromTalentId}->${e.talentId}`))
   awardSkillXp(db, bus, user.id, 'mining', xpForLevel(5))
 
   const options = minorOptions('mining', 5)
@@ -69,14 +71,26 @@ test('chooseTalent: pick one of three at a 5-level milestone, once', () => {
   expect(first.ok).toBe(true)
   expect(first.talent?.id).toBe(options[0]!.id)
 
-  const again = chooseTalent(db, bus, user.id, options[1]!.id)
-  expect(again.ok).toBe(false)
-  expect(again.error).toContain('no pending')
+  // the same milestone can be respecced to a different option
+  const swap = chooseTalent(db, bus, user.id, options[1]!.id)
+  expect(swap.ok).toBe(true)
+  expect(changes).toEqual([`${options[0]!.id}->${options[1]!.id}`])
+  const owned = listTalents(db, user.id).filter((t) => t.skillId === 'mining')
+  expect(owned.map((t) => t.talentId)).toEqual([options[1]!.id])
 
-  // a wrong-milestone / invalid option is rejected
+  // the next milestone opens at level 15
   awardSkillXp(db, bus, user.id, 'mining', xpForLevel(15) - xpForLevel(5))
-  expect(chooseTalent(db, bus, user.id, 'mining:m:5:2').ok).toBe(false)
   expect(chooseTalent(db, bus, user.id, 'mining:m:15:1').ok).toBe(true)
+  // and it can be respecced too, without touching the level-5 pick
+  expect(chooseTalent(db, bus, user.id, 'mining:m:15:2').ok).toBe(true)
+  const both = listTalents(db, user.id).filter((t) => t.skillId === 'mining' && t.tier === 'minor')
+  expect(both.length).toBe(2)
+  expect(both.some((t) => t.talentId === options[1]!.id)).toBe(true)
+
+  // cannot skip ahead to a milestone you have not reached
+  const skipped = chooseTalent(db, bus, user.id, 'mining:m:25:1')
+  expect(skipped.ok).toBe(false)
+  expect(skipped.error).toContain('not reached')
   sqlite.close()
 })
 
@@ -101,6 +115,7 @@ test('talentView exposes the chosen talents and the next milestones', () => {
   expect(chosen.pendingChoice).toBe(false)
   expect(chosen.owned.map((t) => t.id)).toEqual([choice.id])
   expect(chosen.owned[0]!.tier).toBe('minor')
+  expect(chosen.owned[0]!.options.length).toBe(3)
   expect(chosen.nextMinor).toBe(15)
   expect(chosen.nextMajor).toBe(10)
   sqlite.close()

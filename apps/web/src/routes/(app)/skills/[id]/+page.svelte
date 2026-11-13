@@ -9,6 +9,7 @@
   let note = $state('')
   let loading = $state(true)
   let busy = $state(false)
+  let changing = $state<string | null>(null)
 
   const id = $derived(page.params.id)
   const pct = (v: number) => `${Math.round(v * 100)}%`
@@ -46,7 +47,8 @@
     busy = true
     try {
       await chooseTalent(talentId)
-      note = 'Talent chosen.'
+      note = 'Talent saved.'
+      changing = null
       if (id) await load(id)
     } catch (e) {
       error = (e as Error).message
@@ -158,22 +160,45 @@
   {#if skill.talent.owned.length}
     <div class="mt-2 space-y-2">
       {#each skill.talent.owned as t (t.id)}
-        <div
-          class="flex items-start gap-3 rounded-2xl border border-neutral-800 bg-neutral-900/50 p-3"
-        >
-          <span class="text-lg">{t.tier === 'major' ? '⭐' : '🔹'}</span>
-          <div class="min-w-0 flex-1">
-            <div class="flex items-baseline justify-between gap-2">
-              <span class="text-sm font-medium">{t.name}</span>
-              <span class="shrink-0 text-[11px] text-neutral-500">Lv {t.milestone}</span>
+        <div class="rounded-2xl border border-neutral-800 bg-neutral-900/50 p-3">
+          <div class="flex items-start gap-3">
+            <span class="text-lg">{t.tier === 'major' ? '⭐' : '🔹'}</span>
+            <div class="min-w-0 flex-1">
+              <div class="flex items-baseline justify-between gap-2">
+                <span class="text-sm font-medium">{t.name}</span>
+                <span class="shrink-0 text-[11px] text-neutral-500">Lv {t.milestone}</span>
+              </div>
+              <p class="text-xs text-neutral-400">{t.description}</p>
             </div>
-            <p class="text-xs text-neutral-400">{t.description}</p>
+            <span
+              class="shrink-0 rounded-full px-2 py-0.5 text-[10px] uppercase {t.tier === 'major'
+                ? 'bg-amber-900/50 text-amber-200'
+                : 'bg-neutral-800 text-neutral-400'}">{t.tier}</span
+            >
           </div>
-          <span
-            class="shrink-0 rounded-full px-2 py-0.5 text-[10px] uppercase {t.tier === 'major'
-              ? 'bg-amber-900/50 text-amber-200'
-              : 'bg-neutral-800 text-neutral-400'}">{t.tier}</span
-          >
+
+          {#if t.tier === 'minor'}
+            <button
+              onclick={() => (changing = changing === t.id ? null : t.id)}
+              class="mt-2 text-[11px] text-emerald-400"
+            >
+              {changing === t.id ? 'Cancel' : 'Change talent'}
+            </button>
+            {#if changing === t.id}
+              <div class="mt-2 grid gap-2">
+                {#each t.options.filter((o) => o.id !== t.id) as o (o.id)}
+                  <button
+                    onclick={() => pick(o.id)}
+                    disabled={busy}
+                    class="rounded-xl border border-neutral-700 px-3 py-2 text-left hover:bg-neutral-800/60 disabled:opacity-50"
+                  >
+                    <span class="text-sm font-medium">{o.name}</span>
+                    <span class="block text-xs text-neutral-400">{o.description}</span>
+                  </button>
+                {/each}
+              </div>
+            {/if}
+          {/if}
         </div>
       {/each}
     </div>
