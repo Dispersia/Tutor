@@ -68,3 +68,55 @@ certs:
     mkcert -cert-file data/tls/tutor.pem -key-file data/tls/tutor-key.pem \
       localhost 127.0.0.1 "$ip" "$(scutil --get LocalHostName 2>/dev/null || hostname)"
     echo "cert written to data/tls/tutor.pem (install the mkcert CA on the phone)"
+
+# build + run the app in the foreground on http://127.0.0.1:4318
+serve: package
+    ./result/bin/tutor
+
+# expose the app over HTTPS on your tailnet via Tailscale (no extra software)
+tailscale-serve:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    host="$(tailscale status --json | jq -r .Self.DNSName | sed 's/\.$//')"
+    tailscale serve --bg --https=443 http://127.0.0.1:4318
+    echo "https://$host/"
+
+# turn the Tailscale HTTPS proxy off
+tailscale-unserve:
+    tailscale serve --https=443 off || true
+
+# get a Let's Encrypt cert for this machine's ts.net name (for Caddy)
+tailscale-cert:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    host="$(tailscale status --json | jq -r .Self.DNSName | sed 's/\.$//')"
+    cd deploy && tailscale cert "$host" && echo "wrote deploy/$host.crt and .key"
+
+# run Caddy with the example config (run `just tailscale-cert` first)
+caddy:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    host="$(tailscale status --json | jq -r .Self.DNSName | sed 's/\.$//')"
+    TUTOR_HOSTNAME="$host" TUTOR_CERT="$PWD/deploy/$host.crt" TUTOR_KEY="$PWD/deploy/$host.key" \
+      caddy run --config deploy/Caddyfile
+
+# install a launchd agent so tutor starts at login and restarts on crash
+service-install: package
+    #!/usr/bin/env bash
+    set -euo pipefail
+    repo="$PWD"; label="dev.tutor.serve"
+    plist="$HOME/Library/LaunchAgents/$label.plist"
+    mkdir -p "$HOME/Library/LaunchAgents" "$HOME/Library/Logs"
+    sed -e "s|@REPO@|$repo|g" -e "s|@HOME@|$HOME|g" deploy/launchd.plist.template > "$plist"
+    launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
+    launchctl bootstrap "gui/$(id -u)" "$plist"
+    echo "installed $plist — logs in ~/Library/Logs/tutor.log"
+
+# remove the launchd agent
+service-uninstall:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    label="dev.tutor.serve"
+    launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
+    rm -f "$HOME/Library/LaunchAgents/$label.plist"
+    echo "removed $label"

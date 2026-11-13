@@ -14,11 +14,20 @@ let
   bun = pkgs.bun;
   node = pkgs.nodejs_24;
 
-  # Fixed-output derivation: the repo with node_modules baked in (needs network).
+  # Only manifests + the lockfile feed the dependency FOD, so *code* changes never
+  # invalidate it (otherwise every commit would need a new hash).
+  depsSrc = builtins.filterSource (
+    path: type:
+    type == "directory"
+    || builtins.baseNameOf path == "package.json"
+    || builtins.baseNameOf path == "bun.lock"
+  ) src;
+
+  # Fixed-output derivation: just the installed node_modules (needs network once).
   deps = pkgs.stdenvNoCC.mkDerivation {
     pname = "tutor-bun-deps";
     version = "0.0.0";
-    inherit src;
+    src = depsSrc;
     nativeBuildInputs = [
       bun
       node
@@ -34,18 +43,29 @@ let
     installPhase = ''
       runHook preInstall
       mkdir -p "$out"
-      cp -r . "$out"/
+      cp -r node_modules "$out/node_modules"
+      for d in apps/* packages/*; do
+        [ -d "$d" ] || continue
+        if [ -d "$d/node_modules" ]; then
+          mkdir -p "$out/$d"
+          cp -r "$d/node_modules" "$out/$d/node_modules"
+        fi
+        # workspace symlinks (@tutor/core -> ../../packages/core) must not dangle,
+        # so keep a stub manifest at each workspace path
+        mkdir -p "$out/$d"
+        printf '{"name":"stub","version":"0.0.0","private":true}' > "$out/$d/package.json"
+      done
       runHook postInstall
     '';
     outputHashMode = "recursive";
     outputHashAlgo = "sha256";
-    outputHash = "sha256-RXTUIMwKnwZWFtLxex7ROG9XtsA5qLI30azkRwc9PZo=";
+    outputHash = "sha256-kupurc5bMqrw5S1sQgVn1EHRejBy7aRqacJj3VDclBY=";
   };
 
   appFiles = pkgs.stdenvNoCC.mkDerivation {
     pname = "tutor";
     version = "0.1.0";
-    src = deps;
+    inherit src;
     nativeBuildInputs = [
       bun
       node
@@ -54,6 +74,18 @@ let
     buildPhase = ''
       runHook preBuild
       export HOME=$TMPDIR
+      # merge in the pinned dependency tree (workspace symlinks stay relative)
+      cp -r ${deps}/node_modules ./node_modules
+      for d in apps/* packages/*; do
+        if [ -d "${deps}/$d/node_modules" ]; then
+          cp -r "${deps}/$d/node_modules" "$d/node_modules"
+        fi
+      done
+      # store copies are read-only; SvelteKit writes generated types into node_modules
+      chmod -R u+w node_modules
+      for d in apps/* packages/*; do
+        [ -d "$d/node_modules" ] && chmod -R u+w "$d/node_modules"
+      done
       bun scripts/gen-migrations.mjs
       bun run --cwd apps/web build
       bun build --compile --minify apps/server/src/index.ts --outfile tutor

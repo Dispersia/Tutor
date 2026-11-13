@@ -1,0 +1,15 @@
+# Serve tutor over HTTPS on your Tailscale tailnet with Caddy.
+#
+#   1. Get a real cert for this machine's ts.net name (Tailscale issues it):
+#        just tailscale-cert        # writes deploy/<host>.crt and .key
+#   2. Run Caddy (sets TUTOR_HOSTNAME/CERT/KEY for you):
+#        just caddy
+#
+# Caddy terminates TLS and proxies to the tutor app on http://127.0.0.1:4318.
+# Prefer `just tailscale-serve` if you don't already run Caddy.
+
+https://{$TUTOR_HOSTNAME} {
+	tls {$TUTOR_CERT} {$TUTOR_KEY}
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:4318
+}

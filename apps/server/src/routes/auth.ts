@@ -19,7 +19,9 @@ import {
 import { seedStarterDecks } from '../seed/service'
 
 function isHttps(c: Context<AppEnv>): boolean {
-  return new URL(c.req.url).protocol === 'https:'
+  if (new URL(c.req.url).protocol === 'https:') return true
+  // behind a TLS-terminating proxy (Caddy / `tailscale serve`)
+  return c.req.header('x-forwarded-proto')?.split(',')[0]?.trim() === 'https'
 }
 
 export function currentUser(c: Context<AppEnv>) {

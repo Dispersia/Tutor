@@ -70,6 +70,23 @@ is content only (`apps/server/src/game/skills.ts`) — see §13.5.
 Everything except `/api/health`, `/api/models` and the auth routes requires a
 session. All data is scoped to the signed-in user.
 
+## Hosting (Mac + Tailscale HTTPS)
+
+Declared for nix-darwin — import the module:
+
+```nix
+imports = [ inputs.tutor.darwinModules.default ];
+services.tutor = {
+  enable = true;
+  tailscaleServe.enable = true;                                   # HTTPS on your tailnet
+  environmentFile = "/Users/dispersias/.config/tutor/env";
+  # caddy.enable = true; caddy.hostname = "aarons-mac-mini.tail7c1ddb.ts.net";
+};
+```
+
+Or ad-hoc: `just service-install && just tailscale-serve`. Full details in
+[`deploy/README.md`](deploy/README.md).
+
 ## Layout
 
 ```

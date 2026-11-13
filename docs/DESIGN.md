@@ -836,6 +836,26 @@ serves the PWA, applies the embedded migrations, registers a user, and spawns th
 speech sidecar (TTS returned a WAV) — all with the venv and weights outside the
 store.
 
+### 15.4 Hosting on the Mac (nix-darwin + Tailscale)
+
+The Mac is a nix-darwin host, so hosting is declared, not scripted:
+
+- **`darwinModules.default`** (import `inputs.tutor.darwinModules.default`) adds a
+  `launchd.user.agents.tutor` agent (runs as you, so it has your `$HOME` where the
+  MLX venv and weights live) and, optionally, HTTPS:
+  - `services.tutor.tailscaleServe.enable` → a `tailscale serve --https=443`
+    agent (Tailscale issues a real cert for `*.ts.net`; no extra software), or
+  - `services.tutor.caddy.enable` + `hostname` → a `tailscale cert` agent plus a
+    `caddy run` agent using a generated Caddyfile.
+- Options: `enable`, `package`, `host`, `port`, `dataDir`, `modelsDir`,
+  `environmentFile`, `tailscaleServe.{enable,httpsPort}`, `caddy.{enable,hostname}`.
+- Non-nix-darwin fallback: the same shape is available as `just service-install`
+  (a launchd agent via `deploy/launchd.plist.template`) + `just tailscale-serve`.
+
+The app binds `127.0.0.1` and trusts `X-Forwarded-Proto: https`, so cookies are
+`Secure` behind either proxy. `tailscale serve` routes are per-path, so it coexists
+with anything else already served on the machine.
+
 > Tradeoff documented: fully hermetic packaging of MLX is not worth it here.
 > We pin `bun.lock`, `uv.lock` and model revisions instead, which gives
 > reproducibility in practice while letting Metal and multi-GB weights live where
