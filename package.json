@@ -2,9 +2,12 @@
   "name": "tutor",
   "private": true,
   "type": "module",
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "bun run --filter '*' dev",
+    "dev": "bun run --cwd apps/server dev",
     "build": "bun run --filter '*' build",
     "test": "bun test",
     "typecheck": "tsc -b",

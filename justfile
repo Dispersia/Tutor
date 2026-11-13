@@ -21,9 +21,9 @@ speech:
 bench:
     cd python && uv run python -m speech.bench
 
-# start dev servers (web + api) — lands in Phase 2/3
+# start the API (and the web app once Phase 3 exists)
 dev:
-    @echo "dev servers land in Phase 2 (api) / Phase 3 (web)"
+    bun run --cwd apps/server dev
 
 # run tests
 test:

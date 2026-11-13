@@ -40,11 +40,7 @@ export interface SpeechHealth {
 
 export interface SpeechProvider {
   asr(audio: Blob | Uint8Array, opts?: { language?: string; hint?: string }): Promise<AsrResult>
-  align(
-    audio: Blob | Uint8Array,
-    text: string,
-    opts?: { language?: string },
-  ): Promise<AlignItem[]>
+  align(audio: Blob | Uint8Array, text: string, opts?: { language?: string }): Promise<AlignItem[]>
   tts(text: string, opts?: TtsOptions): Promise<Uint8Array>
   health(): Promise<SpeechHealth>
   unload(): Promise<void>

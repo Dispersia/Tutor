@@ -18,9 +18,25 @@ Requires [Nix](https://nixos.org/download) with flakes enabled.
 nix develop          # bun + python3.12 + uv + ffmpeg + just
 just setup           # install JS + Python deps
 just models          # download the MLX checkpoints (~6 GB) into ./models
-just speech          # start the speech gateway
-just bench           # optional: measure latency + peak RAM
+just dev             # start the API on http://127.0.0.1:4318
+just speech          # (optional) run the speech gateway standalone
+just bench           # (optional) measure latency + peak RAM
 ```
+
+Open http://127.0.0.1:4318 — a placeholder page with a streaming chat box until
+the SvelteKit PWA lands in Phase 3.
+
+## API (Phase 2)
+
+| Endpoint                                                                  | Purpose                                         |
+| ------------------------------------------------------------------------- | ----------------------------------------------- |
+| `GET /api/health`                                                         | server + speech status + active role models     |
+| `GET /api/models?q=`                                                      | live OpenRouter catalogue for the model picker  |
+| `GET/PUT /api/settings`                                                   | per-role model selection (persisted)            |
+| `POST /api/chat`                                                          | streamed chat over SSE, persists both turns     |
+| `POST /api/chat/json`                                                     | structured (JSON-schema) completion for graders |
+| `GET/POST /api/sessions`, `GET /api/sessions/:id`                         | conversation history                            |
+| `GET /api/speech/health` · `POST /api/speech/{tts,asr,align,wake,unload}` | speech, lazily started/stopped                  |
 
 ## Layout
 
@@ -39,7 +55,7 @@ docs/          DESIGN.md (architecture + execution plan)
 
 - [x] Phase 0 — scaffold, flake, tooling
 - [x] Phase 1 — speech gateway (ASR/TTS/aligner + idle unload) — verified on M6
-- [ ] Phase 2 — backend (Hono, SQLite, OpenRouter)
+- [x] Phase 2 — backend (Hono, SQLite, OpenRouter, speech supervisor) — 17 tests green
 - [ ] Phase 3 — SvelteKit PWA (chat + voice)
 - [ ] Phase 4 — exercise engine + cards
 - [ ] Phase 5 — pronunciation scoring
