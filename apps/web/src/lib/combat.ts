@@ -60,7 +60,7 @@ export interface HitResult {
   drops: { item: string; count: number }[]
   xp: number
   ate: { item: string; heal: number; playerHp: number } | null
-  grantedTalents: { id: string; name: string }[]
+  talentUnlocked: number | null
 }
 
 export const getCombat = () => api<CombatResponse>('/api/combat')

@@ -21,18 +21,10 @@ export interface GameEventMap {
   'skill.level.up': { userId: string; skillId: string; level: number }
   'item.gained': { userId: string; itemId: string; count: number; total: number }
   'item.consumed': { userId: string; itemId: string; count: number; total: number }
-  'talent.granted': {
-    userId: string
-    talentId: string
-    skillId: string
-    tier: 'minor' | 'major'
-    milestone: number
-  }
   'talent.chosen': {
     userId: string
     talentId: string
     skillId: string
-    tier: 'minor' | 'major'
     milestone: number
   }
   'talent.changed': {
@@ -40,7 +32,6 @@ export interface GameEventMap {
     talentId: string
     fromTalentId: string
     skillId: string
-    tier: 'minor' | 'major'
     milestone: number
   }
   'item.equipped': { userId: string; itemId: string; slot: string }

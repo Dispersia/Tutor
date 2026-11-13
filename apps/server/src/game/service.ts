@@ -11,7 +11,6 @@ import {
   getSrs,
   getStats,
   getUserSetting,
-  hasTalent,
   listCards,
   listDecks,
   listEquipment,
@@ -67,12 +66,10 @@ import {
 } from './skills'
 import {
   type TalentDef,
-  majorFor,
-  majorMilestones,
-  minorMilestones,
-  minorOptions,
   parseTalentId,
   resolveTalents,
+  talentMilestones,
+  talentOptions,
 } from './talents'
 
 // --- global XP, streak, summary ---------------------------------------------
@@ -213,37 +210,8 @@ export interface SkillAward {
   level: number
   leveledUp: boolean
   gained: number
-  grantedTalents: TalentDef[]
-}
-
-/** Grants the major talents for every 10-level milestone newly reached. */
-function grantMajors(
-  db: Db,
-  bus: EventBus,
-  userId: string,
-  skillId: SkillId,
-  level: number,
-): TalentDef[] {
-  const granted: TalentDef[] = []
-  for (const milestone of majorMilestones(level)) {
-    const talent = majorFor(skillId, milestone)
-    if (hasTalent(db, userId, talent.id)) continue
-    addTalent(db, userId, {
-      talentId: talent.id,
-      skillId,
-      tier: 'major',
-      milestone,
-    })
-    granted.push(talent)
-    bus.emit('talent.granted', {
-      userId,
-      talentId: talent.id,
-      skillId,
-      tier: 'major',
-      milestone,
-    })
-  }
-  return granted
+  /** the milestone level whose talent choice just opened up (or null) */
+  talentUnlocked: number | null
 }
 
 export function awardSkillXp(
@@ -258,19 +226,21 @@ export function awardSkillXp(
   const gained = Math.max(0, Math.round(amount * (1 + bonus.xp(skillId) + bonus.globalXp)))
   const xp = beforeXp + gained
   const info = skillLevelInfo(xp)
+  const before = skillLevelInfo(beforeXp).level
   setSkillXp(db, userId, skillId, xp, info.level)
   bus.emit('skill.xp', { userId, skillId, amount: gained, xp, level: info.level })
 
-  const leveledUp = info.level > skillLevelInfo(beforeXp).level
-  let grantedTalents: TalentDef[] = []
+  const leveledUp = info.level > before
+  let talentUnlocked: number | null = null
   if (leveledUp) {
     bus.emit('skill.level.up', { userId, skillId, level: info.level })
-    grantedTalents = grantMajors(db, bus, userId, skillId, info.level)
+    const milestone = Math.floor(info.level / 10) * 10
+    if (milestone >= 10 && milestone > before) talentUnlocked = milestone
   }
-  return { skillId, xp, level: info.level, leveledUp, gained, grantedTalents }
+  return { skillId, xp, level: info.level, leveledUp, gained, talentUnlocked }
 }
 
-/** Chooses a minor talent offered at the current 5-level milestone. */
+/** Chooses one of two talents at a 10-level milestone (or changes it later). */
 export function chooseTalent(
   db: Db,
   bus: EventBus,
@@ -278,16 +248,14 @@ export function chooseTalent(
   talentId: string,
 ): { ok: boolean; error?: string; talent?: TalentDef } {
   const parsed = parseTalentId(talentId)
-  if (!parsed || parsed.tier !== 'minor') return { ok: false, error: 'not a minor talent' }
+  if (!parsed) return { ok: false, error: 'not a talent' }
   const level = skillLevelOf(db, userId, parsed.skillId)
-  const milestones = minorMilestones(level)
+  const milestones = talentMilestones(level)
   if (!milestones.includes(parsed.milestone)) return { ok: false, error: 'milestone not reached' }
-  const option = minorOptions(parsed.skillId, parsed.milestone).find((o) => o.id === talentId)
+  const option = talentOptions(parsed.skillId, parsed.milestone).find((o) => o.id === talentId)
   if (!option) return { ok: false, error: 'invalid talent option' }
 
-  const owned = listTalents(db, userId).filter(
-    (r) => r.skillId === parsed.skillId && r.tier === 'minor',
-  )
+  const owned = listTalents(db, userId).filter((r) => r.skillId === parsed.skillId)
 
   // Changing a talent already chosen at this milestone (a free respec).
   const existing = owned.find((r) => r.milestone === parsed.milestone)
@@ -296,7 +264,7 @@ export function chooseTalent(
     replaceTalent(db, userId, existing.talentId, {
       talentId: option.id,
       skillId: option.skillId,
-      tier: 'minor',
+      tier: 'choice',
       milestone: parsed.milestone,
     })
     bus.emit('talent.changed', {
@@ -304,7 +272,6 @@ export function chooseTalent(
       talentId: option.id,
       fromTalentId: existing.talentId,
       skillId: option.skillId,
-      tier: 'minor',
       milestone: parsed.milestone,
     })
     return { ok: true, talent: option }
@@ -317,14 +284,13 @@ export function chooseTalent(
   addTalent(db, userId, {
     talentId: option.id,
     skillId: option.skillId,
-    tier: 'minor',
+    tier: 'choice',
     milestone: nextMilestone,
   })
   bus.emit('talent.chosen', {
     userId,
     talentId: option.id,
     skillId: option.skillId,
-    tier: 'minor',
     milestone: nextMilestone,
   })
   return { ok: true, talent: option }
@@ -336,39 +302,30 @@ export function talentView(db: Db, userId: string) {
   return SKILLS.map((s) => {
     const level = skillLevelOf(db, userId, s.id)
     const mine = owned.filter((r) => r.skillId === s.id)
-    const ownedMinor = mine.filter((r) => r.tier === 'minor').length
-    const milestones = minorMilestones(level)
-    const pending = milestones.length > ownedMinor
-    const nextMilestone = pending ? milestones[ownedMinor]! : null
-    // Minor milestones are 5, 15, 25, … so the next one to earn is deterministic.
-    const nextMinor = 5 + 10 * ownedMinor
-    const nextMajor = Math.floor(level / 10) * 10 + 10
+    const milestones = talentMilestones(level)
+    const pending = milestones.length > mine.length
+    const nextMilestone = pending ? milestones[mine.length]! : null
     return {
       skillId: s.id,
       level,
       pendingChoice: pending,
       milestone: nextMilestone,
-      options: nextMilestone ? minorOptions(s.id, nextMilestone) : [],
-      majors: mine.filter((r) => r.tier === 'major').length,
-      nextMinor,
-      nextMajor,
+      options: nextMilestone ? talentOptions(s.id, nextMilestone) : [],
+      /** the next 10-level milestone (whether or not it has been reached) */
+      nextMilestone: 10 + 10 * mine.length,
       owned: resolveTalents(mine).map((t) => ({
         id: t.id,
         name: t.name,
         description: t.description,
-        tier: t.tier,
         milestone: t.milestone,
         mods: t.mods,
-        // For minor talents, the other options at the same milestone (respec).
-        options:
-          t.tier === 'minor'
-            ? minorOptions(t.skillId, t.milestone).map((o) => ({
-                id: o.id,
-                name: o.name,
-                description: o.description,
-                mods: o.mods,
-              }))
-            : [],
+        // the other options at the same milestone (so it can be changed)
+        options: talentOptions(t.skillId, t.milestone).map((o) => ({
+          id: o.id,
+          name: o.name,
+          description: o.description,
+          mods: o.mods,
+        })),
       })),
     }
   })
@@ -652,7 +609,7 @@ export interface HitOutcome {
   drops: Cost[]
   xp: number
   ate: { item: string; heal: number; playerHp: number } | null
-  grantedTalents: TalentDef[]
+  talentUnlocked: number | null
 }
 
 /** Resolves one drill inside an active encounter. */
@@ -745,7 +702,7 @@ export function combatResolve(
     drops,
     xp,
     ate,
-    grantedTalents: award?.grantedTalents ?? [],
+    talentUnlocked: award?.talentUnlocked ?? null,
   }
 }
 

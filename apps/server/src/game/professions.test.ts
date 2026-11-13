@@ -13,7 +13,7 @@ import {
   skillXpForLevel,
   type SkillId,
 } from './skills'
-import { majorFor, majorMilestones, minorMilestones, minorOptions, parseTalentId } from './talents'
+import { parseTalentId, talentMilestones, talentOptions } from './talents'
 
 test('content integrity: ids, references and coverage', () => {
   const skillIds = new Set(SKILLS.map((s) => s.id))
@@ -81,26 +81,26 @@ test('unlock + material helpers', () => {
   expect(missingMaterials(brew, () => 1).length).toBe(0)
 })
 
-test('talent milestones: minor every 5 (not 10), major every 10', () => {
-  expect(minorMilestones(4)).toEqual([])
-  expect(minorMilestones(5)).toEqual([5])
-  expect(minorMilestones(10)).toEqual([5]) // 10 is a major, not a minor
-  expect(minorMilestones(25)).toEqual([5, 15, 25])
-  expect(majorMilestones(9)).toEqual([])
-  expect(majorMilestones(10)).toEqual([10])
-  expect(majorMilestones(30)).toEqual([10, 20, 30])
+test('talent milestones: every 10 levels', () => {
+  expect(talentMilestones(9)).toEqual([])
+  expect(talentMilestones(10)).toEqual([10])
+  expect(talentMilestones(25)).toEqual([10, 20])
+  expect(talentMilestones(30)).toEqual([10, 20, 30])
 })
 
-test('minor options: three choices, unique ids, parseable', () => {
-  const opts = minorOptions('mining', 5)
-  expect(opts.length).toBe(3)
-  expect(new Set(opts.map((o) => o.id)).size).toBe(3)
-  expect(opts.some((o) => o.description.includes('bonus'))).toBe(true) // "doubler" style
+test('talent options: two choices, unique ids, parseable', () => {
+  const opts = talentOptions('mining', 10)
+  expect(opts.length).toBe(2)
+  expect(new Set(opts.map((o) => o.id)).size).toBe(2)
+  expect(opts[0]!.description).toContain('yield')
+  expect(opts[1]!.description).toContain('XP')
   for (const o of opts) {
-    expect(parseTalentId(o.id)).toEqual({ skillId: 'mining', tier: 'minor', milestone: 5 })
+    expect(parseTalentId(o.id)).toEqual({ skillId: 'mining', milestone: 10 })
   }
-  const major = majorFor('mining', 20)
-  expect(parseTalentId(major.id)).toEqual({ skillId: 'mining', tier: 'major', milestone: 20 })
+  // combat professions get a power talent instead of yield
+  expect(talentOptions('attack', 10)[0]!.description).toContain('power')
+  expect(parseTalentId('mining:t:20:2')).toEqual({ skillId: 'mining', milestone: 20 })
+  expect(parseTalentId('nope')).toBeNull()
 })
 
 test('computeBonuses: per-level effects + talents stack', () => {
@@ -112,8 +112,8 @@ test('computeBonuses: per-level effects + talents stack', () => {
   expect(b.yield('mining')).toBeCloseTo(0.1)
   expect(b.globalXp).toBeCloseTo(0.05)
 
-  const withTalent = computeBonuses(levels, [minorOptions('mining', 5)[0]!])
-  expect(withTalent.yield('mining')).toBeCloseTo(0.2) // +10% talent
+  const withTalent = computeBonuses(levels, [talentOptions('mining', 10)[0]!])
+  expect(withTalent.yield('mining')).toBeCloseTo(0.25) // +15% talent
 })
 
 test('applyYield applies yield bonus and double chance deterministically', () => {

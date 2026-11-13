@@ -35,10 +35,9 @@ export interface OwnedTalent {
   id: string
   name: string
   description: string
-  tier: 'minor' | 'major'
   milestone: number
   mods: { kind: ModKind; value: number; skill?: string }[]
-  /** for minors: the other options at this milestone, so it can be changed */
+  /** the other option(s) at this milestone, so it can be changed */
   options: TalentOption[]
 }
 
@@ -59,12 +58,9 @@ export interface SkillDTO {
     pendingChoice: boolean
     milestone: number | null
     options: TalentOption[]
-    majors: number
-    /** the next minor milestone you can still earn (5, 15, 25, …) */
-    nextMinor: number
-    /** the next major milestone you will earn (10, 20, 30, …) */
-    nextMajor: number
-    /** talents already chosen / granted for this profession */
+    /** the next 10-level milestone (whether or not it has been reached) */
+    nextMilestone: number
+    /** talents already chosen for this profession */
     owned: OwnedTalent[]
   }
   actions: ActionDTO[]
@@ -119,5 +115,6 @@ export interface SkillOutcome {
   leveledUp: boolean
   gained: Cost[]
   consumed: Cost[]
-  grantedTalents: { id: string; name: string; description: string }[]
+  /** the milestone level whose talent choice just opened (or null) */
+  talentUnlocked: number | null
 }

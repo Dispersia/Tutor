@@ -171,8 +171,7 @@ test('GET /api/skills/:id returns one profession with its talent roadmap', async
       actions: unknown[]
       talent: {
         owned: unknown[]
-        nextMinor: number
-        nextMajor: number
+        nextMilestone: number
         pendingChoice: boolean
       }
     }
@@ -182,8 +181,7 @@ test('GET /api/skills/:id returns one profession with its talent roadmap', async
   expect(body.skill.name).toBe('Mining')
   expect(body.skill.actions.length).toBeGreaterThan(0)
   expect(body.skill.talent.owned).toEqual([])
-  expect(body.skill.talent.nextMinor).toBe(5)
-  expect(body.skill.talent.nextMajor).toBe(10)
+  expect(body.skill.talent.nextMilestone).toBe(10)
   expect(body.skill.talent.pendingChoice).toBe(false)
   expect(body.items.length).toBeGreaterThan(20)
 

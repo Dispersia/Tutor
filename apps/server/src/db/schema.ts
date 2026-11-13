@@ -175,7 +175,7 @@ export const inventory = sqliteTable('inventory', {
   updatedAt: integer('updated_at').notNull(),
 })
 
-/** Per-user talents (5-level choices + 10-level majors). */
+/** Per-user talents (one choice per 10-level milestone). */
 export const talents = sqliteTable('talents', {
   userId: text('user_id')
     .notNull()

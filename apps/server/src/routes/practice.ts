@@ -134,7 +134,7 @@ function settleAction(
       leveledUp: false,
       gained: [],
       consumed: [],
-      grantedTalents: [],
+      talentUnlocked: null,
     }
   }
   const award = awardSkillXp(deps.db, deps.events, userId, action.skillId, action.xp)
@@ -149,7 +149,7 @@ function settleAction(
     leveledUp: award.leveledUp,
     gained: produces,
     consumed: consumes,
-    grantedTalents: award.grantedTalents,
+    talentUnlocked: award.talentUnlocked,
   }
 }
 

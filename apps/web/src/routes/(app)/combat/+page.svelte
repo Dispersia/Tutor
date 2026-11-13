@@ -189,9 +189,14 @@
           🍤 auto-ate {name(hit.ate.item)} (+{hit.ate.heal})
         </span>
       {/if}
-      {#each hit.grantedTalents as t (t.id)}
-        <span class="rounded-lg bg-amber-900/40 px-2 py-1 text-amber-200">🏅 {t.name}</span>
-      {/each}
+      {#if hit.talentUnlocked}
+        <a
+          href={href(`/skills/${monster?.combatSkill ?? ''}`)}
+          class="rounded-lg bg-amber-900/40 px-2 py-1 text-amber-200"
+        >
+          🎉 Talent unlocked — choose one
+        </a>
+      {/if}
     </div>
   {/if}
 
