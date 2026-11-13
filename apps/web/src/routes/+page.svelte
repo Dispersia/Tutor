@@ -8,4 +8,4 @@
   })
 </script>
 
-<div class="grid h-dvh place-items-center text-neutral-500">Loading…</div>
+<div class="grid h-dvh place-items-center text-ink-400">Loading…</div>

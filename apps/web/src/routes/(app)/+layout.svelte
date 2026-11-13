@@ -12,12 +12,12 @@
   })
 
   const tabs = [
-    { href: '/home', label: 'Home' },
-    { href: '/learn', label: 'Learn' },
-    { href: '/skills', label: 'Skills' },
-    { href: '/chat', label: 'Chat' },
-    { href: '/history', label: 'History' },
-    { href: '/settings', label: 'Settings' },
+    { href: '/home', label: 'Home', icon: '🏠' },
+    { href: '/learn', label: 'Learn', icon: '📖' },
+    { href: '/skills', label: 'Skills', icon: '⚒️' },
+    { href: '/chat', label: 'Chat', icon: '💬' },
+    { href: '/history', label: 'History', icon: '📜' },
+    { href: '/settings', label: 'Settings', icon: '⚙️' },
   ]
   const active = $derived(stripBase(page.url.pathname))
 </script>
@@ -27,24 +27,28 @@
     {@render children()}
   </main>
 
-  <nav
-    class="sticky bottom-0 z-10 border-t border-neutral-800 bg-neutral-950/95 backdrop-blur pb-safe"
-  >
+  <nav class="sticky bottom-0 z-10 border-t border-ink-700 bg-ink-950/90 backdrop-blur-md pb-safe">
     <ul class="mx-auto grid max-w-2xl grid-cols-6">
       {#each tabs as t (t.href)}
+        {@const on = active.startsWith(t.href)}
         <li>
           <a
             href={href(t.href)}
-            class="flex flex-col items-center gap-1 py-2 text-xs {active.startsWith(t.href)
-              ? 'text-emerald-400'
-              : 'text-neutral-500'}"
+            class="group flex flex-col items-center gap-0.5 pt-2 pb-1 text-[11px] transition-colors {on
+              ? 'text-gold-300'
+              : 'text-ink-400 hover:text-ink-300'}"
           >
             <span
-              class="h-1.5 w-1.5 rounded-full {active.startsWith(t.href)
-                ? 'bg-emerald-400'
+              class="text-base leading-none transition-transform {on
+                ? 'scale-110 drop-shadow-[0_0_7px_rgba(244,217,141,0.6)]'
+                : 'opacity-75 group-hover:opacity-100'}">{t.icon}</span
+            >
+            <span class="font-medium">{t.label}</span>
+            <span
+              class="h-0.5 w-6 rounded-full transition-colors {on
+                ? 'bg-gold-400'
                 : 'bg-transparent'}"
             ></span>
-            {t.label}
           </a>
         </li>
       {/each}

@@ -114,18 +114,23 @@
   }
 </script>
 
-<div class="flex items-center justify-between pt-4 pb-3">
+<div class="flex items-center justify-between pt-5 pb-3">
   <div>
-    <h1 class="text-lg font-semibold">Combat</h1>
-    <p class="text-xs text-neutral-500">
+    <p class="eyebrow">Battle</p>
+    <h1 class="display text-2xl text-combat-400">Combat</h1>
+    <p class="text-xs text-ink-400">
       {encounter ? 'Answer drills to strike; a miss lets it hit back.' : 'Pick a monster to fight.'}
       · 🍤 {foodCount} food · 🧪 {potionCount} potions · auto-eat under {foodThreshold}%
     </p>
   </div>
   {#if data}
-    <div class="text-right text-xs text-neutral-400">
-      <div>❤️ {encounter?.playerHp ?? data.player.maxHp} HP</div>
-      <div>🛡️ {data.player.armour} · ⚔️ {data.player.weaponPower}</div>
+    <div class="flex shrink-0 flex-col items-end gap-1 text-xs">
+      <span class="chip" style="--accent: #ef5f5a"
+        >❤️ {encounter?.playerHp ?? data.player.maxHp} HP</span
+      >
+      <span class="chip" style="--accent: #6b7a96"
+        >🛡️ {data.player.armour} · ⚔️ {data.player.weaponPower}</span
+      >
     </div>
   {/if}
 </div>
@@ -135,10 +140,10 @@
 {/if}
 
 {#if loading}
-  <p class="text-sm text-neutral-500">Loading…</p>
+  <p class="text-sm text-ink-400">Loading…</p>
 {:else if encounter}
   <!-- active fight -->
-  <div class="mb-3 rounded-2xl border border-neutral-800 bg-neutral-900/50 p-4">
+  <div class="panel panel-accent mb-3 p-4" style="--accent: #ef5f5a">
     {#if drank}
       <p class="mb-2 text-xs text-sky-300">
         🧪 auto-drunk {name(drank.item)} at the start ({drank.buff.kind === 'power'
@@ -147,52 +152,43 @@
       </p>
     {/if}
     <div class="flex items-center justify-between text-sm">
-      <span>{encounter.monsterIcon} {encounter.monsterName}</span>
-      <span class="text-neutral-400">{encounter.monsterHp}/{encounter.monsterMaxHp}</span>
+      <span class="display text-ink-200">{encounter.monsterIcon} {encounter.monsterName}</span>
+      <span class="text-ink-400">{encounter.monsterHp}/{encounter.monsterMaxHp}</span>
     </div>
-    <div class="mt-1 h-2 overflow-hidden rounded-full bg-neutral-800">
-      <div
-        class="h-full rounded-full bg-red-500 transition-all"
-        style="width: {(encounter.monsterHp / encounter.monsterMaxHp) * 100}%"
-      ></div>
+    <div class="bar mt-1 mb-3" style="--accent: #ef5f5a">
+      <i style="width: {(encounter.monsterHp / encounter.monsterMaxHp) * 100}%"></i>
     </div>
-    <div class="mt-3 flex items-center justify-between text-sm">
-      <span>🧑 You</span>
-      <span class="text-neutral-400">{encounter.playerHp}/{encounter.playerMaxHp}</span>
+    <div class="flex items-center justify-between text-sm">
+      <span class="display text-ink-200">🧑 You</span>
+      <span class="text-ink-400">{encounter.playerHp}/{encounter.playerMaxHp}</span>
     </div>
-    <div class="mt-1 h-2 overflow-hidden rounded-full bg-neutral-800">
-      <div
-        class="h-full rounded-full bg-emerald-500 transition-all"
-        style="width: {(encounter.playerHp / encounter.playerMaxHp) * 100}%"
-      ></div>
+    <div class="bar mt-1" style="--accent: #58c46b">
+      <i style="width: {(encounter.playerHp / encounter.playerMaxHp) * 100}%"></i>
     </div>
   </div>
 
   {#if hit}
-    <div class="mb-3 flex flex-wrap gap-2 text-xs">
+    <div class="mb-3 flex flex-wrap gap-2">
       {#if hit.correct}
-        <span class="rounded-lg bg-emerald-900/40 px-2 py-1 text-emerald-200">
-          ⚔️ you hit for {hit.damage}
-        </span>
+        <span class="chip" style="--accent: #58c46b"> ⚔️ you hit for {hit.damage} </span>
       {:else}
-        <span class="rounded-lg bg-red-900/40 px-2 py-1 text-red-200">
-          💥 it hit you for {hit.playerDamage}
-        </span>
+        <span class="chip" style="--accent: #ef5f5a"> 💥 it hit you for {hit.playerDamage} </span>
       {/if}
       {#if hit.xp > 0}
-        <span class="rounded-lg bg-sky-900/40 px-2 py-1 text-sky-200">
+        <span class="chip" style="--accent: #4fb0e8">
           {skillMap.get(monster?.combatSkill ?? '')?.icon ?? ''} +{hit.xp} xp
         </span>
       {/if}
       {#if hit.ate}
-        <span class="rounded-lg bg-amber-900/40 px-2 py-1 text-amber-200">
+        <span class="chip" style="--accent: #ef9d45">
           🍤 auto-ate {name(hit.ate.item)} (+{hit.ate.heal})
         </span>
       {/if}
       {#if hit.talentUnlocked}
         <a
           href={href(`/skills/${monster?.combatSkill ?? ''}`)}
-          class="rounded-lg bg-amber-900/40 px-2 py-1 text-amber-200"
+          class="chip"
+          style="--accent: #e8c264"
         >
           🎉 Talent unlocked — choose one
         </a>
@@ -202,16 +198,17 @@
 
   {#if hit && hit.outcome !== 'ongoing'}
     <div
-      class="rounded-2xl border p-5 {hit.outcome === 'won'
-        ? 'border-emerald-800 bg-emerald-950/40'
-        : 'border-red-800 bg-red-950/30'}"
+      class="panel panel-accent p-5"
+      style="--accent: {hit.outcome === 'won' ? '#58c46b' : '#ef5f5a'}"
     >
-      <p class="text-lg font-medium">{hit.outcome === 'won' ? '🏆 Victory!' : '💀 Defeated'}</p>
+      <p class="display text-lg {hit.outcome === 'won' ? 'text-emerald-300' : 'text-red-300'}">
+        {hit.outcome === 'won' ? '🏆 Victory!' : '💀 Defeated'}
+      </p>
       {#if hit.drops.length}
-        <p class="mt-2 text-sm text-neutral-300">Loot:</p>
-        <div class="mt-1 flex flex-wrap gap-2 text-xs">
+        <p class="mt-2 text-sm text-ink-300">Loot:</p>
+        <div class="mt-1 flex flex-wrap gap-2">
           {#each hit.drops as d (d.item)}
-            <span class="rounded-lg bg-emerald-900/40 px-2 py-1 text-emerald-200">
+            <span class="chip" style="--accent: #58c46b">
               +{d.count}
               {icon(d.item)}
               {name(d.item)}
@@ -220,37 +217,33 @@
         </div>
       {/if}
     </div>
-    <button
-      onclick={leave}
-      class="mt-4 w-full rounded-xl bg-emerald-500 py-3 font-medium text-black"
-      >Back to monsters</button
-    >
+    <button onclick={leave} class="btn btn-primary mt-4 w-full py-3">Back to monsters</button>
   {:else if instance}
     {@const Comp = componentFor(instance.exerciseId)}
-    <div class="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-5">
+    <div class="panel p-5">
       <Comp {instance} {busy} onsubmit={submit} />
     </div>
   {:else}
-    <p class="text-sm text-neutral-500">No drill available — try again.</p>
+    <p class="text-sm text-ink-400">No drill available — try again.</p>
   {/if}
 {:else}
   <!-- monster list -->
   <div class="space-y-2">
     {#each data?.monsters ?? [] as m (m.id)}
-      <div class="rounded-2xl border border-neutral-800 bg-neutral-900/50 p-3">
+      <div class="panel p-3" class:opacity-70={!m.unlocked}>
         <div class="flex items-center gap-3">
-          <span class="text-2xl">{m.icon}</span>
+          <span class="text-2xl drop-shadow">{m.icon}</span>
           <div class="flex-1">
             <div class="flex items-baseline justify-between">
-              <span class="text-sm font-medium">{m.name}</span>
-              <span class="text-xs text-neutral-400">Lv {m.level} · {m.hp} HP</span>
+              <span class="display text-sm text-ink-200">{m.name}</span>
+              <span class="text-xs text-ink-400">Lv {m.level} · {m.hp} HP</span>
             </div>
-            <div class="text-[11px] text-neutral-500">
+            <div class="text-[11px] text-ink-400">
               {m.description} · trains {skillMap.get(m.combatSkill)?.name ?? m.combatSkill}
             </div>
-            <div class="mt-1 flex flex-wrap gap-1 text-[11px]">
+            <div class="mt-1 flex flex-wrap gap-1">
               {#each m.drops as d (d.item)}
-                <span class="rounded bg-neutral-800 px-1.5 py-0.5">
+                <span class="chip" style="--accent: #6b7a96">
                   {icon(d.item)}
                   {name(d.item)}
                   {Math.round(d.chance * 100)}%
@@ -261,13 +254,14 @@
           <button
             onclick={() => fight(m)}
             disabled={!m.unlocked}
-            class="shrink-0 rounded-xl bg-emerald-500 px-3 py-2 text-sm text-black disabled:opacity-40"
+            class="btn shrink-0 px-3 py-2 text-sm"
+            style="color:#08111b; background: linear-gradient(180deg, #f29b97, #ef5f5a); border: 1px solid #ef5f5a"
           >
             Fight
           </button>
         </div>
         {#if !m.unlocked}
-          <p class="mt-1 text-[11px] text-amber-400">
+          <p class="mt-1 text-[11px] text-amber-300">
             locked — {m.missing
               .map((r) => `${skillMap.get(r.skill)?.name ?? r.skill} ${r.level}`)
               .join(', ')}
@@ -277,9 +271,7 @@
       </div>
     {/each}
   </div>
-  <button
-    onclick={() => goto(href('/skills'))}
-    class="mt-4 w-full rounded-xl border border-neutral-700 py-3 text-sm"
-    >Gather & craft gear →</button
-  >
+  <button onclick={() => goto(href('/skills'))} class="btn btn-ghost mt-4 w-full py-3">
+    Gather & craft gear →
+  </button>
 {/if}

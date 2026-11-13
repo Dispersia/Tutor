@@ -207,8 +207,8 @@
 </script>
 
 <div class="pt-4 pb-6">
-  <h1 class="text-lg font-semibold">Settings</h1>
-  <p class="text-xs text-neutral-500">These apply to {session.user?.username} only.</p>
+  <h1 class="display text-2xl text-gold-200">Settings</h1>
+  <p class="text-xs text-ink-400">These apply to {session.user?.username} only.</p>
 </div>
 
 {#if error}
@@ -219,9 +219,9 @@
 {/if}
 
 <!-- OpenRouter key ------------------------------------------------------->
-<section class="mb-5 rounded-2xl border border-neutral-800 bg-neutral-900/50 p-4">
-  <h2 class="text-sm font-medium">Your OpenRouter key</h2>
-  <p class="mt-1 text-xs text-neutral-400">
+<section class="mb-5 panel p-4">
+  <h2 class="display text-sm text-gold-200">Your OpenRouter key</h2>
+  <p class="mt-1 text-xs text-ink-400">
     Status:
     {#if keyStatus === 'user'}<span class="text-emerald-400">using your own key</span>
     {:else if keyStatus === 'server'}<span class="text-amber-400">using the server's key</span>
@@ -232,25 +232,23 @@
       type="password"
       bind:value={keyInput}
       placeholder={keyStatus === 'user' ? 'Replace key…' : 'sk-or-…'}
-      class="flex-1 rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
+      class="flex-1 rounded-xl border border-ink-600 bg-ink-900 px-3 py-2 text-sm"
     />
-    <button onclick={saveKey} class="rounded-xl bg-neutral-100 px-3 py-2 text-sm text-black"
-      >Save</button
-    >
+    <button onclick={saveKey} class="btn btn-gold px-3 py-2 text-sm">Save</button>
   </div>
 </section>
 
 <!-- Models --------------------------------------------------------------->
-<section class="mb-5 rounded-2xl border border-neutral-800 bg-neutral-900/50 p-4">
-  <h2 class="text-sm font-medium">Models per role</h2>
-  <p class="mt-1 text-xs text-neutral-400">
+<section class="mb-5 panel p-4">
+  <h2 class="display text-sm text-gold-200">Models per role</h2>
+  <p class="mt-1 text-xs text-ink-400">
     Pick any OpenRouter model — use Qwen, or point a role at DeepSeek/OpenAI/etc.
   </p>
   <input
     bind:value={modelFilter}
     onchange={loadModels}
     placeholder="filter models (e.g. qwen, deepseek)"
-    class="mt-3 w-full rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
+    class="mt-3 w-full rounded-xl border border-ink-600 bg-ink-900 px-3 py-2 text-sm"
   />
   <datalist id="models">
     {#each models as m (m.id)}<option value={m.id}>{m.name}</option>{/each}
@@ -258,11 +256,11 @@
   <div class="mt-3 space-y-2">
     {#each ROLE_KEYS as role (role)}
       <label class="block">
-        <span class="mb-1 block text-xs text-neutral-400">{ROLE_LABEL[role]}</span>
+        <span class="mb-1 block text-xs text-ink-400">{ROLE_LABEL[role]}</span>
         <input
           list="models"
           bind:value={roles[role]}
-          class="w-full rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
+          class="w-full rounded-xl border border-ink-600 bg-ink-900 px-3 py-2 text-sm"
         />
       </label>
     {/each}
@@ -272,32 +270,31 @@
       >Save models</button
     >
     {#if roleDefaults}
-      <button
-        onclick={() => (roles = { ...roleDefaults! })}
-        class="text-xs text-neutral-400 underline">reset to defaults</button
+      <button onclick={() => (roles = { ...roleDefaults! })} class="text-xs text-ink-400 underline"
+        >reset to defaults</button
       >
     {/if}
   </div>
 </section>
 
 <!-- Voice ---------------------------------------------------------------->
-<section class="mb-5 rounded-2xl border border-neutral-800 bg-neutral-900/50 p-4">
-  <h2 class="text-sm font-medium">Voice</h2>
+<section class="mb-5 panel p-4">
+  <h2 class="display text-sm text-gold-200">Voice</h2>
   <div class="mt-2 flex gap-2">
     <button
       onclick={() => (voiceMode = 'preset')}
       class="flex-1 rounded-xl border px-3 py-2 text-sm {voiceMode === 'preset'
         ? 'border-emerald-500 text-emerald-400'
-        : 'border-neutral-700 text-neutral-300'}">Preset speakers</button
+        : 'border-ink-600 text-ink-300'}">Preset speakers</button
     >
     <button
       onclick={() => (voiceMode = 'design')}
       class="flex-1 rounded-xl border px-3 py-2 text-sm {voiceMode === 'design'
         ? 'border-emerald-500 text-emerald-400'
-        : 'border-neutral-700 text-neutral-300'}">Voice design</button
+        : 'border-ink-600 text-ink-300'}">Voice design</button
     >
   </div>
-  <p class="mt-2 text-xs text-neutral-500">
+  <p class="mt-2 text-xs text-ink-400">
     {voiceMode === 'preset'
       ? 'Built-in Qwen3-TTS speakers (fast, lowest memory).'
       : 'Describe a voice in the text box (e.g. "a warm, patient Mandarin teacher").'}
@@ -305,12 +302,12 @@
   <div class="mt-3 space-y-2">
     {#each Object.entries(VOICE_PRESETS) as [lc, list] (lc)}
       <label class="block">
-        <span class="mb-1 block text-xs text-neutral-400">{lc.toUpperCase()}</span>
+        <span class="mb-1 block text-xs text-ink-400">{lc.toUpperCase()}</span>
         <input
           list="voices-{lc}"
           bind:value={voices[lc]}
           placeholder={list[0]}
-          class="w-full rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
+          class="w-full rounded-xl border border-ink-600 bg-ink-900 px-3 py-2 text-sm"
         />
         <datalist id="voices-{lc}">
           {#each list as v (v)}<option value={v}></option>{/each}
@@ -324,25 +321,25 @@
 </section>
 
 <!-- Speech engine -------------------------------------------------------->
-<section class="mb-5 rounded-2xl border border-neutral-800 bg-neutral-900/50 p-4">
+<section class="mb-5 panel p-4">
   <div class="flex items-center justify-between">
     <div>
-      <h2 class="text-sm font-medium">Speech engine</h2>
-      <p class="text-xs text-neutral-400">
+      <h2 class="display text-sm text-gold-200">Speech engine</h2>
+      <p class="text-xs text-ink-400">
         {speech?.ready ? 'awake' : speech?.running ? 'starting' : 'asleep'}
         {#if speech?.models?.length}· {speech.models.join(', ')}{/if}
       </p>
     </div>
-    <button onclick={free} class="rounded-lg border border-neutral-700 px-3 py-1.5 text-xs"
+    <button onclick={free} class="rounded-lg border border-ink-600 px-3 py-1.5 text-xs"
       >Free RAM</button
     >
   </div>
 </section>
 
 <!-- Daily goal ----------------------------------------------------------->
-<section class="mb-5 rounded-2xl border border-neutral-800 bg-neutral-900/50 p-4">
-  <h2 class="text-sm font-medium">Daily goal</h2>
-  <p class="mt-1 text-xs text-neutral-400">XP to earn each UTC day to keep your streak.</p>
+<section class="mb-5 panel p-4">
+  <h2 class="display text-sm text-gold-200">Daily goal</h2>
+  <p class="mt-1 text-xs text-ink-400">XP to earn each UTC day to keep your streak.</p>
   <div class="mt-3 flex gap-2">
     <input
       type="number"
@@ -350,18 +347,16 @@
       max="1000"
       step="10"
       bind:value={dailyGoal}
-      class="w-28 rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
+      class="w-28 rounded-xl border border-ink-600 bg-ink-900 px-3 py-2 text-sm"
     />
-    <button onclick={saveDailyGoal} class="rounded-xl bg-neutral-100 px-3 py-2 text-sm text-black"
-      >Save</button
-    >
+    <button onclick={saveDailyGoal} class="btn btn-gold px-3 py-2 text-sm">Save</button>
   </div>
 </section>
 
 <!-- Spaced repetition ----------------------------------------------------->
-<section class="mb-5 rounded-2xl border border-neutral-800 bg-neutral-900/50 p-4">
-  <h2 class="text-sm font-medium">Spaced repetition</h2>
-  <p class="mt-1 text-xs text-neutral-400">
+<section class="mb-5 panel p-4">
+  <h2 class="display text-sm text-gold-200">Spaced repetition</h2>
+  <p class="mt-1 text-xs text-ink-400">
     Anki-style FSRS-6 scheduling. Desired retention is the chance you want to recall a card when it
     comes up — higher means shorter intervals and more reviews.
   </p>
@@ -372,19 +367,17 @@
       max="97"
       step="1"
       bind:value={desiredRetention}
-      class="w-24 rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
+      class="w-24 rounded-xl border border-ink-600 bg-ink-900 px-3 py-2 text-sm"
     />
-    <span class="text-sm text-neutral-400">%</span>
-    <button onclick={saveRetention} class="rounded-xl bg-neutral-100 px-3 py-2 text-sm text-black"
-      >Save</button
-    >
+    <span class="text-sm text-ink-400">%</span>
+    <button onclick={saveRetention} class="btn btn-gold px-3 py-2 text-sm">Save</button>
   </div>
 </section>
 
 <!-- Combat ---------------------------------------------------------------->
-<section class="mb-5 rounded-2xl border border-neutral-800 bg-neutral-900/50 p-4">
-  <h2 class="text-sm font-medium">Combat</h2>
-  <p class="mt-1 text-xs text-neutral-400">
+<section class="mb-5 panel p-4">
+  <h2 class="display text-sm text-gold-200">Combat</h2>
+  <p class="mt-1 text-xs text-ink-400">
     Food is auto-eaten when your HP drops below this percentage. Potions are auto-drunk at the start
     of a fight.
   </p>
@@ -395,32 +388,27 @@
       max="90"
       step="5"
       bind:value={foodThreshold}
-      class="w-24 rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
+      class="w-24 rounded-xl border border-ink-600 bg-ink-900 px-3 py-2 text-sm"
     />
-    <span class="text-sm text-neutral-400">%</span>
-    <button
-      onclick={saveFoodThreshold}
-      class="rounded-xl bg-neutral-100 px-3 py-2 text-sm text-black">Save</button
-    >
+    <span class="text-sm text-ink-400">%</span>
+    <button onclick={saveFoodThreshold} class="btn btn-gold px-3 py-2 text-sm">Save</button>
   </div>
 </section>
 
 <!-- Account -------------------------------------------------------------->
-<section class="mb-5 rounded-2xl border border-neutral-800 bg-neutral-900/50 p-4">
-  <h2 class="text-sm font-medium">Account</h2>
+<section class="mb-5 panel p-4">
+  <h2 class="display text-sm text-gold-200">Account</h2>
   <label class="mt-3 block">
-    <span class="mb-1 block text-xs text-neutral-400">Display name</span>
+    <span class="mb-1 block text-xs text-ink-400">Display name</span>
     <div class="flex gap-2">
       <input
         bind:value={handle}
-        class="flex-1 rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
+        class="flex-1 rounded-xl border border-ink-600 bg-ink-900 px-3 py-2 text-sm"
       />
-      <button onclick={saveProfile} class="rounded-xl bg-neutral-100 px-3 py-2 text-sm text-black"
-        >Save</button
-      >
+      <button onclick={saveProfile} class="btn btn-gold px-3 py-2 text-sm">Save</button>
     </div>
   </label>
-  <p class="mt-3 text-xs text-neutral-500">
+  <p class="mt-3 text-xs text-ink-400">
     @{session.user?.username} · {session.user?.role}
   </p>
   <button
@@ -431,16 +419,14 @@
 
 <!-- Admin ---------------------------------------------------------------->
 {#if isAdmin}
-  <section class="mb-5 rounded-2xl border border-neutral-800 bg-neutral-900/50 p-4">
-    <h2 class="text-sm font-medium">Users ({users.length})</h2>
+  <section class="mb-5 panel p-4">
+    <h2 class="display text-sm text-gold-200">Users ({users.length})</h2>
     <ul class="mt-3 space-y-2">
       {#each users as u (u.id)}
-        <li
-          class="flex items-center justify-between rounded-xl border border-neutral-800 px-3 py-2"
-        >
+        <li class="flex items-center justify-between rounded-xl border border-ink-700 px-3 py-2">
           <div>
             <div class="text-sm">{u.handle}</div>
-            <div class="text-xs text-neutral-500">@{u.username} · {u.role}</div>
+            <div class="text-xs text-ink-400">@{u.username} · {u.role}</div>
           </div>
           {#if u.id !== session.user?.id}
             <button
@@ -451,7 +437,7 @@
         </li>
       {/each}
     </ul>
-    <p class="mt-3 text-xs text-neutral-500">
+    <p class="mt-3 text-xs text-ink-400">
       Everyone's conversations, settings and keys are stored separately.
     </p>
   </section>

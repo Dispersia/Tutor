@@ -17,7 +17,7 @@
       <button
         onclick={() => onsubmit(choice)}
         disabled={busy}
-        class="rounded-xl border border-neutral-700 bg-neutral-900 px-4 py-4 text-left text-lg hover:border-emerald-500 disabled:opacity-50"
+        class="rounded-xl border border-ink-600 bg-ink-900 px-4 py-4 text-left text-lg hover:border-gold-500 disabled:opacity-50"
       >
         {choice}
       </button>
