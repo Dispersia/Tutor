@@ -3,6 +3,7 @@ import type { Db } from './db/client'
 import type { PublicUser } from './db/repo'
 import type { Role } from './env'
 import type { OpenRouter } from './llm/openrouter'
+import type { AssessFn } from './pronunciation/assess'
 import type { SpeechSupervisor } from './speech/supervisor'
 
 export interface Deps {
@@ -17,6 +18,8 @@ export interface Deps {
   secret?: string
   allowRegistration: boolean
   sessionTtlMs: number
+  /** Test hook: overrides the real speech assessor. */
+  assess?: AssessFn
 }
 
 export type AppEnv = { Variables: { deps: Deps; user: PublicUser | null } }

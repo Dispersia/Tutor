@@ -62,6 +62,26 @@ export interface GradeResult {
   detail?: Record<string, unknown>
 }
 
+/** Per-word pronunciation feedback (DESIGN §9.4). */
+export interface WordFeedback {
+  text: string
+  ok: boolean
+  tip?: string
+}
+
+export interface AlignItem {
+  text: string
+  start: number
+  end: number
+}
+
+/** Result of the speech gateway's one-shot ASR + alignment probe. */
+export interface AssessResult {
+  transcript: string
+  items: AlignItem[]
+  duration: number
+}
+
 export interface ExerciseContext {
   card: Card
   learner: Learner
@@ -69,6 +89,8 @@ export interface ExerciseContext {
   distractors: string[]
   /** optional LLM helper, injected by the server (absent when no key is set) */
   judge?: (prompt: string, schema: object) => Promise<unknown>
+  /** optional speech assessor, injected by the server for audio grading */
+  assess?: (audio: Uint8Array, expected: string) => Promise<AssessResult>
 }
 
 /**
@@ -80,10 +102,18 @@ export interface ExerciseDef<Answer = unknown> {
   id: string
   title: string
   modality: Modality
+  /** true for exercises that grade recorded audio (routed via /api/practice/speak) */
+  needsAudio?: boolean
   /** can this exercise be generated for this card? */
   supports(card: Card, learner: Learner): boolean
   generate(ctx: ExerciseContext): Promise<ExerciseInstance>
   grade(ctx: ExerciseContext, instance: ExerciseInstance, answer: Answer): Promise<GradeResult>
+  /** audio grading path used when `needsAudio` is set */
+  gradeAudio?(
+    ctx: ExerciseContext,
+    instance: ExerciseInstance,
+    audio: Uint8Array,
+  ): Promise<GradeResult>
   xp(result: GradeResult, instance: ExerciseInstance): number
 }
 

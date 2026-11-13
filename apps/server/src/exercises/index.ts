@@ -6,6 +6,7 @@ import {
   type GradeResult,
 } from '@tutor/core'
 import { feedbackFor, gradeText, similarity } from './grading'
+import { computeFeatures, deterministicWords, summarize } from '../pronunciation/features'
 
 const LANG_LABEL: Record<string, string> = {
   zh: 'Mandarin',
@@ -169,12 +170,37 @@ const typeListen: ExerciseDef<string> = {
   xp: (r) => (r.correct ? 12 + (r.score === 100 ? 5 : 0) : 1),
 }
 
-// --- speak the word (basic ASR grading; upgraded in Phase 5) ------------------
+// --- speak the word: pronunciation scoring (DESIGN §9.4) ----------------------
+
+const PRON_SCHEMA = {
+  type: 'object',
+  properties: {
+    score: { type: 'integer', minimum: 0, maximum: 100 },
+    correct: { type: 'boolean' },
+    summary: { type: 'string' },
+    words: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          text: { type: 'string' },
+          ok: { type: 'boolean' },
+          tip: { type: 'string' },
+        },
+        required: ['text', 'ok', 'tip'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['score', 'correct', 'summary', 'words'],
+  additionalProperties: false,
+}
 
 const speakWord: ExerciseDef<string> = {
   id: 'speak_word',
   title: 'Say it out loud',
   modality: 'voice',
+  needsAudio: true,
   supports: () => true,
   async generate(ctx) {
     return {
@@ -189,6 +215,7 @@ const speakWord: ExerciseDef<string> = {
       },
     }
   },
+  /** Text fallback (no audio): compare the transcript directly. */
   async grade(ctx, _instance, answer) {
     const transcript = String(answer ?? '').trim()
     if (!transcript) {
@@ -201,17 +228,74 @@ const speakWord: ExerciseDef<string> = {
     }
     const g = gradeText(ctx.card.back, readingsOf(ctx), transcript)
     const best = Math.max(g.score, Math.round(similarity(ctx.card.back, transcript) * 100))
-    const correct = best >= 70
     return {
       score: best,
-      correct,
+      correct: best >= 70,
       expected: ctx.card.back,
-      feedback: correct
-        ? `Sounded good — you said “${transcript}”.`
-        : `You said “${transcript}” — aim for “${ctx.card.back}”.`,
+      feedback: `You said “${transcript}”.`,
       detail: { transcript },
     }
   },
+
+  /** Real pronunciation path: ASR + forced alignment + optional LLM judge. */
+  async gradeAudio(ctx, instance, audio) {
+    const expected = ctx.card.back
+    if (!ctx.assess) return speakWord.grade!(ctx, instance, '')
+
+    const a = await ctx.assess(audio, expected)
+    const f = computeFeatures({
+      expected,
+      transcript: a.transcript,
+      items: a.items,
+      duration: a.duration,
+    })
+
+    let score = f.score
+    let correct = f.correct
+    let words = deterministicWords(f)
+    let summary = summarize(f)
+
+    if (ctx.judge) {
+      const timings = f.words.map((w) => `${w.text}:${w.duration.toFixed(2)}s`).join(' ')
+      const out = (await ctx.judge(
+        `Grade the pronunciation of ${label(ctx.card.targetLang)} text “${expected}”.
+The learner said (ASR): “${a.transcript}”.
+Missing tokens: ${f.missing.join('、') || 'none'}. Character error rate: ${f.cer.toFixed(2)}.
+Word timings: ${timings}. Long pauses: ${f.pauses.map((p) => `${p.after}+${p.seconds}s`).join(', ') || 'none'}.
+Length ${f.duration.toFixed(2)}s. Be encouraging; flag the specific tokens that need work.`,
+        PRON_SCHEMA,
+      )) as
+        | {
+            score?: number
+            correct?: boolean
+            summary?: string
+            words?: { text: string; ok: boolean; tip: string }[]
+          }
+        | undefined
+      if (out && typeof out.score === 'number') {
+        score = out.score
+        correct = out.correct ?? correct
+        summary = out.summary ?? summary
+        if (Array.isArray(out.words) && out.words.length) words = out.words
+      }
+    }
+
+    return {
+      score,
+      correct,
+      expected,
+      feedback: summary,
+      detail: {
+        transcript: a.transcript,
+        words,
+        cer: Number(f.cer.toFixed(3)),
+        missing: f.missing,
+        rate: Number(f.speechRate.toFixed(2)),
+        truncated: f.truncated,
+      },
+    }
+  },
+
   xp: (r) => (r.correct ? 15 + (r.score >= 90 ? 5 : 0) : 1),
 }
 
@@ -283,5 +367,10 @@ export const registry = new ExerciseRegistry()
   .register(converse)
 
 export function exerciseCatalog() {
-  return registry.list().map((d) => ({ id: d.id, title: d.title, modality: d.modality }))
+  return registry.list().map((d) => ({
+    id: d.id,
+    title: d.title,
+    modality: d.modality,
+    needsAudio: Boolean(d.needsAudio),
+  }))
 }

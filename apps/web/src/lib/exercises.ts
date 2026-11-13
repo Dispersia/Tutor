@@ -53,3 +53,16 @@ export const gradeExercise = (body: {
     method: 'POST',
     body: JSON.stringify(body),
   })
+
+/** Recorded-audio grading (pronunciation) — multipart to /api/practice/speak. */
+export const gradeSpeak = (form: FormData) =>
+  api<{ result: Grade; stats: { xp: number; level: number } }>('/api/practice/speak', {
+    method: 'POST',
+    body: form,
+  })
+
+export interface WordFeedback {
+  text: string
+  ok: boolean
+  tip?: string
+}

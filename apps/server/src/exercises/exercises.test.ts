@@ -108,3 +108,65 @@ test('converse uses the injected judge when present', async () => {
   expect(r.score).toBe(91)
   expect(r.feedback).toContain('Great')
 })
+
+test('speak_word.gradeAudio uses the injected assessor', async () => {
+  const def = registry.get('speak_word')!
+  const c = ctx()
+  const inst = await def.generate(c)
+  c.assess = async () => ({
+    transcript: '你好',
+    items: [
+      { text: '你', start: 0.1, end: 0.4 },
+      { text: '好', start: 0.4, end: 0.7 },
+    ],
+    duration: 1.1,
+  })
+  const r = await def.gradeAudio!(c, inst, new Uint8Array())
+  expect(r.correct).toBe(true)
+  expect(r.detail?.transcript).toBe('你好')
+  expect(Array.isArray(r.detail?.words)).toBe(true)
+})
+
+test('speak_word.gradeAudio detects a missing word', async () => {
+  const def = registry.get('speak_word')!
+  const c = ctx({ back: '你好世界' })
+  const inst = await def.generate(c)
+  c.assess = async () => ({
+    transcript: '你好',
+    items: [
+      { text: '你', start: 0, end: 0.3 },
+      { text: '好', start: 0.3, end: 0.6 },
+    ],
+    duration: 0.6,
+  })
+  const r = await def.gradeAudio!(c, inst, new Uint8Array())
+  expect(r.correct).toBe(false)
+  expect((r.detail?.missing as string[]).sort()).toEqual(['世', '界'])
+})
+
+test('speak_word.gradeAudio prefers the judge result', async () => {
+  const def = registry.get('speak_word')!
+  const c = ctx()
+  const inst = await def.generate(c)
+  c.assess = async () => ({
+    transcript: '你好',
+    items: [
+      { text: '你', start: 0, end: 0.3 },
+      { text: '好', start: 0.3, end: 0.6 },
+    ],
+    duration: 0.4,
+  })
+  c.judge = async () => ({
+    score: 88,
+    correct: true,
+    summary: 'Good tones.',
+    words: [
+      { text: '你', ok: true, tip: '' },
+      { text: '好', ok: true, tip: 'tone 3' },
+    ],
+  })
+  const r = await def.gradeAudio!(c, inst, new Uint8Array())
+  expect(r.score).toBe(88)
+  expect(r.feedback).toBe('Good tones.')
+  expect((r.detail?.words as { tip: string }[])[1]!.tip).toBe('tone 3')
+})

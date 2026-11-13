@@ -7,7 +7,13 @@
     instance,
     busy = false,
     onsubmit,
-  }: { instance: Instance; busy?: boolean; onsubmit: (answer: string) => void } = $props()
+    onspeak,
+  }: {
+    instance: Instance
+    busy?: boolean
+    onsubmit: (answer: string) => void
+    onspeak?: (audio: Blob) => void
+  } = $props()
 
   const recorder = new Recorder()
   const target = $derived((instance.data.target as string) ?? '')
@@ -24,6 +30,10 @@
     if (recording) {
       recording = false
       const blob = await recorder.stop()
+      if (onspeak) {
+        onspeak(blob)
+        return
+      }
       working = true
       try {
         const text = await transcribe(blob, language)
@@ -72,4 +82,20 @@
     {/if}
   </div>
   {#if err}<p class="text-xs text-red-300">{err}</p>{/if}
+  {#if !canMic}
+    <form
+      onsubmit={(e) => {
+        e.preventDefault()
+        const v = (e.currentTarget as HTMLFormElement).querySelector('input')?.value ?? ''
+        if (v.trim()) onsubmit(v.trim())
+      }}
+      class="flex gap-2"
+    >
+      <input
+        placeholder="No mic here — type it instead"
+        class="flex-1 rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm"
+      />
+      <button class="rounded-xl bg-emerald-500 px-3 py-2 text-sm text-black">Check</button>
+    </form>
+  {/if}
 </div>

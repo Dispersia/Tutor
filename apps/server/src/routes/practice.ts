@@ -14,6 +14,7 @@ import {
 import { exerciseCatalog, registry } from '../exercises'
 import { OpenRouter } from '../llm/openrouter'
 import { resolveUserKey } from '../llm/userkey'
+import { makeAssessor, type AssessFn } from '../pronunciation/assess'
 import { seedStarterDecks } from '../seed/service'
 
 function learnerOf(user: {
@@ -126,5 +127,49 @@ export function registerPractice(app: App) {
       result: { ...result, xp },
       stats: { xp: s.xpTotal, level: levelForXp(s.xpTotal) },
     })
+  })
+
+  // Pronunciation: recorded audio -> ASR + forced alignment -> score + tips (§9.4).
+  app.post('/api/practice/speak', async (c) => {
+    const deps = c.get('deps')
+    const user = c.get('user')!
+    const form = await c.req.formData()
+    const file = form.get('file')
+    const cardId = String(form.get('cardId') ?? '')
+    const exerciseId = String(form.get('exerciseId') ?? '')
+    const latencyMs = Number(form.get('latencyMs') ?? 0)
+
+    if (!(file instanceof File)) return c.json({ error: 'audio file required' }, 400)
+    const card = cardId ? getCard(deps.db, cardId, user.id) : undefined
+    if (!card) return c.json({ error: 'card not found' }, 404)
+    const def = exerciseId ? registry.get(exerciseId) : undefined
+    if (!def?.gradeAudio) return c.json({ error: 'exercise does not support audio grading' }, 400)
+
+    const audio = new Uint8Array(await file.arrayBuffer())
+    const learner = learnerOf(user)
+    const assess: AssessFn = deps.assess ?? makeAssessor(deps, card.targetLang)
+    const ctx = { card, learner, distractors: [] as string[], judge: await judgeFor(c), assess }
+
+    try {
+      const instance = await def.generate(ctx)
+      const result = await def.gradeAudio(ctx, instance, audio)
+      const xp = def.xp(result, instance)
+      addReview(deps.db, {
+        cardId: card.id,
+        userId: user.id,
+        exerciseId: def.id,
+        score: result.score,
+        latencyMs,
+        detail: result.detail,
+      })
+      addXp(deps.db, user.id, xp, 'review', def.id)
+      const s = getStats(deps.db, user.id)
+      return c.json({
+        result: { ...result, xp },
+        stats: { xp: s.xpTotal, level: levelForXp(s.xpTotal) },
+      })
+    } catch (err) {
+      return c.json({ error: (err as Error).message }, 502)
+    }
   })
 }
