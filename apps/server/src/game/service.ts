@@ -304,22 +304,36 @@ export function chooseTalent(
   return { ok: true, talent: option }
 }
 
-/** Per-skill talent state for the UI (pending choice + owned counts). */
+/** Per-skill talent state for the UI (pending choice + owned talents). */
 export function talentView(db: Db, userId: string) {
   const owned = listTalents(db, userId)
   return SKILLS.map((s) => {
     const level = skillLevelOf(db, userId, s.id)
-    const ownedMinor = owned.filter((r) => r.skillId === s.id && r.tier === 'minor').length
+    const mine = owned.filter((r) => r.skillId === s.id)
+    const ownedMinor = mine.filter((r) => r.tier === 'minor').length
     const milestones = minorMilestones(level)
     const pending = milestones.length > ownedMinor
     const nextMilestone = pending ? milestones[ownedMinor]! : null
+    // Minor milestones are 5, 15, 25, … so the next one to earn is deterministic.
+    const nextMinor = 5 + 10 * ownedMinor
+    const nextMajor = Math.floor(level / 10) * 10 + 10
     return {
       skillId: s.id,
       level,
       pendingChoice: pending,
       milestone: nextMilestone,
       options: nextMilestone ? minorOptions(s.id, nextMilestone) : [],
-      majors: owned.filter((r) => r.skillId === s.id && r.tier === 'major').length,
+      majors: mine.filter((r) => r.tier === 'major').length,
+      nextMinor,
+      nextMajor,
+      owned: resolveTalents(mine).map((t) => ({
+        id: t.id,
+        name: t.name,
+        description: t.description,
+        tier: t.tier,
+        milestone: t.milestone,
+        mods: t.mods,
+      })),
     }
   })
 }

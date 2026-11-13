@@ -31,6 +31,15 @@ export interface TalentOption {
   mods: { kind: ModKind; value: number }[]
 }
 
+export interface OwnedTalent {
+  id: string
+  name: string
+  description: string
+  tier: 'minor' | 'major'
+  milestone: number
+  mods: { kind: ModKind; value: number; skill?: string }[]
+}
+
 export interface SkillDTO {
   id: string
   name: string
@@ -49,6 +58,12 @@ export interface SkillDTO {
     milestone: number | null
     options: TalentOption[]
     majors: number
+    /** the next minor milestone you can still earn (5, 15, 25, …) */
+    nextMinor: number
+    /** the next major milestone you will earn (10, 20, 30, …) */
+    nextMajor: number
+    /** talents already chosen / granted for this profession */
+    owned: OwnedTalent[]
   }
   actions: ActionDTO[]
 }
@@ -74,6 +89,17 @@ export interface SkillsResponse {
 }
 
 export const getSkills = () => api<SkillsResponse>('/api/skills')
+
+export interface SkillPageResponse {
+  skill: SkillDTO
+  items: ItemDTO[]
+  inventory: { itemId: string; count: number }[]
+  equipment: { slot: string; itemId: string }[]
+  bonuses: { globalXp: number; damage: number; drop: number; hp: number }
+}
+
+export const getSkill = (id: string) =>
+  api<SkillPageResponse>(`/api/skills/${encodeURIComponent(id)}`)
 
 export const chooseTalent = (talentId: string) =>
   api('/api/skills/talents', { method: 'POST', body: JSON.stringify({ talentId }) })

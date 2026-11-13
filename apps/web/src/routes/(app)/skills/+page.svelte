@@ -1,16 +1,7 @@
 <script lang="ts">
   import { href } from '#lib/paths'
   import { onMount } from 'svelte'
-  import { goto } from '$app/navigation'
-  import {
-    chooseTalent,
-    equipItem,
-    getSkills,
-    type ActionDTO,
-    type SkillDTO,
-    type SkillsResponse,
-    unequipSlot,
-  } from '#lib/skills'
+  import { equipItem, getSkills, type SkillsResponse, unequipSlot } from '#lib/skills'
 
   let data = $state<SkillsResponse | null>(null)
   let error = $state('')
@@ -50,17 +41,6 @@
     }
   }
 
-  async function pick(skill: SkillDTO, talentId: string) {
-    note = ''
-    try {
-      await chooseTalent(talentId)
-      note = `Talent chosen for ${skill.name}.`
-      await refresh()
-    } catch (e) {
-      error = (e as Error).message
-    }
-  }
-
   async function equip(itemId: string) {
     note = ''
     try {
@@ -75,24 +55,13 @@
     await unequipSlot(slot).catch(() => {})
     await refresh()
   }
-
-  function train(a: ActionDTO) {
-    void goto(`/practice?action=${a.id}`)
-  }
-
-  function lockedReason(a: ActionDTO): string {
-    if (a.missingUnlocks.length) {
-      return a.missingUnlocks.map((u) => `${u.skill} ${u.level}`).join(', ')
-    }
-    if (a.equipMissing) return `equip a ${a.equipMissing.tag} ${a.equipMissing.slot}`
-    if (a.missing.length)
-      return `need ${a.missing.map((m) => `${m.count}× ${itemMap.get(m.item)?.name ?? m.item}`).join(', ')}`
-    return ''
-  }
 </script>
 
 <div class="flex items-baseline justify-between pt-4 pb-3">
-  <h1 class="text-lg font-semibold">Professions</h1>
+  <div>
+    <h1 class="text-lg font-semibold">Professions</h1>
+    <p class="text-xs text-neutral-500">Train a trade, earn materials, get stronger.</p>
+  </div>
   <span class="text-xs text-neutral-400">total level {totalLevel}</span>
 </div>
 
@@ -104,10 +73,13 @@
 {/if}
 
 {#if pendingTalents.length}
-  <div class="mb-4 rounded-2xl border border-amber-700 bg-amber-950/30 p-3 text-sm text-amber-200">
-    🎉 You have a talent to choose for
-    {pendingTalents.map((s) => s.name).join(', ')} — open the profession below.
-  </div>
+  <a
+    href={href(`/skills/${pendingTalents[0]!.id}`)}
+    class="mb-4 block rounded-2xl border border-amber-700 bg-amber-950/30 p-3 text-sm text-amber-200"
+  >
+    🎉 A talent is ready to choose for
+    {pendingTalents.map((s) => s.name).join(', ')} — tap to open.
+  </a>
 {/if}
 
 <a
@@ -122,97 +94,42 @@
 {:else}
   {#each groups as g (g.key)}
     {#if g.skills.length}
-      <h2 class="mt-4 mb-2 text-xs tracking-wide text-neutral-500 uppercase">{g.label}</h2>
-      <div class="space-y-2">
+      <h2 class="mt-5 mb-2 text-xs tracking-wide text-neutral-500 uppercase">{g.label}</h2>
+      <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
         {#each g.skills as s (s.id)}
-          <details
-            class="rounded-2xl border {s.talent.pendingChoice
+          <a
+            href={href(`/skills/${s.id}`)}
+            class="relative flex flex-col gap-2 rounded-2xl border p-3 transition-colors hover:bg-neutral-900 {s
+              .talent.pendingChoice
               ? 'border-amber-600'
               : 'border-neutral-800'} bg-neutral-900/50"
           >
-            <summary class="flex cursor-pointer items-center gap-3 p-3">
-              <span class="text-xl">{s.icon}</span>
-              <span class="flex-1">
-                <span class="flex items-baseline justify-between">
-                  <span class="text-sm font-medium">{s.name}</span>
-                  <span class="text-xs text-neutral-400">Lv {s.level}</span>
-                </span>
-                <span class="mt-1 block h-1.5 overflow-hidden rounded-full bg-neutral-800">
-                  <span
-                    class="block h-full rounded-full bg-emerald-500"
-                    style="width: {s.progress * 100}%"
-                  ></span>
-                </span>
-                <span class="mt-1 block text-[11px] text-neutral-500">
-                  {s.effectLabel} · now {pct(s.effect.value)}
-                </span>
-              </span>
-            </summary>
-
-            <div class="space-y-2 border-t border-neutral-800 p-3">
-              {#if s.talent.pendingChoice}
-                <div class="rounded-xl border border-amber-700 bg-amber-950/20 p-3">
-                  <p class="mb-2 text-xs text-amber-200">
-                    Level {s.talent.milestone} — choose one talent:
-                  </p>
-                  <div class="grid gap-2">
-                    {#each s.talent.options as o (o.id)}
-                      <button
-                        onclick={() => pick(s, o.id)}
-                        class="rounded-xl border border-amber-700/60 px-3 py-2 text-left text-sm hover:bg-amber-900/20"
-                      >
-                        <span class="font-medium">{o.name}</span>
-                        <span class="block text-xs text-neutral-400">{o.description}</span>
-                      </button>
-                    {/each}
-                  </div>
-                </div>
-              {/if}
-
-              {#each s.actions as a (a.id)}
-                <div class="rounded-xl border border-neutral-800 p-3">
-                  <div class="flex items-start justify-between gap-3">
-                    <div>
-                      <div class="text-sm">{a.name}</div>
-                      <div class="text-[11px] text-neutral-500">{a.description}</div>
-                      <div class="mt-1 flex flex-wrap gap-1 text-[11px]">
-                        {#each a.consumes ?? [] as c (c.item)}
-                          <span class="rounded bg-neutral-800 px-1.5 py-0.5">
-                            −{c.count}
-                            {itemMap.get(c.item)?.icon ?? ''}
-                            {itemMap.get(c.item)?.name ?? c.item}
-                          </span>
-                        {/each}
-                        {#each a.produces ?? [] as p (p.item)}
-                          <span class="rounded bg-emerald-900/40 px-1.5 py-0.5 text-emerald-200">
-                            +{p.count}
-                            {itemMap.get(p.item)?.icon ?? ''}
-                            {itemMap.get(p.item)?.name ?? p.item}
-                          </span>
-                        {/each}
-                        <span class="rounded bg-sky-900/40 px-1.5 py-0.5 text-sky-200"
-                          >+{a.xp} xp</span
-                        >
-                      </div>
-                    </div>
-                    <button
-                      onclick={() => train(a)}
-                      disabled={!a.unlocked || !a.affordable}
-                      class="shrink-0 rounded-xl bg-emerald-500 px-3 py-2 text-sm text-black disabled:opacity-40"
-                    >
-                      Train
-                    </button>
-                  </div>
-                  {#if !a.unlocked || !a.affordable}
-                    <p class="mt-1 text-[11px] text-amber-400">
-                      {a.unlocked ? 'needs' : 'locked —'}
-                      {lockedReason(a)}
-                    </p>
-                  {/if}
-                </div>
-              {/each}
+            {#if s.talent.pendingChoice}
+              <span
+                class="absolute top-2 right-2 grid h-4 w-4 place-items-center rounded-full bg-amber-500 text-[10px] font-bold text-black"
+                title="Talent to choose">!</span
+              >
+            {/if}
+            <div class="flex items-center gap-2">
+              <span class="text-2xl">{s.icon}</span>
+              <div class="min-w-0">
+                <div class="truncate text-sm font-medium">{s.name}</div>
+                <div class="text-[11px] text-neutral-500">Lv {s.level}</div>
+              </div>
             </div>
-          </details>
+            <div class="h-1.5 overflow-hidden rounded-full bg-neutral-800">
+              <div
+                class="h-full rounded-full bg-emerald-500"
+                style="width: {s.progress * 100}%"
+              ></div>
+            </div>
+            <div class="text-[11px] leading-tight text-neutral-500">
+              now <span class="text-emerald-300">{pct(s.effect.value)}</span>
+              {#if s.talent.owned.length}
+                · {s.talent.owned.length} talent{s.talent.owned.length === 1 ? '' : 's'}
+              {/if}
+            </div>
+          </a>
         {/each}
       </div>
     {/if}
