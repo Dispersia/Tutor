@@ -40,7 +40,7 @@
           >
             <span
               class="flex flex-col items-center gap-0.5 rounded-lg px-3 py-1 {on
-                ? 'bg-gold-400 text-ink-950'
+                ? 'bg-ink-800 text-gold-300'
                 : ''}"
             >
               <span
