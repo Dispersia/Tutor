@@ -62,6 +62,25 @@ async function send() {
 </html>`
 
 /**
+ * Cache policy for served files. Hashed build assets are immutable; the shell
+ * and the service worker must always revalidate so a new deploy shows up.
+ */
+function cacheHeaders(path: string): Record<string, string> {
+  if (path.startsWith('/_app/immutable/')) {
+    return { 'cache-control': 'public, max-age=31536000, immutable' }
+  }
+  if (
+    path === '/' ||
+    path.endsWith('.html') ||
+    path === '/service-worker.js' ||
+    path.endsWith('.webmanifest')
+  ) {
+    return { 'cache-control': 'no-cache' }
+  }
+  return { 'cache-control': 'public, max-age=3600' }
+}
+
+/**
  * Serves the built SvelteKit PWA when present (apps/web/build), falling back to
  * SPA index.html, and finally to a placeholder page so the API is testable now.
  */
@@ -72,12 +91,12 @@ export function registerStatic(app: App, staticDir: string) {
 
     const direct = join(staticDir, path === '/' ? 'index.html' : path)
     if (existsSync(direct) && statSync(direct).isFile()) {
-      return new Response(Bun.file(direct))
+      return new Response(Bun.file(direct), { headers: cacheHeaders(path) })
     }
     const index = join(staticDir, 'index.html')
     if (existsSync(index)) {
       return new Response(Bun.file(index), {
-        headers: { 'content-type': 'text/html; charset=utf-8' },
+        headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache' },
       })
     }
     return c.html(PLACEHOLDER)
