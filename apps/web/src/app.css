@@ -1,49 +1,44 @@
 @import 'tailwindcss';
 
 /* ---------------------------------------------------------------------------
-   tutor theme — an idle-RPG look (Melvor / Archmage) with **flat** surfaces:
-   solid obsidian panels, gold filigree for structure, and a colour per
-   profession category. No gradients.
+   tutor theme — Melvor-Idle flavoured: dark neutral panels with a handful of
+   saturated accents (coloured icons, green/blue bars, blue + amber buttons,
+   gold numbers). Flat colours only, no gradients.
    --------------------------------------------------------------------------- */
 
 @theme {
-  /* display face for headings — serif ships with macOS + Android, so no font fetch */
   --font-display:
     'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Noto Serif', 'Times New Roman',
     serif;
 
-  /* obsidian surfaces (dark → light) */
-  --color-ink-950: #080b12;
-  --color-ink-900: #0d1119;
-  --color-ink-850: #121722;
-  --color-ink-800: #181f2d;
-  --color-ink-700: #232d40;
-  --color-ink-600: #313d54;
-  --color-ink-500: #45536f;
-  --color-ink-400: #6b7a96;
-  --color-ink-300: #9aa7bf;
+  /* neutral slate surfaces (dark → light) */
+  --color-ink-950: #101218;
+  --color-ink-900: #171a22;
+  --color-ink-850: #1f2330;
+  --color-ink-800: #272c3a;
+  --color-ink-700: #353c4d;
+  --color-ink-600: #454e63;
+  --color-ink-500: #5a657d;
+  --color-ink-400: #8b95aa;
+  --color-ink-300: #bcc4d3;
 
-  /* gold filigree */
-  --color-gold-200: #fdf0c4;
-  --color-gold-300: #f4d98d;
-  --color-gold-400: #e8c264;
-  --color-gold-500: #d0a13a;
-  --color-gold-600: #a37a24;
+  /* gold — numbers, ranks, currency */
+  --color-gold-200: #f6e6ae;
+  --color-gold-300: #e8c15a;
+  --color-gold-400: #d9a93c;
+  --color-gold-500: #b9862a;
+  --color-gold-600: #8f6620;
 
-  /* profession categories */
-  --color-gather-400: #58c46b;
-  --color-artisan-400: #ef9d45;
-  --color-support-400: #b085ef;
-  --color-combat-400: #ef5f5a;
-
-  /* misc accents */
-  --color-arcane-400: #4fb0e8;
-  --color-xp-400: #e8c264;
+  /* accents */
+  --color-gather-400: #5cc46a;
+  --color-artisan-400: #e6a83c;
+  --color-support-400: #a97fe0;
+  --color-combat-400: #e05858;
+  --color-arcane-400: #5b9be0;
 }
 
 :root {
   color-scheme: dark;
-  /* default accent; tiles/cards override it inline */
   --accent: var(--color-arcane-400);
 }
 
@@ -54,7 +49,7 @@ body {
 }
 
 body {
-  color: #e9edf5;
+  color: #e7eaf1;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior-y: none;
   font-family:
@@ -62,10 +57,9 @@ body {
     -apple-system,
     'Segoe UI',
     sans-serif;
-  background: #0b1020;
+  background: #12141b;
 }
 
-/* respect the phone's safe areas (notches, gesture bar) */
 .pb-safe {
   padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem);
 }
@@ -76,15 +70,17 @@ body {
 @layer components {
   /* ---- surfaces ---------------------------------------------------------- */
   .panel {
-    border-radius: 0.75rem;
+    border-radius: 0.6rem;
     overflow: hidden;
     border: 1px solid var(--color-ink-700);
-    background: color-mix(in oklab, var(--accent) 14%, var(--color-ink-850));
+    background: var(--color-ink-850);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
   }
 
+  /* a panel that belongs to a profession / section: neutral with a colour edge */
   .panel-accent {
-    border-color: color-mix(in oklab, var(--accent) 65%, var(--color-ink-700));
-    background: color-mix(in oklab, var(--accent) 34%, var(--color-ink-850));
+    border-color: color-mix(in oklab, var(--accent) 50%, var(--color-ink-700));
+    background: color-mix(in oklab, var(--accent) 7%, var(--color-ink-850));
   }
 
   .panel-hd {
@@ -92,17 +88,11 @@ body {
     align-items: center;
     justify-content: space-between;
     gap: 0.5rem;
-    padding: 0.55rem 0.9rem;
-    border-bottom: 1px solid color-mix(in oklab, var(--accent) 60%, black);
-    background: var(--accent);
-    color: #0a0d13;
-    font-family: var(--font-display);
+    padding: 0.5rem 0.9rem;
+    border-bottom: 1px solid var(--color-ink-700);
+    background: var(--color-ink-800);
     font-weight: 700;
-    letter-spacing: 0.02em;
-  }
-  .panel-accent > .panel-hd {
-    border-top-left-radius: 0.7rem;
-    border-top-right-radius: 0.7rem;
+    color: #eef1f7;
   }
 
   /* ---- typography -------------------------------------------------------- */
@@ -126,9 +116,9 @@ body {
   .tile {
     position: relative;
     overflow: hidden;
-    border-radius: 0.75rem;
-    border: 1px solid color-mix(in oklab, var(--accent) 70%, var(--color-ink-700));
-    background: color-mix(in oklab, var(--accent) 50%, var(--color-ink-900));
+    border-radius: 0.6rem;
+    border: 1px solid var(--color-ink-700);
+    background: color-mix(in oklab, var(--accent) 7%, var(--color-ink-850));
     transition:
       transform 0.12s ease,
       border-color 0.15s ease,
@@ -139,22 +129,22 @@ body {
     position: absolute;
     inset: 0 0 auto 0;
     height: 3px;
-    background: color-mix(in oklab, var(--accent) 60%, white);
+    background: var(--accent);
   }
   .tile:hover,
   .tile:focus-visible {
     transform: translateY(-1px);
-    border-color: var(--accent);
-    background: color-mix(in oklab, var(--accent) 60%, var(--color-ink-900));
+    border-color: color-mix(in oklab, var(--accent) 60%, var(--color-ink-700));
+    background: color-mix(in oklab, var(--accent) 13%, var(--color-ink-850));
   }
 
-  /* ---- buttons ----------------------------------------------------------- */
+  /* ---- buttons (Melvor blue + amber) ------------------------------------- */
   .btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 0.4rem;
-    border-radius: 0.6rem;
+    border-radius: 0.5rem;
     padding: 0.55rem 0.9rem;
     font-size: 0.875rem;
     font-weight: 600;
@@ -171,20 +161,20 @@ body {
     opacity: 0.4;
     cursor: not-allowed;
   }
+  .btn-primary {
+    color: #ffffff;
+    border: 1px solid #3f78b8;
+    background: #5b9be0;
+  }
+  .btn-primary:hover {
+    filter: brightness(1.08);
+  }
   .btn-gold {
-    color: #241a02;
-    border: 1px solid var(--color-gold-600);
+    color: #2a1d03;
+    border: 1px solid var(--color-gold-500);
     background: var(--color-gold-400);
   }
   .btn-gold:hover {
-    filter: brightness(1.08);
-  }
-  .btn-primary {
-    color: #04241b;
-    border: 1px solid #0b7b60;
-    background: #16c79a;
-  }
-  .btn-primary:hover {
     filter: brightness(1.08);
   }
   .btn-ghost {
@@ -207,21 +197,22 @@ body {
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
-    border-radius: 0.5rem;
+    border-radius: 0.4rem;
     padding: 0.15rem 0.45rem;
     font-size: 0.68rem;
     line-height: 1.3;
-    border: 1px solid color-mix(in oklab, var(--accent) 60%, transparent);
-    background: color-mix(in oklab, var(--accent) 40%, var(--color-ink-900));
-    color: color-mix(in oklab, var(--accent) 80%, white);
+    border: 1px solid color-mix(in oklab, var(--accent) 40%, transparent);
+    background: color-mix(in oklab, var(--accent) 18%, var(--color-ink-900));
+    color: color-mix(in oklab, var(--accent) 72%, white);
   }
 
   .bar {
     position: relative;
-    height: 0.55rem;
+    height: 0.5rem;
     border-radius: 999px;
     overflow: hidden;
-    background: color-mix(in oklab, var(--accent) 28%, var(--color-ink-800));
+    background: var(--color-ink-800);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
   }
   .bar > i {
     display: block;
@@ -231,28 +222,28 @@ body {
     transition: width 0.4s ease;
   }
 
-  /* small rounded rank level badge */
+  /* rank badge — gold text, like Melvor's "(48 / 99)" */
   .level-badge {
     min-width: 1.6rem;
-    border-radius: 0.45rem;
+    border-radius: 0.4rem;
     padding: 0.1rem 0.35rem;
     text-align: center;
     font-variant-numeric: tabular-nums;
     font-weight: 700;
-    color: #241a02;
-    border: 1px solid var(--color-gold-600);
-    background: var(--color-gold-500);
+    color: var(--color-gold-300);
+    border: 1px solid color-mix(in oklab, var(--color-gold-500) 60%, transparent);
+    background: rgba(0, 0, 0, 0.25);
   }
 
+  /* HUD stat: neutral panel, coloured number + left edge */
   .stat-card {
-    border-radius: 0.75rem;
-    border: 1px solid color-mix(in oklab, var(--accent) 70%, black);
-    background: var(--accent);
-    color: #0a0d13;
+    border-radius: 0.6rem;
+    border: 1px solid var(--color-ink-700);
+    border-left: 3px solid var(--accent);
+    background: var(--color-ink-850);
   }
 }
 
-/* scrollbars */
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--color-ink-600) transparent;

@@ -11,20 +11,21 @@ export interface CategoryStyle {
 }
 
 export const CATEGORY: Record<SkillCategory, CategoryStyle> = {
-  gathering: { label: 'Gathering', accent: '#58c46b', tint: 'rgba(88,196,107,0.14)' },
-  artisan: { label: 'Artisan', accent: '#ef9d45', tint: 'rgba(239,157,69,0.14)' },
-  support: { label: 'Support', accent: '#b085ef', tint: 'rgba(176,133,239,0.14)' },
-  combat: { label: 'Combat', accent: '#ef5f5a', tint: 'rgba(239,95,90,0.14)' },
+  gathering: { label: 'Gathering', accent: '#5cc46a', tint: 'rgba(92,196,106,0.14)' },
+  artisan: { label: 'Artisan', accent: '#e6a83c', tint: 'rgba(230,168,60,0.14)' },
+  support: { label: 'Support', accent: '#a97fe0', tint: 'rgba(169,127,224,0.14)' },
+  combat: { label: 'Combat', accent: '#e05858', tint: 'rgba(224,88,88,0.14)' },
 }
 
 export const ACCENT = {
-  xp: '#e8c264',
-  streak: '#ef9d45',
-  level: '#b085ef',
-  arcane: '#4fb0e8',
-  gold: '#e8c264',
-  health: '#ef5f5a',
-  player: '#58c46b',
+  xp: '#e8c15a',
+  streak: '#e6a83c',
+  level: '#5b9be0',
+  arcane: '#5b9be0',
+  gold: '#e8c15a',
+  green: '#5cc46a',
+  health: '#e05858',
+  player: '#5cc46a',
 }
 
 /** The `--accent` style string a component can spread onto an element. */
@@ -35,12 +36,12 @@ export const categoryAccent = (cat: string): string =>
 
 /** Item-tier colours (raw/refined/equipment/consumable/coin/other). */
 export const TIER: Record<string, string> = {
-  raw: '#8fa6c4',
-  refined: '#4fb0e8',
-  equipment: '#e8c264',
-  consumable: '#58c46b',
-  coin: '#f0b429',
-  other: '#9aa7bf',
+  raw: '#8b95aa',
+  refined: '#5b9be0',
+  equipment: '#e8c15a',
+  consumable: '#5cc46a',
+  coin: '#e6a83c',
+  other: '#8b95aa',
 }
 
 export const tierAccent = (tier?: string | null): string => TIER[tier ?? 'other'] ?? TIER.other!

@@ -88,7 +88,7 @@
 >
   <span class="text-xl">⚔️</span>
   <span class="flex-1">Combat — fight monsters for bones, hides and gems</span>
-  <span class="text-white/70">→</span>
+  <span class="text-ink-500">→</span>
 </a>
 
 {#if loading}
@@ -96,12 +96,12 @@
 {:else}
   {#each groups as g (g.key)}
     {#if g.skills.length}
-      <div
-        class="mt-5 mb-2 flex items-center gap-2 rounded-lg px-3 py-1.5"
-        style="background: {g.accent}"
-      >
-        <h2 class="display text-sm font-bold" style="color: #0a0d13">{g.label}</h2>
-        <span class="ml-auto text-[11px] font-bold" style="color: #0a0d13">{g.skills.length}</span>
+      <div class="mt-5 mb-2 flex items-center gap-2">
+        <span class="h-3 w-3 rounded-sm" style="background: {g.accent}"></span>
+        <h2 class="text-xs font-bold tracking-widest uppercase" style="color: {g.accent}">
+          {g.label}
+        </h2>
+        <span class="ml-auto text-[11px] text-ink-500">{g.skills.length}</span>
       </div>
       <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
         {#each g.skills as s (s.id)}
@@ -118,15 +118,15 @@
                 style="background: {g.accent}29; border: 1px solid {g.accent}55">{s.icon}</span
               >
               <div class="min-w-0 flex-1">
-                <div class="display truncate text-sm text-white">{s.name}</div>
+                <div class="display truncate text-sm text-ink-100">{s.name}</div>
               </div>
               <span class="level-badge text-[11px]">{s.level}</span>
             </div>
             <div class="bar mt-2">
               <i style="width: {s.progress * 100}%"></i>
             </div>
-            <div class="mt-1.5 text-[11px] text-white/75">
-              now <span class="font-bold">{pct(s.effect.value)}</span>
+            <div class="mt-1.5 text-[11px] text-ink-400">
+              now <span class="font-bold" style="color: {g.accent}">{pct(s.effect.value)}</span>
               {#if s.talent.owned.length}
                 · {s.talent.owned.length}★
               {/if}
