@@ -24,7 +24,7 @@ scope.addEventListener('activate', (event: ExtendableEvent) => {
   )
 })
 
-// App-shell cache. Never cache the API — chat/speech must always hit the Mac.
+// App shell + assets. Never cache the API — chat/speech must always hit the Mac.
 scope.addEventListener('fetch', (event: FetchEvent) => {
   const url = new URL(event.request.url)
   if (
@@ -34,19 +34,41 @@ scope.addEventListener('fetch', (event: FetchEvent) => {
   ) {
     return
   }
+
+  // Navigations are network-first, so a new deploy shows up on the next open;
+  // the cache is only a fallback when offline.
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .then((res) => {
+          if (res.ok) {
+            const copy = res.clone()
+            void caches.open(CACHE).then((c) => c.put(event.request, copy))
+          }
+          return res
+        })
+        .catch(() =>
+          caches
+            .match(event.request)
+            .then((r) => r ?? caches.match('/index.html'))
+            .then((r) => r ?? Response.error()),
+        ),
+    )
+    return
+  }
+
+  // Everything else (hashed immutable assets) is cache-first.
   event.respondWith(
     caches.match(event.request).then(
       (cached) =>
         cached ??
-        fetch(event.request)
-          .then((res) => {
-            if (res.ok && res.type === 'basic') {
-              const copy = res.clone()
-              void caches.open(CACHE).then((c) => c.put(event.request, copy))
-            }
-            return res
-          })
-          .catch(() => caches.match('/index.html').then((r) => r ?? Response.error())),
+        fetch(event.request).then((res) => {
+          if (res.ok && res.type === 'basic') {
+            const copy = res.clone()
+            void caches.open(CACHE).then((c) => c.put(event.request, copy))
+          }
+          return res
+        }),
     ),
   )
 })
