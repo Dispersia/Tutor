@@ -124,7 +124,7 @@
   </section>
 
   <!-- Talents --------------------------------------------------------------->
-  <h2 class="eyebrow mt-6 mb-2">Talents</h2>
+  <h2 class="eyebrow mt-6 mb-2" style="color: {accent}">Talents</h2>
 
   {#if skill.talent.pendingChoice}
     <div class="panel panel-accent p-4" style={accentStyle('#e8c264')}>
@@ -199,7 +199,7 @@
   {/if}
 
   <!-- Actions --------------------------------------------------------------->
-  <h2 class="eyebrow mt-6 mb-2">Actions</h2>
+  <h2 class="eyebrow mt-6 mb-2" style="color: {accent}">Actions</h2>
   <div class="space-y-2">
     {#each skill.actions as a (a.id)}
       <div

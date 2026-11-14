@@ -97,14 +97,11 @@
   {#each groups as g (g.key)}
     {#if g.skills.length}
       <div
-        class="mt-5 mb-2 flex items-center gap-2 rounded-lg px-2.5 py-1.5"
-        style="background: {g.accent}1c; border: 1px solid {g.accent}45"
+        class="mt-5 mb-2 flex items-center gap-2 rounded-lg px-3 py-1.5"
+        style="background: {g.accent}"
       >
-        <span class="h-2.5 w-2.5 rounded-full" style="background: {g.accent}"></span>
-        <h2 class="eyebrow" style="color: {g.accent}">{g.label}</h2>
-        <span class="ml-auto text-[11px] font-semibold" style="color: {g.accent}"
-          >{g.skills.length}</span
-        >
+        <h2 class="display text-sm font-bold" style="color: #0a0d13">{g.label}</h2>
+        <span class="ml-auto text-[11px] font-bold" style="color: #0a0d13">{g.skills.length}</span>
       </div>
       <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
         {#each g.skills as s (s.id)}
@@ -170,7 +167,7 @@
   <section class="panel panel-accent mb-6" style={accentStyle('#f0b429')}>
     <div class="panel-hd text-sm">
       <span>Bank</span>
-      <span class="text-xs text-ink-400">{bank.length} kinds</span>
+      <span class="text-xs opacity-70">{bank.length} kinds</span>
     </div>
     <div class="p-3">
       {#if bank.length === 0}
