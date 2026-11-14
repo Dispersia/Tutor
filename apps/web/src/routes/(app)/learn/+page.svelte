@@ -81,7 +81,8 @@
             {#if open}
               <a
                 href={href(`/practice?lesson=${encodeURIComponent(l.id)}`)}
-                class="flex items-center gap-3 rounded-xl border border-ink-700/70 bg-ink-900/40 px-2.5 py-2 hover:border-ink-600"
+                class="panel panel-accent flex items-center gap-3 px-2.5 py-2"
+                style={accentStyle(acc)}
               >
                 <span
                   class="grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-bold {l.complete

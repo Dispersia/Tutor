@@ -77,14 +77,14 @@ body {
   /* ---- surfaces ---------------------------------------------------------- */
   .panel {
     border-radius: 0.75rem;
+    overflow: hidden;
     border: 1px solid var(--color-ink-700);
-    background: var(--color-ink-850);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    background: color-mix(in oklab, var(--accent) 8%, var(--color-ink-850));
   }
 
   .panel-accent {
-    border-color: color-mix(in oklab, var(--accent) 40%, var(--color-ink-700));
-    background: color-mix(in oklab, var(--accent) 10%, var(--color-ink-850));
+    border-color: color-mix(in oklab, var(--accent) 55%, var(--color-ink-700));
+    background: color-mix(in oklab, var(--accent) 24%, var(--color-ink-850));
   }
 
   .panel-hd {
@@ -92,12 +92,17 @@ body {
     align-items: center;
     justify-content: space-between;
     gap: 0.5rem;
-    padding: 0.6rem 0.9rem;
-    border-bottom: 1px solid color-mix(in oklab, var(--accent) 22%, var(--color-ink-700));
-    background: color-mix(in oklab, var(--accent) 13%, var(--color-ink-800));
+    padding: 0.55rem 0.9rem;
+    border-bottom: 1px solid color-mix(in oklab, var(--accent) 60%, black);
+    background: var(--accent);
+    color: #0a0d13;
     font-family: var(--font-display);
+    font-weight: 700;
     letter-spacing: 0.02em;
-    color: var(--color-gold-300);
+  }
+  .panel-accent > .panel-hd {
+    border-top-left-radius: 0.7rem;
+    border-top-right-radius: 0.7rem;
   }
 
   /* ---- typography -------------------------------------------------------- */
@@ -122,8 +127,8 @@ body {
     position: relative;
     overflow: hidden;
     border-radius: 0.75rem;
-    border: 1px solid color-mix(in oklab, var(--accent) 30%, var(--color-ink-700));
-    background: color-mix(in oklab, var(--accent) 11%, var(--color-ink-850));
+    border: 1px solid color-mix(in oklab, var(--accent) 50%, var(--color-ink-700));
+    background: color-mix(in oklab, var(--accent) 26%, var(--color-ink-850));
     transition:
       transform 0.12s ease,
       border-color 0.15s ease,
@@ -139,8 +144,8 @@ body {
   .tile:hover,
   .tile:focus-visible {
     transform: translateY(-1px);
-    border-color: color-mix(in oklab, var(--accent) 60%, var(--color-ink-700));
-    background: color-mix(in oklab, var(--accent) 17%, var(--color-ink-850));
+    border-color: var(--accent);
+    background: color-mix(in oklab, var(--accent) 34%, var(--color-ink-850));
   }
 
   /* ---- buttons ----------------------------------------------------------- */
@@ -206,9 +211,9 @@ body {
     padding: 0.15rem 0.45rem;
     font-size: 0.68rem;
     line-height: 1.3;
-    border: 1px solid color-mix(in oklab, var(--accent) 32%, transparent);
-    background: color-mix(in oklab, var(--accent) 14%, var(--color-ink-900));
-    color: color-mix(in oklab, var(--accent) 72%, white);
+    border: 1px solid color-mix(in oklab, var(--accent) 55%, transparent);
+    background: color-mix(in oklab, var(--accent) 30%, var(--color-ink-900));
+    color: color-mix(in oklab, var(--accent) 78%, white);
   }
 
   .bar {
@@ -216,7 +221,7 @@ body {
     height: 0.55rem;
     border-radius: 999px;
     overflow: hidden;
-    background: var(--color-ink-800);
+    background: color-mix(in oklab, var(--accent) 20%, var(--color-ink-800));
   }
   .bar > i {
     display: block;
@@ -241,9 +246,9 @@ body {
 
   .stat-card {
     border-radius: 0.75rem;
-    border: 1px solid color-mix(in oklab, var(--accent) 38%, var(--color-ink-700));
-    border-left: 3px solid var(--accent);
-    background: color-mix(in oklab, var(--accent) 14%, var(--color-ink-850));
+    border: 1px solid color-mix(in oklab, var(--accent) 60%, var(--color-ink-700));
+    border-left: 4px solid var(--accent);
+    background: color-mix(in oklab, var(--accent) 30%, var(--color-ink-850));
   }
 }
 
