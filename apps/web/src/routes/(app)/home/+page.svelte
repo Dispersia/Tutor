@@ -77,18 +77,18 @@
 
 <section class="grid grid-cols-3 gap-2.5">
   <div class="stat-card p-3" style={accentStyle(ACCENT.xp)}>
-    <div class="eyebrow">XP</div>
-    <div class="display mt-1 text-xl text-gold-200">{stats?.xp ?? 0}</div>
+    <div class="text-[0.68rem] font-semibold tracking-[0.14em] uppercase opacity-70">XP</div>
+    <div class="display mt-1 text-xl font-bold">{stats?.xp ?? 0}</div>
   </div>
   <div class="stat-card p-3" style={accentStyle(ACCENT.streak)}>
-    <div class="eyebrow">Streak</div>
-    <div class="display mt-1 text-xl" style="color: {ACCENT.streak}">
-      {stats?.streak ?? 0}<span class="ml-0.5 text-xs text-ink-400">days</span>
+    <div class="text-[0.68rem] font-semibold tracking-[0.14em] uppercase opacity-70">Streak</div>
+    <div class="display mt-1 text-xl font-bold">
+      {stats?.streak ?? 0}<span class="ml-0.5 text-xs opacity-70">days</span>
     </div>
   </div>
   <div class="stat-card p-3" style={accentStyle(ACCENT.level)}>
-    <div class="eyebrow">Reviews</div>
-    <div class="display mt-1 text-xl" style="color: {ACCENT.level}">{srs?.due ?? 0}</div>
+    <div class="text-[0.68rem] font-semibold tracking-[0.14em] uppercase opacity-70">Reviews</div>
+    <div class="display mt-1 text-xl font-bold">{srs?.due ?? 0}</div>
   </div>
 </section>
 
@@ -136,11 +136,11 @@
       <span class="display block text-lg text-white">
         {srs && srs.due > 0 ? `${srs.due} cards due` : 'Continue learning'}
       </span>
-      <span class="text-xs text-ink-300">
+      <span class="text-xs text-white/80">
         {srs ? `${srs.learned} / ${srs.total} cards learned` : 'Start the guided path'}
       </span>
     </span>
-    <span class="text-ink-400">→</span>
+    <span class="text-white/70">→</span>
   </a>
 
   <a
