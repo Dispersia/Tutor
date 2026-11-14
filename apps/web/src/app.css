@@ -62,7 +62,7 @@ body {
     -apple-system,
     'Segoe UI',
     sans-serif;
-  background: var(--color-ink-950);
+  background: #0b1020;
 }
 
 /* respect the phone's safe areas (notches, gesture bar) */
@@ -79,12 +79,12 @@ body {
     border-radius: 0.75rem;
     overflow: hidden;
     border: 1px solid var(--color-ink-700);
-    background: color-mix(in oklab, var(--accent) 8%, var(--color-ink-850));
+    background: color-mix(in oklab, var(--accent) 14%, var(--color-ink-850));
   }
 
   .panel-accent {
-    border-color: color-mix(in oklab, var(--accent) 55%, var(--color-ink-700));
-    background: color-mix(in oklab, var(--accent) 24%, var(--color-ink-850));
+    border-color: color-mix(in oklab, var(--accent) 65%, var(--color-ink-700));
+    background: color-mix(in oklab, var(--accent) 34%, var(--color-ink-850));
   }
 
   .panel-hd {
@@ -127,8 +127,8 @@ body {
     position: relative;
     overflow: hidden;
     border-radius: 0.75rem;
-    border: 1px solid color-mix(in oklab, var(--accent) 50%, var(--color-ink-700));
-    background: color-mix(in oklab, var(--accent) 26%, var(--color-ink-850));
+    border: 1px solid color-mix(in oklab, var(--accent) 70%, var(--color-ink-700));
+    background: color-mix(in oklab, var(--accent) 50%, var(--color-ink-900));
     transition:
       transform 0.12s ease,
       border-color 0.15s ease,
@@ -139,13 +139,13 @@ body {
     position: absolute;
     inset: 0 0 auto 0;
     height: 3px;
-    background: var(--accent);
+    background: color-mix(in oklab, var(--accent) 60%, white);
   }
   .tile:hover,
   .tile:focus-visible {
     transform: translateY(-1px);
     border-color: var(--accent);
-    background: color-mix(in oklab, var(--accent) 34%, var(--color-ink-850));
+    background: color-mix(in oklab, var(--accent) 60%, var(--color-ink-900));
   }
 
   /* ---- buttons ----------------------------------------------------------- */
@@ -211,9 +211,9 @@ body {
     padding: 0.15rem 0.45rem;
     font-size: 0.68rem;
     line-height: 1.3;
-    border: 1px solid color-mix(in oklab, var(--accent) 55%, transparent);
-    background: color-mix(in oklab, var(--accent) 30%, var(--color-ink-900));
-    color: color-mix(in oklab, var(--accent) 78%, white);
+    border: 1px solid color-mix(in oklab, var(--accent) 60%, transparent);
+    background: color-mix(in oklab, var(--accent) 40%, var(--color-ink-900));
+    color: color-mix(in oklab, var(--accent) 80%, white);
   }
 
   .bar {
@@ -221,7 +221,7 @@ body {
     height: 0.55rem;
     border-radius: 999px;
     overflow: hidden;
-    background: color-mix(in oklab, var(--accent) 20%, var(--color-ink-800));
+    background: color-mix(in oklab, var(--accent) 28%, var(--color-ink-800));
   }
   .bar > i {
     display: block;
@@ -246,9 +246,9 @@ body {
 
   .stat-card {
     border-radius: 0.75rem;
-    border: 1px solid color-mix(in oklab, var(--accent) 60%, var(--color-ink-700));
-    border-left: 4px solid var(--accent);
-    background: color-mix(in oklab, var(--accent) 30%, var(--color-ink-850));
+    border: 1px solid color-mix(in oklab, var(--accent) 70%, black);
+    background: var(--accent);
+    color: #0a0d13;
   }
 }
 

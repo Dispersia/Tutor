@@ -88,7 +88,7 @@
 >
   <span class="text-xl">⚔️</span>
   <span class="flex-1">Combat — fight monsters for bones, hides and gems</span>
-  <span class="text-ink-400">→</span>
+  <span class="text-white/70">→</span>
 </a>
 
 {#if loading}
@@ -118,15 +118,15 @@
                 style="background: {g.accent}29; border: 1px solid {g.accent}55">{s.icon}</span
               >
               <div class="min-w-0 flex-1">
-                <div class="display truncate text-sm text-ink-300">{s.name}</div>
+                <div class="display truncate text-sm text-white">{s.name}</div>
               </div>
               <span class="level-badge text-[11px]">{s.level}</span>
             </div>
             <div class="bar mt-2">
               <i style="width: {s.progress * 100}%"></i>
             </div>
-            <div class="mt-1.5 text-[11px] text-ink-400">
-              now <span class="font-semibold" style="color: {g.accent}">{pct(s.effect.value)}</span>
+            <div class="mt-1.5 text-[11px] text-white/75">
+              now <span class="font-bold">{pct(s.effect.value)}</span>
               {#if s.talent.owned.length}
                 · {s.talent.owned.length}★
               {/if}
