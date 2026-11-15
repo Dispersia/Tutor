@@ -25,9 +25,24 @@
   let working = $state(false)
   let err = $state('')
 
+  function send() {
+    if (answer.trim() && !busy) onsubmit(answer.trim())
+  }
+
   function submit(e: SubmitEvent) {
     e.preventDefault()
-    if (answer.trim()) onsubmit(answer.trim())
+    send()
+  }
+
+  /**
+   * Enter sends, Shift+Enter adds a newline. `isComposing` (and keyCode 229) guard
+   * the Enter that confirms an IME candidate — critical when typing Japanese.
+   */
+  function onKeydown(e: KeyboardEvent) {
+    if (e.key !== 'Enter' || e.shiftKey || e.repeat) return
+    if (e.isComposing || e.keyCode === 229) return
+    e.preventDefault()
+    send()
   }
 
   async function record() {
@@ -66,6 +81,7 @@
   {/if}
   <textarea
     bind:value={answer}
+    onkeydown={onKeydown}
     rows="2"
     class="w-full rounded-md border border-ink-600 bg-ink-900 px-4 py-3 outline-none focus:border-seal-400"
     placeholder="Write or say a sentence…"

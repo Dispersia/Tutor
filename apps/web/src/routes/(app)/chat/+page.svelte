@@ -176,10 +176,11 @@
   }
 
   function onKey(e: KeyboardEvent) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      void send()
-    }
+    if (e.key !== 'Enter' || e.shiftKey || e.repeat) return
+    // Don't send while an IME is confirming a candidate (typing Japanese).
+    if (e.isComposing || e.keyCode === 229) return
+    e.preventDefault()
+    void send()
   }
 </script>
 
