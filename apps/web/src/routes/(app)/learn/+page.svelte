@@ -37,6 +37,21 @@
   let meaningField = $state(-1)
   let importing = $state(false)
   let importError = $state('')
+  /** Target language for a new deck: built or imported. */
+  let buildLang = $state('')
+  let importLang = $state('')
+
+  const LANGUAGES = [
+    { code: 'zh', label: 'Mandarin Chinese' },
+    { code: 'ja', label: 'Japanese' },
+    { code: 'ko', label: 'Korean' },
+    { code: 'es', label: 'Spanish' },
+    { code: 'fr', label: 'French' },
+    { code: 'de', label: 'German' },
+    { code: 'it', label: 'Italian' },
+    { code: 'pt', label: 'Portuguese' },
+    { code: 'ru', label: 'Russian' },
+  ] as const
 
   const storageKey = $derived(`tutor.profession.${session.user?.id ?? 'anon'}`)
 
@@ -71,6 +86,7 @@
       decks = c.decks.sort((a, b) => rank(a.level) - rank(b.level))
       stats = s
       ref = sk
+      buildLang = session.user?.targetLang ?? 'zh'
       const saved = localStorage.getItem(storageKey)
       if (saved && usable.some((u) => u.action.id === saved)) actionId = saved
     } catch (e) {
@@ -122,7 +138,7 @@
     building = true
     buildError = ''
     try {
-      await createDeck({ instruction: text, targetLang: session.user?.targetLang ?? undefined })
+      await createDeck({ instruction: text, targetLang: buildLang || undefined })
       instruction = ''
       await reload()
     } catch (e) {
@@ -158,14 +174,14 @@
     try {
       const form = new FormData()
       form.set('file', file, file.name)
-      const target = session.user?.targetLang
-      if (target) form.set('targetLang', target)
       const info = await inspectDeck(form)
       importFile = file
       inspection = info
       wordField = info.suggested.wordField
       readingField = info.suggested.readingField
       meaningField = info.suggested.meaningField
+      // the deck's own script wins over the profile's target language
+      importLang = info.suggestedLang ?? session.user?.targetLang ?? 'zh'
     } catch (err) {
       importError = (err as Error).message
     } finally {
@@ -185,8 +201,7 @@
       form.set('readingField', String(readingField))
       form.set('meaningField', String(meaningField))
       if (instruction.trim()) form.set('instruction', instruction.trim())
-      const target = session.user?.targetLang
-      if (target) form.set('targetLang', target)
+      if (importLang) form.set('targetLang', importLang)
       await importDeck(form)
       instruction = ''
       importFile = null
@@ -207,6 +222,8 @@
 
   /** A preview cell: the cleaned value of a field, trimmed for display. */
   const cell = (value: string | undefined) => (value ?? '').slice(0, 40) || '—'
+
+  const langLabel = (code: string) => LANGUAGES.find((l) => l.code === code)?.label ?? code
 
   /** Flip a deck's own reading (ruby) rule. */
   async function toggleReadings(d: CurriculumDeck) {
@@ -250,6 +267,15 @@
       Describe what you want. It pulls a real frequency list and writes the cards — one new word at a
       time.
     </p>
+    <label class="mt-2 block text-[11px] text-ink-400">
+      Language
+      <select
+        bind:value={buildLang}
+        class="mt-1 w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm"
+      >
+        {#each LANGUAGES as l (l.code)}<option value={l.code}>{l.label}</option>{/each}
+      </select>
+    </label>
     <textarea
       bind:value={instruction}
       rows="2"
@@ -290,7 +316,25 @@
         <p class="eyebrow">Import {inspection.name ?? 'Anki deck'}</p>
         <span class="text-[11px] text-ink-400">{inspection.noteCount} notes</span>
       </div>
-      <p class="mt-1 text-xs text-ink-400">Pick which field is the real word.</p>
+      <p class="mt-1 text-xs text-ink-400">Pick the deck's language and which field is the real word.</p>
+
+      <label class="mt-3 block text-[11px] text-ink-400">
+        Language
+        <select
+          bind:value={importLang}
+          class="mt-1 w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm"
+        >
+          {#if importLang && !LANGUAGES.some((l) => l.code === importLang)}
+            <option value={importLang}>{importLang}</option>
+          {/if}
+          {#each LANGUAGES as l (l.code)}<option value={l.code}>{l.label}</option>{/each}
+        </select>
+      </label>
+      {#if inspection.suggestedLang}
+        <p class="mt-1 text-[11px] text-jade-400">
+          Detected {langLabel(inspection.suggestedLang)} from the deck.
+        </p>
+      {/if}
 
       <label class="mt-3 block text-[11px] text-ink-400">
         Word field

@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { readApkg, type AnkiDeck } from './parse'
-import { cleanField, inspectAnki, wordsFromAnki } from './words'
+import { cleanField, detectLanguage, inspectAnki, wordsFromAnki } from './words'
 import { unzip } from './zip'
 
 const fixture = () =>
@@ -85,6 +85,22 @@ test('inspectAnki previews a modern package from the v18 tables', async () => {
   expect(info.fields).toEqual(['Word', 'Reading', 'Meaning'])
   expect(info.sample[0]).toEqual(['我', 'ㄨㄛˇ', 'I, me'])
   expect(info.suggested).toEqual({ wordField: 0, readingField: 1, meaningField: 2 })
+})
+
+test('detectLanguage reads the deck script (kana → ja, han → zh, hangul → ko)', () => {
+  const deck = (words: string[]): AnkiDeck => ({
+    models: { '1': { name: 'X', fields: ['Word'] } },
+    notes: words.map((w, i) => ({ mid: 1, fields: [w], tags: [], order: i })),
+  })
+  expect(detectLanguage(deck(['食べる', '飲む']))).toBe('ja')
+  expect(detectLanguage(deck(['吃', '喝']))).toBe('zh')
+  expect(detectLanguage(deck(['먹다']))).toBe('ko')
+  expect(detectLanguage(deck(['comer']))).toBeUndefined()
+})
+
+test('inspectAnki reports the detected language', async () => {
+  const deck = await readApkg(modernFixture())
+  expect(inspectAnki(deck, 'zh').suggestedLang).toBe('zh')
 })
 
 test('cleanField strips Anki HTML and sound markup', () => {
