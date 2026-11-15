@@ -260,6 +260,25 @@ test('POST /api/decks/import builds a deck from an uploaded Anki package', async
   sqlite.close()
 })
 
+test('POST /api/decks/import handles a modern schema-18 package', async () => {
+  const { app, sqlite } = makeApp()
+  const cookie = await signup(app)
+  const apkg = readFileSync(join(import.meta.dir, 'anki/fixtures/modern-schema18.apkg'))
+  const form = new FormData()
+  form.set('file', new File([apkg], 'modern.apkg'))
+  form.set('targetLang', 'zh')
+  form.set('count', '4')
+  form.set('wordField', '0')
+  form.set('readingField', '1')
+  form.set('meaningField', '2')
+  const res = await app.request('/api/decks/import', auth(cookie, { method: 'POST', body: form }))
+  expect(res.status).toBe(201)
+  const body = (await res.json()) as DeckBody
+  expect(body.source).toBe('Imported Modern')
+  expect(body.newWords).toEqual(['我', '你', '喝', '茶'])
+  sqlite.close()
+})
+
 test('POST /api/decks/import rejects a non-package', async () => {
   const { app, sqlite } = makeApp()
   const cookie = await signup(app)

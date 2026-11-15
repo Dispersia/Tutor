@@ -1,12 +1,13 @@
-import type { AnkiDeck } from './parse'
+import type { AnkiDeck, AnkiNote } from './parse'
 
 /**
  * Turns Anki notes into an ordered word list (docs/DESIGN.md §13.7) — the same
  * shape a frequency list yields, so an uploaded deck is just another source.
  *
- * Which field holds the word is guessed from the model's field names, then from
- * the target script, and can be overridden by index. Reading/meaning fields are
- * picked up too and passed to the planner as hints.
+ * Which field holds the word is chosen by the learner in the UI; this module
+ * only pre-selects a sensible default and extracts the chosen fields. A package
+ * can carry several note types, so everything is scoped to the model that most
+ * notes use.
  */
 
 export interface AnkiWordList {
@@ -45,9 +46,11 @@ export interface WordFieldOptions {
   limit?: number
 }
 
-const WORD_FIELD = /(^|[\s_\-])(word|expression|term|vocab|vocabulary|front|kanji|hanzi|character|外語|単語|單字|生詞|生词|詞|词|字)/i
+const WORD_FIELD =
+  /(^|[\s_\-])(word|expression|term|vocab|vocabulary|front|kanji|hanzi|character|外語|単語|單字|生詞|生词|詞|词|字)/i
 const READING_FIELD = /(reading|pronunciation|pron|pinyin|kana|furigana|romaji|yomi|読み|発音|拼音|注音)/i
-const MEANING_FIELD = /(meaning|definition|english|translation|gloss|sense|back|意思|釋義|释义|翻譯|翻译|中文|英文)/i
+const MEANING_FIELD =
+  /(meaning|definition|english|translation|gloss|sense|back|意思|釋義|释义|翻譯|翻译|中文|英文)/i
 
 const CJK = /[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff\uac00-\ud7af]/
 
@@ -73,41 +76,44 @@ function cjkRatio(s: string): number {
   return n / [...s].length
 }
 
-/** The field names of the model with the most fields (decks are usually one model). */
-export function dominantModelFields(deck: AnkiDeck): string[] {
-  let best: string[] = []
-  for (const model of Object.values(deck.models)) {
-    if (model.fields.length > best.length) best = model.fields
+/** The note type most notes use (a package can carry more than one). */
+function dominantMid(deck: AnkiDeck): number | undefined {
+  const counts = new Map<number, number>()
+  for (const n of deck.notes) counts.set(n.mid, (counts.get(n.mid) ?? 0) + 1)
+  let best: number | undefined
+  let bestN = -1
+  for (const [mid, n] of counts) {
+    if (n > bestN) {
+      bestN = n
+      best = mid
+    }
   }
   return best
 }
 
-/** Best-guess field indices (used only to pre-select the pickers). */
-export function suggestAnkiFields(
-  deck: AnkiDeck,
-  targetLang: string,
-): { wordField: number; readingField: number; meaningField: number } {
-  const fields = dominantModelFields(deck)
-  const rows = deck.notes.map((n) => n.fields.map(cleanField))
-  return {
-    wordField: pickWordField(fields, rows, targetLang),
-    readingField: fields.findIndex((f) => READING_FIELD.test(f)),
-    meaningField: fields.findIndex((f) => MEANING_FIELD.test(f)),
-  }
+/** The notes of the dominant model, in deck order. */
+function dominantNotes(deck: AnkiDeck): AnkiNote[] {
+  const mid = dominantMid(deck)
+  if (mid === undefined) return deck.notes
+  const subset = deck.notes.filter((n) => n.mid === mid)
+  return subset.length ? subset : deck.notes
 }
 
-/** What a deck looks like before the learner picks its fields. */
-export function inspectAnki(deck: AnkiDeck, targetLang: string): AnkiInspection {
-  return {
-    name: deck.name,
-    fields: dominantModelFields(deck),
-    sample: deck.notes.slice(0, 5).map((n) => n.fields.map(cleanField)),
-    noteCount: deck.notes.length,
-    suggested: suggestAnkiFields(deck, targetLang),
+/** Field names of the dominant model, or generic labels sized to the data. */
+function modelFields(deck: AnkiDeck, notes: AnkiNote[]): string[] {
+  const mid = dominantMid(deck)
+  const named = mid !== undefined ? deck.models[String(mid)]?.fields : undefined
+  if (named?.length) return named
+  let best: string[] = []
+  for (const model of Object.values(deck.models)) {
+    if (model.fields.length > best.length) best = model.fields
   }
+  if (best.length) return best
+  const width = notes.reduce((max, n) => Math.max(max, n.fields.length), 0)
+  return Array.from({ length: width }, (_, i) => `Field ${i + 1}`)
 }
 
-/** Picks the field index that holds the target word. */
+/** Picks the field index that most likely holds the target word. */
 function pickWordField(fields: string[], rows: string[][], targetLang: string): number {
   const named = fields.findIndex((f) => WORD_FIELD.test(f))
   if (named >= 0) return named
@@ -128,17 +134,51 @@ function pickWordField(fields: string[], rows: string[][], targetLang: string): 
   return 0
 }
 
+/** The cleaned field rows of the dominant model. */
+function rowsOf(notes: AnkiNote[]): string[][] {
+  return notes.map((n) => n.fields.map(cleanField))
+}
+
+/** Best-guess field indices (used only to pre-select the pickers). */
+export function suggestAnkiFields(
+  deck: AnkiDeck,
+  targetLang: string,
+): { wordField: number; readingField: number; meaningField: number } {
+  const notes = dominantNotes(deck)
+  const fields = modelFields(deck, notes)
+  const rows = rowsOf(notes)
+  return {
+    wordField: pickWordField(fields, rows, targetLang),
+    readingField: fields.findIndex((f) => READING_FIELD.test(f)),
+    meaningField: fields.findIndex((f) => MEANING_FIELD.test(f)),
+  }
+}
+
+/** What a deck looks like before the learner picks its fields. */
+export function inspectAnki(deck: AnkiDeck, targetLang: string): AnkiInspection {
+  const notes = dominantNotes(deck)
+  return {
+    name: deck.name,
+    fields: modelFields(deck, notes),
+    sample: rowsOf(notes.slice(0, 5)),
+    noteCount: notes.length,
+    suggested: suggestAnkiFields(deck, targetLang),
+  }
+}
+
 /**
  * Extracts an ordered, de-duplicated word list from a deck's notes. `wordField`
- * overrides the guessed field index.
+ * (and optional reading/meaning fields) come from the learner's choice; the
+ * indices are guessed only when they are not supplied.
  */
 export function wordsFromAnki(
   deck: AnkiDeck,
   targetLang: string,
   opts: WordFieldOptions = {},
 ): AnkiWordList {
-  const fields = dominantModelFields(deck)
-  const rows = deck.notes.map((n) => n.fields.map(cleanField))
+  const notes = dominantNotes(deck)
+  const fields = modelFields(deck, notes)
+  const rows = rowsOf(notes)
   const wordField = opts.wordField ?? pickWordField(fields, rows, targetLang)
   const readingField = opts.readingField ?? fields.findIndex((f) => READING_FIELD.test(f))
   const meaningField = opts.meaningField ?? fields.findIndex((f) => MEANING_FIELD.test(f))
