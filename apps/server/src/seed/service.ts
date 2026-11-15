@@ -81,9 +81,10 @@ function starterDecks(): FrequencyDeck[] {
 }
 
 /**
- * Gives a (new) user their own copy of the frequency decks — the Mandarin and
- * Japanese word lists, one new word per step — then repairs any existing copy.
- * Idempotent.
+ * **Test fixture only.** Decks are no longer pre-seeded: the product builds them
+ * on demand from a pulled frequency list (`deck/generate.ts`). This gives a user
+ * a copy of the curated frequency decks so the SRS / n+1 / sentence tests have a
+ * deterministic deck to drill. Idempotent.
  */
 export function seedStarterDecks(db: Db, userId: string): boolean {
   const created = listDecks(db, userId).length === 0

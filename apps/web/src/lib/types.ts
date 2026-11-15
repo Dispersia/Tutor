@@ -55,6 +55,29 @@ export interface ExerciseInfo {
   title: string
   modality: string
   needsAudio?: boolean
+  /** The card template this exercise belongs to (vocab, spoken, …). */
+  template?: TemplateKind
+}
+
+export type TemplateKind = 'vocab' | 'spoken' | 'listening' | 'grammar' | 'sentence'
+
+export interface TemplateField {
+  /** Dotted path on the card: `back`, `readings.kana`, `payload.tokens`. */
+  path: string
+  label: string
+  kind: string
+  required: boolean
+  description: string
+}
+
+/** A reusable, language-agnostic practice card template (see @tutor/core). */
+export interface CardTemplate {
+  kind: TemplateKind
+  title: string
+  summary: string
+  modality: string
+  fields: TemplateField[]
+  exercises: string[]
 }
 
 export type ModKind = 'yield' | 'double' | 'xp' | 'global_xp' | 'damage' | 'drop' | 'hp' | 'coins'

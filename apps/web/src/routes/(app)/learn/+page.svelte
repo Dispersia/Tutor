@@ -2,6 +2,14 @@
   import { onMount } from 'svelte'
   import { href } from '#lib/paths'
   import { getCurriculum, getSrsStats, type CurriculumDeck, type SrsStats } from '#lib/curriculum'
+  import {
+    createDeck,
+    growDeck,
+    importDeck,
+    inspectDeck,
+    updateDeck,
+    type AnkiInspection,
+  } from '#lib/exercises'
   import { getSkills, type SkillsResponse } from '#lib/skills'
   import { session } from '#lib/session.svelte'
   import { ACCENT, accentStyle } from '#lib/theme'
@@ -13,6 +21,22 @@
   let actionId = $state('')
   let loading = $state(true)
   let error = $state('')
+  /** Deck builder: the instruction the user types. */
+  let instruction = $state('')
+  let building = $state(false)
+  let buildError = $state('')
+  /** Organic growth: which deck is growing, and the optional topic to focus on. */
+  let growing = $state('')
+  let growTopic = $state('')
+  let deckError = $state('')
+  /** Anki import: the file, its inspected fields, and the chosen field mapping. */
+  let importFile = $state<File | null>(null)
+  let inspection = $state<AnkiInspection | null>(null)
+  let wordField = $state(0)
+  let readingField = $state(-1)
+  let meaningField = $state(-1)
+  let importing = $state(false)
+  let importError = $state('')
 
   const storageKey = $derived(`tutor.profession.${session.user?.id ?? 'anon'}`)
 
@@ -71,9 +95,9 @@
     return href(`/practice?${query.toString()}`)
   }
 
-  const rank = (level: string) => (level === 'zhfreq' ? 0 : level === 'jafreq' ? 1 : 2)
+  const rank = (level: string | null) => (level === 'zhfreq' ? 0 : level === 'jafreq' ? 1 : 2)
 
-  const deckAccent = (level: string) =>
+  const deckAccent = (level: string | null) =>
     level === 'zhfreq' ? ACCENT.green : level === 'jafreq' ? ACCENT.level : ACCENT.arcane
 
   /** The next step of the path: the first lesson not yet finished. */
@@ -81,6 +105,119 @@
     d.lessons.find((l) => !l.complete) ?? d.lessons[d.lessons.length - 1]
 
   const done = (d: CurriculumDeck) => d.cardCount > 0 && d.learned >= d.cardCount
+
+  /** Whether a deck shows native readings (its own override, else the default). */
+  const showsReadings = (d: CurriculumDeck) => d.settings?.showReadings ?? true
+
+  async function reload() {
+    const [c, s] = await Promise.all([getCurriculum(), getSrsStats()])
+    decks = c.decks.sort((a, b) => rank(a.level) - rank(b.level))
+    stats = s
+  }
+
+  /** Build a deck from the instruction (the server pulls a frequency list). */
+  async function build() {
+    const text = instruction.trim()
+    if (!text || building) return
+    building = true
+    buildError = ''
+    try {
+      await createDeck({ instruction: text, targetLang: session.user?.targetLang ?? undefined })
+      instruction = ''
+      await reload()
+    } catch (e) {
+      buildError = (e as Error).message
+    } finally {
+      building = false
+    }
+  }
+
+  /** Grow a deck organically, optionally focusing on a topic. */
+  async function grow(d: CurriculumDeck) {
+    if (growing) return
+    growing = d.deckId
+    deckError = ''
+    try {
+      await growDeck(d.deckId, { topic: growTopic.trim() || undefined })
+      growTopic = ''
+      await reload()
+    } catch (e) {
+      deckError = (e as Error).message
+    } finally {
+      growing = ''
+    }
+  }
+
+  /** Step 1: read the .apkg's fields so the learner can pick the real word. */
+  async function inspectApkg(e: Event) {
+    const input = e.target as HTMLInputElement
+    const file = input.files?.[0]
+    if (!file || importing) return
+    importing = true
+    importError = ''
+    try {
+      const form = new FormData()
+      form.set('file', file, file.name)
+      const target = session.user?.targetLang
+      if (target) form.set('targetLang', target)
+      const info = await inspectDeck(form)
+      importFile = file
+      inspection = info
+      wordField = info.suggested.wordField
+      readingField = info.suggested.readingField
+      meaningField = info.suggested.meaningField
+    } catch (err) {
+      importError = (err as Error).message
+    } finally {
+      importing = false
+    }
+  }
+
+  /** Step 2: build the deck from the chosen fields. */
+  async function confirmImport() {
+    if (!importFile || !inspection || importing) return
+    importing = true
+    importError = ''
+    try {
+      const form = new FormData()
+      form.set('file', importFile, importFile.name)
+      form.set('wordField', String(wordField))
+      form.set('readingField', String(readingField))
+      form.set('meaningField', String(meaningField))
+      if (instruction.trim()) form.set('instruction', instruction.trim())
+      const target = session.user?.targetLang
+      if (target) form.set('targetLang', target)
+      await importDeck(form)
+      instruction = ''
+      importFile = null
+      inspection = null
+      await reload()
+    } catch (err) {
+      importError = (err as Error).message
+    } finally {
+      importing = false
+    }
+  }
+
+  function cancelImport() {
+    importFile = null
+    inspection = null
+    importError = ''
+  }
+
+  /** A preview cell: the cleaned value of a field, trimmed for display. */
+  const cell = (value: string | undefined) => (value ?? '').slice(0, 40) || '—'
+
+  /** Flip a deck's own reading (ruby) rule. */
+  async function toggleReadings(d: CurriculumDeck) {
+    deckError = ''
+    try {
+      await updateDeck(d.deckId, { settings: { showReadings: !showsReadings(d) } })
+      await reload()
+    } catch (e) {
+      deckError = (e as Error).message
+    }
+  }
 </script>
 
 <div class="flex items-center justify-between border-b border-ink-700 pt-5 pb-4">
@@ -106,9 +243,123 @@
   <p class="flex items-center gap-2 text-sm text-ink-400">
     <Spinner size={14} label="Loading your path" /> Loading…
   </p>
-{:else if decks.length === 0}
-  <p class="text-sm text-ink-400">No courses yet.</p>
 {:else}
+  <section class="panel panel-accent mb-4 p-4" style="--accent: {ACCENT.azure}">
+    <p class="eyebrow">Build a deck</p>
+    <p class="mt-1 text-xs text-ink-400">
+      Describe what you want. It pulls a real frequency list and writes the cards — one new word at a
+      time.
+    </p>
+    <textarea
+      bind:value={instruction}
+      rows="2"
+      placeholder="a traditional Chinese frequency list, with grammar, using only traditional characters and zhuyin"
+      class="mt-2 w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm outline-none focus:border-seal-400"
+    ></textarea>
+    <button
+      type="button"
+      onclick={build}
+      disabled={building || !instruction.trim()}
+      class="btn btn-primary mt-2 w-full py-3 disabled:opacity-60"
+    >
+      {#if building}<Spinner size={15} label="Building the deck" /> Pulling the list &amp; writing
+        cards…{:else}Build deck{/if}
+    </button>
+    {#if buildError}
+      <p class="mt-2 rounded-md bg-ember-950 px-3 py-2 text-xs text-ember-300">{buildError}</p>
+    {/if}
+    <label class="mt-3 block cursor-pointer text-center text-[11px] text-ink-400 underline">
+      {#if importing}<Spinner size={12} label="Reading the deck" /> Reading the deck…{:else}…or import
+        an Anki deck (.apkg){/if}
+      <input
+        type="file"
+        accept=".apkg,.colpkg"
+        class="hidden"
+        onchange={inspectApkg}
+        disabled={importing}
+      />
+    </label>
+    {#if importError}
+      <p class="mt-2 rounded-md bg-ember-950 px-3 py-2 text-xs text-ember-300">{importError}</p>
+    {/if}
+  </section>
+
+  {#if inspection}
+    <section class="panel panel-accent mb-4 p-4" style="--accent: {ACCENT.violet}">
+      <div class="flex items-baseline justify-between">
+        <p class="eyebrow">Import {inspection.name ?? 'Anki deck'}</p>
+        <span class="text-[11px] text-ink-400">{inspection.noteCount} notes</span>
+      </div>
+      <p class="mt-1 text-xs text-ink-400">Pick which field is the real word.</p>
+
+      <label class="mt-3 block text-[11px] text-ink-400">
+        Word field
+        <select
+          bind:value={wordField}
+          class="mt-1 w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm"
+        >
+          {#each inspection.fields as f, i (i)}<option value={i}>{f}</option>{/each}
+        </select>
+      </label>
+
+      <div class="mt-2 grid grid-cols-2 gap-2">
+        <label class="block text-[11px] text-ink-400">
+          Reading (optional)
+          <select
+            bind:value={readingField}
+            class="mt-1 w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm"
+          >
+            <option value={-1}>None</option>
+            {#each inspection.fields as f, i (i)}<option value={i}>{f}</option>{/each}
+          </select>
+        </label>
+        <label class="block text-[11px] text-ink-400">
+          Meaning (optional)
+          <select
+            bind:value={meaningField}
+            class="mt-1 w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm"
+          >
+            <option value={-1}>None</option>
+            {#each inspection.fields as f, i (i)}<option value={i}>{f}</option>{/each}
+          </select>
+        </label>
+      </div>
+
+      <div class="mt-3 overflow-x-auto">
+        <table class="w-full text-left text-[11px] text-ink-400">
+          <thead>
+            <tr>{#each inspection.fields as f (f)}<th class="pr-2 font-normal">{f}</th>{/each}</tr>
+          </thead>
+          <tbody>
+            {#each inspection.sample.slice(0, 3) as row, r (r)}
+              <tr>
+                {#each row as value, i (i)}<td class="pr-2 text-ink-300">{cell(value)}</td>{/each}
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="mt-3 flex gap-2">
+        <button
+          type="button"
+          onclick={confirmImport}
+          disabled={importing}
+          class="btn btn-primary flex-1 py-3 disabled:opacity-60"
+        >
+          {#if importing}<Spinner size={15} label="Building the deck" /> Building…{:else}Build deck
+          {/if}
+        </button>
+        <button type="button" onclick={cancelImport} disabled={importing} class="btn btn-ghost px-4">
+          Cancel
+        </button>
+      </div>
+    </section>
+  {/if}
+
+  {#if decks.length === 0}
+    <p class="text-sm text-ink-400">No decks yet — describe one above and build it.</p>
+  {:else}
   <section class="panel mb-4 p-4" style="--accent: {ACCENT.arcane}">
     <div class="flex items-baseline justify-between">
       <p class="eyebrow">Profession</p>
@@ -204,7 +455,37 @@
       {#if done(d)}
         <p class="mt-2 text-center text-[11px] text-jade-400">All words learned ✓</p>
       {/if}
+
+      <div class="mt-3 flex items-center gap-2">
+        <input
+          bind:value={growTopic}
+          placeholder="grow on a topic (optional)"
+          class="min-w-0 flex-1 rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-xs outline-none focus:border-seal-400"
+        />
+        <button
+          type="button"
+          onclick={() => grow(d)}
+          disabled={Boolean(growing)}
+          class="btn btn-ghost px-3 py-2 text-xs disabled:opacity-60"
+        >
+          {#if growing === d.deckId}<Spinner size={13} label="Growing the deck" /> Growing…{:else}Grow
+          {/if}
+        </button>
+      </div>
+      <button
+        type="button"
+        onclick={() => toggleReadings(d)}
+        class="mt-2 w-full text-center text-[11px] text-ink-400 underline"
+      >
+        {showsReadings(d)
+          ? 'Hide readings (ruby) for this deck'
+          : 'Show readings (ruby) for this deck'}
+      </button>
     </section>
   {/each}
+  {/if}
+  {#if deckError}
+    <p class="mb-3 rounded-md bg-ember-950 px-3 py-2 text-sm text-ember-300">{deckError}</p>
+  {/if}
 {/if}
 <div class="h-4"></div>

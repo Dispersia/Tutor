@@ -1,5 +1,6 @@
 import type { Card, CardType } from '@tutor/core'
 import { and, asc, desc, eq, sql } from 'drizzle-orm'
+import { mergeDeckSettings, parseDeckSettings, type DeckSettings } from '../deck/settings'
 import type { Role } from '../env'
 import type { Db } from './client'
 import {
@@ -301,6 +302,7 @@ export interface NewDeck {
   targetLang: string
   level?: string
   description?: string
+  settings?: DeckSettings
 }
 
 export function createDeck(db: Db, userId: string, d: NewDeck) {
@@ -312,6 +314,7 @@ export function createDeck(db: Db, userId: string, d: NewDeck) {
     targetLang: d.targetLang,
     level: d.level ?? null,
     description: d.description ?? null,
+    settingsJson: JSON.stringify(d.settings ?? {}),
   }
   db.insert(decks).values(row).run()
   return row
@@ -326,6 +329,7 @@ export function listDecks(db: Db, userId: string) {
       targetLang: decks.targetLang,
       level: decks.level,
       description: decks.description,
+      settingsJson: decks.settingsJson,
       cardCount: sql<number>`count(${cards.id})`,
     })
     .from(decks)
@@ -334,11 +338,35 @@ export function listDecks(db: Db, userId: string) {
     .groupBy(decks.id)
     .orderBy(asc(decks.name))
     .all()
+    .map((d) => ({ ...d, settings: parseDeckSettings(d.settingsJson) }))
 }
 
 export function getDeck(db: Db, deckId: string, userId: string) {
   const row = db.select().from(decks).where(eq(decks.id, deckId)).get()
-  return row && row.userId === userId ? row : undefined
+  if (!row || row.userId !== userId) return undefined
+  return { ...row, settings: parseDeckSettings(row.settingsJson) }
+}
+
+/** The stable key a deck's lessons are addressed by (level if set, else id). */
+export function deckKey(deck: { id: string; level: string | null }): string {
+  return deck.level ?? deck.id
+}
+
+/** Applies a partial settings update and returns the merged settings. */
+export function updateDeckSettings(
+  db: Db,
+  deckId: string,
+  userId: string,
+  patch: Partial<DeckSettings>,
+): DeckSettings | undefined {
+  const row = db.select().from(decks).where(eq(decks.id, deckId)).get()
+  if (!row || row.userId !== userId) return undefined
+  const merged = mergeDeckSettings(parseDeckSettings(row.settingsJson), patch)
+  db.update(decks)
+    .set({ settingsJson: JSON.stringify(merged) })
+    .where(eq(decks.id, deckId))
+    .run()
+  return merged
 }
 
 export interface NewCard {

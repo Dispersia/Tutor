@@ -297,7 +297,9 @@
 
   /** Short label for the lesson header (the frequency path reads as "Frequency"). */
   function lessonLabel(l: LessonDTO): string {
-    return l.level === 'zhfreq' ? 'Frequency' : l.level.toUpperCase()
+    if (l.level === 'zhfreq' || l.level === 'jafreq') return 'Frequency'
+    // generated decks address their lessons by deck id; show a plain label
+    return l.level.length > 12 ? 'Deck' : l.level.toUpperCase()
   }
 
   /** Human summary of the FSRS-6 scheduling decision. */
