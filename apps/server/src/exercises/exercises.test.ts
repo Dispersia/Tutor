@@ -26,6 +26,7 @@ function ctx(partial: Partial<Card> = {}, distractors: string[] = []): ExerciseC
 test('catalog lists the built-in exercises', () => {
   const ids = exerciseCatalog().map((e) => e.id)
   for (const id of [
+    'introduce',
     'translate.front_to_back',
     'translate.back_to_front',
     'multiple_choice',
@@ -36,6 +37,38 @@ test('catalog lists the built-in exercises', () => {
   ]) {
     expect(ids).toContain(id)
   }
+})
+
+test('introduce teaches a new word and never quizzes or schedules', async () => {
+  const def = registry.get('introduce')!
+  const c = ctx()
+  const inst = await def.generate(c)
+  expect(inst.data.word).toBe('你好')
+  expect(inst.data.reading).toBe('ㄋㄧˇ ㄏㄠˇ') // Zhuyin, never pinyin
+  expect(inst.data.meaning).toBe('hello')
+  const r = await def.grade(c, inst, 'ok')
+  expect(r.correct).toBe(true)
+  expect(def.xp(r, inst)).toBe(0)
+})
+
+test('introduce example is n+1: only words already met plus the new one', async () => {
+  const def = registry.get('introduce')!
+
+  // enough prior words -> a sentence is taught, using only those words
+  const c = ctx({ back: '很', front: 'very', readings: { zhuyin: 'ㄏㄣˇ' } })
+  c.seen = ['我', '好']
+  c.known = []
+  const inst = await def.generate(c)
+  const ex = inst.data.example as { text: string; reading: string; target: string } | undefined
+  expect(ex?.text).toBe('我很好')
+  expect(ex?.target).toBe('很')
+  expect(ex?.reading).toContain('ㄏㄣˇ') // Zhuyin, never pinyin
+
+  // without the supporting words there is no sentence to teach (never guesses)
+  const bare = ctx({ back: '很', front: 'very', readings: { zhuyin: 'ㄏㄣˇ' } })
+  bare.seen = ['我']
+  bare.known = []
+  expect((await def.generate(bare)).data.example).toBeUndefined()
 })
 
 test('readings are locale-aware: Zhuyin for Chinese, furigana for Japanese', async () => {

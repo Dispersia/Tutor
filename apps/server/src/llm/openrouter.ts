@@ -30,6 +30,13 @@ export interface ModelInfo {
 export type ChatEvent =
   { type: 'delta'; text: string } | { type: 'usage'; usage: Usage } | { type: 'done' }
 
+/**
+ * How much hidden reasoning a model may spend before answering. Thinking models
+ * (Qwen 3.8, …) default to a model-chosen budget, which can be hundreds of
+ * tokens the learner never sees; pick `none` for latency-sensitive roles.
+ */
+export type ReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh'
+
 export interface ChatOptions {
   model: string
   messages: ChatMessage[]
@@ -37,6 +44,8 @@ export interface ChatOptions {
   maxTokens?: number
   signal?: AbortSignal
   title?: string
+  /** Defaults to `none` — see `ReasoningEffort`. */
+  reasoning?: ReasoningEffort
 }
 
 function mapUsage(u: Record<string, unknown> | undefined): Usage {
@@ -157,6 +166,7 @@ export class OpenRouter {
         messages: opts.messages,
         stream: true,
         usage: { include: true },
+        reasoning: { effort: opts.reasoning ?? 'none' },
         ...(opts.temperature != null ? { temperature: opts.temperature } : {}),
         ...(opts.maxTokens != null ? { max_tokens: opts.maxTokens } : {}),
       }),
@@ -199,6 +209,7 @@ export class OpenRouter {
         model: opts.model,
         messages: opts.messages,
         usage: { include: true },
+        reasoning: { effort: opts.reasoning ?? 'none' },
         response_format: {
           type: 'json_schema',
           json_schema: {

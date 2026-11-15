@@ -125,6 +125,56 @@ def unload() -> dict:
     return manager.unload_all()
 
 
+def _warm_clip(seconds: float = 0.6) -> Path:
+    """A short silent 16 kHz WAV used to trigger a model's compile/graph cost."""
+    import numpy as np  # type: ignore
+    import soundfile as sf  # type: ignore
+
+    fd, name = tempfile.mkstemp(suffix=".wav")
+    os.close(fd)
+    sf.write(name, np.zeros(int(16000 * seconds), dtype="float32"), 16000)
+    return Path(name)
+
+
+@app.post("/v1/warm")
+def warm() -> dict:
+    """
+    Load the voice models ahead of the first request, then run one tiny inference
+    each so the first real play/record skips both the load and the compile cost.
+    Idempotent: warm models answer instantly.
+    """
+    warmed: list[str] = []
+    failed: dict[str, str] = {}
+    clip: Path | None = None
+    try:
+        clip = _warm_clip()
+        with manager.inference():
+            try:
+                models.tts_synthesize(
+                    manager.get("tts_preset"), "你好", voice=None, language="Chinese"
+                )
+                warmed.append("tts_preset")
+            except Exception as exc:  # pragma: no cover - depends on the local models
+                log.warning("warm tts_preset failed: %s", exc)
+                failed["tts_preset"] = str(exc)
+            for kind in ("asr", "align"):
+                try:
+                    model = manager.get(kind)
+                    if kind == "asr":
+                        models.asr_transcribe(model, str(clip), "Chinese")
+                    else:
+                        models.align_text(model, str(clip), "你好", "Chinese")
+                    warmed.append(kind)
+                except Exception as exc:  # pragma: no cover - depends on the local models
+                    log.warning("warm %s failed: %s", kind, exc)
+                    failed[kind] = str(exc)
+    finally:
+        if clip:
+            clip.unlink(missing_ok=True)
+    manager.touch()
+    return {"ok": not failed, "models": manager.resident(), "warmed": warmed, "failed": failed}
+
+
 @app.post("/v1/asr")
 async def asr(
     file: UploadFile = File(...),

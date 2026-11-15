@@ -43,6 +43,20 @@ export type Role = 'conversation' | 'judge' | 'generator' | 'translator'
 
 export interface Roles extends Record<Role, string> {}
 
+/** Per-user study preferences: reading display + which exercise kinds are offered. */
+export interface StudyPrefs {
+  showZhuyin: boolean
+  showFurigana: boolean
+  disabledExercises: string[]
+}
+
+export interface ExerciseInfo {
+  id: string
+  title: string
+  modality: string
+  needsAudio?: boolean
+}
+
 export type ModKind = 'yield' | 'double' | 'xp' | 'global_xp' | 'damage' | 'drop' | 'hp' | 'coins'
 
 export interface SpeechStatus {

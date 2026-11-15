@@ -136,6 +136,25 @@ export class SpeechSupervisor {
     throw new Error('speech gateway did not become healthy in time')
   }
 
+  /**
+   * Starts the gateway if needed, then loads the models a voice card needs
+   * (ASR + aligner + preset TTS) so the first "Hear it" / "Say it" tap skips the
+   * model-load latency (DESIGN §8.1). Idempotent: warm models load instantly.
+   */
+  async warm(): Promise<void> {
+    await this.ensure()
+    this.begin()
+    try {
+      const res = await fetch(`${this.cfg.url}/v1/warm`, {
+        method: 'POST',
+        signal: AbortSignal.timeout(180_000),
+      })
+      if (!res.ok) throw new Error(`speech gateway warm -> ${res.status}`)
+    } finally {
+      this.end()
+    }
+  }
+
   async health(): Promise<Record<string, unknown>> {
     try {
       const res = await fetch(`${this.cfg.url}/health`, { signal: AbortSignal.timeout(3000) })

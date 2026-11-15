@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Instance } from '#lib/exercises'
+  import Spinner from '../Spinner.svelte'
 
   let {
     instance,
@@ -8,9 +9,6 @@
   }: { instance: Instance; busy?: boolean; onsubmit: (answer: unknown) => void } = $props()
 
   const bank = $derived((instance.data.bank as string[]) ?? [])
-  const bankReadings = $derived((instance.data.bankReadings as string[]) ?? [])
-  const reading = $derived((instance.data.reading as string) ?? '')
-  const gloss = $derived((instance.data.gloss as string) ?? '')
   const newWord = $derived((instance.data.newWord as string) ?? '')
 
   // Which bank tiles are currently placed, by bank index (so repeats work).
@@ -40,21 +38,18 @@
 
 <form onsubmit={submit} class="space-y-4">
   <p class="text-lg leading-snug">{instance.prompt}</p>
-  {#if reading}
-    <p class="text-xs text-ink-400">{gloss} · {reading}</p>
-  {/if}
 
   {#if typing}
     <input
       bind:value={typed}
       autocomplete="off"
       autocapitalize="off"
-      class="w-full rounded-xl border border-ink-600 bg-ink-900 px-4 py-4 text-lg outline-none focus:border-gold-500"
+      class="w-full rounded-md border border-ink-600 bg-ink-900 px-4 py-4 text-lg outline-none focus:border-seal-400"
       placeholder="Type the sentence…"
     />
   {:else}
     <div
-      class="min-h-[3.5rem] rounded-xl border border-dashed border-ink-600 bg-ink-950/40 px-2 py-2"
+      class="min-h-[3.5rem] rounded-md border border-dashed border-ink-600 bg-ink-950/40 px-2 py-2"
     >
       {#if picked.length === 0}
         <span class="text-sm text-ink-500">Tap the words in order…</span>
@@ -64,12 +59,9 @@
             <button
               type="button"
               onclick={() => removeAt(pos)}
-              class="flex flex-col items-center rounded-lg border border-gold-500/60 bg-ink-900 px-3 py-1.5"
+              class="flex flex-col items-center rounded-[3px] border border-seal-400/70 bg-ink-900 px-3 py-1.5"
             >
-              <span class="text-xl leading-tight">{bank[bi]}</span>
-              {#if bankReadings[bi]}
-                <span class="text-[10px] text-ink-400">{bankReadings[bi]}</span>
-              {/if}
+              <span class="display text-xl leading-tight">{bank[bi]}</span>
             </button>
           {/each}
         </div>
@@ -82,18 +74,13 @@
           type="button"
           onclick={() => tap(i)}
           disabled={busy}
-          class="flex flex-col items-center rounded-lg border px-3 py-1.5 disabled:opacity-50 {picked.includes(
+          class="flex flex-col items-center rounded-[3px] border border-ink-600 bg-ink-900 px-3 py-1.5 transition disabled:opacity-50 {picked.includes(
             i,
           )
-            ? 'border-ink-700 bg-ink-900 text-ink-500'
-            : 'border-ink-600 bg-ink-900 hover:border-gold-500'}"
+            ? 'opacity-30'
+            : 'hover:-translate-y-px hover:border-seal-400'}"
         >
-          <span class="text-xl leading-tight">{tile}</span>
-          {#if bankReadings[i]}
-            <span class="text-[10px] {picked.includes(i) ? 'text-ink-600' : 'text-ink-400'}"
-              >{bankReadings[i]}</span
-            >
-          {/if}
+          <span class="display text-xl leading-tight">{tile}</span>
         </button>
       {/each}
     </div>
@@ -111,8 +98,8 @@
   <button
     type="submit"
     disabled={busy || (typing ? !typed.trim() : picked.length === 0)}
-    class="w-full rounded-xl bg-emerald-500 py-3 font-medium text-black disabled:opacity-40"
+    class="btn btn-primary w-full py-3"
   >
-    Check
+    {#if busy}<Spinner size={15} label="Checking your answer" /> Checking…{:else}Check{/if}
   </button>
 </form>

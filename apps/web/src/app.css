@@ -1,45 +1,110 @@
 @import 'tailwindcss';
 
+/* The display voice, self-hosted so the lettering is the same on every device.
+   Source Serif 4 (Latin) with an explicit CJK serif stack behind it. */
+@font-face {
+  font-family: 'Source Serif 4';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('./assets/source-serif-4-latin.woff2') format('woff2');
+}
+
 /* ---------------------------------------------------------------------------
-   tutor theme — Melvor-Idle flavoured: dark neutral panels with a handful of
-   saturated accents (coloured icons, green/blue bars, blue + amber buttons,
-   gold numbers). Flat colours only, no gradients.
+   tutor — "The Lexicon": a night dictionary.
+
+   A deep ink ground, one paper plate where the language lives, seal-red for the
+   action, jade for what grows, brass gold for what you earned, and a small set
+   of semantic accents that always mean the same thing. Flat, ruled, precise.
+   The signature is the character cell: every studied glyph sits on ruled paper.
    --------------------------------------------------------------------------- */
 
 @theme {
+  /* display voice: a self-hosted book serif that also carries CJK */
   --font-display:
-    'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Noto Serif', 'Times New Roman',
-    serif;
+    'Source Serif 4', 'Songti SC', 'Noto Serif CJK SC', 'Source Han Serif SC',
+    'Hiragino Mincho ProN', 'Noto Serif SC', serif;
 
-  /* neutral slate surfaces (dark → light) */
-  --color-ink-950: #101218;
-  --color-ink-900: #171a22;
-  --color-ink-850: #1f2330;
-  --color-ink-800: #272c3a;
-  --color-ink-700: #353c4d;
-  --color-ink-600: #454e63;
-  --color-ink-500: #5a657d;
-  --color-ink-400: #8b95aa;
-  --color-ink-300: #bcc4d3;
+  /* ink — deep blue-black ground and the surface ladder above it */
+  --color-ink-950: #090d12;
+  --color-ink-900: #0e141b;
+  --color-ink-850: #131b24;
+  --color-ink-800: #1a242f;
+  --color-ink-700: #26323f;
+  --color-ink-600: #35434f;
+  --color-ink-500: #586673;
+  --color-ink-400: #8694a1;
+  --color-ink-300: #b8c3cd;
+  --color-ink-200: #d7dee5;
+  --color-ink-100: #e8edf2;
 
-  /* gold — numbers, ranks, currency */
-  --color-gold-200: #f6e6ae;
-  --color-gold-300: #e8c15a;
+  /* gold — every number the player earned */
+  --color-gold-200: #f6e4b0;
+  --color-gold-300: #eac168;
   --color-gold-400: #d9a93c;
   --color-gold-500: #b9862a;
   --color-gold-600: #8f6620;
 
-  /* accents */
-  --color-gather-400: #5cc46a;
-  --color-artisan-400: #e6a83c;
-  --color-support-400: #a97fe0;
-  --color-combat-400: #e05858;
-  --color-arcane-400: #5b9be0;
+  /* seal — the vermilion action and the earned rank stamp */
+  --color-seal-300: #f0735a;
+  --color-seal-400: #e2452b;
+  --color-seal-500: #c63620;
+  --color-seal-600: #a62c19;
+
+  /* semantic accents — colour as data, never decoration */
+  --color-jade-300: #7bd3a9;
+  --color-jade-400: #45c08a;
+  --color-jade-500: #2fa274;
+  --color-jade-950: #0c2018;
+  --color-brass-300: #efc078;
+  --color-brass-400: #e3a64a;
+  --color-brass-500: #c4862f;
+  --color-brass-950: #241a08;
+  --color-violet-300: #c6aef0;
+  --color-violet-400: #ac8be6;
+  --color-violet-500: #8f6bcb;
+  --color-ember-300: #ee8e86;
+  --color-ember-400: #e0655c;
+  --color-ember-500: #c64a41;
+  --color-ember-600: #a93a32;
+  --color-ember-800: #6e2620;
+  --color-ember-950: #2a0f0c;
+  --color-azure-300: #9cc6f2;
+  --color-azure-400: #6aa9e9;
+  --color-azure-500: #4a8ad0;
+
+  /* profession aliases kept from the previous system */
+  --color-gather-400: #45c08a;
+  --color-artisan-400: #e3a64a;
+  --color-support-400: #ac8be6;
+  --color-combat-400: #e0655c;
+  --color-arcane-400: #6aa9e9;
+
+  /* Tailwind's default families remapped onto the palette, so no utility
+     anywhere in the app can render an off-system colour. */
+  --color-emerald-300: #7bd3a9;
+  --color-emerald-400: #45c08a;
+  --color-emerald-500: #2fa274;
+  --color-emerald-600: #24855e;
+  --color-emerald-950: #0c2018;
+  --color-amber-300: #efc078;
+  --color-amber-400: #e3a64a;
+  --color-amber-500: #c4862f;
+  --color-amber-950: #241a08;
+  --color-red-200: #f3b7b1;
+  --color-red-300: #ee8e86;
+  --color-red-400: #e0655c;
+  --color-red-500: #c64a41;
+  --color-red-600: #a93a32;
+  --color-red-800: #6e2620;
+  --color-red-950: #2a0f0c;
+  --color-sky-300: #9cc6f2;
 }
 
 :root {
   color-scheme: dark;
-  --accent: var(--color-arcane-400);
+  --accent: var(--color-azure-400);
+  caret-color: var(--color-seal-400);
 }
 
 html,
@@ -49,7 +114,7 @@ body {
 }
 
 body {
-  color: #e7eaf1;
+  color: var(--color-ink-200);
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior-y: none;
   font-family:
@@ -57,7 +122,8 @@ body {
     -apple-system,
     'Segoe UI',
     sans-serif;
-  background: #12141b;
+  /* the room: a lamp-lit study after dark — flat ink, no gradient */
+  background: var(--color-ink-950);
 }
 
 .pb-safe {
@@ -67,20 +133,28 @@ body {
   padding-top: calc(env(safe-area-inset-top, 0px) + 0.5rem);
 }
 
+::selection {
+  background: color-mix(in oklab, var(--color-seal-400) 50%, transparent);
+  color: #fff;
+}
+:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--color-seal-400) 75%, transparent);
+  outline-offset: 2px;
+}
+
 @layer components {
   /* ---- surfaces ---------------------------------------------------------- */
   .panel {
-    border-radius: 0.6rem;
+    border-radius: 5px;
     overflow: hidden;
     border: 1px solid var(--color-ink-700);
     background: var(--color-ink-850);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
   }
 
-  /* a panel that belongs to a profession / section: neutral with a colour edge */
+  /* a panel that belongs to a profession / section: tinted ground + accent edge */
   .panel-accent {
-    border-color: color-mix(in oklab, var(--accent) 50%, var(--color-ink-700));
-    background: color-mix(in oklab, var(--accent) 7%, var(--color-ink-850));
+    border-color: color-mix(in oklab, var(--accent) 42%, var(--color-ink-700));
+    background: color-mix(in oklab, var(--accent) 10%, var(--color-ink-850));
   }
 
   .panel-hd {
@@ -89,10 +163,10 @@ body {
     justify-content: space-between;
     gap: 0.5rem;
     padding: 0.5rem 0.9rem;
-    border-bottom: 1px solid var(--color-ink-700);
-    background: var(--color-ink-800);
+    border-bottom: 1px solid color-mix(in oklab, var(--accent) 30%, var(--color-ink-700));
+    background: color-mix(in oklab, var(--accent) 14%, var(--color-ink-800));
     font-weight: 700;
-    color: #eef1f7;
+    color: var(--color-ink-100);
   }
 
   /* ---- typography -------------------------------------------------------- */
@@ -102,9 +176,10 @@ body {
   }
 
   .eyebrow {
-    font-size: 0.68rem;
-    letter-spacing: 0.14em;
+    font-size: 0.66rem;
+    letter-spacing: 0.16em;
     text-transform: uppercase;
+    font-weight: 600;
     color: var(--color-ink-400);
   }
 
@@ -112,13 +187,41 @@ body {
     color: var(--color-gold-300);
   }
 
+  /* the character cell — the system's signature mark */
+  .cell {
+    position: relative;
+    display: grid;
+    place-items: center;
+    border: 1px solid color-mix(in oklab, var(--accent) 38%, var(--color-ink-700));
+    border-radius: 3px;
+    background: color-mix(in oklab, var(--accent) 6%, var(--color-ink-900));
+  }
+  .cell::before,
+  .cell::after {
+    content: '';
+    position: absolute;
+    background: color-mix(in oklab, var(--accent) 20%, transparent);
+  }
+  .cell::before {
+    left: 10%;
+    right: 10%;
+    top: 50%;
+    height: 1px;
+  }
+  .cell::after {
+    top: 10%;
+    bottom: 10%;
+    left: 50%;
+    width: 1px;
+  }
+
   /* ---- tiles ------------------------------------------------------------- */
   .tile {
     position: relative;
     overflow: hidden;
-    border-radius: 0.6rem;
-    border: 1px solid var(--color-ink-700);
-    background: color-mix(in oklab, var(--accent) 7%, var(--color-ink-850));
+    border-radius: 5px;
+    border: 1px solid color-mix(in oklab, var(--accent) 38%, var(--color-ink-700));
+    background: color-mix(in oklab, var(--accent) 9%, var(--color-ink-850));
     transition:
       transform 0.12s ease,
       border-color 0.15s ease,
@@ -128,23 +231,23 @@ body {
     content: '';
     position: absolute;
     inset: 0 0 auto 0;
-    height: 3px;
+    height: 2px;
     background: var(--accent);
   }
   .tile:hover,
   .tile:focus-visible {
     transform: translateY(-1px);
-    border-color: color-mix(in oklab, var(--accent) 60%, var(--color-ink-700));
-    background: color-mix(in oklab, var(--accent) 13%, var(--color-ink-850));
+    border-color: color-mix(in oklab, var(--accent) 62%, var(--color-ink-700));
+    background: color-mix(in oklab, var(--accent) 15%, var(--color-ink-850));
   }
 
-  /* ---- buttons (Melvor blue + amber) ------------------------------------- */
+  /* ---- buttons ----------------------------------------------------------- */
   .btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 0.4rem;
-    border-radius: 0.5rem;
+    border-radius: 4px;
     padding: 0.55rem 0.9rem;
     font-size: 0.875rem;
     font-weight: 600;
@@ -161,14 +264,16 @@ body {
     opacity: 0.4;
     cursor: not-allowed;
   }
+  /* primary = the one action that moves the session forward */
   .btn-primary {
-    color: #ffffff;
-    border: 1px solid #3f78b8;
-    background: #5b9be0;
+    color: #fff;
+    border: 1px solid var(--color-seal-600);
+    background: var(--color-seal-400);
   }
   .btn-primary:hover {
     filter: brightness(1.08);
   }
+  /* gold = spending, claiming, rewarding */
   .btn-gold {
     color: #2a1d03;
     border: 1px solid var(--color-gold-500);
@@ -183,7 +288,7 @@ body {
     background: var(--color-ink-800);
   }
   .btn-ghost:hover {
-    color: #eef2f9;
+    color: var(--color-ink-100);
     border-color: var(--color-ink-500);
   }
   .btn-accent {
@@ -192,61 +297,108 @@ body {
     background: var(--accent);
   }
 
+  /* ---- loading ----------------------------------------------------------- */
+  /* The one wait signal: an accent ring that reads on any surface, tinted from
+     the local --accent so it belongs wherever it stands. */
+  .spinner {
+    display: inline-block;
+    flex: none;
+    width: var(--spinner-size, 1rem);
+    height: var(--spinner-size, 1rem);
+    border-radius: 50%;
+    border: 2px solid color-mix(in oklab, var(--accent) 26%, transparent);
+    border-top-color: var(--accent);
+    animation: spin 0.7s linear infinite;
+    vertical-align: -0.15em;
+  }
+
   /* ---- chips / bars ------------------------------------------------------ */
   .chip {
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
-    border-radius: 0.4rem;
-    padding: 0.15rem 0.45rem;
+    border-radius: 3px;
+    padding: 0.16rem 0.45rem;
     font-size: 0.68rem;
     line-height: 1.3;
-    border: 1px solid color-mix(in oklab, var(--accent) 40%, transparent);
-    background: color-mix(in oklab, var(--accent) 18%, var(--color-ink-900));
-    color: color-mix(in oklab, var(--accent) 72%, white);
+    border: 1px solid color-mix(in oklab, var(--accent) 45%, transparent);
+    background: color-mix(in oklab, var(--accent) 16%, var(--color-ink-900));
+    color: color-mix(in oklab, var(--accent) 68%, white);
   }
 
   .bar {
     position: relative;
-    height: 0.5rem;
-    border-radius: 999px;
+    height: 6px;
+    border-radius: 3px;
     overflow: hidden;
+    border: 1px solid var(--color-ink-700);
     background: var(--color-ink-800);
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
   }
   .bar > i {
     display: block;
     height: 100%;
-    border-radius: 999px;
+    border-radius: 2px;
     background: var(--accent);
     transition: width 0.4s ease;
   }
 
-  /* rank badge — gold text, like Melvor's "(48 / 99)" */
+  /* rank badge — brass gold numerals in a stamped cell */
   .level-badge {
-    min-width: 1.6rem;
-    border-radius: 0.4rem;
+    min-width: 1.7rem;
+    border-radius: 3px;
     padding: 0.1rem 0.35rem;
     text-align: center;
     font-variant-numeric: tabular-nums;
     font-weight: 700;
     color: var(--color-gold-300);
     border: 1px solid color-mix(in oklab, var(--color-gold-500) 60%, transparent);
-    background: rgba(0, 0, 0, 0.25);
+    background: rgba(0, 0, 0, 0.28);
   }
 
-  /* HUD stat: neutral panel, coloured number + left edge */
+  /* the level seal — a vermilion stamp for what you earned */
+  .seal {
+    display: grid;
+    place-items: center;
+    border-radius: 4px;
+    border: 1.5px solid color-mix(in oklab, var(--color-seal-400) 80%, transparent);
+    color: var(--color-seal-300);
+    background: color-mix(in oklab, var(--color-seal-400) 12%, transparent);
+    font-family: var(--font-display);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* HUD stat: neutral panel, accent rule across the top, serif figure */
   .stat-card {
-    border-radius: 0.6rem;
+    position: relative;
+    overflow: hidden;
+    border-radius: 5px;
     border: 1px solid var(--color-ink-700);
-    border-left: 3px solid var(--accent);
     background: var(--color-ink-850);
+  }
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 2px;
+    background: var(--accent);
   }
 }
 
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--color-ink-600) transparent;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* A wait state must stay legible: slow the ring rather than freeze it. */
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 1.6s;
+  }
 }
 
 @keyframes pulse-rec {

@@ -91,6 +91,26 @@ test('training an action awards skill XP and materials', async () => {
   const { app, sqlite } = makeApp()
   const cookie = await signup(app)
 
+  // The first exposure to a card is a "teach" step, not a graded drill: clear it
+  // so the next fetch hands back the action's exercise.
+  const first = (await (
+    await app.request('/api/practice/next', auth(cookie, json({ actionId: 'mine-copper' })))
+  ).json()) as { instance: { exerciseId: string; cardId: string } }
+  if (first.instance.exerciseId === 'introduce') {
+    await app.request(
+      '/api/practice/grade',
+      auth(
+        cookie,
+        json({
+          exerciseId: 'introduce',
+          cardId: first.instance.cardId,
+          answer: 'ok',
+          actionId: 'mine-copper',
+        }),
+      ),
+    )
+  }
+
   const next = (await (
     await app.request('/api/practice/next', auth(cookie, json({ actionId: 'mine-copper' })))
   ).json()) as { instance: { exerciseId: string; cardId: string }; action: { skillId: string } }

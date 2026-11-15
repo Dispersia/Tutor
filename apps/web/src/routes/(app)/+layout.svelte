@@ -11,13 +11,25 @@
     if (session.loaded && !session.user) void goto(href('/login'))
   })
 
+  /** Tab icons are drawn, one stroke and weight, never emoji. */
+  const ICONS: Record<string, string> = {
+    home: '<path d="M3 10.5 12 3l9 7.5M5 9.5V20h5v-5h4v5h5V9.5" />',
+    learn:
+      '<path d="M12 6.5C10 5 7.5 4.5 4 4.5v13c3.5 0 6 .5 8 2M12 6.5c2-1.5 4.5-2 8-2v13c-3.5 0-6 .5-8 2M12 6.5v13" />',
+    skills: '<path d="m14.5 5.5 4 4M3 21l6.5-6.5M11.5 3.5l9 9-3 3-9-9zM6 14l4 4" />',
+    chat: '<path d="M4 5h16v11H9l-5 4z" />',
+    history: '<path d="M12 7v5l3.5 2M3.5 12a8.5 8.5 0 1 0 2.6-6.1M3.5 4v4h4" />',
+    settings:
+      '<path d="M4 6h5M13 6h7M4 12h11M19 12h1M4 18h7M15 18h5" /><circle cx="11" cy="6" r="2" /><circle cx="17" cy="12" r="2" /><circle cx="13" cy="18" r="2" />',
+  }
+
   const tabs = [
-    { href: '/home', label: 'Home', icon: '🏠' },
-    { href: '/learn', label: 'Learn', icon: '📖' },
-    { href: '/skills', label: 'Skills', icon: '⚒️' },
-    { href: '/chat', label: 'Chat', icon: '💬' },
-    { href: '/history', label: 'History', icon: '📜' },
-    { href: '/settings', label: 'Settings', icon: '⚙️' },
+    { href: '/home', label: 'Home', icon: ICONS.home },
+    { href: '/learn', label: 'Learn', icon: ICONS.learn },
+    { href: '/skills', label: 'Skills', icon: ICONS.skills },
+    { href: '/chat', label: 'Chat', icon: ICONS.chat },
+    { href: '/history', label: 'History', icon: ICONS.history },
+    { href: '/settings', label: 'Settings', icon: ICONS.settings },
   ]
   const active = $derived(stripBase(page.url.pathname))
 </script>
@@ -27,28 +39,39 @@
     {@render children()}
   </main>
 
-  <nav class="sticky bottom-0 z-10 border-t border-ink-700 bg-ink-950/90 backdrop-blur-md pb-safe">
+  <nav
+    class="sticky bottom-0 z-10 border-t border-ink-700 bg-ink-950/90 pb-safe backdrop-blur-md"
+    aria-label="Primary"
+  >
     <ul class="mx-auto grid max-w-2xl grid-cols-6">
       {#each tabs as t (t.href)}
         {@const on = active.startsWith(t.href)}
         <li>
           <a
             href={href(t.href)}
-            class="group flex justify-center py-1.5 text-[11px] transition-colors {on
-              ? 'text-gold-300'
-              : 'text-ink-400 hover:text-ink-300'}"
+            aria-current={on ? 'page' : undefined}
+            class="flex justify-center py-1.5 text-[11px] font-medium transition-colors {on
+              ? 'text-seal-300'
+              : 'text-ink-400 hover:text-ink-200'}"
           >
             <span
-              class="flex flex-col items-center gap-0.5 rounded-lg px-3 py-1 {on
-                ? 'bg-ink-800 text-gold-300'
+              class="flex flex-col items-center gap-1 rounded-[4px] px-3 py-1 {on
+                ? 'bg-seal-400/12'
                 : ''}"
             >
-              <span
-                class="text-base leading-none transition-transform {on
-                  ? 'scale-110'
-                  : 'opacity-75 group-hover:opacity-100'}">{t.icon}</span
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="h-[18px] w-[18px] {on ? '' : 'opacity-80'}"
+                aria-hidden="true"
               >
-              <span class="font-medium">{t.label}</span>
+                {@html t.icon}
+              </svg>
+              <span>{t.label}</span>
             </span>
           </a>
         </li>

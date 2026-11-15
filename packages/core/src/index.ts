@@ -98,6 +98,19 @@ export interface ExerciseContext {
    * `sentence_build`. Absent when the caller has no learner state (e.g. tests).
    */
   known?: string[]
+  /**
+   * target-language words the learner has *met* — introduced in the teach step or
+   * reviewed — plus the current card. Looser than `known`: a first-exposure n+1
+   * example may reuse anything the learner has seen, not only what has graduated.
+   */
+  seen?: string[]
+  /**
+   * Whether the learner wants native readings (Zhuyin / furigana) shown. When
+   * false, exercises omit display readings from prompts, options and feedback —
+   * grading still accepts the card's readings as correct answers. Defaults to
+   * true when absent.
+   */
+  showReadings?: boolean
   /** optional LLM helper, injected by the server (absent when no key is set) */
   judge?: (prompt: string, schema: object) => Promise<unknown>
   /** optional speech assessor, injected by the server for audio grading */

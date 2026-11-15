@@ -2,7 +2,9 @@
   import { href } from '#lib/paths'
   import { onMount } from 'svelte'
   import { equipItem, getSkills, type SkillsResponse, unequipSlot } from '#lib/skills'
-  import { CATEGORY, accentStyle, tierAccent, type SkillCategory } from '#lib/theme'
+  import { ACCENT, CATEGORY, accentStyle, tierAccent, type SkillCategory } from '#lib/theme'
+  import Icon from '#lib/components/Icon.svelte'
+  import Spinner from '#lib/components/Spinner.svelte'
 
   let data = $state<SkillsResponse | null>(null)
   let error = $state('')
@@ -51,84 +53,76 @@
   }
 </script>
 
-<div class="flex items-center justify-between pt-5 pb-4">
+<div class="flex items-center justify-between border-b border-ink-700 pt-5 pb-4">
   <div>
-    <p class="eyebrow">The guild</p>
-    <h1 class="display text-2xl text-gold-200">Skills</h1>
-    <p class="text-xs text-ink-400">Train a trade, gather materials, grow stronger.</p>
+    <h1 class="display text-3xl text-ink-100">Skills</h1>
+    <p class="mt-1 text-xs text-ink-400">Train a trade, gather materials, grow stronger.</p>
   </div>
-  <div class="text-center">
-    <div class="display text-2xl text-gold-200">{totalLevel}</div>
-    <div class="eyebrow">total level</div>
+  <div class="seal h-14 w-14 shrink-0" aria-label="Total level {totalLevel}">
+    <span class="text-2xl leading-none font-bold">{totalLevel}</span>
+    <span class="text-[8px] tracking-[0.16em]">TOTAL</span>
   </div>
 </div>
 
 {#if error}
-  <p class="mb-3 rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300">{error}</p>
+  <p class="mt-3 rounded-[4px] bg-ember-950 px-3 py-2 text-sm text-ember-300">{error}</p>
 {/if}
 {#if note}
-  <p class="mb-3 rounded-lg bg-emerald-950/60 px-3 py-2 text-sm text-emerald-300">{note}</p>
+  <p class="mt-3 rounded-[4px] bg-jade-950 px-3 py-2 text-sm text-jade-300">{note}</p>
 {/if}
 
 {#if pendingTalents.length}
   <a
     href={href(`/skills/${pendingTalents[0]!.id}`)}
-    class="panel panel-accent mb-4 block p-3 text-sm"
-    style={accentStyle('#e8c264')}
+    class="mt-3 flex items-center gap-2 border-b border-ink-700 pb-3 text-sm"
+    style={accentStyle(ACCENT.gold)}
   >
-    🎉 A talent is ready to choose for
-    <span class="gold">{pendingTalents.map((s) => s.name).join(', ')}</span> — tap to open.
+    <span class="h-2 w-2 shrink-0 rounded-[2px]" style="background: var(--accent)"></span>
+    A talent is ready for <span class="gold">{pendingTalents.map((s) => s.name).join(', ')}</span>
+    <span class="ml-auto text-ink-500">→</span>
   </a>
 {/if}
 
 <a
   href={href('/combat')}
-  class="tile mb-5 flex items-center gap-3 p-3 text-sm"
+  class="mt-3 flex items-center gap-3 border-b border-ink-700 pb-3 text-sm"
   style={accentStyle(CATEGORY.combat.accent)}
 >
-  <span class="text-xl">⚔️</span>
-  <span class="flex-1">Combat — fight monsters for bones, hides and gems</span>
+  <Icon name="skull" size={18} />
+  <span class="flex-1 text-ink-100">Combat — fight monsters for bones, hides and gems</span>
   <span class="text-ink-500">→</span>
 </a>
 
 {#if loading}
-  <p class="text-sm text-ink-400">Loading…</p>
+  <p class="mt-4 flex items-center gap-2 text-sm text-ink-400">
+    <Spinner size={14} label="Loading skills" /> Loading…
+  </p>
 {:else}
   {#each groups as g (g.key)}
     {#if g.skills.length}
       <div class="mt-5 mb-2 flex items-center gap-2">
-        <span class="h-3 w-3 rounded-sm" style="background: {g.accent}"></span>
+        <span class="h-2.5 w-2.5 rounded-[2px]" style="background: {g.accent}"></span>
         <h2 class="text-xs font-bold tracking-widest uppercase" style="color: {g.accent}">
           {g.label}
         </h2>
         <span class="ml-auto text-[11px] text-ink-500">{g.skills.length}</span>
       </div>
-      <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+      <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
         {#each g.skills as s (s.id)}
-          <a href={href(`/skills/${s.id}`)} class="tile p-3" style={accentStyle(g.accent)}>
-            {#if s.talent.pendingChoice}
-              <span
-                class="absolute top-2 right-2 z-10 grid h-4 w-4 place-items-center rounded-full bg-gold-400 text-[10px] font-bold text-ink-950"
-                title="Talent to choose">!</span
+          <a href={href(`/skills/${s.id}`)} class="tile p-2.5" style={accentStyle(g.accent)}>
+            <div class="flex items-center justify-between gap-2">
+              <span class="min-w-0 truncate text-[13px] font-medium text-ink-100">{s.name}</span>
+              <span class="display shrink-0 text-base font-bold" style="color: {g.accent}"
+                >{s.level}</span
               >
-            {/if}
-            <div class="flex items-center gap-2">
-              <span
-                class="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-xl"
-                style="background: {g.accent}29; border: 1px solid {g.accent}55">{s.icon}</span
-              >
-              <div class="min-w-0 flex-1">
-                <div class="display truncate text-sm text-ink-100">{s.name}</div>
-              </div>
-              <span class="level-badge text-[11px]">{s.level}</span>
             </div>
-            <div class="bar mt-2">
-              <i style="width: {s.progress * 100}%"></i>
-            </div>
-            <div class="mt-1.5 text-[11px] text-ink-400">
+            <div class="bar mt-2"><i style="width: {s.progress * 100}%"></i></div>
+            <div class="mt-1.5 text-[10px] text-ink-400">
               now <span class="font-bold" style="color: {g.accent}">{pct(s.effect.value)}</span>
-              {#if s.talent.owned.length}
-                · {s.talent.owned.length}★
+              {#if s.talent.pendingChoice}
+                <span class="ml-1 text-gold-300">· talent</span>
+              {:else if s.talent.owned.length}
+                <span class="ml-1 text-ink-500">· {s.talent.owned.length}★</span>
               {/if}
             </div>
           </a>
@@ -138,9 +132,13 @@
   {/each}
 
   <!-- Equipment -->
-  <section class="panel panel-accent mt-6 mb-4" style={accentStyle('#e8c264')}>
-    <div class="panel-hd text-sm">Equipment</div>
-    <div class="p-3">
+  <section class="mt-6" style={accentStyle(ACCENT.gold)}>
+    <div class="flex items-center justify-between border-b border-ink-700 pb-2">
+      <h2 class="text-xs font-bold tracking-widest uppercase" style="color: var(--accent)">
+        Equipment
+      </h2>
+    </div>
+    <div class="pt-3">
       {#if (data?.equipment ?? []).length === 0}
         <p class="text-xs text-ink-400">
           Nothing equipped. Forge a weapon (Smithing) or a bow (Fletching) to train combat.
@@ -164,12 +162,12 @@
   </section>
 
   <!-- Bank -->
-  <section class="panel panel-accent mb-6" style={accentStyle('#f0b429')}>
-    <div class="panel-hd text-sm">
-      <span>Bank</span>
-      <span class="text-xs opacity-70">{bank.length} kinds</span>
+  <section class="mt-5" style={accentStyle(ACCENT.brass)}>
+    <div class="flex items-center justify-between border-b border-ink-700 pb-2">
+      <h2 class="text-xs font-bold tracking-widest uppercase" style="color: var(--accent)">Bank</h2>
+      <span class="text-[11px] text-ink-500">{bank.length} kinds</span>
     </div>
-    <div class="p-3">
+    <div class="pt-3">
       {#if bank.length === 0}
         <p class="text-xs text-ink-400">Empty. Train a gathering profession to gather materials.</p>
       {/if}
@@ -192,7 +190,7 @@
   </section>
 
   {#if data}
-    <p class="mb-6 text-center text-[11px] text-ink-400">
+    <p class="mt-6 mb-6 text-center text-[11px] text-ink-400">
       Bonuses · global XP <span class="gold">+{pct(data.bonuses.globalXp)}</span> · power
       <span class="text-combat-400">+{pct(data.bonuses.damage)}</span> · drop
       <span class="text-support-400">+{pct(data.bonuses.drop)}</span>

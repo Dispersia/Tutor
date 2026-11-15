@@ -29,7 +29,9 @@ export function registerSpeech(app: App) {
   app.get('/api/speech/health', async (c) => c.json(await c.get('deps').supervisor.status()))
 
   app.post('/api/speech/wake', async (c) => {
-    await c.get('deps').supervisor.ensure()
+    // Load the voice models too, not just the process: a healthy gateway with no
+    // models resident still pays the load cost on the first play/record.
+    await c.get('deps').supervisor.warm()
     return c.json(await c.get('deps').supervisor.status())
   })
 

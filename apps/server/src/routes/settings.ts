@@ -1,4 +1,6 @@
 import { allUserSettings, getRoles, getUserSetting, setDailyGoal, setUserSetting } from '../db/repo'
+import { INTRODUCE_ID, registry } from '../exercises'
+import { readStudyPrefs, writeStudyPrefs, type StudyPrefs } from '../game/study'
 import { ROLES, type Role } from '../env'
 import { hasUserKey, saveUserKey } from '../llm/userkey'
 import type { App } from '../context'
@@ -33,6 +35,7 @@ export function registerSettings(app: App) {
       roleDefaults: deps.defaults,
       allowedRoles: ROLES,
       voice: readVoicePrefs(deps.db, user.id),
+      study: readStudyPrefs(deps.db, user.id),
       openrouter: { key: hasUserKey(deps, user.id) },
       foodThreshold: Number(getUserSetting(deps.db, user.id, 'foodThreshold') ?? 50),
       desiredRetention: Number(getUserSetting(deps.db, user.id, 'desiredRetention') ?? 90),
@@ -46,6 +49,7 @@ export function registerSettings(app: App) {
     const body = (await c.req.json().catch(() => ({}))) as {
       roles?: Partial<Record<Role, string>>
       voice?: Partial<VoicePrefs>
+      study?: Partial<StudyPrefs>
       prefs?: Record<string, string>
       dailyGoal?: number
       foodThreshold?: number
@@ -73,6 +77,20 @@ export function registerSettings(app: App) {
       }
     }
 
+    if (body.study && typeof body.study === 'object') {
+      const patch: Partial<StudyPrefs> = {}
+      if (typeof body.study.showZhuyin === 'boolean') patch.showZhuyin = body.study.showZhuyin
+      if (typeof body.study.showFurigana === 'boolean') patch.showFurigana = body.study.showFurigana
+      if (Array.isArray(body.study.disabledExercises)) {
+        // Only known exercise ids; the first-exposure "teach" step is never a drill.
+        const known = new Set(registry.list().map((d) => d.id))
+        patch.disabledExercises = body.study.disabledExercises.filter(
+          (id): id is string => typeof id === 'string' && id !== INTRODUCE_ID && known.has(id),
+        )
+      }
+      writeStudyPrefs(deps.db, user.id, patch)
+    }
+
     if (body.prefs && typeof body.prefs === 'object') {
       for (const [k, v] of Object.entries(body.prefs)) {
         setUserSetting(deps.db, user.id, k, String(v))
@@ -94,6 +112,7 @@ export function registerSettings(app: App) {
     return c.json({
       roles: getRoles(deps.db, user.id, deps.defaults),
       voice: readVoicePrefs(deps.db, user.id),
+      study: readStudyPrefs(deps.db, user.id),
     })
   })
 

@@ -26,6 +26,18 @@ loadEnvFile(join(homedir(), '.config/tutor/env'))
 export type Role = 'conversation' | 'judge' | 'generator' | 'translator'
 export const ROLES: Role[] = ['conversation', 'judge', 'generator', 'translator']
 
+/**
+ * Thinking budget per role. Chat, translation and card generation must feel
+ * instant, so they skip hidden reasoning entirely; the judge keeps a little so
+ * its corrections stay defensible.
+ */
+export const roleReasoning: Record<Role, 'none' | 'low' | 'medium' | 'high' | 'xhigh'> = {
+  conversation: 'none',
+  judge: 'low',
+  generator: 'none',
+  translator: 'none',
+}
+
 const num = (v: string | undefined, fallback: number): number =>
   v === undefined || v === '' ? fallback : Number(v)
 

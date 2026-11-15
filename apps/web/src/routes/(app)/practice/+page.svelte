@@ -21,6 +21,9 @@
   import { getCurriculum, type CurriculumDeck, type LessonDTO } from '#lib/curriculum'
   import { href } from '#lib/paths'
   import { wakeSpeech } from '#lib/speech'
+  import { ACCENT } from '#lib/theme'
+  import Icon from '#lib/components/Icon.svelte'
+  import Spinner from '#lib/components/Spinner.svelte'
 
   let decks = $state<Deck[]>([])
   let deckId = $state<string>('')
@@ -159,6 +162,7 @@
 
   async function submit(answer: unknown) {
     if (!instance) return
+    const wasIntro = instance.exerciseId === 'introduce'
     busy = true
     error = ''
     try {
@@ -170,6 +174,14 @@
         actionId,
         lessonId,
       })
+      // A first-exposure teach step has no result screen: it records that the
+      // card was introduced, then moves straight to the drill for that word.
+      if (wasIntro) {
+        stats = r.stats
+        quietUntil = r.stats.quietUntil ?? quietUntil
+        await loadNext()
+        return
+      }
       result = r.result
       skill = r.skill
       srs = r.srs ?? null
@@ -302,25 +314,22 @@
 
 <svelte:window onkeydown={onKeydown} />
 
-<div class="flex items-center justify-between pt-5 pb-3">
+<div class="flex items-center justify-between border-b border-ink-700 pt-5 pb-3">
   <div>
-    <p class="eyebrow">
-      {actionId ? 'Training' : lesson ? lessonLabel(lesson) : 'Practice'}
-    </p>
-    <h1 class="display text-xl text-gold-200">
+    <h1 class="display text-2xl text-ink-100">
       {actionId ? skillName : lesson ? lesson.title : 'Free practice'}
     </h1>
-    <p class="text-xs text-ink-400">
+    <p class="mt-1 text-xs text-ink-400">
       {actionId
         ? actionName
         : lesson
-          ? `${lesson.learned}/${lesson.cards} learned`
+          ? `${lessonLabel(lesson)} · ${lesson.learned}/${lesson.cards} learned`
           : 'Spaced repetition picks what’s due'}
     </p>
   </div>
   <div class="flex items-center gap-2 text-xs">
     {#if skillMap.get(skill?.skillId ?? '')}
-      <span class="chip" style="--accent: #b085ef">
+      <span class="chip" style="--accent: {ACCENT.violet}">
         {skillMap.get(skill!.skillId)!.icon}
         {skillMap.get(skill!.skillId)!.name}
         {skill!.level ?? ''}
@@ -329,22 +338,23 @@
     <button
       type="button"
       onclick={() => applyQuiet(!quietActive)}
-      class="chip cursor-pointer"
-      style="--accent: {quietActive ? '#ef9d45' : '#5b6470'}"
+      class="chip cursor-pointer gap-1"
+      style="--accent: {quietActive ? ACCENT.brass : ACCENT.azure}"
       title={quietActive
         ? 'Listen & speak cards return when this ends — turn it off now'
         : 'Hide listen & speak cards for 15 min'}
       aria-pressed={quietActive}
     >
-      {quietActive ? `🔇 ${quietClock}` : '🔇 Can’t speak?'}
+      <Icon name="mute" size={12} />
+      {quietActive ? quietClock : 'Can’t speak?'}
     </button>
-    <span class="chip" style="--accent: #e8c264">{stats?.xp ?? 0} XP</span>
+    <span class="chip" style="--accent: {ACCENT.gold}">{stats?.xp ?? 0} XP</span>
   </div>
 </div>
 
 {#if quietActive}
-  <div class="panel panel-accent mb-4 p-3 text-xs" style="--accent: #ef9d45">
-    <span class="text-amber-300">Text-only mode</span>
+  <div class="panel panel-accent mb-4 p-3 text-xs" style="--accent: {ACCENT.brass}">
+    <span class="text-brass-300">Text-only mode</span>
     — listen &amp; speak cards are hidden for
     <span class="gold">{quietClock}</span>.
     <button type="button" onclick={() => applyQuiet(false)} class="cursor-pointer underline"
@@ -357,7 +367,7 @@
   <select
     value={deckId}
     onchange={changeDeck}
-    class="mb-4 w-full rounded-xl border border-ink-700 bg-ink-900 px-3 py-2 text-sm"
+    class="mb-4 w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm"
   >
     {#each decks as d (d.id)}
       <option value={d.id}>{d.name} · {d.cardCount} cards</option>
@@ -366,17 +376,19 @@
 {/if}
 
 {#if loading}
-  <p class="text-sm text-ink-400">Loading…</p>
+  <p class="flex items-center gap-2 text-sm text-ink-400">
+    <Spinner size={14} label="Loading practice" /> Loading…
+  </p>
 {:else if error}
-  <p class="rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300">{error}</p>
-  <button onclick={loadNext} class="mt-3 rounded-xl border border-ink-600 px-3 py-2 text-sm"
+  <p class="rounded-lg bg-ember-950 px-3 py-2 text-sm text-ember-300">{error}</p>
+  <button onclick={loadNext} class="mt-3 rounded-md border border-ink-600 px-3 py-2 text-sm"
     >Back</button
   >
 {:else if result}
   {#if lessonCompleted}
-    <div class="panel panel-accent mb-3 p-4 text-center" style="--accent: #58c46b">
-      <p class="display text-lg text-emerald-300">
-        🎉 Lesson complete — {lesson?.title ?? 'nice work'}!
+    <div class="panel panel-accent mb-3 p-4 text-center" style="--accent: {ACCENT.jade}">
+      <p class="display text-lg text-jade-300">
+        Lesson complete — {lesson?.title ?? 'nice work'}!
       </p>
       {#if !nextLessonId}
         <a href={href('/learn')} class="btn btn-primary mt-2">Back to Learn</a>
@@ -385,30 +397,33 @@
   {/if}
   {#if skill}
     <div class="mb-3 flex flex-wrap gap-2">
-      <span class="chip" style="--accent: #4fb0e8">
+      <span class="chip" style="--accent: {ACCENT.azure}">
         {skillMap.get(skill.skillId)?.icon ?? ''}
         {skillMap.get(skill.skillId)?.name ?? skill.skillId}
         +{skill.xp} xp
         {#if skill.leveledUp}· level {skill.level}!{/if}
       </span>
       {#each skill.gained as g (g.item)}
-        <span class="chip" style="--accent: #58c46b">
+        <span class="chip" style="--accent: {ACCENT.jade}">
           +{g.count}
           {itemMap.get(g.item)?.icon ?? ''}
           {itemMap.get(g.item)?.name ?? g.item}
         </span>
       {/each}
       {#if skill.talentUnlocked}
-        <a href={href(`/skills/${skill.skillId}`)} class="chip" style="--accent: #e8c264">
-          🎉 Talent unlocked — choose one
+        <a href={href(`/skills/${skill.skillId}`)} class="chip" style="--accent: {ACCENT.gold}">
+          Talent unlocked — choose one
         </a>
       {/if}
     </div>
   {/if}
 
-  <div class="panel panel-accent p-5" style="--accent: {result.correct ? '#58c46b' : '#ef9d45'}">
+  <div
+    class="panel panel-accent p-5"
+    style="--accent: {result.correct ? ACCENT.jade : ACCENT.brass}"
+  >
     <div class="flex items-baseline justify-between">
-      <span class="display text-lg {result.correct ? 'text-emerald-300' : 'text-amber-300'}">
+      <span class="display text-lg {result.correct ? 'text-jade-300' : 'text-brass-300'}">
         {result.correct ? '✓ Correct' : '✗ Not quite'}
       </span>
       <span class="text-sm text-ink-300">{result.score}/100</span>
@@ -424,7 +439,7 @@
     {#if words.length}
       <div class="mt-3 flex flex-wrap gap-2">
         {#each words as w (w.text)}
-          <span class="chip" style="--accent: {w.ok ? '#58c46b' : '#ef5f5a'}">
+          <span class="chip" style="--accent: {w.ok ? ACCENT.jade : ACCENT.ember}">
             {w.text}{w.tip ? ` · ${w.tip}` : ''}
           </span>
         {/each}
@@ -432,8 +447,8 @@
     {/if}
     {#if srs}
       <p class="mt-3 text-xs text-ink-400">
-        🗓️ <span class="gold">{reviewLabel(srs)}</span> · stability {srs.stability.toFixed(1)}d ·
-        difficulty {srs.difficulty.toFixed(1)}
+        Next review <span class="gold">{reviewLabel(srs)}</span> · stability
+        {srs.stability.toFixed(1)}d · difficulty {srs.difficulty.toFixed(1)}
       </p>
     {/if}
   </div>
@@ -443,7 +458,8 @@
       disabled={advancing}
       class="btn btn-primary mt-4 w-full py-3 disabled:opacity-60"
     >
-      Next lesson →{nextLessonTitle ? ` ${nextLessonTitle}` : ''}
+      {#if advancing}<Spinner size={15} label="Loading the next lesson" />{:else}Next lesson →
+        {nextLessonTitle ? ` ${nextLessonTitle}` : ''}{/if}
     </button>
   {:else if !lessonCompleted}
     <button
@@ -451,21 +467,35 @@
       disabled={advancing}
       class="btn btn-primary mt-4 w-full py-3 disabled:opacity-60"
     >
-      Next →
+      {#if advancing}<Spinner size={15} label="Loading the next card" />{:else}Next →{/if}
     </button>
   {/if}
 {:else if instance}
   {@const Comp = componentFor(instance.exerciseId)}
   {#if needsSpeech && speechWarm !== 'ready'}
-    <p class="mb-2 text-xs {speechWarm === 'error' ? 'text-red-300' : 'text-ink-400'}">
+    <p
+      class="mb-2 flex items-center gap-2 text-xs {speechWarm === 'error'
+        ? 'text-ember-300'
+        : 'text-ink-400'}"
+    >
       {#if speechWarm === 'error'}
         Speech model didn’t start — audio may be unavailable.
       {:else}
-        <span class="text-amber-400">●</span> Starting the speech model…
+        <Spinner size={12} label="Starting the speech model" /> Starting the speech model…
       {/if}
     </p>
   {/if}
   <div class="panel p-5">
     <Comp {instance} {busy} onsubmit={submit} onspeak={submitAudio} />
+    {#if instance.modality === 'voice'}
+      <button
+        type="button"
+        onclick={() => applyQuiet(true)}
+        class="btn btn-ghost mt-4 w-full py-2.5 text-xs"
+        title="Hide listen/speak cards for 15 minutes"
+      >
+        <Icon name="mute" size={13} /> I can’t speak or listen right now — hide these for 15 min
+      </button>
+    {/if}
   </div>
 {/if}

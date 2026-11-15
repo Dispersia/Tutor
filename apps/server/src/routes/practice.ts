@@ -5,12 +5,13 @@ import {
   addReview,
   getCard,
   getRoles,
+  introducedCardIds,
   lastExerciseUse,
   listCards,
   listDecks,
   otherBacks,
 } from '../db/repo'
-import { exerciseCatalog, registry } from '../exercises'
+import { exerciseCatalog, INTRODUCE_ID, registry } from '../exercises'
 import {
   actionState,
   awardSkillXp,
@@ -26,10 +27,13 @@ import {
 } from '../game/service'
 import { buildLessons } from '../game/curriculum'
 import { quietState, setQuiet } from '../game/quiet'
+import { readStudyPrefs, showsReadings } from '../game/study'
 import { ACTION_BY_ID } from '../game/skills'
 import { selectCardId } from '../game/srs'
 import { OpenRouter } from '../llm/openrouter'
+import { MANDARIN_RULE, NATIVE_FEEDBACK_RULE } from '../llm/prompts'
 import { resolveUserKey } from '../llm/userkey'
+import { roleReasoning } from '../env'
 import { makeAssessor, type AssessFn } from '../pronunciation/assess'
 import { seedStarterDecks } from '../seed/service'
 import { pinyinToZhuyin } from '../seed/zhuyin'
@@ -117,9 +121,13 @@ export function pickNextExercise(
   card: Card,
   learner: Learner,
   ctx?: ExerciseContext,
-  opts?: { quiet?: boolean },
+  opts?: { quiet?: boolean; disabled?: ReadonlySet<string> },
 ): ExerciseDef<unknown> | undefined {
   let all = registry.forCard(card, learner)
+  // The first-exposure "teach" step is never part of the drill rotation.
+  all = all.filter((d) => d.id !== INTRODUCE_ID)
+  // The learner's own switches: exercise kinds they turned off in Study settings.
+  if (opts?.disabled?.size) all = all.filter((d) => !opts.disabled!.has(d.id))
   // Quiet mode ("can't speak or listen"): never offer a listen/speak card.
   if (opts?.quiet) all = all.filter((d) => d.modality !== 'voice')
   if (all.length === 0) return undefined
@@ -133,6 +141,13 @@ export function pickNextExercise(
   return ties[Math.floor(Math.random() * ties.length)]
 }
 
+/** A helpful message when no drill can be offered for a card. */
+function noDrillMessage(disabled: ReadonlySet<string>): string {
+  return disabled.size
+    ? 'Every exercise kind for this card is turned off — re-enable some in Settings › Study.'
+    : 'No exercise available for this card.'
+}
+
 /** Builds the optional LLM judge for this user (absent when no key is set). */
 async function judgeFor(c: Context<AppEnv>) {
   const deps = c.get('deps')
@@ -141,17 +156,19 @@ async function judgeFor(c: Context<AppEnv>) {
   if (!key) return undefined
   const model = getRoles(deps.db, user.id, deps.defaults).judge
   const or = new OpenRouter(key, deps.or.baseUrl)
+  const system = [
+    'You are a strict but encouraging language tutor. Reply with only the requested JSON.',
+    NATIVE_FEEDBACK_RULE(user.nativeLang),
+    MANDARIN_RULE,
+  ].join('\n')
   return async (prompt: string, schema: object): Promise<unknown> => {
     const { json } = await or.chatJSON({
       model,
       schema,
       schemaName: 'grade',
+      reasoning: roleReasoning.judge,
       messages: [
-        {
-          role: 'system',
-          content:
-            'You are a strict but encouraging language tutor. Reply with only the requested JSON.',
-        },
+        { role: 'system', content: system },
         { role: 'user', content: prompt },
       ],
     })
@@ -220,6 +237,9 @@ export function registerPractice(app: App) {
     }
     seedStarterDecks(deps.db, user.id)
     const quiet = quietState(deps.db, user.id)
+    // The learner's own switches: readings visibility + exercise kinds they turned off.
+    const prefs = readStudyPrefs(deps.db, user.id)
+    const disabled = new Set(prefs.disabledExercises)
 
     const action = body.actionId ? ACTION_BY_ID.get(body.actionId) : undefined
     if (body.actionId && !action) return c.json({ error: 'unknown action' }, 404)
@@ -259,24 +279,47 @@ export function registerPractice(app: App) {
     if (!card) return c.json({ error: 'no cards in this deck' }, 404)
 
     const learner = learnerOf(user)
+    const srs = srsStateMap(deps.db, user.id)
+    const introduced = introducedCardIds(deps.db, user.id)
+    const known = knownWords(deps.db, user.id)
+    // Words the learner has met (introduced or reviewed): the n+1 vocabulary for
+    // a first-exposure example sentence.
+    const seen = new Set(known)
+    for (const c of listCards(deps.db, user.id))
+      if (introduced.has(c.id) || srs.has(c.id)) seen.add(c.back)
+
     const ctx = {
       card,
       learner,
       distractors: otherBacks(deps.db, user.id, card.targetLang, card.back, 3),
       readings: readingMap(deps.db, user.id, card.targetLang),
-      known: [...knownWords(deps.db, user.id), card.back],
+      known: [...known, card.back],
+      seen: [...seen, card.back],
+      showReadings: showsReadings(prefs, card.targetLang),
       judge: await judgeFor(c),
     }
+
+    // First exposure: teach the concept before quizzing. A card with no SRS state
+    // that has not been introduced yet gets the "meet the word" step; the learner
+    // taps Continue, then the same card comes back as a normal drill.
+    const isNewCard = !srs.has(card.id)
+    if (!body.exerciseId && isNewCard && !introduced.has(card.id)) {
+      const intro = registry.get(INTRODUCE_ID)
+      if (intro) return c.json({ instance: await intro.generate(ctx), action: null })
+    }
+
     const def = body.exerciseId
       ? registry.get(body.exerciseId)
-      : pickNextExercise(deps.db, user.id, card, learner, ctx, { quiet: quiet.active })
-    if (!def) return c.json({ error: 'no exercise available' }, 500)
-    // A voice card can't be forced while quiet mode is on — swap in a text one.
-    const chosen =
-      quiet.active && def.modality === 'voice'
-        ? pickNextExercise(deps.db, user.id, card, learner, ctx, { quiet: true })
-        : def
-    if (!chosen) return c.json({ error: 'no exercise available' }, 500)
+      : pickNextExercise(deps.db, user.id, card, learner, ctx, { quiet: quiet.active, disabled })
+    if (!def) return c.json({ error: noDrillMessage(disabled) }, 409)
+    // A voice card can't be forced while quiet mode is on, and a kind the learner
+    // turned off is swapped for one that is allowed.
+    const blocked = (d: typeof def) =>
+      (quiet.active && d.modality === 'voice') || disabled.has(d.id)
+    const chosen = blocked(def)
+      ? pickNextExercise(deps.db, user.id, card, learner, ctx, { quiet: quiet.active, disabled })
+      : def
+    if (!chosen) return c.json({ error: noDrillMessage(disabled) }, 409)
 
     const instance = await chosen.generate(ctx)
     return c.json({
@@ -335,11 +378,12 @@ export function registerPractice(app: App) {
       distractors: otherBacks(deps.db, user.id, card.targetLang, card.back, 3),
       readings: readingMap(deps.db, user.id, card.targetLang),
       known: [...knownWords(deps.db, user.id), card.back],
+      showReadings: showsReadings(readStudyPrefs(deps.db, user.id), card.targetLang),
       judge: await judgeFor(c),
     }
     const instance = await def.generate(ctx)
     const result = await def.grade(ctx, instance, body.answer)
-    const xp = def.xp(result, instance)
+    const xp = def.id === INTRODUCE_ID ? 0 : def.xp(result, instance)
 
     addReview(deps.db, {
       cardId: card.id,
@@ -349,6 +393,17 @@ export function registerPractice(app: App) {
       latencyMs: body.latencyMs,
       detail: result.detail,
     })
+    // A first-exposure "teach" step records that the card was introduced, but is
+    // not a recall test: no XP, no schedule, no lesson completion.
+    if (def.id === INTRODUCE_ID) {
+      return c.json({
+        result: { ...result, xp, leveledUp: false },
+        skill: null,
+        srs: null,
+        lessonCompleted: false,
+        stats: summary(deps.db, user.id),
+      })
+    }
     const { leveledUp } = awardXp(deps.db, deps.events, user.id, xp, 'review', def.id)
     recordActivity(deps.db, deps.events, user.id)
     deps.events.emit('review.completed', {
@@ -418,6 +473,7 @@ export function registerPractice(app: App) {
       distractors: [] as string[],
       readings: readingMap(deps.db, user.id, card.targetLang),
       known: [...knownWords(deps.db, user.id), card.back],
+      showReadings: showsReadings(readStudyPrefs(deps.db, user.id), card.targetLang),
       judge: await judgeFor(c),
       assess,
     }
