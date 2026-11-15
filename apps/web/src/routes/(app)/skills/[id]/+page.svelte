@@ -70,10 +70,7 @@
 </script>
 
 <div class="pt-5">
-  <button
-    onclick={() => goto(href('/skills'))}
-    class="text-sm text-ink-400 hover:text-ink-200"
-  >
+  <button onclick={() => goto(href('/skills'))} class="text-sm text-ink-400 hover:text-ink-200">
     ← Skills
   </button>
 </div>
@@ -100,7 +97,7 @@
     <div
       class="grid h-14 w-14 shrink-0 place-items-center rounded-[4px]"
       style="border: 1.5px solid {accent}; background: {accent}1f; color: {accent}"
-      aria-label="Level {skill.level}"
+      aria-label="Level {skill.level} of 100, the average of {skill.actions.length} actions"
     >
       <span class="display text-2xl leading-none font-bold">{skill.level}</span>
       <span class="text-[8px] tracking-[0.16em]">LEVEL</span>
@@ -111,15 +108,20 @@
   <section style={accentStyle(accent)}>
     <div class="border-b border-ink-700 py-3">
       <div class="flex items-baseline justify-between gap-2 text-sm">
-        <span class="text-ink-300">Progress</span>
-        <span class="text-ink-300 tabular-nums">{skill.intoLevel} / {skill.forNext} xp</span>
+        <span class="text-ink-300"
+          >Level {skill.level}/100 · average of {skill.actions.length} action{skill.actions
+            .length === 1
+            ? ''
+            : 's'}</span
+        >
+        <span class="text-ink-500 tabular-nums">{pct(skill.progress)} avg</span>
       </div>
       <div class="bar mt-2"><i style="width: {skill.progress * 100}%"></i></div>
     </div>
     <div class="flex items-baseline justify-between gap-2 border-b border-ink-700 py-3 text-sm">
       <span class="min-w-0 text-ink-300">{skill.effectLabel}</span>
       <span class="display shrink-0 text-lg font-bold" style="color: {accent}"
-        >{pct(skill.effect.value)}</span
+        >{pct(skill.effect.value)}/lv</span
       >
     </div>
     <div class="flex items-baseline justify-between gap-2 border-b border-ink-700 py-3 text-sm">
@@ -208,8 +210,7 @@
     </ul>
   {:else}
     <p class="mt-2 border-b border-ink-700 py-3 text-xs text-ink-400">
-      No talents yet — reach <span class="gold">Lv {skill.talent.nextMilestone}</span> to pick your
-      first.
+      No talents yet — reach <span class="gold">Lv {skill.talent.nextMilestone}</span> to pick your first.
     </p>
   {/if}
 
@@ -225,19 +226,30 @@
         <div class="min-w-0 flex-1">
           <div class="flex items-baseline justify-between gap-2">
             <span class="text-sm font-medium text-ink-100">{a.name}</span>
-            <span class="shrink-0 text-[11px] text-ink-400 tabular-nums">+{a.xp} xp</span>
+            <span class="display shrink-0 text-sm font-bold" style="color: {accent}"
+              >Lv {a.level}</span
+            >
+          </div>
+          <div class="bar mt-1.5"><i style="width: {a.progress * 100}%"></i></div>
+          <div class="mt-1 flex flex-wrap items-center gap-x-3 text-[11px] text-ink-500">
+            <span class="tabular-nums">+{a.xp} xp</span>
+            <span style="color: {accent}">now {pct(a.effect.value)}</span>
           </div>
           <div class="mt-0.5 text-[11px] text-ink-400">{a.description}</div>
           {#if (a.consumes ?? []).length || (a.produces ?? []).length}
             <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
               {#each a.consumes ?? [] as c (c.item)}
                 <span class="text-ember-300">
-                  −{c.count} {itemMap.get(c.item)?.icon ?? ''} {itemMap.get(c.item)?.name ?? c.item}
+                  −{c.count}
+                  {itemMap.get(c.item)?.icon ?? ''}
+                  {itemMap.get(c.item)?.name ?? c.item}
                 </span>
               {/each}
               {#each a.produces ?? [] as p (p.item)}
                 <span class="text-jade-400">
-                  +{p.count} {itemMap.get(p.item)?.icon ?? ''} {itemMap.get(p.item)?.name ?? p.item}
+                  +{p.count}
+                  {itemMap.get(p.item)?.icon ?? ''}
+                  {itemMap.get(p.item)?.name ?? p.item}
                 </span>
               {/each}
             </div>
@@ -252,7 +264,9 @@
         <button
           onclick={() => train(a)}
           disabled={!a.unlocked || !a.affordable}
-          class="btn {a.unlocked && a.affordable ? 'btn-primary' : 'btn-ghost'} shrink-0 px-3 py-2 text-sm"
+          class="btn {a.unlocked && a.affordable
+            ? 'btn-primary'
+            : 'btn-ghost'} shrink-0 px-3 py-2 text-sm"
         >
           Train
         </button>

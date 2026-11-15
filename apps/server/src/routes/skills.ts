@@ -4,12 +4,14 @@ import {
   SKILLS,
   SKILL_BY_ID,
   actionsForSkill,
+  skillXpForLevel,
   type ModKind,
   type SkillDef,
   type SkillId,
 } from '../game/skills'
 import type { Bonuses } from '../game/modifiers'
 import {
+  actionProgressView,
   actionState,
   aggregateBonuses,
   chooseTalent,
@@ -22,18 +24,17 @@ import {
 import type { App } from '../context'
 import type { Db } from '../db/client'
 
-/** The player's current total for a skill's passive effect (levels + talents). */
-function currentEffect(skill: SkillDef, b: Bonuses): number {
-  const kind: ModKind = skill.effect.kind
+/** The bonus an action carries right now (its own passive at its current level). */
+function currentEffect(kind: ModKind, b: Bonuses, actionId: string): number {
   switch (kind) {
     case 'yield':
-      return b.yield(skill.id)
+      return b.yield(actionId)
     case 'double':
-      return b.double(skill.id)
+      return b.double(actionId)
     case 'xp':
-      return b.xp(skill.id)
+      return b.xp(actionId)
     case 'coins':
-      return b.coins(skill.id)
+      return b.coins(actionId)
     case 'global_xp':
       return b.globalXp
     case 'damage':
@@ -45,9 +46,14 @@ function currentEffect(skill: SkillDef, b: Bonuses): number {
   }
 }
 
-/** Every profession with its level, effect, talents and actions. */
+/**
+ * Every profession with its derived level, and each action with its own level and
+ * current passive (docs/DESIGN.md §13.5). The profession has no level of its own:
+ * `level` is the sum of the action levels below it.
+ */
 function boardSkills(db: Db, userId: string) {
   const progress = new Map(skillSummaries(db, userId).map((s) => [s.skillId, s]))
+  const byAction = actionProgressView(db, userId)
   const talents = new Map(talentView(db, userId).map((t) => [t.skillId, t]))
   const bonuses = aggregateBonuses(db, userId)
   return SKILLS.map((s) => {
@@ -56,12 +62,21 @@ function boardSkills(db: Db, userId: string) {
       ...s,
       level: p.level,
       xp: p.xp,
-      intoLevel: p.intoLevel,
-      forNext: p.forNext,
       progress: p.progress,
-      effect: { ...s.effect, value: currentEffect(s, bonuses) },
       talent: talents.get(s.id)!,
-      actions: actionsForSkill(s.id).map((a) => ({ ...a, ...actionState(db, userId, a) })),
+      actions: actionsForSkill(s.id).map((a) => {
+        const ap = byAction.get(a.id)
+        return {
+          ...a,
+          level: ap?.level ?? 1,
+          actionXp: ap?.xp ?? 0,
+          intoLevel: ap?.intoLevel ?? 0,
+          forNext: ap?.forNext ?? skillXpForLevel(1),
+          progress: ap?.progress ?? 0,
+          effect: { ...s.effect, value: currentEffect(s.effect.kind, bonuses, a.id) },
+          ...actionState(db, userId, a),
+        }
+      }),
     }
   })
 }
@@ -71,8 +86,8 @@ function bonusSummary(b: Bonuses) {
 }
 
 export function registerSkills(app: App) {
-  // The profession board: skills (+level/xp/effect), their actions (locked /
-  // affordable / equipped), talents and the materials bank. DESIGN §13.5.
+  // The profession board: skills (+derived level), their actions (each with its
+  // own level/effect), talents and the materials bank. DESIGN §13.5.
   app.get('/api/skills', (c) => {
     const db = c.get('deps').db
     const user = c.get('user')!
@@ -86,8 +101,8 @@ export function registerSkills(app: App) {
     })
   })
 
-  // A single profession's page: its actions, talent roadmap and the materials
-  // needed to label the action costs.
+  // A single profession's page: its actions (each with its own level), the talent
+  // roadmap and the materials needed to label the action costs.
   app.get('/api/skills/:id', (c) => {
     const db = c.get('deps').db
     const user = c.get('user')!

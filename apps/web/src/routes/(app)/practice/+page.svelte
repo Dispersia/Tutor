@@ -416,9 +416,9 @@
     <div class="mb-3 flex flex-wrap gap-2">
       <span class="chip" style="--accent: {ACCENT.azure}">
         {skillMap.get(skill.skillId)?.icon ?? ''}
-        {skillMap.get(skill.skillId)?.name ?? skill.skillId}
+        {actionName ?? skillMap.get(skill.skillId)?.name ?? skill.skillId}
         +{skill.xp} xp
-        {#if skill.leveledUp}· level {skill.level}!{/if}
+        {#if skill.leveledUp && skill.level}· Lv {skill.level}!{/if}
       </span>
       {#each skill.gained as g (g.item)}
         <span class="chip" style="--accent: {ACCENT.jade}">

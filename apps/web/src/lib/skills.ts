@@ -13,6 +13,15 @@ export interface ActionDTO {
   description: string
   tier: number
   xp: number
+  /** this action's own level (the profession level is the sum of these) */
+  level: number
+  /** this action's own XP + progress toward its next level */
+  actionXp: number
+  intoLevel: number
+  forNext: number
+  progress: number
+  /** the action's passive at its current level (a fraction; 0.04 = +4%) */
+  effect: { kind: ModKind; value: number }
   consumes?: Cost[]
   produces?: Cost[]
   equip?: { slot: string; tag: string }
@@ -47,11 +56,12 @@ export interface SkillDTO {
   category: 'gathering' | 'artisan' | 'support' | 'combat'
   icon: string
   description: string
+  /** the sum of this profession's action levels — the profession has no XP own */
   level: number
   xp: number
-  intoLevel: number
-  forNext: number
+  /** the average of its actions' progress toward their next level */
   progress: number
+  /** the passive every action of this profession gains per level */
   effect: { kind: ModKind; value: number }
   effectLabel: string
   talent: {
@@ -109,12 +119,16 @@ export const unequipSlot = (slot: string) =>
   api('/api/skills/equip', { method: 'POST', body: JSON.stringify({ slot, unequip: true }) })
 
 export interface SkillOutcome {
+  actionId: string
   skillId: string
   xp: number
-  level?: number
+  /** the action's own level (null when the drill did not count) */
+  level: number | null
+  /** the profession's derived level (null when the drill did not count) */
+  skillLevel: number | null
   leveledUp: boolean
   gained: Cost[]
   consumed: Cost[]
-  /** the milestone level whose talent choice just opened (or null) */
+  /** the profession milestone whose talent choice just opened (or null) */
   talentUnlocked: number | null
 }
