@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Instance } from '#lib/exercises'
+  import { typingAttrs } from '#lib/lang'
   import Spinner from '../Spinner.svelte'
   import Word from '../Word.svelte'
 
@@ -14,6 +15,7 @@
   const options = $derived((instance.data.options as string[]) ?? [])
   const rule = $derived((instance.data.rule as string) ?? '')
   const lang = $derived((instance.data.readingLang as string) ?? '')
+  const answerLang = $derived((instance.data.answerLang as string) ?? undefined)
 
   function submit(e: SubmitEvent) {
     e.preventDefault()
@@ -43,12 +45,16 @@
     <form onsubmit={submit} class="space-y-4">
       <input
         bind:value={answer}
-        autocomplete="off"
-        autocapitalize="off"
+        {...typingAttrs(answerLang)}
         class="w-full rounded-md border border-ink-600 bg-ink-900 px-4 py-4 text-lg outline-none focus:border-seal-400"
         placeholder="Type the correct form…"
       />
-      <button type="submit" disabled={busy || !answer.trim()} class="btn btn-primary w-full py-3">
+      <button
+        type="submit"
+        disabled={busy || !answer.trim()}
+        data-enter-action
+        class="btn btn-primary w-full py-3"
+      >
         {#if busy}<Spinner size={15} label="Checking your answer" /> Checking…{:else}Check{/if}
       </button>
     </form>

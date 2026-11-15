@@ -80,6 +80,46 @@ export interface CardTemplate {
   exercises: string[]
 }
 
+/** One step of a pitch contour. */
+export type PitchLevel = 'H' | 'L'
+
+/**
+ * A language-agnostic pitch contour (Japanese pitch accent, tone contours): one
+ * level per syllable/mora. `drop` is the accent nucleus counted from 1 — the
+ * mora after which the pitch falls (`0` = no in-word drop).
+ */
+export interface PitchContour {
+  levels: PitchLevel[]
+  drop?: number | null
+  /** The syllable/mora texts the levels describe (kana); defaults to 1:1 chars. */
+  syllables?: string[]
+}
+
+/** Language-specific annotations attached to a card (see @tutor/core). */
+export interface CardMetadata {
+  /** Pitch contour of the card's word (Japanese pitch accent, tones, …). */
+  pitch?: PitchContour
+  /** Any other annotation, keyed by convention (`radical`, `strokeOrder`, …). */
+  [key: string]: unknown
+}
+
+/** A stored card, as the decks API returns it. */
+export interface Card {
+  id: string
+  deckId: string | null
+  type: string
+  sourceLang: string
+  targetLang: string
+  front: string
+  back: string
+  readings: Record<string, string>
+  tags: string[]
+  payload: Record<string, unknown>
+  metadata: CardMetadata
+  origin: string
+  createdAt: number
+}
+
 export type ModKind = 'yield' | 'double' | 'xp' | 'global_xp' | 'damage' | 'drop' | 'hp' | 'coins'
 
 export interface SpeechStatus {

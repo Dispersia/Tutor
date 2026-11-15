@@ -1,5 +1,12 @@
 import type { CardType } from '@tutor/core'
-import { addCard, createDeck, getDeck, listCards, updateDeckSettings } from '../db/repo'
+import {
+  addCard,
+  createDeck,
+  getDeck,
+  listCards,
+  rememberedDeckInstruction,
+  updateDeckSettings,
+} from '../db/repo'
 import type { Db } from '../db/client'
 import {
   fetchFrequencyWords,
@@ -31,6 +38,8 @@ export interface BuildDeckOptions {
   readingScript?: string
   showReadings?: boolean
   disabledExercises?: string[]
+  /** Ask the generator for pitch-accent metadata (Japanese, …). */
+  pitchAccent?: boolean
   /** An explicit ordered word list (imported decks) — skips the frequency pull. */
   words?: string[]
   /** Provenance label shown on the deck (e.g. the imported deck's name). */
@@ -64,22 +73,34 @@ const clamp = (n: number, lo: number, hi: number) => Math.min(Math.max(n, lo), h
 export function parseInstruction(
   instruction: string,
   targetLang: string,
-): { variant?: CharacterVariant; readingScript?: string } {
+): { variant?: CharacterVariant; readingScript?: string; pitchAccent?: boolean } {
   const s = instruction.toLowerCase()
+  const isChinese = targetLang === 'zh' || targetLang === 'yue'
+  const isJapanese = targetLang === 'ja'
+
+  // The deck's language wins over wording borrowed from another deck's prompt:
+  // a remembered Chinese prompt must never force Zhuyin on a Japanese deck.
   let variant: CharacterVariant | undefined
-  if (/traditional|繁體|繁体|zh_tw/.test(s)) variant = 'traditional'
-  else if (/simplified|简体|簡體|zh_cn/.test(s)) variant = 'simplified'
-  else if (targetLang === 'zh') variant = 'traditional' // the app's default
+  if (isChinese) {
+    if (/traditional|繁體|繁体|zh_tw/.test(s)) variant = 'traditional'
+    else if (/simplified|简体|簡體|zh_cn/.test(s)) variant = 'simplified'
+    else if (targetLang === 'zh') variant = 'traditional' // the app's default
+  }
 
   let readingScript: string | undefined
-  if (/zhuyin|注音|bopomofo|ㄅㄆㄇ/.test(s)) readingScript = 'zhuyin'
-  else if (/pinyin|拼音/.test(s)) readingScript = 'pinyin'
-  else if (/furigana|kana|かな|カナ/.test(s)) readingScript = 'kana'
-  else if (/romaji|rōmaji/.test(s)) readingScript = 'romaji'
-  else if (targetLang === 'zh') readingScript = 'zhuyin'
-  else if (targetLang === 'ja') readingScript = 'kana'
+  if (isChinese) {
+    if (/zhuyin|注音|bopomofo|ㄅㄆㄇ/.test(s)) readingScript = 'zhuyin'
+    else if (/pinyin|拼音/.test(s)) readingScript = 'pinyin'
+    else readingScript = 'zhuyin'
+  } else if (isJapanese) {
+    readingScript = /romaji|rōmaji/.test(s) ? 'romaji' : 'kana'
+  }
 
-  return { variant, readingScript }
+  // Pitch-accent metadata is language-specific but opt-in: only ask the
+  // generator when the instruction does (Japanese pitch accent, tone contours).
+  const pitchAccent = /pitch|accent|アクセント|音調|音调|高低|聲調|声调|tone contour|tones?/.test(s)
+
+  return { variant, readingScript, pitchAccent }
 }
 
 /** The stored reading for a planned card, in the deck's script. */
@@ -138,6 +159,7 @@ function persistCards(
       readings: readingsForPlanned(opts.targetLang, c.reading, opts.readingScript),
       tags: [opts.targetLang, c.template],
       payload: { ...(c.payload ?? {}), template: c.template, step: Math.max(step, 1) },
+      metadata: c.metadata,
       origin: 'llm',
     })
     cardCount++
@@ -188,6 +210,7 @@ export async function buildDeck(
     variant: opts.variant,
     readingScript: opts.readingScript,
     count,
+    pitchAccent: opts.pitchAccent,
     hints: opts.hints,
   })
 
@@ -196,6 +219,7 @@ export async function buildDeck(
     readingScript: opts.readingScript,
     showReadings: opts.showReadings,
     disabledExercises: opts.disabledExercises,
+    pitchAccent: opts.pitchAccent,
     cursor: count,
     batchSize: count,
     instruction: opts.instruction,
@@ -215,7 +239,12 @@ export async function buildDeck(
     db,
     userId,
     deck.id,
-    { targetLang: opts.targetLang, sourceLang: opts.sourceLang, readingScript: opts.readingScript, startStep: 0 },
+    {
+      targetLang: opts.targetLang,
+      sourceLang: opts.sourceLang,
+      readingScript: opts.readingScript,
+      startStep: 0,
+    },
     planned,
   )
   return { deckId: deck.id, name, cardCount, source: sourceLabel, newWords }
@@ -253,10 +282,19 @@ export async function growDeck(
   }
   const remaining = sourceWords.slice(cursor).filter((w) => !known.includes(w))
 
+  // A deck's own prompt wins. Older imported decks only carry the generic
+  // "Build a deck from the imported deck …" wording, so they pick up the
+  // learner's remembered prompt instead of losing it on the next batch.
+  const genericPrompt =
+    !settings.instruction || settings.instruction.startsWith('Build a deck from the imported deck ')
+  const instruction = genericPrompt
+    ? (rememberedDeckInstruction(db, userId) ?? settings.instruction ?? 'Continue the deck')
+    : (settings.instruction ?? 'Continue the deck')
+
   const planned = await opts.planner({
-    instruction: opts.topic
-      ? `Grow the deck, focusing on: ${opts.topic}`
-      : (settings.instruction ?? 'Continue the deck'),
+    // The prompt that built the deck stays in force for every later batch; a
+    // topic narrows the batch without replacing the learner's rules.
+    instruction,
     targetLang: deck.targetLang,
     sourceLang: deck.sourceLang,
     topic: opts.topic,
@@ -265,6 +303,7 @@ export async function growDeck(
     variant: settings.variant,
     readingScript: settings.readingScript,
     count,
+    pitchAccent: settings.pitchAccent,
   })
 
   const { newWords, cardCount } = persistCards(
@@ -282,7 +321,7 @@ export async function growDeck(
   updateDeckSettings(db, deckId, userId, {
     cursor: cursor + count,
     batchSize: count,
-    instruction: settings.instruction,
+    instruction,
   })
   return {
     deckId,

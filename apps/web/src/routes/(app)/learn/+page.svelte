@@ -1,9 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte'
+  import { api } from '#lib/api'
   import { href } from '#lib/paths'
   import { getCurriculum, getSrsStats, type CurriculumDeck, type SrsStats } from '#lib/curriculum'
   import {
     createDeck,
+    deleteDeck,
     growDeck,
     importDeck,
     inspectDeck,
@@ -14,6 +16,7 @@
   import { session } from '#lib/session.svelte'
   import { ACCENT, accentStyle } from '#lib/theme'
   import Spinner from '#lib/components/Spinner.svelte'
+  import CardEditor from '#lib/components/CardEditor.svelte'
 
   let decks = $state<CurriculumDeck[]>([])
   let stats = $state<SrsStats | null>(null)
@@ -29,6 +32,10 @@
   let growing = $state('')
   let growTopic = $state('')
   let deckError = $state('')
+  /** Which deck is being deleted (shows a spinner and blocks double taps). */
+  let deleting = $state('')
+  /** The deck whose card metadata is open in the editor. */
+  let editing = $state<CurriculumDeck | null>(null)
   /** Anki import: the file, its inspected fields, and the chosen field mapping. */
   let importFile = $state<File | null>(null)
   let inspection = $state<AnkiInspection | null>(null)
@@ -77,15 +84,18 @@
 
   onMount(async () => {
     try {
-      const [c, s, sk] = await Promise.all([
+      const [c, s, sk, prefs] = await Promise.all([
         getCurriculum(),
         getSrsStats(),
         getSkills().catch(() => null),
+        api<{ deckInstruction?: string }>('/api/settings').catch(() => null),
       ])
       // the frequency path first — that is where you start
       decks = c.decks.sort((a, b) => rank(a.level) - rank(b.level))
       stats = s
       ref = sk
+      // the prompt you gave on an earlier deck follows you into every new one
+      if (prefs?.deckInstruction) instruction = prefs.deckInstruction
       buildLang = session.user?.targetLang ?? 'zh'
       const saved = localStorage.getItem(storageKey)
       if (saved && usable.some((u) => u.action.id === saved)) actionId = saved
@@ -139,7 +149,7 @@
     buildError = ''
     try {
       await createDeck({ instruction: text, targetLang: buildLang || undefined })
-      instruction = ''
+      // keep the prompt in the box: it is the deck's constitution, reused below
       await reload()
     } catch (e) {
       buildError = (e as Error).message
@@ -161,6 +171,25 @@
       deckError = (e as Error).message
     } finally {
       growing = ''
+    }
+  }
+
+  /** Delete a deck and all of its cards, SRS state, history and deck chats. */
+  async function removeDeck(d: CurriculumDeck) {
+    if (deleting) return
+    const ok = confirm(
+      `Delete “${d.name}” and all its cards, reviews and history? This cannot be undone.`,
+    )
+    if (!ok) return
+    deleting = d.deckId
+    deckError = ''
+    try {
+      await deleteDeck(d.deckId)
+      await reload()
+    } catch (e) {
+      deckError = (e as Error).message
+    } finally {
+      deleting = ''
     }
   }
 
@@ -203,7 +232,6 @@
       if (instruction.trim()) form.set('instruction', instruction.trim())
       if (importLang) form.set('targetLang', importLang)
       await importDeck(form)
-      instruction = ''
       importFile = null
       inspection = null
       await reload()
@@ -316,7 +344,10 @@
         <p class="eyebrow">Import {inspection.name ?? 'Anki deck'}</p>
         <span class="text-[11px] text-ink-400">{inspection.noteCount} notes</span>
       </div>
-      <p class="mt-1 text-xs text-ink-400">Pick the deck's language and which field is the real word.</p>
+      <p class="mt-1 text-xs text-ink-400">
+        Pick the deck's language and which field is the real word. The prompt above is applied to this
+        deck too.
+      </p>
 
       <label class="mt-3 block text-[11px] text-ink-400">
         Language
@@ -457,6 +488,12 @@
         <i style="width: {progress}%"></i>
       </div>
 
+      {#if d.settings?.instruction}
+        <p class="mt-2 line-clamp-2 text-[11px] text-ink-500" title={d.settings.instruction}>
+          Prompt · {d.settings.instruction}
+        </p>
+      {/if}
+
       {#if next}
         {#if actionId}
           <a href={practiceHref({ lesson: next.id })} class="btn btn-primary mt-3 w-full py-3">
@@ -525,11 +562,32 @@
           ? 'Hide readings (ruby) for this deck'
           : 'Show readings (ruby) for this deck'}
       </button>
+      <button
+        type="button"
+        onclick={() => (editing = d)}
+        class="mt-2 w-full text-center text-[11px] text-ink-400 underline"
+      >
+        Edit card metadata (pitch accent, notes)
+      </button>
+      <button
+        type="button"
+        onclick={() => removeDeck(d)}
+        disabled={Boolean(deleting)}
+        class="mt-2 w-full text-center text-[11px] text-ember-400 underline disabled:opacity-60"
+      >
+        {#if deleting === d.deckId}Deleting…{:else}Delete this deck{/if}
+      </button>
     </section>
   {/each}
   {/if}
   {#if deckError}
     <p class="mb-3 rounded-md bg-ember-950 px-3 py-2 text-sm text-ember-300">{deckError}</p>
   {/if}
+{/if}
+{#if editing}
+  <CardEditor
+    deck={{ id: editing.deckId, name: editing.name, targetLang: editing.targetLang }}
+    onclose={() => (editing = null)}
+  />
 {/if}
 <div class="h-4"></div>

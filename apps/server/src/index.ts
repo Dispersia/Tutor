@@ -32,6 +32,10 @@ const server = Bun.serve({
   hostname: env.host,
   port: env.port,
   fetch: fetchHandler,
+  // A cold speech warm loads three MLX checkpoints (can take >10s, Bun's default
+  // request timeout), which would otherwise fail the request and show as
+  // "audio unavailable". Allow the whole warm window.
+  idleTimeout: 200,
   ...(tls ? { tls } : {}),
 })
 

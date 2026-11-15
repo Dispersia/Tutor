@@ -41,6 +41,8 @@ export interface SpeakOptions {
   voice?: string
   language?: string
   mode?: 'preset' | 'design'
+  /** Style cue sent to the TTS model (see TEACHER_INSTRUCT). */
+  instruct?: string
 }
 
 /** Requests one chunk of TTS audio; resolves to the WAV blob. */

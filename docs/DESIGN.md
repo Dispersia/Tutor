@@ -282,7 +282,7 @@ server owns its lifecycle.
 - Every activity (an ASR call, a TTS call, an open WS audio stream, a client
   heartbeat) updates `lastActivity`.
 - A reaper checks every 30 s: if `now - lastActivity > TUTOR_SPEECH_IDLE_TIMEOUT`
-  (default **10 min**) **and** the number of active audio WebSockets is 0 **and**
+  (default **1 hour**) **and** the number of active audio WebSockets is 0 **and**
   no connected clients are in "voice" state → gracefully stop the sidecar.
 - Graceful stop = `POST /admin/unload` (drop model refs, call
   `mlx.core.clear_cache()` / `mx.metal.clear_cache()`, then exit) → OS reclaims RAM.
@@ -394,6 +394,13 @@ record (MediaRecorder) ─► 16 kHz mono WAV ─► /v1/asr (lang hint) ─► 
 - Convert to 16 kHz mono server-side with `ffmpeg` (nix-provided) or in-browser
   via AudioWorklet PCM.
 - Language hint improves accuracy; auto-detect is the fallback.
+- **Context biasing:** the caller may pass `hint` (a comma-separated word list →
+  Qwen3-ASR `hotwords`), e.g. the deck vocabulary in play, so a half-heard course
+  word is not replaced by an unrelated one.
+- **No-speech guard:** Qwen3-ASR is generative — fed silence or a clipped
+  fragment it invents a word ("Okay.", "Written.", "嗯。"). The gateway computes a
+  cheap energy VAD (`models.has_speech`) and returns `{ text: "", noSpeech: true }`
+  for silent/too-short clips instead of hallucinating.
 - Streaming ASR (WS) is Phase-2 for low-latency turn-taking + barge-in.
 
 ### 9.4 Pronunciation judging (approximate)
@@ -497,10 +504,32 @@ type Card = {
   readings?: Record<string, string> // pinyin / romaji / kana
   tags: string[]
   payload: Record<string, unknown> // type-specific extras (zod-validated)
+  metadata: Record<string, unknown> // language-specific annotations (see below)
   origin: 'curated' | 'llm' | 'manual'
   createdAt: number
 }
 ```
+
+**Metadata** is the language-agnostic escape hatch for annotations that don't
+fit the role-named content above — the things that are specific to one language
+or one deck: Japanese pitch accent, tone contours, radicals, mnemonics. Keys are
+plain names and a value is `unknown`, so a new annotation kind never needs a
+schema change. One shape is built in because the app renders it:
+
+```ts
+metadata.pitch = {
+  levels: ['L', 'H', 'H', 'L'], // one level per mora
+  syllables: ['か', 'み', 'さ', 'ま'],
+  drop: 3, // accent nucleus counted from 1; 0 = heiban (no in-word drop)
+}
+```
+
+The container names no language: a pitch contour is the *shape* of the pitch, so
+Japanese pitch accent (高低アクセント) and a Mandarin tone contour read the same
+way. Metadata never affects grading — `readings` and `back` stay the source of
+truth for correctness. A deck asks the generator for it (`pitchAccent`), and a
+card's bag is editable per-card via `PATCH /api/decks/:id/cards/:cardId`
+(merged by key; `null` removes one).
 
 Cards come from: a curated starter deck, LLM generation ("give me 20 HSK-1
 food words"), or manual entry.
@@ -559,7 +588,7 @@ auth_sessions(id /*sha256(token)*/, user_id, created_at, expires_at, user_agent)
 user_settings(user_id, key, value, PRIMARY KEY(user_id,key))
 decks(id, user_id, name, source_lang, target_lang, level, description)
 cards(id, deck_id, user_id, type, source_lang, target_lang, front, back,
-      readings_json, tags_json, payload_json, origin, created_at)
+      readings_json, tags_json, payload_json, metadata_json, origin, created_at)
 reviews(id, card_id, user_id, exercise_id, score, latency_ms, detail_json,
         audio_ref, created_at)                 -- one row per attempt
 sessions(id, user_id, deck_id, kind /*chat|voice|mixed*/, lang,
@@ -864,6 +893,34 @@ and Android shows a confusing permission failure. Options, in order of preferenc
 The Bun server should support an optional `--tls-cert/--tls-key`. This also lets us
 register a service worker for the PWA, which otherwise also requires HTTPS.
 
+### 14.2 Language hints — keyboards & IMEs (best effort, not a switch)
+
+A page **cannot** switch the OS keyboard / input method. There is no such API on
+any platform (Android, iOS, macOS, Windows): the layout is the user's, and on the
+desktop it is OS-driven (Ctrl+Space / Cmd+Space). `inputmode` only picks the
+keyboard *type* (text / numeric / tel / …), never the language. So the tutor does
+not try to *bring up* the Japanese IME — it gives the platform the best hints it
+will accept (`apps/web/src/lib/lang.ts`):
+
+- **`answerLang` on every typing exercise.** The backend names the language the
+  learner types with (`card.targetLang`, or `card.sourceLang` for
+  `translate.back_to_front`, whose answer is in the learner's own language). The
+  client spreads `typingAttrs(answerLang)` onto the field: `lang` (the real hint —
+  some Android keyboards read it; it also feeds spellcheck and font fallback),
+  `inputmode="text"`, `enterkeyhint`, plus `spellcheck/autocorrect/autocapitalize`
+  off so an English dictionary doesn't red-squiggle every kana.
+- **Element-level `lang` on target-language content.** `Word.svelte` tags the word
+  it renders, so the browser shapes and announces the right script.
+- **`<html lang>` follows the learner's native language** (the language prompts,
+  meanings and feedback are written in), updated per account — not the target
+  language, which would mis-announce the mostly-English chrome to a screen reader.
+
+Where this does not help, the **word-tile / character-bank** interaction
+(`sentence_build`, `multiple_choice`) sidesteps typing entirely — the reliable
+path on mobile for a beginner who has not enabled a CJK keyboard. A built-in
+romaji→kana / pinyin→hanzi IME would make *free* typing work cross-platform, and
+remains future work.
+
 ---
 
 ## 15. Nix flake design (dev + packaging)
@@ -1118,7 +1175,7 @@ stack before any UI work.**
 | 3   | First languages / levels    | **Mandarin**, **Japanese** — both frequency-ordered, one word per step (themed HSK 1 / JLPT N5 decks were dropped)                                                                  |
 | 4   | OpenRouter models           | **User-selectable per role in-app** from OpenRouter's catalogue (defaults: Qwen for convo/judge, cheap model for generator/translator); works with any key (DeepSeek, OpenAI, …)   |
 | 5   | Voice strategy              | **User-selectable**: **CustomVoice presets** _or_ **VoiceDesign** personas (per language), switchable in Settings; one TTS checkpoint resident at a time (§9.2). Cloning → Phase 8 |
-| 6   | Idle timeout                | **10 min** (configurable 2–30)                                                                                                                                                     |
+| 6   | Idle timeout                | **1 hour** (configurable)                                                                                                                                                          |
 | 7   | Speech provider abstraction | Build the **provider interface now** (local mlx-audio + cloud fallback), so swapping is trivial                                                                                    |
 | 8   | Client deployment           | Mac = server; phones = PWA over **HTTPS** (mkcert) — required for mic (§14.1)                                                                                                      |
 | 9   | Multi-user                  | **Local accounts** (username + password, argon2id), **fully isolated** per-user history/settings/keys; first user is admin; per-user OpenRouter key with server fallback (§12.5)   |

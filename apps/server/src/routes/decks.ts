@@ -1,16 +1,23 @@
 import {
   addCard,
   createDeck,
+  deleteDeck,
+  getCard,
   getDeck,
   getRoles,
   listCards,
   listDecks,
+  rememberedDeckInstruction,
+  setUserSetting,
+  updateCard,
   updateDeckSettings,
 } from '../db/repo'
 import { readApkg } from '../anki/parse'
+import { parsePitchContour } from '@tutor/core'
 import { detectLanguage, inspectAnki, wordsFromAnki } from '../anki/words'
 import { buildDeck, growDeck, parseInstruction } from '../deck/generate'
 import { llmPlanner, type Planner } from '../deck/plan'
+import { DECK_INSTRUCTION_KEY } from '../deck/settings'
 import { roleReasoning } from '../env'
 import { OpenRouter } from '../llm/openrouter'
 import { MANDARIN_RULE } from '../llm/prompts'
@@ -93,18 +100,20 @@ export function registerDecks(app: App) {
       readingScript?: string
       showReadings?: boolean
       disabledExercises?: string[]
+      pitchAccent?: boolean
     }
     const targetLang = body.targetLang ?? user.targetLang ?? 'zh'
     const sourceLang = body.sourceLang ?? user.nativeLang ?? 'en'
 
     // --- generated from an instruction + a real frequency list ----------------
     if (body.instruction?.trim()) {
+      const instruction = body.instruction.trim()
       const planner = await plannerFor(deps, user.id)
       if (!planner) return c.json({ error: 'No OpenRouter key — add one in Settings.' }, 502)
-      const parsed = parseInstruction(body.instruction, targetLang)
+      const parsed = parseInstruction(instruction, targetLang)
       try {
         const built = await buildDeck(deps.db, user.id, {
-          instruction: body.instruction.trim(),
+          instruction,
           targetLang,
           sourceLang,
           topic: body.topic,
@@ -114,9 +123,13 @@ export function registerDecks(app: App) {
           readingScript: body.readingScript ?? parsed.readingScript,
           showReadings: body.showReadings,
           disabledExercises: body.disabledExercises,
+          pitchAccent: body.pitchAccent ?? parsed.pitchAccent,
           fetcher: deps.fetcher,
           planner,
         })
+        // The prompt is the deck's constitution: remember it so every later
+        // deck (including imports and growth batches) starts from it.
+        setUserSetting(deps.db, user.id, DECK_INSTRUCTION_KEY, instruction)
         return c.json({ deck: getDeck(deps.db, built.deckId, user.id), ...built }, 201)
       } catch (err) {
         return c.json({ error: (err as Error).message }, 502)
@@ -249,8 +262,12 @@ export function registerDecks(app: App) {
         if (reading || meaning) hints[w] = { reading, meaning }
       }
       const name = String(form.get('name') ?? '').trim() || parsed.name || 'Imported deck'
-      const instruction =
-        String(form.get('instruction') ?? '').trim() || `Build a deck from the imported deck "${name}"`
+      const typed = String(form.get('instruction') ?? '').trim()
+      const remembered = rememberedDeckInstruction(deps.db, user.id) ?? ''
+      if (typed) setUserSetting(deps.db, user.id, DECK_INSTRUCTION_KEY, typed)
+      // Every deck carries the learner's prompt — typed now, or the one they
+      // already gave on an earlier deck. Only fall back to a generic one.
+      const instruction = typed || remembered || `Build a deck from the imported deck "${name}"`
       const rules = parseInstruction(instruction, targetLang)
       const built = await buildDeck(deps.db, user.id, {
         instruction,
@@ -267,7 +284,12 @@ export function registerDecks(app: App) {
         planner,
       })
       return c.json(
-        { deck: getDeck(deps.db, built.deckId, user.id), ...built, words: list.words.length, fields: list.fields },
+        {
+          deck: getDeck(deps.db, built.deckId, user.id),
+          ...built,
+          words: list.words.length,
+          fields: list.fields,
+        },
         201,
       )
     } catch (err) {
@@ -300,6 +322,16 @@ export function registerDecks(app: App) {
     }
   })
 
+  /** Delete a deck completely: cards, SRS state, history and deck chats. */
+  app.delete('/api/decks/:id', (c) => {
+    const deps = c.get('deps')
+    const user = c.get('user')!
+    const deckId = c.req.param('id')
+    if (!getDeck(deps.db, deckId, user.id)) return c.json({ error: 'not found' }, 404)
+    deleteDeck(deps.db, deckId, user.id)
+    return c.json({ ok: true, deckId })
+  })
+
   /** Update a deck's own rules (ruby/reading override, variant, toggles). */
   app.patch('/api/decks/:id', async (c) => {
     const deps = c.get('deps')
@@ -312,6 +344,7 @@ export function registerDecks(app: App) {
         readingScript?: string
         variant?: 'traditional' | 'simplified'
         disabledExercises?: string[]
+        pitchAccent?: boolean
       }
     }
     if (!getDeck(deps.db, deckId, user.id)) return c.json({ error: 'not found' }, 404)
@@ -319,5 +352,51 @@ export function registerDecks(app: App) {
       ? updateDeckSettings(deps.db, deckId, user.id, body.settings)
       : undefined
     return c.json({ deck: getDeck(deps.db, deckId, user.id), settings })
+  })
+
+  /**
+   * Update a card's own content. Metadata is the language-agnostic annotation
+   * bag (pitch accent, radicals, …); it is merged by key so one annotation can
+   * be edited without dropping the others.
+   */
+  app.patch('/api/decks/:id/cards/:cardId', async (c) => {
+    const deps = c.get('deps')
+    const user = c.get('user')!
+    const deckId = c.req.param('id')
+    const cardId = c.req.param('cardId')
+    const card = getCard(deps.db, cardId, user.id)
+    if (!card || card.deckId !== deckId) return c.json({ error: 'not found' }, 404)
+    const body = (await c.req.json().catch(() => ({}))) as {
+      front?: string
+      back?: string
+      readings?: Record<string, string>
+      metadata?: Record<string, unknown>
+    }
+    const patch: {
+      front?: string
+      back?: string
+      readings?: Record<string, string>
+      metadata?: Record<string, unknown>
+    } = {}
+    if (typeof body.front === 'string') patch.front = body.front
+    if (typeof body.back === 'string') patch.back = body.back
+    if (body.readings && typeof body.readings === 'object') patch.readings = body.readings
+    // Merge annotations by key; an explicit `null` removes one.
+    if (body.metadata && typeof body.metadata === 'object') {
+      const merged: Record<string, unknown> = { ...card.metadata }
+      for (const [key, value] of Object.entries(body.metadata)) {
+        if (value === null) delete merged[key]
+        else merged[key] = value
+      }
+      // Keep the built-in pitch contour canonical so the UI can render it.
+      if ('pitch' in merged) {
+        const pitch = parsePitchContour(merged.pitch)
+        if (pitch) merged.pitch = pitch
+        else delete merged.pitch
+      }
+      patch.metadata = merged
+    }
+    updateCard(deps.db, cardId, user.id, patch)
+    return c.json({ card: getCard(deps.db, cardId, user.id) })
   })
 }

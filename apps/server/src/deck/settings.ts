@@ -7,14 +7,15 @@
 
 export type CharacterVariant = 'traditional' | 'simplified'
 
+/**
+ * Where the learner's remembered deck prompt lives in `user_settings`. The same
+ * prompt is reused for every new deck (and for existing decks that only carry
+ * the generic import wording), so a deck's rules never start over.
+ */
+export const DECK_INSTRUCTION_KEY = 'deckInstruction'
+
 export type ReadingScript =
-  | 'zhuyin'
-  | 'pinyin'
-  | 'kana'
-  | 'romaji'
-  | 'latin'
-  | 'none'
-  | (string & {})
+  'zhuyin' | 'pinyin' | 'kana' | 'romaji' | 'latin' | 'none' | (string & {})
 
 export interface DeckSettings {
   /** Override: show native readings (Zhuyin / furigana) for this deck. */
@@ -25,6 +26,8 @@ export interface DeckSettings {
   variant?: CharacterVariant
   /** Exercise ids disabled for this deck (in addition to the user's own). */
   disabledExercises?: string[]
+  /** Ask the generator for pitch-accent metadata (Japanese, …). */
+  pitchAccent?: boolean
   /** Growth cursor: the frequency rank the deck has been generated up to. */
   cursor?: number
   /** How many new words each organic-growth batch should add. */

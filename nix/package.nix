@@ -160,16 +160,23 @@ pkgs.writeShellApplication {
     export TUTOR_BASE_PATH="${basePath}"
 
     # The Python/MLX project must be writable (it grows a venv), so copy it out of
-    # the read-only store on first run and let uv create the environment.
+    # the read-only store and let uv create the environment. Re-sync whenever the
+    # packaged source changes: a first-run-only copy goes stale on rebuilds, so
+    # new gateway routes/fixes never reach the data dir.
     PY="''${TUTOR_PYTHON_DIR:-$TUTOR_DATA_DIR/python}"
-    if [ ! -f "$PY/pyproject.toml" ]; then
-      echo "tutor: setting up the speech project in $PY"
+    SRC="${appFiles}/share/tutor/python"
+    STAMP="$PY/.tutor-src-stamp"
+    WANT="${appFiles}"
+    if [ ! -f "$PY/pyproject.toml" ] || [ "$(cat "$STAMP" 2>/dev/null || true)" != "$WANT" ]; then
+      echo "tutor: syncing the speech project into $PY"
       mkdir -p "$PY"
-      cp -r "${appFiles}/share/tutor/python/." "$PY/"
+      cp -r "$SRC/." "$PY/"
       chmod -R u+w "$PY"
+      printf '%s' "$WANT" > "$STAMP"
+      NEED_SYNC=1
     fi
-    if [ ! -d "$PY/.venv" ]; then
-      echo "tutor: creating the speech environment (uv sync) — first run only"
+    if [ ! -d "$PY/.venv" ] || [ "''${NEED_SYNC:-0}" = 1 ]; then
+      echo "tutor: creating/updating the speech environment (uv sync)"
       ( cd "$PY" && uv sync --no-progress )
     fi
     export TUTOR_PYTHON_DIR="$PY"

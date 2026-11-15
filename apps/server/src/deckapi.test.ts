@@ -5,7 +5,7 @@ import { createApp } from './app'
 import type { App, Deps } from './context'
 import { openDb } from './db/client'
 import { parseInstruction } from './deck/generate'
-import type { PlannedCard, Planner } from './deck/plan'
+import type { PlannedCard, Planner, PlanRequest } from './deck/plan'
 import type { Role } from './env'
 import { EventBus } from './events'
 import type { Fetcher } from './frequency/source'
@@ -20,7 +20,9 @@ const defaults: Record<Role, string> = {
 }
 
 /** A tiny stand-in for a pulled frequency list (no network in tests). */
-const FAKE_LIST = ['的 100', '我 90', '你 80', '他 70', '好 60', '是 50', '不 40', '在 30'].join('\n')
+const FAKE_LIST = ['的 100', '我 90', '你 80', '他 70', '好 60', '是 50', '不 40', '在 30'].join(
+  '\n',
+)
 
 const fetcher: Fetcher = async () => FAKE_LIST
 
@@ -101,6 +103,16 @@ test('parseInstruction reads the character variant and reading script', () => {
   expect(zh.readingScript).toBe('zhuyin')
   expect(parseInstruction('simplified chinese with pinyin', 'zh').variant).toBe('simplified')
   expect(parseInstruction('japanese with furigana', 'ja').readingScript).toBe('kana')
+  expect(parseInstruction('japanese with romaji', 'ja').readingScript).toBe('romaji')
+  // a Chinese prompt remembered from another deck never forces Zhuyin on Japanese
+  expect(parseInstruction('traditional chinese with zhuyin', 'ja')).toEqual({
+    variant: undefined,
+    readingScript: 'kana',
+    pitchAccent: false,
+  })
+  // pitch-accent metadata is opt-in, by instruction
+  expect(parseInstruction('japanese with pitch accent', 'ja').pitchAccent).toBe(true)
+  expect(parseInstruction('japanese frequency list', 'ja').pitchAccent).toBe(false)
 })
 
 test('POST /api/decks builds a deck from an instruction and a pulled list', async () => {
@@ -172,6 +184,110 @@ test('POST /api/decks/:id/grow appends an n+1 batch, optionally on a topic', asy
   sqlite.close()
 })
 
+test('growing a deck keeps its original prompt and adds the topic', async () => {
+  const calls: PlanRequest[] = []
+  const recording: Planner = async (req) => {
+    calls.push(req)
+    return req.words.slice(0, req.count).map((w) => ({
+      template: 'vocab' as const,
+      front: `meaning ${w}`,
+      back: w,
+      reading: `r-${w}`,
+    }))
+  }
+  const { app, sqlite } = makeApp({ planner: recording })
+  const cookie = await signup(app)
+  const created = (await (
+    await app.request(
+      '/api/decks',
+      auth(cookie, json({ instruction: 'my special deck prompt', targetLang: 'zh', count: 2 })),
+    )
+  ).json()) as DeckBody
+
+  await app.request(
+    `/api/decks/${created.deck.id}/grow`,
+    auth(cookie, json({ topic: 'ordering at a restaurant', count: 1 })),
+  )
+  const last = calls[calls.length - 1]!
+  // the prompt is not replaced by the topic — both reach the planner
+  expect(last.instruction).toBe('my special deck prompt')
+  expect(last.topic).toBe('ordering at a restaurant')
+  sqlite.close()
+})
+
+test('a new deck reuses the prompt from the previous one', async () => {
+  const { app, sqlite } = makeApp()
+  const cookie = await signup(app)
+  await app.request(
+    '/api/decks',
+    auth(
+      cookie,
+      json({ instruction: 'traditional Chinese, zhuyin only', targetLang: 'zh', count: 2 }),
+    ),
+  )
+
+  // the settings expose it for the deck builder to prefill
+  const settings = (await (await app.request('/api/settings', auth(cookie))).json()) as {
+    deckInstruction: string
+  }
+  expect(settings.deckInstruction).toBe('traditional Chinese, zhuyin only')
+
+  // an import with no typed prompt still carries it
+  const apkg = readFileSync(join(import.meta.dir, 'anki/fixtures/sample.apkg'))
+  const form = new FormData()
+  form.set('file', new File([apkg], 'sample.apkg'))
+  form.set('targetLang', 'zh')
+  form.set('count', '4')
+  form.set('wordField', '0')
+  const res = await app.request('/api/decks/import', auth(cookie, { method: 'POST', body: form }))
+  expect(res.status).toBe(201)
+  const body = (await res.json()) as DeckBody
+  expect(body.deck.settings.instruction).toBe('traditional Chinese, zhuyin only')
+  sqlite.close()
+})
+
+test('DELETE /api/decks/:id removes the deck and its cards', async () => {
+  const { app, sqlite } = makeApp()
+  const cookie = await signup(app)
+  const created = (await (
+    await app.request(
+      '/api/decks',
+      auth(cookie, json({ instruction: 'chinese frequency list', targetLang: 'zh', count: 2 })),
+    )
+  ).json()) as DeckBody
+
+  const res = await app.request(`/api/decks/${created.deck.id}`, auth(cookie, { method: 'DELETE' }))
+  expect(res.status).toBe(200)
+  expect(await res.json()).toEqual({ ok: true, deckId: created.deck.id })
+
+  const list = (await (await app.request('/api/decks', auth(cookie))).json()) as {
+    decks: unknown[]
+  }
+  expect(list.decks).toEqual([])
+  const cards = await app.request(`/api/decks/${created.deck.id}/cards`, auth(cookie))
+  expect(cards.status).toBe(404)
+  sqlite.close()
+})
+
+test('a deck cannot be deleted by another account', async () => {
+  const { app, sqlite } = makeApp()
+  const alice = await signup(app, 'alice')
+  const bob = await signup(app, 'bob')
+  const created = (await (
+    await app.request(
+      '/api/decks',
+      auth(alice, json({ instruction: 'chinese frequency list', targetLang: 'zh', count: 2 })),
+    )
+  ).json()) as DeckBody
+
+  const denied = await app.request(`/api/decks/${created.deck.id}`, auth(bob, { method: 'DELETE' }))
+  expect(denied.status).toBe(404)
+
+  const stillThere = await app.request(`/api/decks/${created.deck.id}/cards`, auth(alice))
+  expect(stillThere.status).toBe(200)
+  sqlite.close()
+})
+
 test('a deck override hides readings for its cards', async () => {
   const { app, sqlite } = makeApp()
   const cookie = await signup(app)
@@ -187,10 +303,7 @@ test('a deck override hides readings for its cards', async () => {
       (await (
         await app.request(
           '/api/practice/next',
-          auth(
-            cookie,
-            json({ deckId: created.deck.id, exerciseId: 'translate.back_to_front' }),
-          ),
+          auth(cookie, json({ deckId: created.deck.id, exerciseId: 'translate.back_to_front' })),
         )
       ).json()) as { instance: { data: { reading?: string } } }
     ).instance.data.reading
@@ -204,6 +317,89 @@ test('a deck override hides readings for its cards', async () => {
   )
   expect(patched.status).toBe(200)
   expect(await reading()).toBe('')
+  sqlite.close()
+})
+
+test('pitch-accent metadata flows from the planner to the learner', async () => {
+  const calls: PlanRequest[] = []
+  const pitchPlanner: Planner = async (req) => {
+    calls.push(req)
+    return req.words.slice(0, req.count).map((w) => ({
+      template: 'vocab' as const,
+      front: `meaning ${w}`,
+      back: w,
+      reading: `r-${w}`,
+      metadata: { pitch: { syllables: ['か', 'み'], levels: ['L', 'H'], drop: 2 } },
+    }))
+  }
+  const { app, sqlite } = makeApp({ planner: pitchPlanner })
+  const cookie = await signup(app)
+  const created = (await (
+    await app.request(
+      '/api/decks',
+      auth(cookie, json({ instruction: 'japanese with pitch accent', targetLang: 'ja', count: 2 })),
+    )
+  ).json()) as DeckBody
+  expect(calls[0]!.pitchAccent).toBe(true)
+  expect(created.deck.settings.pitchAccent).toBe(true)
+
+  const cards = (await (
+    await app.request(`/api/decks/${created.deck.id}/cards`, auth(cookie))
+  ).json()) as {
+    cards: { metadata: { pitch?: { levels: string[]; drop?: number; syllables?: string[] } } }[]
+  }
+  expect(cards.cards[0]!.metadata.pitch).toEqual({
+    syllables: ['か', 'み'],
+    levels: ['L', 'H'],
+    drop: 2,
+  })
+
+  // the annotation reaches the exercise data (so the UI can render it)
+  const next = (await (
+    await app.request(
+      '/api/practice/next',
+      auth(cookie, json({ deckId: created.deck.id, exerciseId: 'translate.back_to_front' })),
+    )
+  ).json()) as { instance: { data: { pitch?: { levels: string[] } } } }
+  expect(next.instance.data.pitch?.levels).toEqual(['L', 'H'])
+  sqlite.close()
+})
+
+test('PATCH a card metadata merges annotations and null removes one', async () => {
+  const { app, sqlite } = makeApp()
+  const cookie = await signup(app)
+  const created = (await (
+    await app.request(
+      '/api/decks',
+      auth(cookie, json({ instruction: 'chinese frequency list', targetLang: 'zh', count: 2 })),
+    )
+  ).json()) as DeckBody
+  const list = (await (
+    await app.request(`/api/decks/${created.deck.id}/cards`, auth(cookie))
+  ).json()) as { cards: { id: string }[] }
+  const cardId = list.cards[0]!.id
+
+  const first = (await (
+    await app.request(
+      `/api/decks/${created.deck.id}/cards/${cardId}`,
+      auth(cookie, {
+        ...json({ metadata: { pitch: 'LHHL', radical: '水' } }),
+        method: 'PATCH',
+      }),
+    )
+  ).json()) as { card: { metadata: { pitch?: { levels: string[] }; radical?: string } } }
+  // the "LHHL" shorthand is normalised into a contour; other keys pass through
+  expect(first.card.metadata.pitch?.levels).toEqual(['L', 'H', 'H', 'L'])
+  expect(first.card.metadata.radical).toBe('水')
+
+  const second = (await (
+    await app.request(
+      `/api/decks/${created.deck.id}/cards/${cardId}`,
+      auth(cookie, { ...json({ metadata: { radical: null } }), method: 'PATCH' }),
+    )
+  ).json()) as { card: { metadata: { pitch?: unknown; radical?: string } } }
+  expect(second.card.metadata.radical).toBeUndefined()
+  expect(second.card.metadata.pitch).toBeDefined()
   sqlite.close()
 })
 

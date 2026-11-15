@@ -1,6 +1,6 @@
 import { api } from './api'
 import type { SkillOutcome } from './skills'
-import type { CardTemplate } from './types'
+import type { Card, CardTemplate } from './types'
 
 export interface Instance {
   exerciseId: string
@@ -121,6 +121,30 @@ export const updateDeck = (deckId: string, body: { name?: string; settings?: Dec
   api<{ deck: Deck; settings?: DeckSettings }>(`/api/decks/${deckId}`, {
     method: 'PATCH',
     body: JSON.stringify(body),
+  })
+
+/** Delete a deck completely: cards, SRS state, history and deck chats. */
+export const deleteDeck = (deckId: string) =>
+  api<{ ok: boolean; deckId: string }>(`/api/decks/${deckId}`, { method: 'DELETE' })
+
+/** Every card in a deck (with its readings, payload and metadata). */
+export const getDeckCards = (deckId: string) =>
+  api<{ deck: Deck; cards: Card[] }>(`/api/decks/${deckId}/cards`)
+
+/** A card edit: content and/or the language-agnostic metadata bag. */
+export interface CardPatch {
+  front?: string
+  back?: string
+  readings?: Record<string, string>
+  /** Merged by key server-side; `null` removes an annotation. */
+  metadata?: Record<string, unknown>
+}
+
+/** Update one card's content; metadata is merged by key. */
+export const updateDeckCard = (deckId: string, cardId: string, patch: CardPatch) =>
+  api<{ card: Card }>(`/api/decks/${deckId}/cards/${cardId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
   })
 export const listExercises = () =>
   api<{ exercises: { id: string; title: string; modality: string }[] }>('/api/exercises')

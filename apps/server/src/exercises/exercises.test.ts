@@ -16,6 +16,7 @@ function ctx(partial: Partial<Card> = {}, distractors: string[] = []): ExerciseC
     readings: { zhuyin: 'ㄋㄧˇ ㄏㄠˇ' },
     tags: [],
     payload: {},
+    metadata: {},
     origin: 'curated',
     createdAt: 0,
     ...partial,
@@ -261,6 +262,23 @@ test('speak_word.gradeAudio uses the injected assessor', async () => {
   expect(Array.isArray(r.detail?.words)).toBe(true)
 })
 
+test('speak_word.gradeAudio asks for a retry when the clip had no speech', async () => {
+  const def = registry.get('speak_word')!
+  const c = ctx()
+  const inst = await def.generate(c)
+  let judged = false
+  c.assess = async () => ({ transcript: '', items: [], duration: 0.2, noSpeech: true })
+  c.judge = async () => {
+    judged = true
+    return undefined
+  }
+  const r = await def.gradeAudio!(c, inst, new Uint8Array())
+  expect(r.detail?.noSpeech).toBe(true)
+  expect(r.correct).toBe(false)
+  expect(r.feedback).toMatch(/catch|again/i)
+  expect(judged).toBe(false)
+})
+
 test('speak_word.gradeAudio detects a missing word', async () => {
   const def = registry.get('speak_word')!
   const c = ctx({ back: '你好世界' })
@@ -303,4 +321,34 @@ test('speak_word.gradeAudio prefers the judge result', async () => {
   expect(r.score).toBe(88)
   expect(r.feedback).toBe('Good tones.')
   expect((r.detail?.words as { tip: string }[])[1]!.tip).toBe('tone 3')
+})
+
+test('every typing exercise names the language of its answer (keyboard hint)', async () => {
+  // The client spreads this onto the input's `lang` so the platform can hint the
+  // right keyboard / IME — it cannot switch it for us (docs/DESIGN.md §14.2).
+  const cases: [string, Partial<Card>, string][] = [
+    ['translate.front_to_back', { payload: {} }, 'zh'],
+    // the answer is in the learner's own language, not the target
+    ['translate.back_to_front', {}, 'en'],
+    ['type_listen', {}, 'zh'],
+    ['converse', {}, 'zh'],
+    ['grammar_cloze', { payload: { rule: 'negation with 不' } }, 'zh'],
+    ['sentence_build', { payload: { tokens: ['我', '喝'], gloss: 'I drink' } }, 'zh'],
+  ]
+  for (const [id, card, lang] of cases) {
+    const inst = await registry.get(id)!.generate(ctx(card))
+    expect(inst.data.answerLang).toBe(lang)
+  }
+
+  // a non-Chinese target reports its own language
+  const es = await registry.get('sentence_build')!.generate(
+    ctx({
+      targetLang: 'es',
+      back: 'yo bebo té',
+      front: 'I drink tea',
+      readings: {},
+      payload: { tokens: ['yo', 'bebo', 'té'], gloss: 'I drink tea' },
+    }),
+  )
+  expect(es.data.answerLang).toBe('es')
 })

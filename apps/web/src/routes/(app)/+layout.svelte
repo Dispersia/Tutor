@@ -1,14 +1,36 @@
 <script lang="ts">
+  import { onMount } from 'svelte'
   import { goto } from '$app/navigation'
   import { page } from '$app/state'
+  import { api } from '#lib/api'
   import { session } from '#lib/session.svelte'
   import { href, stripBase } from '#lib/paths'
+  import { setVoicePrefs, type VoicePrefs } from '#lib/voices'
+  import { htmlLang } from '#lib/lang'
   import type { LayoutProps } from './$types'
 
   let { children }: LayoutProps = $props()
 
   $effect(() => {
     if (session.loaded && !session.user) void goto(href('/login'))
+  })
+
+  // Label the document with the language its content is written in — the
+  // learner's own language (prompts, meanings and feedback use it). No browser
+  // can switch the OS keyboard for us; this is the best-effort hint (DESIGN
+  // §14.2). Target-language text is tagged per element instead.
+  $effect(() => {
+    if (typeof document === 'undefined') return
+    const tag = htmlLang(session.user?.nativeLang ?? 'en')
+    if (tag) document.documentElement.lang = tag
+  })
+
+  // Voice choices are per account and must reach every playback path, not just
+  // the Settings screen that saved them.
+  onMount(() => {
+    api<{ voice?: VoicePrefs }>('/api/settings')
+      .then((s) => setVoicePrefs(s.voice))
+      .catch(() => {})
   })
 
   /** Tab icons are drawn, one stroke and weight, never emoji. */

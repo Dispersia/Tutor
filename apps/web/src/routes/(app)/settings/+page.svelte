@@ -17,7 +17,7 @@
     SpeechStatus,
     StudyPrefs,
   } from '#lib/types'
-  import { VOICE_PRESETS } from '#lib/voices'
+  import { VOICE_PRESETS, setVoicePrefs } from '#lib/voices'
   import Spinner from '#lib/components/Spinner.svelte'
 
   const ROLE_KEYS: Role[] = ['conversation', 'judge', 'generator', 'translator']
@@ -85,6 +85,7 @@
       roleDefaults = s.roleDefaults
       voiceMode = s.voice.mode
       voices = s.voice.voices
+      setVoicePrefs({ mode: voiceMode, voices })
       if (s.study) study = s.study
       keyStatus = s.openrouter.key
       foodThreshold = s.foodThreshold ?? 50
@@ -217,6 +218,8 @@
         method: 'PUT',
         body: JSON.stringify({ voice: { mode: voiceMode, voices } }),
       })
+      // playback reads this module directly — no reload needed
+      setVoicePrefs({ mode: voiceMode, voices })
       note = 'Voice settings saved.'
     } catch (e) {
       error = (e as Error).message
@@ -425,11 +428,15 @@
   <div class="mt-3 space-y-2">
     {#each Object.entries(VOICE_PRESETS) as [lc, list] (lc)}
       <label class="block">
-        <span class="mb-1 block text-xs text-ink-400">{lc.toUpperCase()}</span>
+        <span class="mb-1 block text-xs text-ink-400"
+          >{lc.toUpperCase()}{voiceMode === 'design' ? ' · voice description' : ''}</span
+        >
         <input
-          list="voices-{lc}"
+          list={voiceMode === 'preset' ? `voices-${lc}` : undefined}
           bind:value={voices[lc]}
-          placeholder={list[0]}
+          placeholder={voiceMode === 'design'
+            ? 'a calm, professional teacher with a clear, warm voice'
+            : list[0]}
           class="w-full rounded-md border border-ink-600 bg-ink-900 px-3 py-2 text-sm"
         />
         <datalist id="voices-{lc}">
