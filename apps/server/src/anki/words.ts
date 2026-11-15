@@ -34,6 +34,8 @@ export interface AnkiInspection {
   noteCount: number
   /** Best-guess field indices, used only to pre-select the pickers. */
   suggested: { wordField: number; readingField: number; meaningField: number }
+  /** Target language guessed from the deck's script (kana → Japanese, …). */
+  suggestedLang?: string
 }
 
 export interface WordFieldOptions {
@@ -139,6 +141,37 @@ function rowsOf(notes: AnkiNote[]): string[][] {
   return notes.map((n) => n.fields.map(cleanField))
 }
 
+/**
+ * Guesses the target language from the script the deck is written in. Kana wins
+ * over Han (Japanese uses both), Hangul is Korean, Han alone is Chinese. Latin
+ * scripts are ambiguous, so they return undefined and the caller decides.
+ */
+export function detectLanguage(deck: AnkiDeck): string | undefined {
+  let kana = 0
+  let han = 0
+  let hangul = 0
+  let cyrillic = 0
+  let arabic = 0
+  for (const note of dominantNotes(deck).slice(0, 200)) {
+    for (const field of note.fields) {
+      for (const ch of cleanField(field)) {
+        const c = ch.codePointAt(0)!
+        if (c >= 0x3040 && c <= 0x30ff) kana++
+        else if (c >= 0x4e00 && c <= 0x9fff) han++
+        else if (c >= 0xac00 && c <= 0xd7af) hangul++
+        else if (c >= 0x0400 && c <= 0x04ff) cyrillic++
+        else if (c >= 0x0600 && c <= 0x06ff) arabic++
+      }
+    }
+  }
+  if (kana > 0) return 'ja'
+  if (hangul > 0) return 'ko'
+  if (han > 0) return 'zh'
+  if (cyrillic > 0) return 'ru'
+  if (arabic > 0) return 'ar'
+  return undefined
+}
+
 /** Best-guess field indices (used only to pre-select the pickers). */
 export function suggestAnkiFields(
   deck: AnkiDeck,
@@ -163,6 +196,7 @@ export function inspectAnki(deck: AnkiDeck, targetLang: string): AnkiInspection 
     sample: rowsOf(notes.slice(0, 5)),
     noteCount: notes.length,
     suggested: suggestAnkiFields(deck, targetLang),
+    suggestedLang: detectLanguage(deck),
   }
 }
 

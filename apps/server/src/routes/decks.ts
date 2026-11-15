@@ -8,7 +8,7 @@ import {
   updateDeckSettings,
 } from '../db/repo'
 import { readApkg } from '../anki/parse'
-import { inspectAnki, wordsFromAnki } from '../anki/words'
+import { detectLanguage, inspectAnki, wordsFromAnki } from '../anki/words'
 import { buildDeck, growDeck, parseInstruction } from '../deck/generate'
 import { llmPlanner, type Planner } from '../deck/plan'
 import { roleReasoning } from '../env'
@@ -196,10 +196,14 @@ export function registerDecks(app: App) {
     const form = await c.req.formData()
     const file = form.get('file')
     if (!(file instanceof File)) return c.json({ error: 'an .apkg file is required' }, 400)
-    const targetLang = String(form.get('targetLang') ?? user.targetLang ?? 'zh')
     try {
       const bytes = new Uint8Array(await file.arrayBuffer())
       const parsed = await readApkg(bytes)
+      const targetLang =
+        String(form.get('targetLang') ?? '').trim() ||
+        detectLanguage(parsed) ||
+        user.targetLang ||
+        'zh'
       return c.json(inspectAnki(parsed, targetLang))
     } catch (err) {
       return c.json({ error: (err as Error).message }, 502)
@@ -217,7 +221,7 @@ export function registerDecks(app: App) {
     const form = await c.req.formData()
     const file = form.get('file')
     if (!(file instanceof File)) return c.json({ error: 'an .apkg file is required' }, 400)
-    const targetLang = String(form.get('targetLang') ?? user.targetLang ?? 'zh')
+    const requestedLang = String(form.get('targetLang') ?? '').trim()
     const sourceLang = String(form.get('sourceLang') ?? user.nativeLang ?? 'en')
     const count = Math.min(Math.max(Number(form.get('count') ?? 20) || 20, 1), 50)
     const fieldIndex = (name: string): number | undefined => {
@@ -233,6 +237,8 @@ export function registerDecks(app: App) {
     try {
       const bytes = new Uint8Array(await file.arrayBuffer())
       const parsed = await readApkg(bytes)
+      // the deck's own script decides the language unless the caller picked one
+      const targetLang = requestedLang || detectLanguage(parsed) || user.targetLang || 'zh'
       const list = wordsFromAnki(parsed, targetLang, { wordField, readingField, meaningField })
       if (list.words.length === 0) return c.json({ error: 'no words found in that deck' }, 422)
 

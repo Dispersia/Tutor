@@ -97,6 +97,8 @@ export interface AnkiInspection {
   noteCount: number
   /** Best-guess indices, used only to pre-select the pickers. */
   suggested: { wordField: number; readingField: number; meaningField: number }
+  /** Target language guessed from the deck's script (kana → Japanese, …). */
+  suggestedLang?: string
 }
 
 /** Inspect an uploaded Anki `.apkg` (field names + preview) before importing. */
