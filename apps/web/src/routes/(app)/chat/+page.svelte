@@ -2,15 +2,16 @@
   import { onMount } from 'svelte'
   import { api } from '#lib/api'
   import { drainSentences, streamChat } from '#lib/chat'
-  import { Recorder, micSupported } from '#lib/recorder'
+  import { Recorder, micSupported, MIN_CLIP_MS } from '#lib/recorder'
   import { session } from '#lib/session.svelte'
   import { createSpeaker, stopAudio, transcribe, wakeSpeech, type Speaker } from '#lib/speech'
   import { accentStyle } from '#lib/theme'
   import { ACCENT } from '#lib/theme'
   import Icon from '#lib/components/Icon.svelte'
   import Spinner from '#lib/components/Spinner.svelte'
+  import { typingAttrs } from '#lib/lang'
   import type { ChatSession, Message } from '#lib/types'
-  import { voiceFor } from '#lib/voices'
+  import { speechOpts } from '#lib/voices'
 
   let messages = $state<Message[]>([])
   let sessionId = $state<string | null>(null)
@@ -93,7 +94,7 @@
       // it is complete, so audio starts before the model has finished writing.
       if (ttsOn) {
         sp = createSpeaker(
-          { voice: voiceFor(lang), language: lang, mode: 'preset' },
+          speechOpts(lang),
           (e) => (error = `Playback: ${e.message}`),
         )
         speaker = sp
@@ -147,6 +148,10 @@
     if (recording) {
       recording = false
       const blob = await recorder.stop()
+      if (recorder.elapsedMs < MIN_CLIP_MS) {
+        error = 'That was too quick — hold the mic and speak.'
+        return
+      }
       transcribing = true
       try {
         const text = await transcribe(blob, lang)
@@ -237,6 +242,7 @@
     <textarea
       bind:value={input}
       onkeydown={onKey}
+      {...typingAttrs(lang)}
       rows="1"
       placeholder="Type…"
       class="max-h-32 flex-1 resize-none bg-transparent px-2 py-2 outline-none"

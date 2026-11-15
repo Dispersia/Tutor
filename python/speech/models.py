@@ -134,7 +134,7 @@ def clear_mlx_cache() -> None:
 
 @dataclass
 class Manager:
-    idle_timeout_s: float = float(os.environ.get("TUTOR_SPEECH_IDLE_TIMEOUT", "600"))
+    idle_timeout_s: float = float(os.environ.get("TUTOR_SPEECH_IDLE_TIMEOUT", "3600"))
     exit_on_idle: bool = os.environ.get("TUTOR_SPEECH_EXIT_ON_IDLE", "true").lower() == "true"
     reaper_interval_s: float = 15.0
 
@@ -257,6 +257,53 @@ class _InferenceGuard:
 
 # --- thin adapters around the mlx-audio APIs (defensive: versions differ) ----
 
+# A clip with less than this much speech-like energy is treated as "no speech".
+_MIN_SPEECH_S = 0.12
+# Below this peak a clip is silence/room tone, never a phrase (float32 samples).
+_MIN_PEAK = 4e-3
+
+
+def speech_seconds(audio_path: str) -> float:
+    """
+    Seconds of speech-like energy in a clip (a cheap energy VAD).
+
+    Qwen3-ASR is a generative model: fed silence or a clipped fragment it happily
+    invents a plausible word ("Okay.", "Written.", "嗯。"), which then looks like a
+    transcription error to the learner. We only run it when there is something to
+    transcribe. Returns -1.0 when the audio cannot be read (caller should not block).
+    """
+    import numpy as np  # type: ignore
+    import soundfile as sf  # type: ignore
+
+    try:
+        x, sr = sf.read(audio_path, dtype="float32")
+    except Exception as exc:  # pragma: no cover - unreadable file
+        log.debug("speech_seconds: cannot read %s (%s)", audio_path, exc)
+        return -1.0
+    sr = int(sr or 16000)
+    if getattr(x, "ndim", 1) > 1:
+        x = x.mean(axis=1)
+    if len(x) == 0:
+        return 0.0
+    peak = float(np.max(np.abs(x)))
+    if peak < _MIN_PEAK:
+        return 0.0
+    frame = max(1, int(0.02 * sr))
+    n = len(x) // frame
+    if n == 0:
+        return 0.0
+    rms = np.sqrt(np.mean(x[: n * frame].reshape(n, frame) ** 2, axis=1))
+    # Frame is "voiced" when it rises clearly above the clip's own noise floor.
+    active = int(np.count_nonzero(rms > max(peak * 0.05, 2e-3)))
+    return active * (frame / sr)
+
+
+def has_speech(audio_path: str) -> bool:
+    seconds = speech_seconds(audio_path)
+    if seconds < 0:  # unreadable → don't second-guess the model
+        return True
+    return seconds >= _MIN_SPEECH_S
+
 
 def asr_transcribe(model: Any, audio_path: str, language: str | None = None, hint: str | None = None):
     kwargs: dict[str, Any] = {}
@@ -331,6 +378,7 @@ def tts_synthesize(
     instruct: str | None = None,
     mode: str = "preset",
     temperature: float | None = None,
+    max_tokens: int | None = None,
 ):
     temp = TTS_TEMPERATURE if temperature is None else temperature
     if mode == "design" and hasattr(model, "generate_voice_design"):
@@ -339,6 +387,7 @@ def tts_synthesize(
             language=language,
             instruct=instruct or DEFAULT_DESIGN_INSTRUCT,
             temperature=temp,
+            max_tokens=max_tokens,
         )
     elif hasattr(model, "generate_custom_voice"):
         speaker = voice or _default_speaker(model, language)
@@ -348,6 +397,7 @@ def tts_synthesize(
             language=language,
             instruct=instruct or DEFAULT_INSTRUCT,
             temperature=temp,
+            max_tokens=max_tokens,
         )
     else:
         kwargs: dict[str, Any] = {"voice": voice, "temperature": temp}

@@ -497,7 +497,17 @@ export function registerPractice(app: App) {
 
     const audio = new Uint8Array(await file.arrayBuffer())
     const learner = learnerOf(user)
-    const assess: AssessFn = deps.assess ?? makeAssessor(deps, card.targetLang)
+    // Bias the ASR toward the words actually in play (this deck when we know it,
+    // else everything in the target language) so a near-miss is not replaced by
+    // an unrelated word. Capped: a short list is context, a long one is noise.
+    const vocabPool = card.deckId
+      ? listCards(deps.db, user.id, card.deckId)
+      : listCards(deps.db, user.id)
+    const hint = [...new Set([card.back, ...vocabPool.map((c) => c.back)])]
+      .filter(Boolean)
+      .slice(0, 40)
+      .join(', ')
+    const assess: AssessFn = deps.assess ?? makeAssessor(deps, card.targetLang, hint)
     const ctx = {
       card,
       learner,
@@ -512,6 +522,17 @@ export function registerPractice(app: App) {
     try {
       const instance = await def.generate(ctx)
       const result = await def.gradeAudio(ctx, instance, audio)
+      // A silent/too-short clip must not count as a wrong answer: no review, no
+      // XP, no SRS — just ask for another attempt.
+      if (result.detail?.noSpeech) {
+        return c.json({
+          result: { ...result, xp: 0 },
+          skill: null,
+          srs: null,
+          lessonCompleted: false,
+          stats: summary(deps.db, user.id),
+        })
+      }
       const xp = def.xp(result, instance)
       addReview(deps.db, {
         cardId: card.id,

@@ -92,7 +92,7 @@ phone (tailnet) ──https──► tailscaled ──► 127.0.0.1:4318 (tutor)
   the prefix for that case), so `http://127.0.0.1:4318/tutor/` works too.
 - The app trusts `X-Forwarded-Proto: https`, so session cookies are `Secure`.
 - The app binds `127.0.0.1` only; the gateway is the only way in.
-- Speech models start on demand and **unload when idle** (10 min), giving the Mac
+- Speech models start on demand and **unload when idle** (1 hour), giving the Mac
   its RAM back between sessions.
 
 Open `https://aarons-mac-mini.tail7c1ddb.ts.net/tutor/` on your phone (Tailscale

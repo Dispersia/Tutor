@@ -12,6 +12,7 @@ const card: Card = {
   readings: { pinyin: 'nǐ hǎo' },
   tags: [],
   payload: {},
+  metadata: {},
   origin: 'curated',
   createdAt: 0,
 }

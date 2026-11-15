@@ -280,17 +280,32 @@
   }
 
   /**
-   * On the result screen there is no input to submit, so Enter should carry
-   * forward like the "Next" button does (mobile keyboards included).
+   * Enter should always do the obvious thing for the screen at hand:
+   *
+   * - On a result screen it carries forward like the "Next" button.
+   * - On an exercise it fires the single primary button (the "Got it" of a new
+   *   word, "Check" when the answer is built from tiles) — anything marked
+   *   `data-enter-action`.
+   *
+   * Typing fields keep Enter for themselves (a form submits, a textarea gets a
+   * newline) and links follow normally. A focused choice or button activates
+   * natively when there is no primary action on screen.
    */
   function onKeydown(e: KeyboardEvent) {
     if (e.key !== 'Enter' || e.repeat) return
-    const t = e.target as HTMLElement | null
-    const tag = t?.tagName
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || t?.isContentEditable) return
-    if (loading || busy || advancing || !result) return
-    e.preventDefault()
-    void nextStep()
+    if (loading || busy || advancing) return
+    const t = e.target instanceof HTMLElement ? e.target : null
+    if (t?.closest('input, textarea, select, a') || t?.isContentEditable) return
+    if (result) {
+      e.preventDefault()
+      void nextStep()
+      return
+    }
+    const primary = document.querySelector<HTMLButtonElement>('[data-enter-action]:not(:disabled)')
+    if (primary) {
+      e.preventDefault()
+      primary.click()
+    }
   }
 
   const RATING_NAMES = { 1: 'Again', 2: 'Hard', 3: 'Good', 4: 'Easy' } as const

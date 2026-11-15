@@ -1,9 +1,15 @@
-import type { Card, CardType } from '@tutor/core'
-import { and, asc, desc, eq, sql } from 'drizzle-orm'
-import { mergeDeckSettings, parseDeckSettings, type DeckSettings } from '../deck/settings'
+import type { Card, CardMetadata, CardType } from '@tutor/core'
+import { and, asc, desc, eq, inArray, like, sql } from 'drizzle-orm'
+import {
+  DECK_INSTRUCTION_KEY,
+  mergeDeckSettings,
+  parseDeckSettings,
+  type DeckSettings,
+} from '../deck/settings'
 import type { Role } from '../env'
 import type { Db } from './client'
 import {
+  attempts,
   authSessions,
   cards,
   decks,
@@ -347,6 +353,21 @@ export function getDeck(db: Db, deckId: string, userId: string) {
   return { ...row, settings: parseDeckSettings(row.settingsJson) }
 }
 
+/**
+ * The prompt to reuse for new decks and growth batches. The learner's saved
+ * prompt wins; older decks predate that setting, so fall back to the first
+ * explicit (non-generic) prompt already stored on one of their decks.
+ */
+export function rememberedDeckInstruction(db: Db, userId: string): string | undefined {
+  const saved = getUserSetting(db, userId, DECK_INSTRUCTION_KEY)
+  if (saved) return saved
+  for (const deck of listDecks(db, userId)) {
+    const prompt = deck.settings.instruction
+    if (prompt && !prompt.startsWith('Build a deck from the imported deck ')) return prompt
+  }
+  return undefined
+}
+
 /** The stable key a deck's lessons are addressed by (level if set, else id). */
 export function deckKey(deck: { id: string; level: string | null }): string {
   return deck.level ?? deck.id
@@ -379,6 +400,8 @@ export interface NewCard {
   readings?: Record<string, string>
   tags?: string[]
   payload?: Record<string, unknown>
+  /** Language-agnostic annotations (pitch accent, radicals, …). */
+  metadata?: CardMetadata
   origin?: 'curated' | 'llm' | 'manual'
 }
 
@@ -395,6 +418,7 @@ export function addCard(db: Db, userId: string, c: NewCard) {
     readingsJson: JSON.stringify(c.readings ?? {}),
     tagsJson: JSON.stringify(c.tags ?? []),
     payloadJson: JSON.stringify(c.payload ?? {}),
+    metadataJson: JSON.stringify(c.metadata ?? {}),
     origin: c.origin ?? 'manual',
     createdAt: now(),
   }
@@ -410,7 +434,13 @@ export function updateCard(
   db: Db,
   cardId: string,
   userId: string,
-  patch: { front?: string; back?: string; readings?: Record<string, string> },
+  patch: {
+    front?: string
+    back?: string
+    readings?: Record<string, string>
+    /** Replaces the whole metadata bag when given (merge by key at the caller). */
+    metadata?: CardMetadata
+  },
 ): void {
   const row = db.select().from(cards).where(eq(cards.id, cardId)).get()
   if (!row || row.userId !== userId) return
@@ -418,16 +448,57 @@ export function updateCard(
   if (patch.front !== undefined) set.front = patch.front
   if (patch.back !== undefined) set.back = patch.back
   if (patch.readings !== undefined) set.readingsJson = JSON.stringify(patch.readings)
+  if (patch.metadata !== undefined) set.metadataJson = JSON.stringify(patch.metadata)
   if (Object.keys(set).length > 0) db.update(cards).set(set).where(eq(cards.id, cardId)).run()
 }
 
 /**
- * Deletes a deck and its cards. Review / SRS rows are keyed by card id and are
- * left behind (harmless), so this never touches another user's history.
+ * Deletes a deck and everything that belongs to it: its cards, the learner's
+ * SRS state, attempt/review history, lesson progress, and any deck-scoped chat
+ * sessions. Other users' rows are never touched.
  */
 export function deleteDeck(db: Db, deckId: string, userId: string): void {
   const row = db.select().from(decks).where(eq(decks.id, deckId)).get()
   if (!row || row.userId !== userId) return
+
+  const cardIds = db
+    .select({ id: cards.id })
+    .from(cards)
+    .where(eq(cards.deckId, deckId))
+    .all()
+    .map((c) => c.id)
+
+  if (cardIds.length > 0) {
+    db.delete(srs)
+      .where(and(eq(srs.userId, userId), inArray(srs.cardId, cardIds)))
+      .run()
+    db.delete(reviews)
+      .where(and(eq(reviews.userId, userId), inArray(reviews.cardId, cardIds)))
+      .run()
+    db.delete(attempts)
+      .where(and(eq(attempts.userId, userId), inArray(attempts.cardId, cardIds)))
+      .run()
+  }
+
+  // Lessons are addressed as `${deck.level ?? deck.id}:${step}`.
+  const key = row.level ?? row.id
+  db.delete(lessonProgress)
+    .where(and(eq(lessonProgress.userId, userId), like(lessonProgress.lessonId, `${key}:%`)))
+    .run()
+
+  const sessionIds = db
+    .select({ id: sessions.id })
+    .from(sessions)
+    .where(and(eq(sessions.userId, userId), eq(sessions.deckId, deckId)))
+    .all()
+    .map((s) => s.id)
+  if (sessionIds.length > 0) {
+    db.delete(messages).where(inArray(messages.sessionId, sessionIds)).run()
+  }
+  db.delete(sessions)
+    .where(and(eq(sessions.userId, userId), eq(sessions.deckId, deckId)))
+    .run()
+
   db.delete(cards).where(eq(cards.deckId, deckId)).run()
   db.delete(decks).where(eq(decks.id, deckId)).run()
 }
@@ -451,6 +522,7 @@ function toCard(row: typeof cards.$inferSelect): Card {
     readings: parse<Record<string, string>>(row.readingsJson, {}),
     tags: parse<string[]>(row.tagsJson, []),
     payload: parse<Record<string, unknown>>(row.payloadJson, {}),
+    metadata: parse<CardMetadata>(row.metadataJson, {}),
     origin: row.origin as Card['origin'],
     createdAt: row.createdAt,
   }

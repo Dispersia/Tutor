@@ -5,18 +5,20 @@ A thin HTTP wrapper around the local MLX models so the Bun app can treat speech
 as a service it can start, use, and let die (docs/DESIGN.md §8, §9).
 
 Run:  uv run python -m speech.server
-Env:  TUTOR_SPEECH_PORT (4319), TUTOR_SPEECH_IDLE_TIMEOUT (600),
+Env:  TUTOR_SPEECH_PORT (4319), TUTOR_SPEECH_IDLE_TIMEOUT (3600),
       TUTOR_SPEECH_EXIT_ON_IDLE (true)
 """
 
 from __future__ import annotations
 
 import logging
+import math
 import os
 import subprocess
 import tempfile
 import time
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse, Response
@@ -72,10 +74,47 @@ def lang_name(code: str | None) -> str | None:
     return _LANGS.get(code.lower(), code)
 
 
+def _is_cjk(ch: str) -> bool:
+    o = ord(ch)
+    return (
+        0x3040 <= o <= 0x30FF  # kana
+        or 0x3400 <= o <= 0x4DBF  # CJK extension A
+        or 0x4E00 <= o <= 0x9FFF  # CJK unified
+        or 0xF900 <= o <= 0xFAFF
+        or 0xAC00 <= o <= 0xD7AF  # hangul
+    )
+
+
+def expected_speech_seconds(text: str) -> float:
+    """Rough duration a measured reading of `text` should take.
+
+    Qwen3-TTS occasionally fails to emit its end-of-speech token and keeps
+    "reading" filler after a short word (`これ` → “これ、うん、これ”). Extra
+    speech always pushes the clip past what the text can plausibly need, so the
+    TTS route checks this estimate and retries an over-long take.
+    """
+    t = text.strip()
+    if not t:
+        return 0.6
+    cjk = sum(1 for ch in t if _is_cjk(ch))
+    other = sum(1 for ch in t if not _is_cjk(ch) and ch.isalnum())
+    return 0.35 + 0.30 * cjk + 0.075 * other
+
+
+def _speech_token_cap(text: str) -> int:
+    """Stop a runaway generation early: ~12.5 speech tokens per second."""
+    seconds = expected_speech_seconds(text)
+    return max(24, min(2048, math.ceil(seconds * 12.5 * 1.8) + 12))
+
+
 def to_wav16k(src: Path) -> Path:
-    """Normalise any uploaded audio to 16 kHz mono WAV for the ASR models."""
-    if src.suffix.lower() == ".wav":
-        return src
+    """
+    Normalise any uploaded audio to 16 kHz mono WAV for the ASR models.
+
+    Never trust the extension: browsers send webm/opus (and other clients send
+    mp4/ogg) that our own routes sometimes carry under a `.wav` name, so always
+    let ffmpeg sniff the container.
+    """
     dst = src.with_suffix(".16k.wav")
     try:
         subprocess.run(
@@ -185,6 +224,9 @@ async def asr(
     path = await _save_upload(file)
     try:
         wav = to_wav16k(path)
+        if not models.has_speech(str(wav)):
+            # Don't let a silent/short clip become a hallucinated word (see models.has_speech).
+            return {"text": "", "segments": [], "lang": language, "ms": 0.0, "noSpeech": True}
         with manager.inference():
             model = manager.get("asr_lite" if lite else "asr")
             t0 = time.time()
@@ -217,6 +259,7 @@ async def assess(
     file: UploadFile = File(...),
     text: str = Form(...),
     language: str | None = Form(None),
+    hint: str | None = Form(None),
 ) -> dict:
     """One shot for pronunciation: transcribe the attempt + align it to `text`."""
     if not text.strip():
@@ -231,10 +274,14 @@ async def assess(
             duration = float(info.frames) / float(info.samplerate or 1)
         except Exception:
             duration = 0.0
+        if not models.has_speech(str(wav)):
+            # Silent/short attempt: report no speech rather than aligning silence
+            # and grading a hallucinated transcript.
+            return {"transcript": "", "items": [], "duration": duration, "noSpeech": True}
         t0 = time.time()
         with manager.inference():
             asr = manager.get("asr")
-            transcript = models.asr_transcribe(asr, str(wav), lang_name(language))
+            transcript = models.asr_transcribe(asr, str(wav), lang_name(language), hint)
             aligner = manager.get("align")
             items = models.align_text(aligner, str(wav), text, lang_name(language))
         return {
@@ -260,16 +307,39 @@ def tts(req: TtsRequest) -> Response:
     if not req.text.strip():
         raise HTTPException(status_code=400, detail="empty text")
     kind = "tts_design" if req.mode == "design" else "tts_preset"
+    expected = expected_speech_seconds(req.text)
+    # Anything this many times longer than the text can possibly take has
+    # picked up filler or a repeated word; take another sample instead.
+    limit = expected * 2.0
+    cap = _speech_token_cap(req.text)
+    attempts = max(1, int(os.environ.get("TUTOR_TTS_ATTEMPTS", "3")))
+
+    best: tuple[float, Any, int] | None = None  # (distance from expected, audio, rate)
     with manager.inference():
         model = manager.get(kind)
-        arr, sr = models.tts_synthesize(
-            model,
-            req.text,
-            voice=req.voice,
-            language=lang_name(req.language),
-            instruct=req.instruct,
-            mode=req.mode,
-        )
+        for _ in range(attempts):
+            arr, sr = models.tts_synthesize(
+                model,
+                req.text,
+                voice=req.voice,
+                language=lang_name(req.language),
+                instruct=req.instruct,
+                mode=req.mode,
+                max_tokens=cap,
+            )
+            if arr is None or len(arr) == 0:
+                continue
+            seconds = len(arr) / float(sr or 1)
+            distance = abs(seconds - expected)
+            # Keep the take closest to a plausible length as a fallback.
+            if best is None or distance < best[0]:
+                best = (distance, arr, sr)
+            if seconds <= limit:
+                break
+
+    if best is None:
+        raise HTTPException(status_code=500, detail="TTS produced no audio")
+    _, arr, sr = best
     fd, name = tempfile.mkstemp(suffix=".wav")
     os.close(fd)
     models.write_wav(name, arr, sr)

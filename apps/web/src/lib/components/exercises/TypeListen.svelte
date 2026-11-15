@@ -1,7 +1,8 @@
 <script lang="ts">
   import type { Instance } from '#lib/exercises'
+  import { typingAttrs } from '#lib/lang'
   import { speak } from '#lib/speech'
-  import { voiceFor } from '#lib/voices'
+  import { speechOpts } from '#lib/voices'
   import Icon from '../Icon.svelte'
   import Spinner from '../Spinner.svelte'
 
@@ -17,12 +18,13 @@
 
   const audioText = $derived((instance.data.audioText as string) ?? '')
   const language = $derived((instance.data.language as string) ?? undefined)
+  const answerLang = $derived((instance.data.answerLang as string) ?? language)
 
   async function play() {
     err = ''
     playing = true
     try {
-      await speak(audioText, { voice: voiceFor(language), language })
+      await speak(audioText, speechOpts(language))
     } catch (e) {
       err = (e as Error).message
     } finally {
@@ -52,12 +54,16 @@
   {#if err}<p class="text-xs text-ember-300">{err}</p>{/if}
   <input
     bind:value={answer}
-    autocomplete="off"
-    autocapitalize="off"
+    {...typingAttrs(answerLang)}
     class="w-full rounded-md border border-ink-600 bg-ink-900 px-4 py-4 text-lg outline-none focus:border-seal-400"
     placeholder="Type what you hear…"
   />
-  <button type="submit" disabled={busy || !answer.trim()} class="btn btn-primary w-full py-3">
+  <button
+    type="submit"
+    disabled={busy || !answer.trim()}
+    data-enter-action
+    class="btn btn-primary w-full py-3"
+  >
     {#if busy}<Spinner size={15} label="Checking your answer" /> Checking…{:else}Check{/if}
   </button>
 </form>

@@ -116,7 +116,25 @@
     drank = null
     void refresh()
   }
+
+  /**
+   * Enter fires the drill's primary action ("Got it", "Check") when the focus
+   * is not in a text field, matching the practice screen. There is no result
+   * screen here, the next instance arrives with the hit.
+   */
+  function onKeydown(e: KeyboardEvent) {
+    if (e.key !== 'Enter' || e.repeat || busy) return
+    const t = e.target instanceof HTMLElement ? e.target : null
+    if (t?.closest('input, textarea, select, a') || t?.isContentEditable) return
+    const primary = document.querySelector<HTMLButtonElement>('[data-enter-action]:not(:disabled)')
+    if (primary) {
+      e.preventDefault()
+      primary.click()
+    }
+  }
 </script>
+
+<svelte:window onkeydown={onKeydown} />
 
 <div class="flex items-center justify-between border-b border-ink-700 pt-5 pb-3">
   <div>

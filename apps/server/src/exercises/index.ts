@@ -1,5 +1,6 @@
 import {
   ExerciseRegistry,
+  pitchOf,
   templateForExercise,
   type Card,
   type ExerciseContext,
@@ -58,6 +59,8 @@ const wordView = (ctx: ExerciseContext) => ({
   furigana: readingsShown(ctx)
     ? furiganaFor(ctx.card.targetLang, ctx.card.back, displayReading(ctx))
     : undefined,
+  // Pitch accent rides on the reading, so hiding readings hides it too.
+  pitch: readingsShown(ctx) ? pitchOf(ctx.card.metadata) : undefined,
 })
 
 function shuffle<T>(items: T[]): T[] {
@@ -93,7 +96,9 @@ const translateFrontToBack: ExerciseDef<string> = {
       cardId: ctx.card.id,
       modality: 'text',
       prompt: `How do you say “${ctx.card.front}” in ${label(ctx.card.targetLang)}?`,
-      data: {},
+      // `answerLang` tells the client which language the learner types (hints the
+      // keyboard/IME; see docs/DESIGN.md §14.2). Here the answer is the target word.
+      data: { answerLang: ctx.card.targetLang },
     }
   },
   async grade(ctx, _instance, answer) {
@@ -122,7 +127,8 @@ const translateBackToFront: ExerciseDef<string> = {
       cardId: ctx.card.id,
       modality: 'text',
       prompt: `What does this mean in ${label(ctx.card.sourceLang)}?`,
-      data: { ...wordView(ctx) },
+      // The answer is in the learner's language, not the target — so hint that.
+      data: { ...wordView(ctx), answerLang: ctx.card.sourceLang },
     }
   },
   async grade(ctx, _instance, answer) {
@@ -196,6 +202,7 @@ const typeListen: ExerciseDef<string> = {
       data: {
         audioText: ctx.card.back,
         language: ctx.card.targetLang,
+        answerLang: ctx.card.targetLang,
         reading: displayReading(ctx),
         readingLang: ctx.card.targetLang,
       },
@@ -286,6 +293,15 @@ const speakWord: ExerciseDef<string> = {
     if (!ctx.assess) return speakWord.grade!(ctx, instance, '')
 
     const a = await ctx.assess(audio, expected)
+    if (a.noSpeech) {
+      return {
+        score: 0,
+        correct: false,
+        expected,
+        feedback: "Didn't catch that — say it again, a little closer to the mic.",
+        detail: { noSpeech: true },
+      }
+    }
     const f = computeFeatures({
       expected,
       transcript: a.transcript,
@@ -358,6 +374,7 @@ const converse: ExerciseDef<string> = {
       data: {
         topic: ctx.card.back,
         language: ctx.card.targetLang,
+        answerLang: ctx.card.targetLang,
         ...wordView(ctx),
       },
     }
@@ -432,9 +449,7 @@ function normalizeSentence(s: string): string {
 /** Ordered target-language tokens a sentence card carries in its payload. */
 function payloadTokens(card: Card): string[] {
   const t = card.payload?.tokens
-  return Array.isArray(t)
-    ? t.filter((x): x is string => typeof x === 'string' && x.length > 0)
-    : []
+  return Array.isArray(t) ? t.filter((x): x is string => typeof x === 'string' && x.length > 0) : []
 }
 
 /** True when the card carries its own segmented sentence (works in any language). */
@@ -482,6 +497,7 @@ const sentenceBuild: ExerciseDef<unknown> = {
           // No readings anywhere here: the learner builds the sentence from the
           // meaning, so any reading on the tiles gives the answer away.
           target: ctx.card.back,
+          answerLang: ctx.card.targetLang,
           newWord: typeof payload.newWord === 'string' ? payload.newWord : ctx.card.back,
         },
       }
@@ -509,6 +525,7 @@ const sentenceBuild: ExerciseDef<unknown> = {
         bank: data.bank,
         gloss: data.gloss,
         target: data.target,
+        answerLang: ctx.card.targetLang,
         newWord: entry?.word ?? ctx.card.back,
       },
     }
@@ -556,8 +573,8 @@ const grammarCloze: ExerciseDef<string> = {
     const options = card.payload?.options
     return Boolean(
       payloadString(card, 'answer') ||
-        payloadString(card, 'rule') ||
-        (Array.isArray(options) && options.length > 0),
+      payloadString(card, 'rule') ||
+      (Array.isArray(options) && options.length > 0),
     )
   },
   async generate(ctx) {
@@ -575,6 +592,7 @@ const grammarCloze: ExerciseDef<string> = {
         rule: payloadString(ctx.card, 'rule'),
         reading: displayReading(ctx),
         readingLang: ctx.card.targetLang,
+        answerLang: ctx.card.targetLang,
       },
     }
   },

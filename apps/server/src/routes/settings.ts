@@ -1,4 +1,11 @@
-import { allUserSettings, getRoles, getUserSetting, setDailyGoal, setUserSetting } from '../db/repo'
+import {
+  allUserSettings,
+  getRoles,
+  getUserSetting,
+  rememberedDeckInstruction,
+  setDailyGoal,
+  setUserSetting,
+} from '../db/repo'
 import { INTRODUCE_ID, registry } from '../exercises'
 import { readStudyPrefs, writeStudyPrefs, type StudyPrefs } from '../game/study'
 import { ROLES, type Role } from '../env'
@@ -37,6 +44,7 @@ export function registerSettings(app: App) {
       voice: readVoicePrefs(deps.db, user.id),
       study: readStudyPrefs(deps.db, user.id),
       openrouter: { key: hasUserKey(deps, user.id) },
+      deckInstruction: rememberedDeckInstruction(deps.db, user.id) ?? '',
       foodThreshold: Number(getUserSetting(deps.db, user.id, 'foodThreshold') ?? 50),
       desiredRetention: Number(getUserSetting(deps.db, user.id, 'desiredRetention') ?? 90),
       raw: allUserSettings(deps.db, user.id),

@@ -1,4 +1,5 @@
 import type { OpenRouter, ReasoningEffort } from '../llm/openrouter'
+import { parsePitchContour } from '@tutor/core'
 import { langName } from '../llm/prompts'
 import type { CharacterVariant } from '../frequency/source'
 
@@ -21,6 +22,8 @@ export interface PlannedCard {
   reading?: string
   /** Extra structured content (tokens, answer, options, …) per template. */
   payload?: Record<string, unknown>
+  /** Language-specific annotations (pitch accent, …). */
+  metadata?: Record<string, unknown>
 }
 
 export interface PlanRequest {
@@ -36,6 +39,8 @@ export interface PlanRequest {
   readingScript?: string
   /** How many new words this batch should introduce. */
   count: number
+  /** Ask the planner for pitch-accent metadata (Japanese, …). */
+  pitchAccent?: boolean
   /** Per-word hints (reading/meaning) — used when importing an Anki deck. */
   hints?: Record<string, { reading?: string; meaning?: string }>
 }
@@ -57,6 +62,29 @@ const PAYLOAD_SCHEMA = {
   additionalProperties: false,
 }
 
+/**
+ * Language-agnostic annotations. `pitch` is the one shape the app renders; the
+ * rest is an open bag so a new language can annotate a card without a schema
+ * change. Pitch levels are one per mora; `drop` is the accent nucleus, counted
+ * from 1 (the mora after which the pitch falls).
+ */
+const METADATA_SCHEMA = {
+  type: 'object',
+  properties: {
+    pitch: {
+      type: 'object',
+      properties: {
+        syllables: { type: 'array', items: { type: 'string' } },
+        levels: { type: 'array', items: { type: 'string', enum: ['H', 'L'] } },
+        drop: { type: 'integer' },
+      },
+      required: ['levels'],
+      additionalProperties: false,
+    },
+  },
+  additionalProperties: true,
+}
+
 export const DECK_SCHEMA = {
   type: 'object',
   properties: {
@@ -72,6 +100,7 @@ export const DECK_SCHEMA = {
           back: { type: 'string' },
           reading: { type: 'string' },
           payload: PAYLOAD_SCHEMA,
+          metadata: METADATA_SCHEMA,
         },
         required: ['template', 'front', 'back'],
         additionalProperties: false,
@@ -98,13 +127,21 @@ export function readingRules(targetLang: string, variant?: CharacterVariant): st
 }
 
 const SYSTEM = `You build a language-learning deck from a real frequency list. You return only the requested JSON.
+
+The learner's instruction is the source of truth, for this batch exactly as for the first one. If it asks for grammar, include grammar cards. If it names a topic, level or register, keep that focus.
+
 Rules:
 - Cards come in frequency order: the most frequent word first.
 - Strict n+1: each "vocab" card introduces exactly ONE new word. Any "sentence" or "grammar" card may use only words already introduced (the new word plus the ones before it).
 - "vocab" cards: front = the meaning in the learner's language, back = the target word, reading = the native reading. Emit exactly one per frequency word, in the order given.
-- "sentence" cards: payload.tokens = the sentence split into target-language tokens in order; payload.gloss = its meaning; payload.distractors = 2-3 wrong tokens of the same kind. Use only known words.
-- "grammar" cards: payload.answer = the correct form, payload.prompt = the instruction, and either payload.options (a choice card) or nothing (free typing); payload.rule names the grammar point. Use only known words.
-- Follow the deck's reading and script rules exactly.`
+- "sentence" cards: payload.tokens = the sentence split into target-language tokens in order; payload.gloss = its meaning; payload.distractors = 2-3 wrong tokens of the same kind. Use only known words. Add one after roughly every third vocab card, and always when the instruction asks for sentences.
+- "grammar" cards: payload.answer = the correct form, payload.prompt = the instruction, and either payload.options (a choice card) or nothing (free typing); payload.rule names the grammar point. Use only known words. Add them whenever the instruction asks for grammar.
+- "back" is the text the learner hears in the listening exercise: the word on a vocab card, the whole sentence on a sentence card. Never put the meaning, the reading or the exercise prompt in "back".
+- Follow the deck's reading and script rules exactly.
+
+Metadata:
+- "metadata" holds language-specific annotations that do not fit front/back/reading. It is optional; omit it when you have nothing to add.
+- For Japanese, when asked, add metadata.pitch: the word's pitch accent as one level per mora, "H" or "L", in "levels"; the mora split in "syllables"; and "drop", the accent nucleus counted from 1 (the mora after which the pitch falls; 0 = heiban, no in-word drop). Only add pitch you are confident about.`
 
 /** The user message: the instruction, the rules and the raw frequency words. */
 export function planPrompt(req: PlanRequest): string {
@@ -118,19 +155,25 @@ export function planPrompt(req: PlanRequest): string {
   const hints = req.hints
     ? Object.entries(req.hints)
         .filter(([w]) => batch.has(w))
-        .map(([w, h]) => `- ${w}${h.reading ? ` [${h.reading}]` : ''}${h.meaning ? ` = ${h.meaning}` : ''}`)
+        .map(
+          ([w, h]) =>
+            `- ${w}${h.reading ? ` [${h.reading}]` : ''}${h.meaning ? ` = ${h.meaning}` : ''}`,
+        )
     : []
   const hintBlock = hints.length
     ? `\n\nHints from the learner's own deck (reading / meaning — verify, do not copy blindly):\n${hints.join('\n')}`
     : ''
-  return `Instruction: ${req.instruction}
+  const pitch = req.pitchAccent
+    ? `\n\nThis deck wants pitch-accent metadata: for each vocab card add metadata.pitch (levels, syllables, drop) when you are confident of the standard accent.`
+    : ''
+  return `Instruction (applies to this batch too): ${req.instruction}
 Target language: ${langName(req.targetLang)}. Learner's language: ${langName(req.sourceLang)}.${topic}${script}
 ${rules}
 
 Introduce the next ${req.count} new words from this list, in order (skip any already known):
 ${req.words.join(' ')}
 
-For each new word emit one "vocab" card. Add a "sentence" or "grammar" card after a word only when it uses words already introduced.${known}${hintBlock}`
+For each new word emit one "vocab" card. Weave in "sentence" (and, if the instruction asks for it, "grammar") cards using only words already introduced.${known}${pitch}${hintBlock}`
 }
 
 /** Normalises whatever the model returned into valid PlannedCards. */
@@ -152,9 +195,19 @@ export function normalizePlan(raw: unknown): PlannedCard[] {
         card.payload && typeof card.payload === 'object'
           ? (card.payload as Record<string, unknown>)
           : undefined,
+      metadata: normalizeMetadata(card.metadata),
     })
   }
   return out
+}
+
+/** Keeps only annotations we can store, normalising pitch into a contour. */
+function normalizeMetadata(raw: unknown): Record<string, unknown> | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const out: Record<string, unknown> = {}
+  const pitch = parsePitchContour((raw as Record<string, unknown>).pitch)
+  if (pitch) out.pitch = pitch
+  return Object.keys(out).length ? out : undefined
 }
 
 /** An OpenRouter-backed planner using the given (generator) model. */

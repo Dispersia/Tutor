@@ -1,7 +1,9 @@
 <script lang="ts">
   import type { Instance } from '#lib/exercises'
-  import { Recorder, micSupported } from '#lib/recorder'
-  import { transcribe } from '#lib/speech'
+  import { typingAttrs } from '#lib/lang'
+  import type { PitchContour } from '#lib/types'
+  import { Recorder, micSupported, MIN_CLIP_MS } from '#lib/recorder'
+  import { stopAudio, transcribe } from '#lib/speech'
   import Word from '../Word.svelte'
   import Icon from '../Icon.svelte'
   import Spinner from '../Spinner.svelte'
@@ -14,10 +16,12 @@
 
   const recorder = new Recorder()
   const language = $derived((instance.data.language as string) ?? undefined)
+  const answerLang = $derived((instance.data.answerLang as string) ?? language)
   const topic = $derived((instance.data.topic as string) ?? '')
   const reading = $derived((instance.data.reading as string) ?? '')
   const lang = $derived((instance.data.readingLang as string) ?? '')
   const furigana = $derived(instance.data.furigana as { base: string; ruby?: string }[] | undefined)
+  const pitch = $derived(instance.data.pitch as PitchContour | undefined)
   const canMic = micSupported()
 
   let answer = $state('')
@@ -50,16 +54,22 @@
     if (recording) {
       recording = false
       const blob = await recorder.stop()
+      if (recorder.elapsedMs < MIN_CLIP_MS) {
+        err = 'That was too quick — hold the mic and speak.'
+        return
+      }
       working = true
       try {
         const text = await transcribe(blob, language)
         if (text.trim()) answer = text.trim()
+        else err = "Didn't catch that — try again."
       } catch (e) {
         err = (e as Error).message
       } finally {
         working = false
       }
     } else {
+      stopAudio()
       try {
         await recorder.start()
         recording = true
@@ -75,13 +85,14 @@
   {#if topic}
     <div class="flex justify-center py-2">
       <span class="cell min-h-[5rem] min-w-[5rem] px-6 py-4"
-        ><Word word={topic} {reading} {lang} {furigana} size="md" /></span
+        ><Word word={topic} {reading} {lang} {furigana} {pitch} size="md" /></span
       >
     </div>
   {/if}
   <textarea
     bind:value={answer}
     onkeydown={onKeydown}
+    {...typingAttrs(answerLang)}
     rows="2"
     class="w-full rounded-md border border-ink-600 bg-ink-900 px-4 py-3 outline-none focus:border-seal-400"
     placeholder="Write or say a sentence…"
@@ -101,7 +112,12 @@
           />{:else if recording}■{:else}<Icon name="mic" size={18} />{/if}
       </button>
     {/if}
-    <button type="submit" disabled={busy || !answer.trim()} class="btn btn-primary flex-1 py-3">
+    <button
+      type="submit"
+      disabled={busy || !answer.trim()}
+      data-enter-action
+      class="btn btn-primary flex-1 py-3"
+    >
       {#if busy}<Spinner size={15} label="Sending your answer" /> Sending…{:else}Send{/if}
     </button>
   </div>

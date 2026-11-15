@@ -1,7 +1,8 @@
 <script lang="ts">
   import type { Instance } from '#lib/exercises'
+  import type { PitchContour } from '#lib/types'
   import { speak } from '#lib/speech'
-  import { voiceFor } from '#lib/voices'
+  import { speechOpts } from '#lib/voices'
   import Icon from '../Icon.svelte'
   import Spinner from '../Spinner.svelte'
   import Word from '../Word.svelte'
@@ -19,6 +20,7 @@
   const reading = $derived((instance.data.reading as string) ?? '')
   const lang = $derived((instance.data.readingLang as string) ?? '')
   const furigana = $derived(instance.data.furigana as { base: string; ruby?: string }[] | undefined)
+  const pitch = $derived(instance.data.pitch as PitchContour | undefined)
   const meaning = $derived((instance.data.meaning as string) ?? '')
   const example = $derived(
     instance.data.example as
@@ -43,7 +45,7 @@
     err = ''
     playing = true
     try {
-      await speak(word, { voice: voiceFor(lang), language: lang })
+      await speak(word, speechOpts(lang))
     } catch (e) {
       err = (e as Error).message
     } finally {
@@ -56,7 +58,7 @@
   <p class="text-xs uppercase tracking-wide text-ink-400">New word</p>
 
   <div class="border-y border-ink-700 py-5 text-center">
-    <Word {word} {reading} {lang} {furigana} />
+    <Word {word} {reading} {lang} {furigana} {pitch} />
     {#if meaning}
       <p class="mt-2 text-sm text-ink-300">{meaning}</p>
     {/if}
@@ -95,6 +97,7 @@
     type="button"
     onclick={() => onsubmit('ok')}
     disabled={busy}
+    data-enter-action
     class="btn btn-primary w-full py-3 disabled:opacity-60"
   >
     {#if busy}<Spinner size={15} label="Loading" /> Working…{:else}Got it{/if}

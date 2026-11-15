@@ -67,6 +67,8 @@ export const cards = sqliteTable(
     readingsJson: text('readings_json').notNull().default('{}'),
     tagsJson: text('tags_json').notNull().default('[]'),
     payloadJson: text('payload_json').notNull().default('{}'),
+    /** Language-agnostic annotations (pitch accent, radicals, …) — see core metadata. */
+    metadataJson: text('metadata_json').notNull().default('{}'),
     origin: text('origin').notNull().default('manual'),
     createdAt: integer('created_at').notNull(),
   },

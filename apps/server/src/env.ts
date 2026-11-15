@@ -71,7 +71,7 @@ export const env = {
   speechPort: num(process.env.TUTOR_SPEECH_PORT, 4319),
   speechUrl:
     process.env.TUTOR_SPEECH_URL ?? `http://127.0.0.1:${num(process.env.TUTOR_SPEECH_PORT, 4319)}`,
-  speechIdleTimeoutMs: num(process.env.TUTOR_SPEECH_IDLE_TIMEOUT, 600) * 1000,
+  speechIdleTimeoutMs: num(process.env.TUTOR_SPEECH_IDLE_TIMEOUT, 3600) * 1000,
   speechAutostart: (process.env.TUTOR_SPEECH_AUTOSTART ?? 'false').toLowerCase() === 'true',
 
   tlsCert: process.env.TUTOR_TLS_CERT,

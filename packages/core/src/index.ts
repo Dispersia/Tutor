@@ -1,5 +1,7 @@
 /** Shared domain contracts for tutor. No runtime deps (except the registry). */
 
+import type { CardMetadata } from './metadata'
+
 export type Modality = 'chat' | 'voice' | 'text' | 'mixed'
 export type CardType = 'vocab' | 'phrase' | 'grammar' | 'kanji' | 'character'
 /** BCP-47-ish language tag: 'en', 'zh', 'ja', ... */
@@ -20,6 +22,12 @@ export interface Card {
   tags: string[]
   /** type-specific extras, versioned per CardType */
   payload: Record<string, unknown>
+  /**
+   * Language-specific annotations that don't fit the role-named content above
+   * (Japanese pitch accent, tone contours, radicals, …). Language-agnostic
+   * container; see `metadata.ts`. Never used for grading.
+   */
+  metadata: CardMetadata
   origin: 'curated' | 'llm' | 'manual'
   createdAt: number
 }
@@ -80,6 +88,8 @@ export interface AssessResult {
   transcript: string
   items: AlignItem[]
   duration: number
+  /** true when the clip held no audible speech (silent / too short to judge) */
+  noSpeech?: boolean
 }
 
 export interface ExerciseContext {
@@ -148,6 +158,7 @@ export interface ExerciseDef<Answer = unknown> {
 }
 
 export * from './templates'
+export * from './metadata'
 
 export class ExerciseRegistry {
   #defs = new Map<string, ExerciseDef<unknown>>()

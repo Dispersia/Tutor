@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Instance } from '#lib/exercises'
+  import { typingAttrs } from '#lib/lang'
   import Spinner from '../Spinner.svelte'
 
   let {
@@ -10,6 +11,7 @@
 
   const bank = $derived((instance.data.bank as string[]) ?? [])
   const newWord = $derived((instance.data.newWord as string) ?? '')
+  const answerLang = $derived((instance.data.answerLang as string) ?? undefined)
 
   // Which bank tiles are currently placed, by bank index (so repeats work).
   let picked = $state<number[]>([])
@@ -42,8 +44,7 @@
   {#if typing}
     <input
       bind:value={typed}
-      autocomplete="off"
-      autocapitalize="off"
+      {...typingAttrs(answerLang)}
       class="w-full rounded-md border border-ink-600 bg-ink-900 px-4 py-4 text-lg outline-none focus:border-seal-400"
       placeholder="Type the sentence…"
     />
@@ -98,6 +99,7 @@
   <button
     type="submit"
     disabled={busy || (typing ? !typed.trim() : picked.length === 0)}
+    data-enter-action
     class="btn btn-primary w-full py-3"
   >
     {#if busy}<Spinner size={15} label="Checking your answer" /> Checking…{:else}Check{/if}

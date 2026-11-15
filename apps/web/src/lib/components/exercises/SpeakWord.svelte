@@ -1,8 +1,10 @@
 <script lang="ts">
   import type { Instance } from '#lib/exercises'
-  import { Recorder, micSupported } from '#lib/recorder'
-  import { speak, transcribe } from '#lib/speech'
-  import { voiceFor } from '#lib/voices'
+  import type { PitchContour } from '#lib/types'
+  import { typingAttrs } from '#lib/lang'
+  import { Recorder, micSupported, MIN_CLIP_MS } from '#lib/recorder'
+  import { speak, stopAudio, transcribe } from '#lib/speech'
+  import { speechOpts } from '#lib/voices'
   import Word from '../Word.svelte'
   import Icon from '../Icon.svelte'
   import Spinner from '../Spinner.svelte'
@@ -24,6 +26,7 @@
   const reading = $derived((instance.data.reading as string) ?? '')
   const lang = $derived((instance.data.readingLang as string) ?? '')
   const furigana = $derived(instance.data.furigana as { base: string; ruby?: string }[] | undefined)
+  const pitch = $derived(instance.data.pitch as PitchContour | undefined)
   const language = $derived((instance.data.language as string) ?? undefined)
   const canMic = micSupported()
 
@@ -36,6 +39,10 @@
     if (recording) {
       recording = false
       const blob = await recorder.stop()
+      if (recorder.elapsedMs < MIN_CLIP_MS) {
+        err = 'That was too quick — hold the mic and speak.'
+        return
+      }
       if (onspeak) {
         onspeak(blob)
         return
@@ -51,6 +58,7 @@
         working = false
       }
     } else {
+      stopAudio()
       try {
         await recorder.start()
         recording = true
@@ -65,14 +73,14 @@
   <p class="text-lg leading-snug">{instance.prompt}</p>
   <div class="flex justify-center py-2">
     <span class="cell min-h-[7rem] min-w-[7rem] px-7 py-5"
-      ><Word word={target} {reading} {lang} {furigana} /></span
+      ><Word word={target} {reading} {lang} {furigana} {pitch} /></span
     >
   </div>
 
   <div class="flex gap-2">
     <button
       type="button"
-      onclick={() => speak(target, { voice: voiceFor(language), language })}
+      onclick={() => speak(target, speechOpts(language))}
       class="btn btn-ghost flex-1 gap-1.5 py-3"><Icon name="sound" size={15} /> Hear it</button
     >
     {#if canMic}
@@ -102,9 +110,10 @@
     >
       <input
         placeholder="No mic here — type it instead"
+        {...typingAttrs(language)}
         class="flex-1 rounded-md border border-ink-600 bg-ink-900 px-3 py-2 text-sm"
       />
-      <button class="btn btn-primary px-3 py-2 text-sm" disabled={busy}>
+      <button class="btn btn-primary px-3 py-2 text-sm" disabled={busy} data-enter-action>
         {#if busy}<Spinner size={14} label="Checking your answer" /> Checking…{:else}Check{/if}
       </button>
     </form>
