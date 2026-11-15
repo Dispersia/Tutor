@@ -1,9 +1,11 @@
+import { CARD_TEMPLATES } from '@tutor/core'
 import type { Card, ExerciseContext, ExerciseDef, Learner } from '@tutor/core'
 import type { Context } from 'hono'
 import type { App, AppEnv, Deps } from '../context'
 import {
   addReview,
   getCard,
+  getDeck,
   getRoles,
   introducedCardIds,
   lastExerciseUse,
@@ -35,7 +37,6 @@ import { MANDARIN_RULE, NATIVE_FEEDBACK_RULE } from '../llm/prompts'
 import { resolveUserKey } from '../llm/userkey'
 import { roleReasoning } from '../env'
 import { makeAssessor, type AssessFn } from '../pronunciation/assess'
-import { seedStarterDecks } from '../seed/service'
 import { pinyinToZhuyin } from '../seed/zhuyin'
 
 /** Due-first card selection (spaced repetition), optionally within a lesson. */
@@ -58,7 +59,24 @@ function stepCardsOf(cards: Card[]) {
     front: c.front,
     back: c.back,
     reading: displayReadingOf(c),
+    // Generated decks tag each card with the n+1 step it belongs to, so a word
+    // and its example cards share one lesson.
+    step: typeof c.payload?.step === 'number' ? c.payload.step : undefined,
   }))
+}
+
+/**
+ * Whether to show native readings for a card. A deck-level override (set when
+ * the deck was generated) wins over the learner's global study preference.
+ */
+function showReadingsFor(
+  deps: Deps,
+  userId: string,
+  card: Card,
+  prefs: ReturnType<typeof readStudyPrefs>,
+): boolean {
+  const deck = card.deckId ? getDeck(deps.db, card.deckId, userId) : undefined
+  return deck?.settings?.showReadings ?? showsReadings(prefs, card.targetLang)
 }
 
 /** Native reading for a card: Zhuyin (zh) or kana (ja). Never pinyin/romaji. */
@@ -83,21 +101,27 @@ export function readingMap(
   return map
 }
 
-/** Resolves `level:index` into the lesson's card ids (and its deck). */
+/**
+ * Resolves a lesson id into its card ids (and its deck). The id is
+ * `<key>:<index>`, where `<key>` is the deck's `level` (curated decks) or its id
+ * (generated decks), so generated decks never collide.
+ */
 function resolveLesson(
   deps: Deps,
   userId: string,
   lessonId: string,
-): { deckId: string; cardIds: string[]; level: string } | undefined {
-  const [level, indexStr] = lessonId.split(':')
-  const index = Number(indexStr) - 1
-  if (!level || !Number.isFinite(index) || index < 0) return undefined
-  const deck = listDecks(deps.db, userId).find((d) => d.level === level)
+): { deckId: string; cardIds: string[]; key: string } | undefined {
+  const sep = lessonId.lastIndexOf(':')
+  if (sep <= 0) return undefined
+  const key = lessonId.slice(0, sep)
+  const index = Number(lessonId.slice(sep + 1)) - 1
+  if (!key || !Number.isFinite(index) || index < 0) return undefined
+  const deck = listDecks(deps.db, userId).find((d) => d.level === key || d.id === key)
   if (!deck) return undefined
   const cards = listCards(deps.db, userId, deck.id)
-  const lesson = buildLessons(level, stepCardsOf(cards))[index]
+  const lesson = buildLessons(key, stepCardsOf(cards))[index]
   if (!lesson) return undefined
-  return { deckId: deck.id, cardIds: lesson.cardIds, level }
+  return { deckId: deck.id, cardIds: lesson.cardIds, key }
 }
 
 function learnerOf(user: {
@@ -216,6 +240,10 @@ function settleAction(
 export function registerPractice(app: App) {
   app.get('/api/exercises', (c) => c.json({ exercises: exerciseCatalog() }))
 
+  // The reusable card templates (vocab, spoken, listening, sentence, grammar):
+  // each names the content it needs and the exercises that realise it.
+  app.get('/api/templates', (c) => c.json({ templates: CARD_TEMPLATES }))
+
   // "I can't speak or listen right now": hide listen/speak cards for 15 minutes.
   // It is a time-boxed window that lifts on its own; XP is unaffected.
   app.post('/api/practice/quiet', async (c) => {
@@ -235,7 +263,6 @@ export function registerPractice(app: App) {
       actionId?: string
       lessonId?: string
     }
-    seedStarterDecks(deps.db, user.id)
     const quiet = quietState(deps.db, user.id)
     // The learner's own switches: readings visibility + exercise kinds they turned off.
     const prefs = readStudyPrefs(deps.db, user.id)
@@ -295,15 +322,19 @@ export function registerPractice(app: App) {
       readings: readingMap(deps.db, user.id, card.targetLang),
       known: [...known, card.back],
       seen: [...seen, card.back],
-      showReadings: showsReadings(prefs, card.targetLang),
+      showReadings: showReadingsFor(deps, user.id, card, prefs),
       judge: await judgeFor(c),
     }
 
     // First exposure: teach the concept before quizzing. A card with no SRS state
     // that has not been introduced yet gets the "meet the word" step; the learner
     // taps Continue, then the same card comes back as a normal drill.
+    // Only word cards get the first-exposure "meet the word" step: sentence and
+    // grammar cards are built from words the learner already knows (n+1), so
+    // there is nothing new to introduce.
+    const teachable = !card.payload?.template || card.payload.template === 'vocab'
     const isNewCard = !srs.has(card.id)
-    if (!body.exerciseId && isNewCard && !introduced.has(card.id)) {
+    if (!body.exerciseId && teachable && isNewCard && !introduced.has(card.id)) {
       const intro = registry.get(INTRODUCE_ID)
       if (intro) return c.json({ instance: await intro.generate(ctx), action: null })
     }
@@ -378,7 +409,7 @@ export function registerPractice(app: App) {
       distractors: otherBacks(deps.db, user.id, card.targetLang, card.back, 3),
       readings: readingMap(deps.db, user.id, card.targetLang),
       known: [...knownWords(deps.db, user.id), card.back],
-      showReadings: showsReadings(readStudyPrefs(deps.db, user.id), card.targetLang),
+      showReadings: showReadingsFor(deps, user.id, card, readStudyPrefs(deps.db, user.id)),
       judge: await judgeFor(c),
     }
     const instance = await def.generate(ctx)
@@ -473,7 +504,7 @@ export function registerPractice(app: App) {
       distractors: [] as string[],
       readings: readingMap(deps.db, user.id, card.targetLang),
       known: [...knownWords(deps.db, user.id), card.back],
-      showReadings: showsReadings(readStudyPrefs(deps.db, user.id), card.targetLang),
+      showReadings: showReadingsFor(deps, user.id, card, readStudyPrefs(deps.db, user.id)),
       judge: await judgeFor(c),
       assess,
     }

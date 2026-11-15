@@ -2,9 +2,11 @@ import { expect, test } from 'bun:test'
 import { createApp } from './app'
 import type { App, Deps } from './context'
 import { openDb } from './db/client'
+import type { Db } from './db/client'
 import type { Role } from './env'
 import { EventBus } from './events'
 import { OpenRouter } from './llm/openrouter'
+import { seedStarterDecks } from './seed/service'
 import { SpeechSupervisor } from './speech/supervisor'
 
 const defaults: Record<Role, string> = {
@@ -46,9 +48,12 @@ const json = (body: unknown): RequestInit => ({
   body: JSON.stringify(body),
 })
 
-async function signup(app: App, username = 'alice') {
+async function signup(app: App, db: Db, username = 'alice') {
   const res = await app.request('/api/auth/register', json({ username, password: 'password123' }))
   const cookie = res.headers.getSetCookie()[0]!.split(';')[0]!
+  // Decks are no longer pre-seeded; tests drill the curated fixture decks.
+  const { user } = (await res.json()) as { user: { id: string } }
+  seedStarterDecks(db, user.id)
   return cookie
 }
 
@@ -58,8 +63,8 @@ const auth = (cookie: string, extra: RequestInit = {}): RequestInit => ({
 })
 
 test('decks are seeded per user and list their cards', async () => {
-  const { app, sqlite } = makeApp()
-  const cookie = await signup(app)
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
   const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
     decks: { id: string; name: string; level: string; cardCount: number }[]
   }
@@ -74,9 +79,28 @@ test('decks are seeded per user and list their cards', async () => {
   sqlite.close()
 })
 
+test('templates: the reusable card templates are exposed', async () => {
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
+  const res = await app.request('/api/templates', auth(cookie))
+  expect(res.status).toBe(200)
+  const body = (await res.json()) as {
+    templates: { kind: string; exercises: string[]; fields: unknown[] }[]
+  }
+  expect(body.templates.map((t) => t.kind)).toEqual([
+    'vocab',
+    'listening',
+    'spoken',
+    'sentence',
+    'grammar',
+  ])
+  expect(body.templates.every((t) => t.exercises.length > 0 && t.fields.length > 0)).toBe(true)
+  sqlite.close()
+})
+
 test('practice: next -> grade -> xp, and exercise catalog', async () => {
-  const { app, sqlite } = makeApp()
-  const cookie = await signup(app)
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
 
   const cat = (await (await app.request('/api/exercises', auth(cookie))).json()) as {
     exercises: { id: string }[]
@@ -148,7 +172,7 @@ test('practice: next -> grade -> xp, and exercise catalog', async () => {
 })
 
 test('practice endpoints require a session', async () => {
-  const { app, sqlite } = makeApp()
+  const { app, db, sqlite } = makeApp()
   for (const [method, path] of [
     ['GET', '/api/decks'],
     ['POST', '/api/practice/next'],
@@ -162,8 +186,8 @@ test('practice endpoints require a session', async () => {
 })
 
 test('LLM deck generation needs a key', async () => {
-  const { app, sqlite } = makeApp()
-  const cookie = await signup(app)
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
   const res = await app.request(
     '/api/decks',
     auth(cookie, json({ topic: 'food', targetLang: 'zh' })),
@@ -186,8 +210,8 @@ test('practice/speak grades recorded audio via the assessor', async () => {
     items: [...expected].map((ch, i) => ({ text: ch, start: i * 0.3, end: i * 0.3 + 0.25 })),
     duration: 0.3 * expected.length,
   })
-  const { app, sqlite } = makeApp(assess)
-  const cookie = await signup(app)
+  const { app, db, sqlite } = makeApp(assess)
+  const cookie = await signup(app, db)
 
   const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
     decks: { id: string; name: string; level: string }[]
@@ -220,8 +244,8 @@ test('practice/speak rejects bad input', async () => {
     items: [],
     duration: 1,
   })
-  const { app, sqlite } = makeApp(assess)
-  const cookie = await signup(app)
+  const { app, db, sqlite } = makeApp(assess)
+  const cookie = await signup(app, db)
   const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
     decks: { id: string; name: string; level: string }[]
   }
@@ -266,8 +290,8 @@ test('practice/speak rejects bad input', async () => {
 })
 
 test('quiet mode hides listen/speak cards for 15 minutes (XP unaffected)', async () => {
-  const { app, sqlite } = makeApp()
-  const cookie = await signup(app)
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
 
   const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
     decks: { id: string; name: string; level: string }[]
@@ -332,8 +356,8 @@ test('quiet mode hides listen/speak cards for 15 minutes (XP unaffected)', async
 })
 
 test('study preferences: readings can be hidden per user', async () => {
-  const { app, sqlite } = makeApp()
-  const cookie = await signup(app)
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
 
   const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
     decks: { id: string; name: string; level: string }[]
@@ -371,8 +395,8 @@ test('study preferences: readings can be hidden per user', async () => {
 })
 
 test('study preferences: disabled exercise kinds are skipped', async () => {
-  const { app, sqlite } = makeApp()
-  const cookie = await signup(app)
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
 
   const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
     decks: { id: string; name: string; level: string }[]

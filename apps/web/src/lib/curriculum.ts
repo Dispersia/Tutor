@@ -18,8 +18,11 @@ export interface LessonDTO {
 export interface CurriculumDeck {
   deckId: string
   name: string
-  level: string
+  level: string | null
   targetLang: string
+  description?: string | null
+  /** The deck's own overrides (ruby/reading rules, variant, growth cursor). */
+  settings?: import('./exercises').DeckSettings
   cardCount: number
   learned: number
   due: number

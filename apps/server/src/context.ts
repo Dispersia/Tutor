@@ -2,7 +2,9 @@ import type { Hono } from 'hono'
 import type { Db } from './db/client'
 import type { PublicUser } from './db/repo'
 import type { Role } from './env'
+import type { Planner } from './deck/plan'
 import type { EventBus } from './events'
+import type { Fetcher } from './frequency/source'
 import type { OpenRouter } from './llm/openrouter'
 import type { AssessFn } from './pronunciation/assess'
 import type { SpeechSupervisor } from './speech/supervisor'
@@ -23,6 +25,10 @@ export interface Deps {
   sessionTtlMs: number
   /** Test hook: overrides the real speech assessor. */
   assess?: AssessFn
+  /** Test hook: overrides the frequency-list fetcher used by the deck builder. */
+  fetcher?: Fetcher
+  /** Test hook: overrides the LLM deck planner. */
+  planner?: Planner
 }
 
 export type AppEnv = { Variables: { deps: Deps; user: PublicUser | null } }

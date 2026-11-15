@@ -34,9 +34,86 @@ test('catalog lists the built-in exercises', () => {
     'speak_word',
     'converse',
     'sentence_build',
+    'grammar_cloze',
   ]) {
     expect(ids).toContain(id)
   }
+})
+
+test('catalog tags every exercise with its card template', () => {
+  const byId = new Map(exerciseCatalog().map((e) => [e.id, e.template]))
+  expect(byId.get('translate.front_to_back')).toBe('vocab')
+  expect(byId.get('type_listen')).toBe('listening')
+  expect(byId.get('speak_word')).toBe('spoken')
+  expect(byId.get('sentence_build')).toBe('sentence')
+  expect(byId.get('grammar_cloze')).toBe('grammar')
+})
+
+test('sentence_build builds from payload tokens in any language', async () => {
+  const def = registry.get('sentence_build')!
+  const c = ctx({
+    targetLang: 'es',
+    front: 'I drink tea',
+    back: 'yo bebo té',
+    readings: {},
+    payload: { tokens: ['yo', 'bebo', 'té'], gloss: 'I drink tea', distractors: ['agua', 'comes'] },
+  })
+  expect(def.supports(c.card, learner)).toBe(true)
+  const inst = await def.generate(c)
+  expect(inst.data.tokens).toEqual(['yo', 'bebo', 'té'])
+  expect(inst.data.gloss).toBe('I drink tea')
+  expect(inst.data.bank as string[]).toContain('agua')
+  expect((await def.grade(c, inst, ['yo', 'bebo', 'té'])).correct).toBe(true)
+  expect((await def.grade(c, inst, ['yo', 'té', 'bebo'])).correct).toBe(false)
+})
+
+test('sentence_build stays Mandarin-only without payload tokens', () => {
+  const def = registry.get('sentence_build')!
+  expect(def.supports(ctx({ targetLang: 'es', payload: {} }).card, learner)).toBe(false)
+})
+
+test('grammar_cloze grades a choice card from its payload (any language)', async () => {
+  const def = registry.get('grammar_cloze')!
+  const c = ctx({
+    targetLang: 'es',
+    front: 'Choose the right form: yo ___ estudiante',
+    back: 'soy',
+    readings: {},
+    payload: {
+      prompt: 'Choose the right form: yo ___ estudiante',
+      answer: 'soy',
+      options: ['soy', 'eres', 'es'],
+      rule: 'ser',
+      explanation: 'yo → soy',
+    },
+  })
+  expect(def.supports(c.card, learner)).toBe(true)
+  const inst = await def.generate(c)
+  expect(inst.prompt).toContain('estudiante')
+  expect(inst.data.options as string[]).toContain('soy')
+  expect(inst.data.rule).toBe('ser')
+  expect((await def.grade(c, inst, 'soy')).correct).toBe(true)
+  const wrong = await def.grade(c, inst, 'es')
+  expect(wrong.correct).toBe(false)
+  expect(wrong.expected).toBe('soy')
+})
+
+test('grammar_cloze free typing defaults the answer to the card back', async () => {
+  const def = registry.get('grammar_cloze')!
+  const c = ctx({
+    front: 'Say: I do not drink tea',
+    back: '我不喝茶',
+    payload: { rule: 'negation with 不' },
+  })
+  expect(def.supports(c.card, learner)).toBe(true)
+  const inst = await def.generate(c)
+  expect(inst.data.options).toBeUndefined()
+  expect((await def.grade(c, inst, '我不喝茶')).correct).toBe(true)
+})
+
+test('grammar_cloze is never offered for a plain word card', () => {
+  const def = registry.get('grammar_cloze')!
+  expect(def.supports(ctx().card, learner)).toBe(false)
 })
 
 test('introduce teaches a new word and never quizzes or schedules', async () => {

@@ -54,7 +54,9 @@ those keys at rest.
 | `PUT /api/settings/openrouter-key` | each user's own key (server key is a fallback) |
 | `POST /api/chat` · `/api/chat/json` | streamed chat (SSE) + structured output |
 | `GET/POST /api/sessions`, `GET /api/sessions/:id` | per-user history |
-| `GET/POST /api/decks`, `GET /api/decks/:id/cards` | starter decks (frequency, HSK 1, JLPT N5) + AI-generated decks |
+| `GET/POST /api/decks`, `GET /api/decks/:id/cards` | decks, built on demand from an instruction + a pulled frequency list |
+| `POST /api/decks/:id/grow` · `PATCH /api/decks/:id` | grow a deck organically (optionally on a topic) · set its reading rules |
+| `POST /api/decks/import` | build a deck from an uploaded Anki `.apkg` (its words are the source) |
 | `GET /api/exercises` | the exercise registry |
 | `POST /api/practice/next` · `/api/practice/grade` · `/api/practice/speak` | next drill · grade it (+XP) · pronunciation |
 | `POST /api/practice/quiet` | "can't speak or listen right now": hide listen/speak cards for 15 min |
@@ -63,6 +65,20 @@ those keys at rest.
 | `GET /api/combat` · `POST /api/combat/{start,hit}` | monsters, player HP · start a fight · land a hit |
 | `GET /api/stats` | XP, level, streak |
 | `GET /api/speech/health` · `POST /api/speech/{tts,asr,align,assess,wake,unload}` | speech, lazily started/stopped |
+
+Decks are **not pre-seeded**. Describe one in the Learn tab (e.g. "a traditional
+Chinese frequency list, with grammar, using only traditional characters and
+zhuyin") and the server pulls a real frequency list
+([Hermit Dave's FrequencyWords](https://github.com/hermitdave/FrequencyWords)),
+then writes cards with the card templates — strictly one new word at a time
+(n+1), following the deck's own reading rules. Decks grow organically: ask for a
+topic ("ordering at a restaurant") and it appends another n+1 batch.
+
+You can also **import an Anki deck** (`.apkg`) — its words become the source
+instead of a frequency list, and the templates write the cards from them. The
+importer reads the collection straight from the zip (no dependency), shows the
+deck's fields with a preview, and lets you **pick which field is the real word**
+(plus optional reading/meaning fields) before it builds anything. No guessing.
 
 Adding an exercise type takes a backend `ExerciseDef` + a Svelte component keyed by
 the same `id` — no core changes (see `docs/DESIGN.md` §11.2). Adding a profession

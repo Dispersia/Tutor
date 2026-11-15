@@ -13,7 +13,6 @@ import {
 } from '../game/service'
 import { readStudyPrefs, showsReadings } from '../game/study'
 import { pickNextExercise, readingMap } from './practice'
-import { seedStarterDecks } from '../seed/service'
 import type { App, Deps } from '../context'
 
 type User = { id: string; nativeLang: string; targetLang: string | null; level: string | null }
@@ -29,7 +28,6 @@ function learnerOf(user: User): Learner {
 
 /** Builds "the next drill" for a monster's deck (exercise-agnostic). */
 async function buildDrill(deps: Deps, user: User, deckLevel: string) {
-  seedStarterDecks(deps.db, user.id)
   const decks = listDecks(deps.db, user.id)
   const deck = decks.find((d) => d.level === deckLevel) ?? decks[0]
   const card = pickCard(deps.db, user.id, deck?.id)

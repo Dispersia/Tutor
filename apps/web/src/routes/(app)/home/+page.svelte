@@ -39,7 +39,7 @@
     return null
   })
 
-  const rank = (level: string) => (level === 'zhfreq' ? 0 : level === 'hsk1' ? 1 : 2)
+  const rank = (level: string | null) => (level === 'zhfreq' ? 0 : level === 'hsk1' ? 1 : 2)
 
   onMount(load)
 

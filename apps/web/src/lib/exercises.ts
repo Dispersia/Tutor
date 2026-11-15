@@ -1,5 +1,6 @@
 import { api } from './api'
 import type { SkillOutcome } from './skills'
+import type { CardTemplate } from './types'
 
 export interface Instance {
   exerciseId: string
@@ -32,6 +33,17 @@ export interface SrsOutcome {
   lapses: number
 }
 
+/** A deck's own overrides (ruby/reading rules, variant, growth cursor). */
+export interface DeckSettings {
+  showReadings?: boolean
+  readingScript?: string
+  variant?: 'traditional' | 'simplified'
+  disabledExercises?: string[]
+  cursor?: number
+  batchSize?: number
+  instruction?: string
+}
+
 export interface Deck {
   id: string
   name: string
@@ -40,6 +52,15 @@ export interface Deck {
   level: string | null
   description: string | null
   cardCount: number
+  settings?: DeckSettings
+}
+
+/** A deck built or grown from an instruction + a pulled frequency list. */
+export interface BuiltDeck {
+  deck: Deck
+  cardCount: number
+  source: string
+  newWords: string[]
 }
 
 export interface Stats {
@@ -58,8 +79,52 @@ export interface Stats {
 }
 
 export const listDecks = () => api<{ decks: Deck[] }>('/api/decks')
+
+/** Build a deck from an instruction; the server pulls a frequency list for it. */
+export const createDeck = (body: {
+  instruction: string
+  targetLang?: string
+  topic?: string
+  count?: number
+  name?: string
+}) => api<BuiltDeck>('/api/decks', { method: 'POST', body: JSON.stringify(body) })
+
+/** What an uploaded Anki deck looks like before the learner picks its fields. */
+export interface AnkiInspection {
+  name?: string
+  fields: string[]
+  sample: string[][]
+  noteCount: number
+  /** Best-guess indices, used only to pre-select the pickers. */
+  suggested: { wordField: number; readingField: number; meaningField: number }
+}
+
+/** Inspect an uploaded Anki `.apkg` (field names + preview) before importing. */
+export const inspectDeck = (form: FormData) =>
+  api<AnkiInspection>('/api/decks/inspect', { method: 'POST', body: form })
+
+/** Import an Anki `.apkg`: its words become the deck's word source. */
+export const importDeck = (form: FormData) =>
+  api<BuiltDeck & { words: number; fields: string[] }>('/api/decks/import', {
+    method: 'POST',
+    body: form,
+  })
+
+/** Grow a deck organically, optionally focusing on a topic. */
+export const growDeck = (deckId: string, body: { topic?: string; count?: number } = {}) =>
+  api<BuiltDeck>(`/api/decks/${deckId}/grow`, { method: 'POST', body: JSON.stringify(body) })
+
+/** Update a deck's own rules (e.g. hide readings for this deck). */
+export const updateDeck = (deckId: string, body: { name?: string; settings?: DeckSettings }) =>
+  api<{ deck: Deck; settings?: DeckSettings }>(`/api/decks/${deckId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
 export const listExercises = () =>
   api<{ exercises: { id: string; title: string; modality: string }[] }>('/api/exercises')
+
+/** The reusable card templates (vocab, spoken, listening, sentence, grammar). */
+export const listTemplates = () => api<{ templates: CardTemplate[] }>('/api/templates')
 export const getStats = () => api<Stats>('/api/stats')
 
 export const nextExercise = (body: {

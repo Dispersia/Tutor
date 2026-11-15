@@ -49,6 +49,8 @@ export const decks = sqliteTable('decks', {
   targetLang: text('target_lang').notNull(),
   level: text('level'),
   description: text('description'),
+  /** Deck-level overrides (ruby/reading rules, character variant, toggles). */
+  settingsJson: text('settings_json').notNull().default('{}'),
 })
 
 export const cards = sqliteTable(

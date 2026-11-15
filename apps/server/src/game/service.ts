@@ -5,6 +5,7 @@ import {
   addXpEvent,
   clearEncounter,
   completeLesson,
+  deckKey,
   getEncounter,
   getItemCount,
   getSkillXp,
@@ -29,7 +30,6 @@ import {
   xpEventsFor,
 } from '../db/repo'
 import type { EventBus } from '../events'
-import { seedStarterDecks } from '../seed/service'
 import { pinyinToZhuyin } from '../seed/zhuyin'
 import { buildLessons } from './curriculum'
 import {
@@ -843,7 +843,6 @@ export function srsStats(db: Db, userId: string): SrsStats {
 
 /** The guided path: each deck split into lessons with completion state. */
 export function curriculumView(db: Db, userId: string) {
-  seedStarterDecks(db, userId)
   const decks = listDecks(db, userId)
   const srsMap = srsStateMap(db, userId)
   const completed = new Set(listLessonProgress(db, userId).map((r) => r.lessonId))
@@ -852,7 +851,7 @@ export function curriculumView(db: Db, userId: string) {
   return decks.map((d) => {
     const cards = listCards(db, userId, d.id)
     const ids = cards.map((c) => c.id)
-    const lessons = buildLessons(d.level ?? '', stepCards(cards)).map((l) => {
+    const lessons = buildLessons(deckKey(d), stepCards(cards)).map((l) => {
       const learned = l.cardIds.filter((id) => isLearned(srsMap.get(id))).length
       const due = countDue(l.cardIds, srsMap, now)
       return {
@@ -868,6 +867,8 @@ export function curriculumView(db: Db, userId: string) {
       name: d.name,
       level: d.level,
       targetLang: d.targetLang,
+      description: d.description,
+      settings: d.settings,
       cardCount: Number(d.cardCount),
       learned: ids.filter((id) => isLearned(srsMap.get(id))).length,
       due: countDue(ids, srsMap, now),
@@ -883,6 +884,7 @@ function stepCards(cards: ReturnType<typeof listCards>) {
     front: c.front,
     back: c.back,
     reading: cardReading(c),
+    step: typeof c.payload?.step === 'number' ? c.payload.step : undefined,
   }))
 }
 
@@ -901,13 +903,15 @@ export function checkLessonCompletion(
   userId: string,
   lessonId: string,
 ): boolean {
-  const [level, indexStr] = lessonId.split(':')
-  const index = Number(indexStr) - 1
-  if (!level || !Number.isFinite(index) || index < 0) return false
-  const deck = listDecks(db, userId).find((d) => d.level === level)
+  const sep = lessonId.lastIndexOf(':')
+  if (sep <= 0) return false
+  const key = lessonId.slice(0, sep)
+  const index = Number(lessonId.slice(sep + 1)) - 1
+  if (!key || !Number.isFinite(index) || index < 0) return false
+  const deck = listDecks(db, userId).find((d) => d.level === key || d.id === key)
   if (!deck) return false
   const cards = listCards(db, userId, deck.id)
-  const lesson = buildLessons(level, stepCards(cards))[index]
+  const lesson = buildLessons(key, stepCards(cards))[index]
   if (!lesson || lesson.cardIds.length === 0) return false
   const srsMap = srsStateMap(db, userId)
   const done = lesson.cardIds.every((id) => isLearned(srsMap.get(id)))

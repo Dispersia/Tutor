@@ -2,9 +2,11 @@ import { expect, test } from 'bun:test'
 import { createApp } from './app'
 import type { App, Deps } from './context'
 import { openDb } from './db/client'
+import type { Db } from './db/client'
 import type { Role } from './env'
 import { EventBus } from './events'
 import { OpenRouter } from './llm/openrouter'
+import { seedStarterDecks } from './seed/service'
 import { SpeechSupervisor } from './speech/supervisor'
 
 const defaults: Record<Role, string> = {
@@ -48,9 +50,13 @@ const auth = (cookie: string, extra: RequestInit = {}): RequestInit => ({
   headers: { ...(extra.headers ?? {}), cookie },
 })
 
-async function signup(app: App, username = 'alice') {
+async function signup(app: App, db: Db, username = 'alice') {
   const res = await app.request('/api/auth/register', json({ username, password: 'password123' }))
-  return res.headers.getSetCookie()[0]!.split(';')[0]!
+  const cookie = res.headers.getSetCookie()[0]!.split(';')[0]!
+  // Decks are no longer pre-seeded; tests drill the curated fixture decks.
+  const { user } = (await res.json()) as { user: { id: string } }
+  seedStarterDecks(db, user.id)
+  return cookie
 }
 
 type CardRow = { id: string; front: string; back: string }
@@ -70,8 +76,8 @@ async function cardIndex(app: App, cookie: string): Promise<Map<string, CardRow>
 }
 
 test('GET /api/skills returns the profession board', async () => {
-  const { app, sqlite } = makeApp()
-  const cookie = await signup(app)
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
   const body = (await (await app.request('/api/skills', auth(cookie))).json()) as {
     skills: { id: string; level: number; effect: { value: number }; actions: unknown[] }[]
     items: { id: string }[]
@@ -88,8 +94,8 @@ test('GET /api/skills returns the profession board', async () => {
 })
 
 test('training an action awards skill XP and materials', async () => {
-  const { app, sqlite } = makeApp()
-  const cookie = await signup(app)
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
 
   // The first exposure to a card is a "teach" step, not a graded drill: clear it
   // so the next fetch hands back the action's exercise.
@@ -153,8 +159,8 @@ test('training an action awards skill XP and materials', async () => {
 })
 
 test('actions are gated by unlocks, materials and equipment', async () => {
-  const { app, sqlite } = makeApp()
-  const cookie = await signup(app)
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
 
   // locked: mine-iron needs Mining 5
   const locked = await app.request(
@@ -182,8 +188,8 @@ test('actions are gated by unlocks, materials and equipment', async () => {
 })
 
 test('GET /api/skills/:id returns one profession with its talent roadmap', async () => {
-  const { app, sqlite } = makeApp()
-  const cookie = await signup(app)
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
   const body = (await (await app.request('/api/skills/mining', auth(cookie))).json()) as {
     skill: {
       id: string
@@ -211,8 +217,8 @@ test('GET /api/skills/:id returns one profession with its talent roadmap', async
 })
 
 test('talent + equip endpoints validate input', async () => {
-  const { app, sqlite } = makeApp()
-  const cookie = await signup(app)
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
 
   const bad = await app.request('/api/skills/talents', auth(cookie, json({ talentId: 'nope' })))
   expect(bad.status).toBe(400)

@@ -2,9 +2,11 @@ import { expect, test } from 'bun:test'
 import { createApp } from './app'
 import type { App, Deps } from './context'
 import { openDb } from './db/client'
+import type { Db } from './db/client'
 import type { Role } from './env'
 import { EventBus } from './events'
 import { OpenRouter } from './llm/openrouter'
+import { seedStarterDecks } from './seed/service'
 import { SpeechSupervisor } from './speech/supervisor'
 
 const defaults: Record<Role, string> = {
@@ -48,14 +50,18 @@ const auth = (cookie: string, extra: RequestInit = {}): RequestInit => ({
   headers: { ...(extra.headers ?? {}), cookie },
 })
 
-async function signup(app: App, username = 'alice') {
+async function signup(app: App, db: Db, username = 'alice') {
   const res = await app.request('/api/auth/register', json({ username, password: 'password123' }))
-  return res.headers.getSetCookie()[0]!.split(';')[0]!
+  const cookie = res.headers.getSetCookie()[0]!.split(';')[0]!
+  // Decks are no longer pre-seeded; tests drill the curated fixture decks.
+  const { user } = (await res.json()) as { user: { id: string } }
+  seedStarterDecks(db, user.id)
+  return cookie
 }
 
 test('GET /api/curriculum returns the frequency decks split into one-word steps', async () => {
-  const { app, sqlite } = makeApp()
-  const cookie = await signup(app)
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
   const body = (await (await app.request('/api/curriculum', auth(cookie))).json()) as {
     decks: {
       name: string
@@ -78,8 +84,8 @@ test('GET /api/curriculum returns the frequency decks split into one-word steps'
 })
 
 test('practising a step stays inside it and records spaced repetition', async () => {
-  const { app, sqlite } = makeApp()
-  const cookie = await signup(app)
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
 
   const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
     decks: { id: string; level: string }[]
@@ -139,8 +145,8 @@ test('practising a step stays inside it and records spaced repetition', async ()
 })
 
 test('the frequency path introduces one word per step (n+1)', async () => {
-  const { app, sqlite } = makeApp()
-  const cookie = await signup(app)
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
   const body = (await (await app.request('/api/curriculum', auth(cookie))).json()) as {
     decks: {
       level: string
@@ -170,8 +176,8 @@ test('the frequency path introduces one word per step (n+1)', async () => {
 })
 
 test('sentence_build builds and grades an n+1 sentence once words are known', async () => {
-  const { app, sqlite } = makeApp()
-  const cookie = await signup(app)
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
   const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
     decks: { id: string; level: string }[]
   }
@@ -234,8 +240,8 @@ test('sentence_build builds and grades an n+1 sentence once words are known', as
 })
 
 test('a new card is taught before it is quizzed', async () => {
-  const { app, sqlite } = makeApp()
-  const cookie = await signup(app)
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
   const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
     decks: { id: string; level: string }[]
   }
@@ -276,8 +282,8 @@ test('a new card is taught before it is quizzed', async () => {
 })
 
 test('teach steps include an n+1 example built from words already met', async () => {
-  const { app, sqlite } = makeApp()
-  const cookie = await signup(app)
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
   const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
     decks: { id: string; level: string }[]
   }
@@ -339,8 +345,8 @@ test('teach steps include an n+1 example built from words already met', async ()
 })
 
 test('a wrong answer schedules the card to come back soon', async () => {
-  const { app, sqlite } = makeApp()
-  const cookie = await signup(app)
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
   const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
     decks: { id: string }[]
   }

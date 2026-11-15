@@ -147,6 +147,8 @@ export interface ExerciseDef<Answer = unknown> {
   xp(result: GradeResult, instance: ExerciseInstance): number
 }
 
+export * from './templates'
+
 export class ExerciseRegistry {
   #defs = new Map<string, ExerciseDef<unknown>>()
 

@@ -11,6 +11,12 @@ export interface StepCard {
   front: string
   back: string
   reading?: string
+  /**
+   * The n+1 step this card belongs to. Cards sharing a step (a word and the
+   * example/grammar cards built from it) form one lesson. Undefined → one card
+   * per lesson (the curated path's behaviour).
+   */
+  step?: number
 }
 
 export interface Lesson {
@@ -29,16 +35,33 @@ export interface Lesson {
 /** The frequency path introduces a single new word per step (n+1). */
 export const STEP_SIZE = 1
 
-/** Splits a deck's cards (in syllabus order) into one-word steps. */
-export function buildLessons(level: string, cards: StepCard[]): Lesson[] {
-  return cards.map((card, i) => ({
-    id: `${level}:${i + 1}`,
-    index: i,
-    title: card.back,
-    description: [card.front, card.reading].filter(Boolean).join(' · '),
-    level,
-    cardIds: [card.id],
-    newWord: card.back,
-    reading: card.reading,
-  }))
+/**
+ * Splits a deck's cards (in syllabus order) into n+1 steps. Cards tagged with
+ * the same `step` are grouped into one lesson; without a tag each card is its
+ * own step. `key` is the deck's level (curated) or id (generated).
+ */
+export function buildLessons(key: string, cards: StepCard[]): Lesson[] {
+  const groups: StepCard[][] = []
+  let current: number | undefined
+  for (const card of cards) {
+    if (card.step !== undefined && card.step === current && groups.length > 0) {
+      groups[groups.length - 1]!.push(card)
+    } else {
+      groups.push([card])
+      current = card.step
+    }
+  }
+  return groups.map((group, i) => {
+    const head = group[0]!
+    return {
+      id: `${key}:${i + 1}`,
+      index: i,
+      title: head.back,
+      description: [head.front, head.reading].filter(Boolean).join(' · '),
+      level: key,
+      cardIds: group.map((c) => c.id),
+      newWord: head.back,
+      reading: head.reading,
+    }
+  })
 }

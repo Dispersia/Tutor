@@ -1,5 +1,7 @@
 import {
   ExerciseRegistry,
+  templateForExercise,
+  type Card,
   type ExerciseContext,
   type ExerciseDef,
   type ExerciseInstance,
@@ -427,21 +429,64 @@ function normalizeSentence(s: string): string {
   return s.replace(/[\s.,!?。，！？、；：；'"]/g, '').trim()
 }
 
+/** Ordered target-language tokens a sentence card carries in its payload. */
+function payloadTokens(card: Card): string[] {
+  const t = card.payload?.tokens
+  return Array.isArray(t)
+    ? t.filter((x): x is string => typeof x === 'string' && x.length > 0)
+    : []
+}
+
+/** True when the card carries its own segmented sentence (works in any language). */
+const hasPayloadSentence = (card: Card): boolean => payloadTokens(card).length >= 2
+
 const sentenceBuild: ExerciseDef<unknown> = {
   id: 'sentence_build',
   title: 'Build the sentence',
   modality: 'text',
+  // Language-agnostic: any card that carries `payload.tokens` is a sentence card.
+  // Mandarin frequency cards are also supported through the hand-written grammar
+  // engine, so the seeded path keeps working without payload tokens.
   supports: (card) => {
+    if (hasPayloadSentence(card)) return true
     if (card.targetLang !== 'zh') return false
     const entry = LEXICON.get(card.back)
     return Boolean(entry && SENTENCE_POS.has(entry.pos))
   },
   available: (ctx) => {
+    if (hasPayloadSentence(ctx.card)) return true
     const entry = LEXICON.get(ctx.card.back)
     if (!entry || !ctx.known) return false
     return canBuildSentence(entry, new Set(ctx.known))
   },
   async generate(ctx) {
+    // Generic path: the sentence lives on the card, so it works for any language.
+    const tokens = payloadTokens(ctx.card)
+    if (tokens.length >= 2) {
+      const payload = ctx.card.payload ?? {}
+      const gloss =
+        typeof payload.gloss === 'string' && payload.gloss ? payload.gloss : ctx.card.front
+      const extra = Array.isArray(payload.distractors)
+        ? (payload.distractors as unknown[]).filter((d): d is string => typeof d === 'string')
+        : ctx.distractors
+      const distractors = extra.filter((d) => d && !tokens.includes(d)).slice(0, 3)
+      return {
+        exerciseId: this.id,
+        cardId: ctx.card.id,
+        modality: 'text',
+        prompt: `Build the sentence: “${gloss}”`,
+        data: {
+          tokens,
+          bank: shuffle([...tokens, ...distractors]),
+          gloss,
+          // No readings anywhere here: the learner builds the sentence from the
+          // meaning, so any reading on the tiles gives the answer away.
+          target: ctx.card.back,
+          newWord: typeof payload.newWord === 'string' ? payload.newWord : ctx.card.back,
+        },
+      }
+    }
+    // Mandarin fallback: build an n+1 sentence from the known-word grammar engine.
     const entry = LEXICON.get(ctx.card.back)
     const known = new Set(ctx.known ?? [])
     const seed = hashSeed(`${ctx.card.id}:${[...known].sort().join(',')}`)
@@ -454,11 +499,6 @@ const sentenceBuild: ExerciseDef<unknown> = {
       gloss: ctx.card.front,
       target: ctx.card.back,
     }
-    const zhuyinOf = (t: string) => {
-      const e = LEXICON.get(t)
-      return e ? pinyinToZhuyin(e.pinyin) : ''
-    }
-    const tokenReadings = readingsShown(ctx) ? data.tokens.map(zhuyinOf) : []
     return {
       exerciseId: this.id,
       cardId: ctx.card.id,
@@ -468,10 +508,6 @@ const sentenceBuild: ExerciseDef<unknown> = {
         tokens: data.tokens,
         bank: data.bank,
         gloss: data.gloss,
-        // No per-token readings here: hearing the sentence before building it
-        // would hand over the answer. `reading` is only for the feedback shown
-        // after the learner answers.
-        reading: build ? tokenReadings.join(' ') : displayReading(ctx),
         target: data.target,
         newWord: entry?.word ?? ctx.card.back,
       },
@@ -490,12 +526,70 @@ const sentenceBuild: ExerciseDef<unknown> = {
       score: correct ? 100 : 0,
       correct,
       expected,
-      feedback: correct
-        ? undefined
-        : `The sentence is “${expected}”${instance.data.reading ? ` (${instance.data.reading})` : ''}.`,
+      feedback: correct ? undefined : `The sentence is “${expected}”.`,
     }
   },
   xp: (r) => (r.correct ? 12 + (r.score === 100 ? 3 : 0) : 1),
+}
+
+// --- grammar: apply a rule to a pattern (any language) ------------------------
+
+/** Reads a string field off a card's payload. */
+const payloadString = (card: Card, key: string): string | undefined => {
+  const v = card.payload?.[key]
+  return typeof v === 'string' && v.length > 0 ? v : undefined
+}
+
+/**
+ * Generic grammar template. The card carries the practice in its payload, so the
+ * same exercise serves every language: `prompt` (defaults to `front`), `answer`
+ * (defaults to `back`), optional `options` for a choice card, plus `rule` and
+ * `explanation` shown around the answer. With no options it is free typing.
+ */
+const grammarCloze: ExerciseDef<string> = {
+  id: 'grammar_cloze',
+  title: 'Apply the rule',
+  modality: 'text',
+  // Gated on explicit grammar markers so a plain word card is never offered as
+  // grammar: the card must carry an answer, a rule or options.
+  supports: (card) => {
+    const options = card.payload?.options
+    return Boolean(
+      payloadString(card, 'answer') ||
+        payloadString(card, 'rule') ||
+        (Array.isArray(options) && options.length > 0),
+    )
+  },
+  async generate(ctx) {
+    const options = ctx.card.payload?.options
+    const choices = Array.isArray(options)
+      ? options.filter((o): o is string => typeof o === 'string' && o.length > 0)
+      : []
+    return {
+      exerciseId: this.id,
+      cardId: ctx.card.id,
+      modality: 'text',
+      prompt: payloadString(ctx.card, 'prompt') ?? ctx.card.front,
+      data: {
+        options: choices.length ? shuffle(choices) : undefined,
+        rule: payloadString(ctx.card, 'rule'),
+        reading: displayReading(ctx),
+        readingLang: ctx.card.targetLang,
+      },
+    }
+  },
+  async grade(ctx, _instance, answer) {
+    const expected = payloadString(ctx.card, 'answer') ?? ctx.card.back
+    const explanation = payloadString(ctx.card, 'explanation')
+    const g = gradeText(expected, readingsOf(ctx), String(answer ?? ''))
+    return {
+      score: g.score,
+      correct: g.correct,
+      expected,
+      feedback: g.correct ? explanation : feedbackFor(g.score, expected),
+    }
+  },
+  xp: (r) => (r.correct ? 10 + (r.score === 100 ? 3 : 0) : 1),
 }
 
 // --- introduce: first exposure teaches, never quizzes (DESIGN §13.7) ----------
@@ -571,6 +665,7 @@ export const registry = new ExerciseRegistry()
   .register(speakWord)
   .register(converse)
   .register(sentenceBuild)
+  .register(grammarCloze)
 
 export function exerciseCatalog() {
   return registry.list().map((d) => ({
@@ -578,5 +673,7 @@ export function exerciseCatalog() {
     title: d.title,
     modality: d.modality,
     needsAudio: Boolean(d.needsAudio),
+    /** The card template this exercise belongs to (vocab, spoken, …). */
+    template: templateForExercise(d.id)?.kind,
   }))
 }
