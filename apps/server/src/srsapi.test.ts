@@ -137,6 +137,101 @@ test('practising a lesson stays inside it and records spaced repetition', async 
   sqlite.close()
 })
 
+test('the frequency path introduces one word per step (n+1)', async () => {
+  const { app, sqlite } = makeApp()
+  const cookie = await signup(app)
+  const body = (await (await app.request('/api/curriculum', auth(cookie))).json()) as {
+    decks: {
+      level: string
+      lessons: { id: string; cards: number; newWord?: string; reading?: string }[]
+    }[]
+  }
+  const freq = body.decks.find((d) => d.level === 'zhfreq')!
+  expect(freq.lessons.length).toBeGreaterThan(100)
+  expect(freq.lessons[0]!.cards).toBe(1)
+  expect(freq.lessons[0]!.id).toBe('zhfreq:1')
+  expect(freq.lessons[0]!.newWord).toBe('我')
+  expect(freq.lessons[0]!.reading).toBe('ㄨㄛˇ')
+
+  // practising step 1 only ever uses its single new word
+  const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
+    decks: { id: string; level: string }[]
+  }
+  const freqDeck = decks.decks.find((d) => d.level === 'zhfreq')!
+  const cards = (await (
+    await app.request(`/api/decks/${freqDeck.id}/cards`, auth(cookie))
+  ).json()) as { cards: { id: string; back: string }[] }
+  const next = (await (
+    await app.request('/api/practice/next', auth(cookie, json({ lessonId: 'zhfreq:1' })))
+  ).json()) as { instance: { cardId: string } }
+  expect(cards.cards.find((c) => c.id === next.instance.cardId)?.back).toBe('我')
+  sqlite.close()
+})
+
+test('sentence_build builds and grades an n+1 sentence once words are known', async () => {
+  const { app, sqlite } = makeApp()
+  const cookie = await signup(app)
+  const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
+    decks: { id: string; level: string }[]
+  }
+  const freqDeck = decks.decks.find((d) => d.level === 'zhfreq')!
+  const cards = (await (
+    await app.request(`/api/decks/${freqDeck.id}/cards`, auth(cookie))
+  ).json()) as { cards: { id: string; back: string }[] }
+
+  // learn the first 35 words (a correct answer with a perfect score graduates
+  // a new card straight to review, i.e. "learned")
+  for (const card of cards.cards.slice(0, 35)) {
+    const res = (await (
+      await app.request(
+        '/api/practice/grade',
+        auth(
+          cookie,
+          json({
+            exerciseId: 'translate.front_to_back',
+            cardId: card.id,
+            answer: card.back,
+          }),
+        ),
+      )
+    ).json()) as { result: { correct: boolean } }
+    expect(res.result.correct).toBe(true)
+  }
+
+  // the step for 喝 should now be able to build "我 喝 茶"
+  const idx = cards.cards.findIndex((c) => c.back === '喝')
+  expect(idx).toBeGreaterThanOrEqual(0)
+  const card = cards.cards[idx]!
+  const built = (await (
+    await app.request(
+      '/api/practice/next',
+      auth(cookie, json({ lessonId: `zhfreq:${idx + 1}`, exerciseId: 'sentence_build' })),
+    )
+  ).json()) as {
+    instance: { exerciseId: string; cardId: string; data: { tokens: string[]; bank: string[] } }
+  }
+  expect(built.instance.exerciseId).toBe('sentence_build')
+  expect(built.instance.data.tokens).toContain('喝')
+  expect(built.instance.data.bank.length).toBeGreaterThanOrEqual(built.instance.data.tokens.length)
+
+  const graded = (await (
+    await app.request(
+      '/api/practice/grade',
+      auth(
+        cookie,
+        json({
+          exerciseId: 'sentence_build',
+          cardId: card.id,
+          answer: built.instance.data.tokens.join(''),
+        }),
+      ),
+    )
+  ).json()) as { result: { correct: boolean; score: number } }
+  expect(graded.result.correct).toBe(true)
+  expect(graded.result.score).toBe(100)
+  sqlite.close()
+})
+
 test('a wrong answer schedules the card to come back soon', async () => {
   const { app, sqlite } = makeApp()
   const cookie = await signup(app)

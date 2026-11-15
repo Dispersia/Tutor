@@ -70,7 +70,7 @@
 
 <div class="pt-5 pb-3">
   <button onclick={() => goto(href('/skills'))} class="text-sm text-ink-400 hover:text-ink-300">
-    ← Professions
+    ← Skills
   </button>
 </div>
 

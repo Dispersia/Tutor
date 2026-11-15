@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Instance } from '#lib/exercises'
+  import Word from '../Word.svelte'
 
   let {
     instance,
@@ -9,6 +10,11 @@
 
   let answer = $state('')
 
+  const word = $derived((instance.data.word as string) ?? '')
+  const reading = $derived((instance.data.reading as string) ?? '')
+  const lang = $derived((instance.data.readingLang as string) ?? '')
+  const furigana = $derived(instance.data.furigana as { base: string; ruby?: string }[] | undefined)
+
   function submit(e: SubmitEvent) {
     e.preventDefault()
     if (answer.trim()) onsubmit(answer.trim())
@@ -17,6 +23,11 @@
 
 <form onsubmit={submit} class="space-y-4">
   <p class="text-lg leading-snug">{instance.prompt}</p>
+  {#if word}
+    <div class="panel p-4 text-center">
+      <Word {word} {reading} {lang} {furigana} />
+    </div>
+  {/if}
   <input
     bind:value={answer}
     autocomplete="off"

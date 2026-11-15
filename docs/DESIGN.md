@@ -534,7 +534,7 @@ interface ExerciseDef<Ctx = unknown, Inst = unknown, Res = unknown> {
 | `speak_word`              | voice      | ✅    | ASR + aligner + judge (§9.4) |
 | `converse`                | chat/voice | ✅    | LLM judge on the turn        |
 | `multiple_choice`         | text       | ✅    | exact                        |
-| `sentence_build`          | text       | later | token order + judge          |
+| `sentence_build`          | text       | ✅    | token order (n+1 vocabulary) |
 | `fill_blank` / `roleplay` | mixed      | later | judge                        |
 
 ### 11.4 Game systems plug in via an event bus
@@ -731,6 +731,52 @@ and intervals derived from a **desired retention** (default `0.9`, per-user).
 - **Curriculum**: each deck is split into themed **8-card lessons** that unlock in
   order; a lesson completes once every card is *learned* (graduated to `review`
   with a ≥1-day interval). Events: `srs.updated`, `lesson.completed`.
+
+## 13.7 The frequency path & n+1 sentences
+
+The flagship path is built **dynamically off a frequency list**, not hand-written
+lessons. `seed/frequency.ts` holds a frequency-ordered Mandarin list tagged with a
+part of speech; the deck is seeded in that order and the curriculum walks it **one
+word per step**, so a step can only ever introduce a single new thing:
+
+```
+我 → 你 → 是 → 不 → 好 → 很 → …                (frequency order)
+   step 1   step 2  step 3   …                 each step = 1 new word
+```
+
+The Learn tab is deliberately minimal: pick a course, tap **Next**. The lesson list
+is gone — the path advances one step at a time.
+
+**n+1, enforced by construction.** The `sentence_build` exercise generates a short
+sentence that uses the new word *exactly once* and every other word from the set the
+learner has already learned (`knownWords`, computed from the SRS state). This is a
+small hand-written pattern grammar (`game/grammar.ts`), not an LLM call, so it is
+instant, deterministic and works with no API key:
+
+```
+new word: 喝        known: 我, 茶        →  我 喝 茶   ("I drink tea")
+new word: 很        known: 我, 好        →  我 很 好   ("I am very good")
+new word: 茶        known: 我, 有        →  我 有 茶   ("I have tea")
+```
+
+Patterns contribute function words as they are learned (是, 很, 不, 在, 吗, 也, 的,
+和 …), a small semantic layer keeps objects sensible (喝 takes 水/茶, 吃 takes food),
+and an exercise is only offered once a sentence can actually be built. The learner
+builds the sentence by tapping word tiles in order **or** typing it.
+
+Two flavours of lesson come out of the same builder: themed 8-card chunks for HSK 1
+and JLPT N5, and one-word steps for the frequency path.
+
+**Readings are native scripts only.** Every card stores the phonetic script, never a
+Latin transliteration — the UI shows:
+
+- Chinese → **Traditional characters** with **Zhuyin** (bopomofo) below, derived from
+  pinyin by a mechanical converter (`seed/zhuyin.ts`), e.g. 學生 = ㄒㄩㄝˊ ˙ㄕㄥ.
+- Japanese → **furigana**, i.e. the kana split into ruby segments over the kanji
+  (`seed/furigana.ts`): 食べる → 食[た]べる, お茶 → お茶[ちゃ].
+
+No pinyin or romaji is stored or shown; the Latin source is used only to derive the
+native reading at seed time. Grading accepts the characters or the native reading.
 
 ---
 

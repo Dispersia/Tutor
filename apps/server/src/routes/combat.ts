@@ -5,12 +5,13 @@ import { MONSTERS, MONSTER_BY_ID, type MonsterDef } from '../game/combat'
 import {
   combatResolve,
   getPlayerCombat,
+  knownWords,
   monsterState,
   recordReview,
   startEncounter,
   summary,
 } from '../game/service'
-import { pickNextExercise } from './practice'
+import { pickNextExercise, readingMap } from './practice'
 import { seedStarterDecks } from '../seed/service'
 import type { App, Deps } from '../context'
 
@@ -33,13 +34,16 @@ async function buildDrill(deps: Deps, user: User, deckLevel: string) {
   const card = pickCard(deps.db, user.id, deck?.id)
   if (!card) return null
   const learner = learnerOf(user)
-  const def = pickNextExercise(deps.db, user.id, card, learner)
-  if (!def) return null
-  const instance = await def.generate({
+  const ctx = {
     card,
     learner,
     distractors: otherBacks(deps.db, user.id, card.targetLang, card.back, 3),
-  })
+    readings: readingMap(deps.db, user.id, card.targetLang),
+    known: [...knownWords(deps.db, user.id), card.back],
+  }
+  const def = pickNextExercise(deps.db, user.id, card, learner, ctx)
+  if (!def) return null
+  const instance = await def.generate(ctx)
   return { instance, card }
 }
 
@@ -119,6 +123,7 @@ export function registerCombat(app: App) {
       card,
       learner,
       distractors: otherBacks(deps.db, user.id, card.targetLang, card.back, 3),
+      known: [...knownWords(deps.db, user.id), card.back],
     }
     const instance = await def.generate(ctx)
     const result = await def.grade(ctx, instance, body.answer)

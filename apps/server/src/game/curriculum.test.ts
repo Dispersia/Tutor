@@ -1,27 +1,39 @@
 import { expect, test } from 'bun:test'
-import { LESSON_SIZE, buildLessons } from './curriculum'
+import { LESSON_SIZE, STEP_SIZE, buildLessons, isFrequencyLevel } from './curriculum'
 
-test('buildLessons splits cards into themed lessons', () => {
-  const ids = Array.from({ length: 20 }, (_, i) => `c${i}`)
-  const lessons = buildLessons('hsk1', ids)
+const cards = (n: number) =>
+  Array.from({ length: n }, (_, i) => ({
+    id: `c${i}`,
+    front: `meaning ${i}`,
+    back: `字${i}`,
+    reading: `zi${i}`,
+  }))
+
+test('buildLessons splits themed decks (hsk1) into 8-card lessons', () => {
+  const lessons = buildLessons('hsk1', cards(20))
   expect(lessons.length).toBe(Math.ceil(20 / LESSON_SIZE))
   expect(lessons[0]!.cardIds.length).toBe(LESSON_SIZE)
   expect(lessons[0]!.title).toBe('Greetings')
   expect(lessons[0]!.id).toBe('hsk1:1')
   expect(lessons[1]!.id).toBe('hsk1:2')
-  // the last lesson holds the remainder
   expect(lessons.at(-1)!.cardIds.length).toBe(20 - 2 * LESSON_SIZE)
-  // cards are not duplicated across lessons
-  const all = lessons.flatMap((l) => l.cardIds)
-  expect(new Set(all).size).toBe(20)
+  expect(new Set(lessons.flatMap((l) => l.cardIds)).size).toBe(20)
 })
 
-test('unknown levels still produce numbered lessons', () => {
-  const lessons = buildLessons('xx', ['a', 'b'])
-  expect(lessons.length).toBe(1)
-  expect(lessons[0]!.title).toBe('Lesson 1')
+test('the frequency path introduces one word per step (n+1)', () => {
+  const lessons = buildLessons('zhfreq', cards(3))
+  expect(lessons.length).toBe(3)
+  expect(lessons[0]!.cardIds.length).toBe(STEP_SIZE)
+  expect(lessons[0]!.newWord).toBe('字0')
+  expect(lessons[0]!.reading).toBe('zi0')
+  expect(lessons[1]!.id).toBe('zhfreq:2')
+  // each card appears in exactly one step
+  expect(new Set(lessons.flatMap((l) => l.cardIds)).size).toBe(3)
+  expect(isFrequencyLevel('zhfreq')).toBe(true)
+  expect(isFrequencyLevel('hsk1')).toBe(false)
 })
 
 test('an empty deck has no lessons', () => {
   expect(buildLessons('hsk1', [])).toEqual([])
+  expect(buildLessons('zhfreq', [])).toEqual([])
 })

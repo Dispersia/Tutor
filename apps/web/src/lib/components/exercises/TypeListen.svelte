@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Instance } from '#lib/exercises'
   import { speak } from '#lib/speech'
+  import { voiceFor } from '#lib/voices'
 
   let {
     instance,
@@ -19,7 +20,7 @@
     err = ''
     playing = true
     try {
-      await speak(audioText, { language })
+      await speak(audioText, { voice: voiceFor(language), language })
     } catch (e) {
       err = (e as Error).message
     } finally {

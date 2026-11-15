@@ -7,6 +7,10 @@ import {
 } from '@tutor/core'
 import { feedbackFor, gradeText, similarity } from './grading'
 import { computeFeatures, deterministicWords, summarize } from '../pronunciation/features'
+import { buildSentence, canBuildSentence, SENTENCE_POS } from '../game/grammar'
+import { LEXICON } from '../seed/frequency'
+import { furiganaSegments } from '../seed/furigana'
+import { pinyinToZhuyin } from '../seed/zhuyin'
 
 const LANG_LABEL: Record<string, string> = {
   zh: 'Mandarin',
@@ -23,6 +27,29 @@ const label = (lang: string) => LANG_LABEL[lang] ?? lang
 
 const readingsOf = (ctx: ExerciseContext): string[] =>
   Object.values(ctx.card.readings).filter(Boolean)
+
+/**
+ * The reading a learner should see: Zhuyin for Chinese, kana (furigana) for
+ * Japanese. Never Latin transliteration — a legacy pinyin value is converted.
+ */
+const displayReading = (ctx: ExerciseContext): string => {
+  const r = ctx.card.readings
+  if (ctx.card.targetLang === 'ja') return r.kana || ''
+  if (ctx.card.targetLang === 'zh') return r.zhuyin || (r.pinyin ? pinyinToZhuyin(r.pinyin) : '')
+  return Object.values(r).find(Boolean) ?? ''
+}
+
+/** Furigana ruby segments for a Japanese word (undefined for other languages). */
+const furiganaFor = (lang: string, word: string, reading: string) =>
+  lang === 'ja' ? furiganaSegments(word, reading) : undefined
+
+/** The target word plus the reading the learner should see (Zhuyin / furigana). */
+const wordView = (ctx: ExerciseContext) => ({
+  word: ctx.card.back,
+  reading: displayReading(ctx),
+  readingLang: ctx.card.targetLang,
+  furigana: furiganaFor(ctx.card.targetLang, ctx.card.back, displayReading(ctx)),
+})
 
 function shuffle<T>(items: T[]): T[] {
   const a = [...items]
@@ -62,14 +89,12 @@ const translateFrontToBack: ExerciseDef<string> = {
   },
   async grade(ctx, _instance, answer) {
     const g = gradeText(ctx.card.back, readingsOf(ctx), String(answer ?? ''))
+    const reading = displayReading(ctx)
     return {
       score: g.score,
       correct: g.correct,
       expected: ctx.card.back,
-      feedback: feedbackFor(
-        g.score,
-        `${ctx.card.back}${readingsOf(ctx)[0] ? ` (${readingsOf(ctx)[0]})` : ''}`,
-      ),
+      feedback: feedbackFor(g.score, `${ctx.card.back}${reading ? ` (${reading})` : ''}`),
     }
   },
   xp: (r) => (r.correct ? 10 + (r.score === 100 ? 5 : 0) : 1),
@@ -87,8 +112,8 @@ const translateBackToFront: ExerciseDef<string> = {
       exerciseId: this.id,
       cardId: ctx.card.id,
       modality: 'text',
-      prompt: `What does “${ctx.card.back}” mean in ${label(ctx.card.sourceLang)}?`,
-      data: { reading: readingsOf(ctx)[0] ?? '' },
+      prompt: `What does this mean in ${label(ctx.card.sourceLang)}?`,
+      data: { ...wordView(ctx) },
     }
   },
   async grade(ctx, _instance, answer) {
@@ -123,7 +148,15 @@ const multipleChoice: ExerciseDef<string> = {
       cardId: ctx.card.id,
       modality: 'text',
       prompt: `Which one means “${ctx.card.front}”?`,
-      data: { choices, reading: readingsOf(ctx)[0] ?? '' },
+      data: {
+        choices,
+        choiceReadings: choices.map((c) => ctx.readings?.[c] ?? ''),
+        choiceFurigana: choices.map((c) =>
+          furiganaFor(ctx.card.targetLang, c, ctx.readings?.[c] ?? ''),
+        ),
+        reading: displayReading(ctx),
+        readingLang: ctx.card.targetLang,
+      },
     }
   },
   async grade(ctx, _instance, answer) {
@@ -154,7 +187,8 @@ const typeListen: ExerciseDef<string> = {
       data: {
         audioText: ctx.card.back,
         language: ctx.card.targetLang,
-        reading: readingsOf(ctx)[0] ?? '',
+        reading: displayReading(ctx),
+        readingLang: ctx.card.targetLang,
       },
     }
   },
@@ -211,7 +245,7 @@ const speakWord: ExerciseDef<string> = {
       data: {
         target: ctx.card.back,
         language: ctx.card.targetLang,
-        reading: readingsOf(ctx)[0] ?? '',
+        ...wordView(ctx),
       },
     }
   },
@@ -312,7 +346,11 @@ const converse: ExerciseDef<string> = {
       cardId: ctx.card.id,
       modality: 'mixed',
       prompt: `Reply in ${label(ctx.card.targetLang)} using “${ctx.card.back}”.`,
-      data: { topic: ctx.card.back, language: ctx.card.targetLang },
+      data: {
+        topic: ctx.card.back,
+        language: ctx.card.targetLang,
+        ...wordView(ctx),
+      },
     }
   },
   async grade(ctx, _instance, answer): Promise<GradeResult> {
@@ -354,6 +392,104 @@ const converse: ExerciseDef<string> = {
   xp: (r) => (r.correct ? 5 + (r.score >= 90 ? 5 : 0) : 1),
 }
 
+// --- sentence build: n+1 sentence from known words (DESIGN §13.7) -------------
+
+/** Deterministic PRNG so the same card always yields the same sentence. */
+function seededRandom(seed: number): () => number {
+  let a = seed >>> 0
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0
+    let t = a
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+function hashSeed(s: string): number {
+  let h = 2166136261
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return h >>> 0
+}
+
+/** Normalises a built/typed sentence for comparison (ignore spaces + punctuation). */
+function normalizeSentence(s: string): string {
+  return s.replace(/[\s.,!?。，！？、；：；'"]/g, '').trim()
+}
+
+const sentenceBuild: ExerciseDef<unknown> = {
+  id: 'sentence_build',
+  title: 'Build the sentence',
+  modality: 'text',
+  supports: (card) => {
+    if (card.targetLang !== 'zh') return false
+    const entry = LEXICON.get(card.back)
+    return Boolean(entry && SENTENCE_POS.has(entry.pos))
+  },
+  available: (ctx) => {
+    const entry = LEXICON.get(ctx.card.back)
+    if (!entry || !ctx.known) return false
+    return canBuildSentence(entry, new Set(ctx.known))
+  },
+  async generate(ctx) {
+    const entry = LEXICON.get(ctx.card.back)
+    const known = new Set(ctx.known ?? [])
+    const seed = hashSeed(`${ctx.card.id}:${[...known].sort().join(',')}`)
+    const build = entry ? buildSentence(entry, known, seededRandom(seed)) : undefined
+    // Fallback (should not happen: the route filters via `available`): build the
+    // word on its own so the exercise is still usable and never crashes.
+    const data = build ?? {
+      tokens: [ctx.card.back],
+      bank: [ctx.card.back],
+      gloss: ctx.card.front,
+      target: ctx.card.back,
+    }
+    const zhuyinOf = (t: string) => {
+      const e = LEXICON.get(t)
+      return e ? pinyinToZhuyin(e.pinyin) : ''
+    }
+    const tokenReadings = data.tokens.map(zhuyinOf)
+    return {
+      exerciseId: this.id,
+      cardId: ctx.card.id,
+      modality: 'text',
+      prompt: `Build the sentence: “${data.gloss}”`,
+      data: {
+        tokens: data.tokens,
+        tokenReadings,
+        bank: data.bank,
+        bankReadings: data.bank.map(zhuyinOf),
+        gloss: data.gloss,
+        reading: build ? tokenReadings.join(' ') : displayReading(ctx),
+        target: data.target,
+        newWord: entry?.word ?? ctx.card.back,
+      },
+    }
+  },
+  async grade(_ctx, instance, answer) {
+    const tokens = (instance.data.tokens as string[] | undefined) ?? []
+    const expected = tokens.join('')
+    const built = Array.isArray(answer)
+      ? (answer as string[]).join('')
+      : typeof answer === 'string'
+        ? answer
+        : String((answer as { tokens?: string[] })?.tokens?.join('') ?? '')
+    const correct = expected.length > 0 && normalizeSentence(built) === normalizeSentence(expected)
+    return {
+      score: correct ? 100 : 0,
+      correct,
+      expected,
+      feedback: correct
+        ? undefined
+        : `The sentence is “${expected}”${instance.data.reading ? ` (${instance.data.reading})` : ''}.`,
+    }
+  },
+  xp: (r) => (r.correct ? 12 + (r.score === 100 ? 3 : 0) : 1),
+}
+
 /**
  * The registry. To add an exercise: create the def, `register` it here, and add a
  * matching Svelte component keyed by the same `id` — no core changes (DESIGN §11.2).
@@ -365,6 +501,7 @@ export const registry = new ExerciseRegistry()
   .register(typeListen)
   .register(speakWord)
   .register(converse)
+  .register(sentenceBuild)
 
 export function exerciseCatalog() {
   return registry.list().map((d) => ({

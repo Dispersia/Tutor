@@ -13,7 +13,7 @@ function ctx(partial: Partial<Card> = {}, distractors: string[] = []): ExerciseC
     targetLang: 'zh',
     front: 'hello',
     back: '你好',
-    readings: { pinyin: 'nǐ hǎo' },
+    readings: { zhuyin: 'ㄋㄧˇ ㄏㄠˇ' },
     tags: [],
     payload: {},
     origin: 'curated',
@@ -32,9 +32,32 @@ test('catalog lists the built-in exercises', () => {
     'type_listen',
     'speak_word',
     'converse',
+    'sentence_build',
   ]) {
     expect(ids).toContain(id)
   }
+})
+
+test('readings are locale-aware: Zhuyin for Chinese, furigana for Japanese', async () => {
+  const def = registry.get('translate.back_to_front')!
+
+  const zh = ctx({ readings: { zhuyin: 'ㄋㄧˇ ㄏㄠˇ' } })
+  const zhInst = await def.generate(zh)
+  expect(zhInst.data.reading).toBe('ㄋㄧˇ ㄏㄠˇ')
+
+  // a legacy pinyin-only reading is converted to Zhuyin, never shown as Latin
+  const legacy = ctx({ readings: { pinyin: 'nǐ hǎo' } })
+  expect((await def.generate(legacy)).data.reading).toBe('ㄋㄧˇ ㄏㄠˇ')
+
+  const ja = ctx({
+    targetLang: 'ja',
+    back: '食べる',
+    front: 'to eat',
+    readings: { kana: 'たべる' },
+  })
+  const jaInst = await def.generate(ja)
+  expect(jaInst.data.reading).toBe('たべる')
+  expect(jaInst.data.furigana).toEqual([{ base: '食', ruby: 'た' }, { base: 'べる' }])
 })
 
 test('translate.front_to_back: exact and via reading', async () => {
@@ -43,8 +66,8 @@ test('translate.front_to_back: exact and via reading', async () => {
   const inst = await def.generate(c)
   expect(inst.prompt).toContain('hello')
   expect((await def.grade(c, inst, '你好')).correct).toBe(true)
-  expect((await def.grade(c, inst, 'ni hao')).score).toBe(100) // reading accepted
-  const wrong = await def.grade(c, inst, '再见')
+  expect((await def.grade(c, inst, 'ㄋㄧˇ ㄏㄠˇ')).score).toBe(100) // zhuyin reading accepted
+  const wrong = await def.grade(c, inst, '再見')
   expect(wrong.correct).toBe(false)
   expect(wrong.expected).toBe('你好')
   expect(def.xp({ score: 100, correct: true }, inst)).toBe(15)
@@ -55,19 +78,20 @@ test('translate.back_to_front', async () => {
   const def = registry.get('translate.back_to_front')!
   const c = ctx()
   const inst = await def.generate(c)
-  expect(inst.prompt).toContain('你好')
+  expect(inst.data.word).toBe('你好')
+  expect(inst.data.reading).toBe('ㄋㄧˇ ㄏㄠˇ') // Zhuyin, never pinyin
   expect((await def.grade(c, inst, 'hello')).correct).toBe(true)
 })
 
 test('multiple_choice generates choices incl. the answer and grades exactly', async () => {
   const def = registry.get('multiple_choice')!
-  const c = ctx({}, ['再见', '谢谢', '我'])
+  const c = ctx({}, ['再見', '謝謝', '我'])
   const inst = await def.generate(c)
   const choices = inst.data.choices as string[]
   expect(choices).toContain('你好')
   expect(choices.length).toBe(4)
   expect((await def.grade(c, inst, '你好')).correct).toBe(true)
-  expect((await def.grade(c, inst, '再见')).correct).toBe(false)
+  expect((await def.grade(c, inst, '再見')).correct).toBe(false)
 })
 
 test('type_listen exposes audio text', async () => {
@@ -93,7 +117,7 @@ test('converse without a judge falls back to a heuristic', async () => {
   const def = registry.get('converse')!
   const c = ctx()
   const inst = await def.generate(c)
-  const used = await def.grade(c, inst, '你好，我是学生。')
+  const used = await def.grade(c, inst, '你好，我是學生。')
   expect(used.score).toBeGreaterThanOrEqual(60)
   const english = await def.grade(c, inst, 'hello there')
   expect(english.correct).toBe(false)

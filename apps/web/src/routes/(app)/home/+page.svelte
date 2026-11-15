@@ -4,198 +4,168 @@
   import { getStats, type Stats } from '#lib/exercises'
   import { href } from '#lib/paths'
   import { session } from '#lib/session.svelte'
-  import { speechStatus, unloadSpeech, wakeSpeech } from '#lib/speech'
   import { ACCENT, CATEGORY, accentStyle } from '#lib/theme'
-  import type { SpeechStatus } from '#lib/types'
   import { LANG_NAMES } from '#lib/voices'
 
   let stats = $state<Stats | null>(null)
   let srs = $state<SrsStats | null>(null)
-  let speech = $state<SpeechStatus | null>(null)
-  let note = $state('')
+  let error = $state('')
 
   const lang = $derived(session.user?.targetLang ?? 'zh')
 
-  onMount(async () => {
+  const LEVEL_LABELS: Record<string, string> = {
+    hsk1: 'HSK 1',
+    n5: 'JLPT N5',
+    zhfreq: 'Frequency 1k',
+  }
+  const levelLabel = $derived.by(() => {
+    const raw = LEVEL_LABELS[session.user?.level ?? '']
+    if (lang === 'ja') return raw === 'JLPT N5' ? raw : 'JLPT N5'
+    if (lang === 'zh') return raw === 'HSK 1' || raw === 'Frequency 1k' ? raw : 'HSK 1'
+    return raw ?? 'Frequency 1k'
+  })
+  const due = $derived(srs?.due ?? 0)
+  const toGoal = $derived(stats ? Math.max(0, stats.dailyGoal - stats.dailyXp) : 0)
+
+  onMount(load)
+
+  async function load() {
+    error = ''
     try {
       stats = await getStats()
-    } catch {
-      /* not fatal */
-    }
-    getSrsStats()
-      .then((s) => (srs = s))
-      .catch(() => {})
-    void refresh()
-  })
-
-  async function refresh() {
-    try {
-      speech = await speechStatus()
-    } catch {
-      speech = null
-    }
-  }
-
-  async function wake() {
-    note = 'Waking the models up…'
-    try {
-      speech = await wakeSpeech()
-      note = 'Models ready.'
     } catch (e) {
-      note = (e as Error).message
+      error = (e as Error).message || 'Could not load your progress.'
     }
-  }
-
-  async function free() {
-    note = ''
     try {
-      await unloadSpeech()
-      await refresh()
-      note = 'Models unloaded — RAM returned to the Mac.'
-    } catch (e) {
-      note = (e as Error).message
+      srs = await getSrsStats()
+    } catch {
+      /* reviews are optional; the action falls back to "Start practising" */
     }
   }
 </script>
 
-<header
-  class="panel panel-accent mt-3 mb-3 flex items-center justify-between p-4"
-  style={accentStyle(ACCENT.arcane)}
->
-  <div>
-    <p class="eyebrow">Welcome back</p>
-    <h1 class="display text-2xl text-gold-200">{session.user?.handle}</h1>
+<header class="flex items-center justify-between gap-3 pt-4 pb-4">
+  <div class="min-w-0">
+    <h1 class="display truncate text-2xl text-gold-200">{session.user?.handle}</h1>
     <p class="text-xs text-ink-400">
-      Learning {LANG_NAMES[lang] ?? lang} · {session.user?.level ?? 'HSK 1'}
+      Learning {LANG_NAMES[lang] ?? lang} · {levelLabel}
     </p>
   </div>
-  <div class="grid h-14 w-14 place-items-center rounded-full border border-gold-500 bg-ink-900">
-    <span class="text-[9px] leading-none tracking-widest text-ink-400">LV</span>
+  <div
+    class="grid h-14 w-14 shrink-0 place-items-center rounded-full border border-gold-500 bg-ink-900"
+  >
+    <span class="eyebrow leading-none">LV</span>
     <span class="display -mt-0.5 text-lg leading-none text-gold-200">{stats?.level ?? 1}</span>
   </div>
 </header>
 
-<section class="grid grid-cols-3 gap-2.5">
-  <div class="stat-card p-3" style={accentStyle(ACCENT.xp)}>
-    <div class="eyebrow">XP</div>
-    <div class="display mt-1 text-xl font-bold" style="color: {ACCENT.xp}">{stats?.xp ?? 0}</div>
-  </div>
-  <div class="stat-card p-3" style={accentStyle(ACCENT.streak)}>
-    <div class="eyebrow">Streak</div>
-    <div class="display mt-1 text-xl font-bold" style="color: {ACCENT.streak}">
-      {stats?.streak ?? 0}<span class="ml-0.5 text-xs text-ink-400">days</span>
-    </div>
-  </div>
-  <div class="stat-card p-3" style={accentStyle(ACCENT.arcane)}>
-    <div class="eyebrow">Reviews</div>
-    <div class="display mt-1 text-xl font-bold" style="color: {ACCENT.arcane}">{srs?.due ?? 0}</div>
-  </div>
-</section>
+<a href={href('/practice')} class="btn btn-primary w-full gap-2 py-3 text-base">
+  {due > 0 ? `Practise ${due} due` : 'Start practising'}
+  <span aria-hidden="true">→</span>
+</a>
 
-<!-- daily goal -->
-<section class="panel mt-3" style={accentStyle(ACCENT.green)}>
-  <div class="flex items-baseline justify-between px-4 pt-3 text-sm">
-    <span class="font-semibold text-ink-100">Daily goal</span>
-    <span class="text-ink-400">{stats?.dailyXp ?? 0} / {stats?.dailyGoal ?? 50} XP</span>
-  </div>
-  <div class="bar mx-4 mt-2 mb-3" style={accentStyle(ACCENT.green)}>
-    <i style="width: {(stats?.goalPct ?? 0) * 100}%"></i>
-  </div>
-  {#if stats && !stats.todayActive}
-    <p class="border-t border-ink-700 px-4 py-2 text-xs text-amber-300">
-      Practise today to keep your streak alive.
-    </p>
-  {:else if stats && stats.goalPct >= 1}
-    <p class="border-t border-ink-700 px-4 py-2 text-xs text-emerald-300">
-      Goal reached — nice work today! 🎉
-    </p>
-  {/if}
-</section>
-
-<!-- level progress -->
-{#if stats}
-  <section class="panel mt-3" style={accentStyle(ACCENT.level)}>
-    <div class="flex items-baseline justify-between px-4 pt-3 text-sm">
-      <span class="font-semibold text-ink-100">Level {stats.level}</span>
-      <span class="text-ink-400">{stats.intoLevel} / {stats.forNext} XP</span>
-    </div>
-    <div class="bar mx-4 mt-2 mb-3" style={accentStyle(ACCENT.level)}>
-      <i style="width: {stats.progress * 100}%"></i>
-    </div>
-  </section>
-{/if}
-
-<section class="mt-5 grid grid-cols-2 gap-2.5">
-  <a
-    href={href('/learn')}
-    class="tile col-span-2 flex items-center gap-3 p-4"
-    style={accentStyle(ACCENT.green)}
-  >
-    <span class="text-3xl">📖</span>
-    <span class="flex-1">
-      <span class="display block text-lg text-ink-100">
-        {srs && srs.due > 0 ? `${srs.due} cards due` : 'Continue learning'}
-      </span>
-      <span class="text-xs text-ink-400">
-        {srs ? `${srs.learned} / ${srs.total} cards learned` : 'Start the guided path'}
-      </span>
-    </span>
-    <span class="text-ink-500">→</span>
-  </a>
-
-  <a
-    href={href('/skills')}
-    class="tile flex items-center gap-2 p-3 text-sm"
-    style={accentStyle(CATEGORY.artisan.accent)}
-  >
-    <span class="text-xl">⛏️</span><span class="text-ink-100">Professions</span>
-  </a>
-  <a
-    href={href('/combat')}
-    class="tile flex items-center gap-2 p-3 text-sm"
-    style={accentStyle(CATEGORY.combat.accent)}
-  >
-    <span class="text-xl">⚔️</span><span class="text-ink-100">Combat</span>
-  </a>
+<section class="mt-4 grid grid-cols-2 gap-2.5">
   <a
     href={href('/chat')}
     class="tile flex items-center gap-2 p-3 text-sm"
     style={accentStyle(ACCENT.arcane)}
   >
-    <span class="text-xl">💬</span><span class="text-ink-100">Talk to tutor</span>
+    <span class="text-xl" aria-hidden="true">🗣️</span><span class="text-ink-100">Talk to tutor</span
+    >
   </a>
   <a
-    href={href('/history')}
+    href={href('/skills')}
     class="tile flex items-center gap-2 p-3 text-sm"
-    style={accentStyle(ACCENT.streak)}
+    style={accentStyle(CATEGORY.artisan.accent)}
   >
-    <span class="text-xl">📜</span><span class="text-ink-100">History</span>
+    <span class="text-xl" aria-hidden="true">⛏️</span><span class="text-ink-100">Skills</span>
   </a>
 </section>
 
-<section class="panel mt-5 mb-6" style={accentStyle(ACCENT.green)}>
-  <div class="flex items-center justify-between px-4 py-3">
-    <div>
-      <div class="font-semibold text-ink-100">Speech engine</div>
-      <div class="text-xs">
-        {#if speech?.ready}
-          <span class="text-emerald-400">● awake</span>
-          <span class="text-ink-400"> — {speech.models.join(', ')}</span>
-        {:else if speech?.running}
-          <span class="text-amber-400">● starting</span>
-        {:else}
-          <span class="text-ink-400">● asleep — starts on demand, unloads when idle</span>
-        {/if}
+{#if error}
+  <div class="panel mt-4 flex items-center justify-between gap-3 p-3" role="alert">
+    <p class="text-xs text-amber-300">Couldn't load your progress — {error}</p>
+    <button type="button" class="btn btn-ghost px-3 py-1.5 text-xs" onclick={load}>Retry</button>
+  </div>
+{:else}
+  <section class="panel mt-4" style={accentStyle(ACCENT.green)} aria-label="Your progress">
+    <div class="grid grid-cols-2 divide-x divide-ink-700 border-b border-ink-700">
+      <div class="px-4 py-3">
+        <div class="eyebrow">XP</div>
+        <div class="display mt-1 text-xl font-bold text-gold-200 tabular-nums">
+          {#if stats}
+            {stats.xp}
+          {:else}
+            <span class="inline-block h-6 w-12 animate-pulse rounded bg-ink-700"></span>
+          {/if}
+        </div>
+      </div>
+      <div class="px-4 py-3">
+        <div class="eyebrow">Streak</div>
+        <div class="display mt-1 text-xl font-bold text-gold-200 tabular-nums">
+          {#if stats}
+            {stats.streak}<span class="ml-1 text-xs font-normal text-ink-400"
+              >{stats.streak === 1 ? 'day' : 'days'}</span
+            >
+          {:else}
+            <span class="inline-block h-6 w-12 animate-pulse rounded bg-ink-700"></span>
+          {/if}
+        </div>
       </div>
     </div>
-    <div class="flex gap-2">
-      {#if !speech?.ready}
-        <button onclick={wake} class="btn btn-ghost px-3 py-1.5 text-xs">Wake</button>
-      {/if}
-      <button onclick={free} class="btn btn-ghost px-3 py-1.5 text-xs">Free RAM</button>
-    </div>
-  </div>
-  {#if note}
-    <p class="border-t border-ink-700 px-4 py-2 text-xs text-ink-300">{note}</p>
-  {/if}
-</section>
+
+    {#if stats}
+      <div class="flex items-baseline justify-between gap-2 px-4 pt-3 text-sm">
+        <span class="font-semibold text-ink-100">Daily goal</span>
+        <span class="text-ink-400 tabular-nums">{stats.dailyXp} / {stats.dailyGoal} XP</span>
+      </div>
+      <div
+        class="bar mx-4 mt-2"
+        role="progressbar"
+        aria-label="Daily goal"
+        aria-valuemin="0"
+        aria-valuemax={stats.dailyGoal}
+        aria-valuenow={stats.dailyXp}
+      >
+        <i style="width: {Math.min(100, stats.goalPct * 100)}%"></i>
+      </div>
+      <p
+        class="px-4 py-2 text-xs {stats.goalPct >= 1
+          ? 'text-emerald-300'
+          : stats.todayActive
+            ? 'text-ink-300'
+            : 'text-amber-300'}"
+      >
+        {#if stats.goalPct >= 1}
+          Goal reached — nice work today!
+        {:else if stats.todayActive}
+          {toGoal} XP to your daily goal.
+        {:else}
+          Practise today to keep your streak alive.
+        {/if}
+      </p>
+
+      <div class="border-t border-ink-700 px-4 pt-3 pb-3">
+        <div class="flex items-baseline justify-between gap-2 text-sm">
+          <span class="font-semibold text-ink-100">Next level</span>
+          <span class="text-ink-400 tabular-nums">{stats.intoLevel} / {stats.forNext} XP</span>
+        </div>
+        <div
+          class="bar mt-2"
+          role="progressbar"
+          aria-label="Progress to level {stats.level + 1}"
+          aria-valuemin="0"
+          aria-valuemax={stats.forNext}
+          aria-valuenow={stats.intoLevel}
+        >
+          <i style="width: {Math.min(100, stats.progress * 100)}%"></i>
+        </div>
+      </div>
+    {:else}
+      <div class="space-y-2 px-4 py-3">
+        <span class="block h-3 w-24 animate-pulse rounded bg-ink-700"></span>
+        <span class="block h-2 w-full animate-pulse rounded bg-ink-800"></span>
+      </div>
+    {/if}
+  </section>
+{/if}

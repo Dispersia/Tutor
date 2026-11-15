@@ -46,12 +46,18 @@ where the MLX venv and weights live; `RunAtLoad` + `KeepAlive`; logs in
 For a machine without the declarative setup:
 
 ```bash
-nix build                # -> ./result/bin/tutor
+just package             # -> ./result/bin/tutor (root-base build; see below)
 just service-install     # per-user launchd agent (starts at login, restarts on crash)
 just tailscale-serve     # HTTPS on the tailnet (root path)
 just tailscale-unserve   # turn it off
 just service-uninstall   # remove the agent
 ```
+
+> `tailscale serve` at the root needs the **root-base build** (`just package`,
+> which runs `nix build .#root`). Only use the `/tutor` subpath build
+> (`just package-gateway`, i.e. `nix build`) when the tailnet gateway mounts the
+> app at `/tutor`; serving a `/tutor` build at `/` makes the SPA bounce between
+> reloads because its asset base does not match the URL.
 
 The agent runs `deploy/tutor-serve.sh` (sets `TUTOR_DATA_DIR`, `TUTOR_MODELS_DIR`,
 `TUTOR_HOST=127.0.0.1`), logs to `~/Library/Logs/tutor.log`.

@@ -10,6 +10,9 @@ export interface LessonDTO {
   learned: number
   due: number
   complete: boolean
+  /** the new word this step introduces (frequency path) */
+  newWord?: string
+  reading?: string
 }
 
 export interface CurriculumDeck {
