@@ -156,3 +156,54 @@ test('hitting with no active encounter is a conflict', async () => {
   expect([404, 409]).toContain(res.status)
   sqlite.close()
 })
+
+test('reloading mid-fight returns a fresh drill to resume', async () => {
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
+
+  const start = (await (
+    await app.request('/api/combat/start', auth(cookie, json({ monsterId: 'slime' })))
+  ).json()) as { instance: Instance }
+  expect(start.instance).toBeTruthy()
+
+  // Opening Combat again mid-fight must hand back a drill, otherwise the page
+  // shows "No drill available — try again." with no way to continue.
+  const body = (await (await app.request('/api/combat', auth(cookie))).json()) as {
+    encounter: unknown
+    instance: Instance | null
+  }
+  expect(body.encounter).not.toBeNull()
+  expect(body.instance?.exerciseId).toBeTruthy()
+  expect(body.instance?.cardId).toBeTruthy()
+  sqlite.close()
+})
+
+test('leaving a fight clears the encounter with no rewards', async () => {
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
+
+  await app.request('/api/combat/start', auth(cookie, json({ monsterId: 'slime' })))
+  const before = (await (await app.request('/api/combat', auth(cookie))).json()) as {
+    encounter: unknown
+  }
+  expect(before.encounter).not.toBeNull()
+
+  const leave = (await (
+    await app.request('/api/combat/leave', auth(cookie, { method: 'POST' }))
+  ).json()) as { encounter: unknown }
+  expect(leave.encounter).toBeNull()
+
+  const after = (await (await app.request('/api/combat', auth(cookie))).json()) as {
+    encounter: unknown
+    instance: unknown
+  }
+  expect(after.encounter).toBeNull()
+  expect(after.instance).toBeNull()
+
+  // Fleeing awards nothing: no bones (the slime's guaranteed drop).
+  const skills = (await (await app.request('/api/skills', auth(cookie))).json()) as {
+    inventory: { itemId: string; count: number }[]
+  }
+  expect(skills.inventory.find((i) => i.itemId === 'bones')?.count ?? 0).toBe(0)
+  sqlite.close()
+})

@@ -1,5 +1,5 @@
 import type { Learner } from '@tutor/core'
-import { getCard, getEncounter, listDecks, otherBacks, pickCard } from '../db/repo'
+import { clearEncounter, getCard, getEncounter, listDecks, otherBacks, pickCard } from '../db/repo'
 import { registry } from '../exercises'
 import { MONSTERS, MONSTER_BY_ID, type MonsterDef } from '../game/combat'
 import {
@@ -69,7 +69,7 @@ function encounterView(deps: Deps, userId: string) {
 }
 
 export function registerCombat(app: App) {
-  app.get('/api/combat', (c) => {
+  app.get('/api/combat', async (c) => {
     const deps = c.get('deps')
     const user = c.get('user')!
     const monsters = MONSTERS.map((m: MonsterDef) => ({
@@ -82,10 +82,17 @@ export function registerCombat(app: App) {
       user.id,
       MONSTER_BY_ID.get(view?.monsterId ?? '')?.combatSkill ?? 'attack',
     )
+    // Resuming an in-progress fight needs a fresh drill too: the page only ever
+    // gets one from `/start` or a `/hit`, so opening Combat mid-fight would sit
+    // on "no drill available" with no way to continue.
+    const drill = view
+      ? await buildDrill(deps, user, MONSTER_BY_ID.get(view.monsterId)?.deckLevel ?? '')
+      : null
     return c.json({
       monsters,
       player: { maxHp: player.maxHp, armour: player.armour, weaponPower: player.weaponPower },
       encounter: view,
+      instance: drill?.instance ?? null,
     })
   })
 
@@ -105,6 +112,16 @@ export function registerCombat(app: App) {
       instance: drill?.instance ?? null,
       drank: res.drank,
     })
+  })
+
+  // Flee the current fight: drop the encounter with no rewards and no penalty.
+  // Without this the only exits from a fight are winning or losing, so a learner
+  // who started one by accident is stuck (the monster list is hidden mid-fight).
+  app.post('/api/combat/leave', (c) => {
+    const deps = c.get('deps')
+    const user = c.get('user')!
+    clearEncounter(deps.db, user.id)
+    return c.json({ encounter: null })
   })
 
   app.post('/api/combat/hit', async (c) => {
