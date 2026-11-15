@@ -53,6 +53,8 @@ export interface Stats {
   dailyXp: number
   goalPct: number
   todayActive: boolean
+  /** epoch ms when the "can't speak or listen" window lifts; 0 when off. */
+  quietUntil?: number
 }
 
 export const listDecks = () => api<{ decks: Deck[] }>('/api/decks')
@@ -70,6 +72,13 @@ export const nextExercise = (body: {
     '/api/practice/next',
     { method: 'POST', body: JSON.stringify(body) },
   )
+
+/** Turns the "can't speak or listen right now" option on (15 min) or off. */
+export const setQuiet = (enabled: boolean) =>
+  api<{ quietUntil: number }>('/api/practice/quiet', {
+    method: 'POST',
+    body: JSON.stringify({ enabled }),
+  })
 
 export const gradeExercise = (body: {
   exerciseId: string

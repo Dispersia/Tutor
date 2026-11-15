@@ -399,13 +399,16 @@ function toCard(row: typeof cards.$inferSelect): Card {
 }
 
 export function listCards(db: Db, userId: string, deckId?: string): Card[] {
-  const rows = deckId
-    ? db
-        .select()
-        .from(cards)
-        .where(and(eq(cards.userId, userId), eq(cards.deckId, deckId)))
-        .all()
-    : db.select().from(cards).where(eq(cards.userId, userId)).all()
+  const where = deckId
+    ? and(eq(cards.userId, userId), eq(cards.deckId, deckId))
+    : eq(cards.userId, userId)
+  // rowid order == insertion order, which is the syllabus (frequency) order.
+  const rows = db
+    .select()
+    .from(cards)
+    .where(where)
+    .orderBy(sql`rowid asc`)
+    .all()
   return rows.map(toCard)
 }
 

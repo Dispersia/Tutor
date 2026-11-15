@@ -54,7 +54,7 @@
 <div class="flex items-center justify-between pt-5 pb-4">
   <div>
     <p class="eyebrow">The guild</p>
-    <h1 class="display text-2xl text-gold-200">Professions</h1>
+    <h1 class="display text-2xl text-gold-200">Skills</h1>
     <p class="text-xs text-ink-400">Train a trade, gather materials, grow stronger.</p>
   </div>
   <div class="text-center">

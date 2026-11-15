@@ -2,6 +2,7 @@
   import type { Instance } from '#lib/exercises'
   import { Recorder, micSupported } from '#lib/recorder'
   import { transcribe } from '#lib/speech'
+  import Word from '../Word.svelte'
 
   let {
     instance,
@@ -11,6 +12,10 @@
 
   const recorder = new Recorder()
   const language = $derived((instance.data.language as string) ?? undefined)
+  const topic = $derived((instance.data.topic as string) ?? '')
+  const reading = $derived((instance.data.reading as string) ?? '')
+  const lang = $derived((instance.data.readingLang as string) ?? '')
+  const furigana = $derived(instance.data.furigana as { base: string; ruby?: string }[] | undefined)
   const canMic = micSupported()
 
   let answer = $state('')
@@ -50,6 +55,11 @@
 
 <form onsubmit={submit} class="space-y-4">
   <p class="text-lg leading-snug">{instance.prompt}</p>
+  {#if topic}
+    <div class="panel p-3 text-center">
+      <Word word={topic} {reading} {lang} {furigana} size="md" />
+    </div>
+  {/if}
   <textarea
     bind:value={answer}
     rows="2"

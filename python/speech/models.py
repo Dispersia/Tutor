@@ -39,6 +39,36 @@ SINGLE = {"asr": ASR_MODEL, "asr_lite": ASR_LITE_MODEL, "align": ALIGN_MODEL, "v
 # TTS checkpoints are mutually exclusive — only one resident at a time.
 TTS = {"tts_preset": TTS_PRESET_MODEL, "tts_design": TTS_DESIGN_MODEL}
 
+# Default CustomVoice speaker per Qwen language name (mirrors the web presets).
+# The client normally sends a voice; this is the safety net so a caller that
+# omits it still gets audio instead of a 500 (Qwen3-TTS rejects `speaker=None`).
+DEFAULT_SPEAKER_BY_LANG = {
+    "Chinese": "Serena",
+    "Cantonese": "Serena",
+    "English": "Ryan",
+    "Japanese": "Ono_Anna",
+    "Korean": "Sohee",
+}
+
+# Style anchor for the CustomVoice presets. Qwen3-TTS samples emotion and
+# prosody freely at its 0.9 default temperature, so the same speaker drifts
+# between a murmur, a shout and sing-song from one clip to the next. Pinning a
+# calm teacher register keeps every clip in the same lane.
+DEFAULT_INSTRUCT = os.environ.get(
+    "TUTOR_TTS_INSTRUCT",
+    "Speak like a calm, professional language teacher: clear and precise "
+    "articulation, warm and friendly, steady measured pace, natural intonation. "
+    "Do not whisper, shout, laugh or sing.",
+)
+# VoiceDesign takes a voice *description* rather than a style cue.
+DEFAULT_DESIGN_INSTRUCT = os.environ.get(
+    "TUTOR_TTS_DESIGN_INSTRUCT",
+    "A calm, professional language teacher: clear articulation, warm and "
+    "friendly, steady measured pace, medium pitch, natural intonation.",
+)
+# Lower than the checkpoint's 0.9: same voice, much less prosody drift.
+TTS_TEMPERATURE = float(os.environ.get("TUTOR_TTS_TEMPERATURE", "0.7"))
+
 
 def model_id(kind: str) -> str:
     if kind in SINGLE:
@@ -263,6 +293,19 @@ def align_text(model: Any, audio_path: str, text: str, language: str | None = No
     return items
 
 
+def _default_speaker(model: Any, language: str | None) -> str | None:
+    """Pick a CustomVoice speaker when the caller did not send one."""
+    speakers = list(getattr(model, "supported_speakers", None) or [])
+    if not speakers:
+        return None
+    preferred = DEFAULT_SPEAKER_BY_LANG.get(language or "")
+    if preferred:
+        for name in speakers:
+            if name.lower() == preferred.lower():
+                return name
+    return speakers[0]
+
+
 def _collect_audio(results: Any) -> tuple[Any, int]:
     import numpy as np  # type: ignore
 
@@ -287,17 +330,31 @@ def tts_synthesize(
     language: str | None = None,
     instruct: str | None = None,
     mode: str = "preset",
+    temperature: float | None = None,
 ):
+    temp = TTS_TEMPERATURE if temperature is None else temperature
     if mode == "design" and hasattr(model, "generate_voice_design"):
-        results = model.generate_voice_design(text=text, language=language, instruct=instruct)
+        results = model.generate_voice_design(
+            text=text,
+            language=language,
+            instruct=instruct or DEFAULT_DESIGN_INSTRUCT,
+            temperature=temp,
+        )
     elif hasattr(model, "generate_custom_voice"):
+        speaker = voice or _default_speaker(model, language)
         results = model.generate_custom_voice(
-            text=text, speaker=voice, language=language, instruct=instruct
+            text=text,
+            speaker=speaker,
+            language=language,
+            instruct=instruct or DEFAULT_INSTRUCT,
+            temperature=temp,
         )
     else:
-        kwargs: dict[str, Any] = {"voice": voice}
+        kwargs: dict[str, Any] = {"voice": voice, "temperature": temp}
         if language:
             kwargs["lang_code"] = language
+        if instruct or DEFAULT_INSTRUCT:
+            kwargs["instruct"] = instruct or DEFAULT_INSTRUCT
         results = model.generate(text, **kwargs)
 
     if not isinstance(results, (list, tuple)):

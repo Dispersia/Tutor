@@ -1,4 +1,4 @@
-import type { Card, ExerciseDef, Learner } from '@tutor/core'
+import type { Card, ExerciseContext, ExerciseDef, Learner } from '@tutor/core'
 import type { Context } from 'hono'
 import type { App, AppEnv, Deps } from '../context'
 import {
@@ -18,18 +18,21 @@ import {
   checkLessonCompletion,
   consumeItems,
   grantItems,
+  knownWords,
   recordActivity,
   recordReview,
   srsStateMap,
   summary,
 } from '../game/service'
 import { buildLessons } from '../game/curriculum'
+import { quietState, setQuiet } from '../game/quiet'
 import { ACTION_BY_ID } from '../game/skills'
 import { selectCardId } from '../game/srs'
 import { OpenRouter } from '../llm/openrouter'
 import { resolveUserKey } from '../llm/userkey'
 import { makeAssessor, type AssessFn } from '../pronunciation/assess'
 import { seedStarterDecks } from '../seed/service'
+import { pinyinToZhuyin } from '../seed/zhuyin'
 
 /** Due-first card selection (spaced repetition), optionally within a lesson. */
 function pickStudyCard(
@@ -44,6 +47,38 @@ function pickStudyCard(
   return id ? getCard(deps.db, id, userId) : undefined
 }
 
+/** Maps stored cards to the curriculum builder's shape. */
+function stepCardsOf(cards: Card[]) {
+  return cards.map((c) => ({
+    id: c.id,
+    front: c.front,
+    back: c.back,
+    reading: displayReadingOf(c),
+  }))
+}
+
+/** Native reading for a card: Zhuyin (zh) or kana (ja). Never pinyin/romaji. */
+function displayReadingOf(c: Card): string {
+  if (c.targetLang === 'ja') return c.readings.kana || ''
+  if (c.targetLang === 'zh')
+    return c.readings.zhuyin || (c.readings.pinyin ? pinyinToZhuyin(c.readings.pinyin) : '')
+  return Object.values(c.readings).find(Boolean) ?? ''
+}
+
+/** Display reading (Zhuyin / kana) keyed by target text, for option annotation. */
+export function readingMap(
+  db: Deps['db'],
+  userId: string,
+  targetLang: string,
+): Record<string, string> {
+  const map: Record<string, string> = {}
+  for (const c of listCards(db, userId)) {
+    if (c.targetLang !== targetLang) continue
+    map[c.back] = displayReadingOf(c)
+  }
+  return map
+}
+
 /** Resolves `level:index` into the lesson's card ids (and its deck). */
 function resolveLesson(
   deps: Deps,
@@ -55,8 +90,8 @@ function resolveLesson(
   if (!level || !Number.isFinite(index) || index < 0) return undefined
   const deck = listDecks(deps.db, userId).find((d) => d.level === level)
   if (!deck) return undefined
-  const ids = listCards(deps.db, userId, deck.id).map((c) => c.id)
-  const lesson = buildLessons(level, ids)[index]
+  const cards = listCards(deps.db, userId, deck.id)
+  const lesson = buildLessons(level, stepCardsOf(cards))[index]
   if (!lesson) return undefined
   return { deckId: deck.id, cardIds: lesson.cardIds, level }
 }
@@ -81,12 +116,20 @@ export function pickNextExercise(
   userId: string,
   card: Card,
   learner: Learner,
+  ctx?: ExerciseContext,
+  opts?: { quiet?: boolean },
 ): ExerciseDef<unknown> | undefined {
-  const eligible = registry.forCard(card, learner)
-  if (eligible.length <= 1) return eligible[0]
+  let all = registry.forCard(card, learner)
+  // Quiet mode ("can't speak or listen"): never offer a listen/speak card.
+  if (opts?.quiet) all = all.filter((d) => d.modality !== 'voice')
+  if (all.length === 0) return undefined
+  // Learner-state gate (n+1 exercises are only offered once they can be built).
+  const eligible = ctx ? all.filter((d) => !d.available || d.available(ctx)) : all
+  const pool = eligible.length > 0 ? eligible : all
+  if (pool.length <= 1) return pool[0]
   const lastUse = lastExerciseUse(db, userId)
-  const oldest = Math.min(...eligible.map((d) => lastUse.get(d.id) ?? 0))
-  const ties = eligible.filter((d) => (lastUse.get(d.id) ?? 0) === oldest)
+  const oldest = Math.min(...pool.map((d) => lastUse.get(d.id) ?? 0))
+  const ties = pool.filter((d) => (lastUse.get(d.id) ?? 0) === oldest)
   return ties[Math.floor(Math.random() * ties.length)]
 }
 
@@ -156,6 +199,16 @@ function settleAction(
 export function registerPractice(app: App) {
   app.get('/api/exercises', (c) => c.json({ exercises: exerciseCatalog() }))
 
+  // "I can't speak or listen right now": hide listen/speak cards for 15 minutes.
+  // It is a time-boxed window that lifts on its own; XP is unaffected.
+  app.post('/api/practice/quiet', async (c) => {
+    const deps = c.get('deps')
+    const user = c.get('user')!
+    const body = (await c.req.json().catch(() => ({}))) as { enabled?: boolean }
+    const state = setQuiet(deps.db, user.id, Boolean(body.enabled))
+    return c.json({ quietUntil: state.until })
+  })
+
   app.post('/api/practice/next', async (c) => {
     const deps = c.get('deps')
     const user = c.get('user')!
@@ -166,6 +219,7 @@ export function registerPractice(app: App) {
       lessonId?: string
     }
     seedStarterDecks(deps.db, user.id)
+    const quiet = quietState(deps.db, user.id)
 
     const action = body.actionId ? ACTION_BY_ID.get(body.actionId) : undefined
     if (body.actionId && !action) return c.json({ error: 'unknown action' }, 404)
@@ -209,14 +263,22 @@ export function registerPractice(app: App) {
       card,
       learner,
       distractors: otherBacks(deps.db, user.id, card.targetLang, card.back, 3),
+      readings: readingMap(deps.db, user.id, card.targetLang),
+      known: [...knownWords(deps.db, user.id), card.back],
       judge: await judgeFor(c),
     }
     const def = body.exerciseId
       ? registry.get(body.exerciseId)
-      : pickNextExercise(deps.db, user.id, card, learner)
+      : pickNextExercise(deps.db, user.id, card, learner, ctx, { quiet: quiet.active })
     if (!def) return c.json({ error: 'no exercise available' }, 500)
+    // A voice card can't be forced while quiet mode is on — swap in a text one.
+    const chosen =
+      quiet.active && def.modality === 'voice'
+        ? pickNextExercise(deps.db, user.id, card, learner, ctx, { quiet: true })
+        : def
+    if (!chosen) return c.json({ error: 'no exercise available' }, 500)
 
-    const instance = await def.generate(ctx)
+    const instance = await chosen.generate(ctx)
     return c.json({
       instance,
       action: action
@@ -271,6 +333,8 @@ export function registerPractice(app: App) {
       card,
       learner,
       distractors: otherBacks(deps.db, user.id, card.targetLang, card.back, 3),
+      readings: readingMap(deps.db, user.id, card.targetLang),
+      known: [...knownWords(deps.db, user.id), card.back],
       judge: await judgeFor(c),
     }
     const instance = await def.generate(ctx)
@@ -348,7 +412,15 @@ export function registerPractice(app: App) {
     const audio = new Uint8Array(await file.arrayBuffer())
     const learner = learnerOf(user)
     const assess: AssessFn = deps.assess ?? makeAssessor(deps, card.targetLang)
-    const ctx = { card, learner, distractors: [] as string[], judge: await judgeFor(c), assess }
+    const ctx = {
+      card,
+      learner,
+      distractors: [] as string[],
+      readings: readingMap(deps.db, user.id, card.targetLang),
+      known: [...knownWords(deps.db, user.id), card.back],
+      judge: await judgeFor(c),
+      assess,
+    }
 
     try {
       const instance = await def.generate(ctx)

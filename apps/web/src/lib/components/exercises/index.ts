@@ -1,6 +1,7 @@
 import type { Component } from 'svelte'
 import Converse from './Converse.svelte'
 import MultipleChoice from './MultipleChoice.svelte'
+import SentenceBuild from './SentenceBuild.svelte'
 import SpeakWord from './SpeakWord.svelte'
 import Translate from './Translate.svelte'
 import TypeListen from './TypeListen.svelte'
@@ -17,6 +18,7 @@ const map: Record<string, Component<any>> = {
   type_listen: TypeListen,
   speak_word: SpeakWord,
   converse: Converse,
+  sentence_build: SentenceBuild,
 }
 
 export function componentFor(exerciseId: string): Component<any> {

@@ -2,6 +2,8 @@
   import type { Instance } from '#lib/exercises'
   import { Recorder, micSupported } from '#lib/recorder'
   import { speak, transcribe } from '#lib/speech'
+  import { voiceFor } from '#lib/voices'
+  import Word from '../Word.svelte'
 
   let {
     instance,
@@ -18,6 +20,8 @@
   const recorder = new Recorder()
   const target = $derived((instance.data.target as string) ?? '')
   const reading = $derived((instance.data.reading as string) ?? '')
+  const lang = $derived((instance.data.readingLang as string) ?? '')
+  const furigana = $derived(instance.data.furigana as { base: string; ruby?: string }[] | undefined)
   const language = $derived((instance.data.language as string) ?? undefined)
   const canMic = micSupported()
 
@@ -58,14 +62,13 @@
 <div class="space-y-4">
   <p class="text-lg leading-snug">{instance.prompt}</p>
   <div class="panel p-4 text-center">
-    <div class="text-3xl">{target}</div>
-    {#if reading}<div class="mt-1 text-sm text-ink-400">{reading}</div>{/if}
+    <Word word={target} {reading} {lang} {furigana} />
   </div>
 
   <div class="flex gap-2">
     <button
       type="button"
-      onclick={() => speak(target, { language })}
+      onclick={() => speak(target, { voice: voiceFor(language), language })}
       class="flex-1 rounded-xl border border-ink-600 py-3 text-sm">🔊 Hear it</button
     >
     {#if canMic}

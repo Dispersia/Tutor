@@ -63,7 +63,7 @@ test('decks are seeded per user and list their cards', async () => {
   const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
     decks: { id: string; name: string; cardCount: number }[]
   }
-  expect(decks.decks.length).toBe(2)
+  expect(decks.decks.length).toBe(3)
   expect(decks.decks.every((d) => Number(d.cardCount) > 40)).toBe(true)
 
   const hsk = decks.decks.find((d) => d.name === 'HSK 1')!
@@ -81,7 +81,7 @@ test('practice: next -> grade -> xp, and exercise catalog', async () => {
   const cat = (await (await app.request('/api/exercises', auth(cookie))).json()) as {
     exercises: { id: string }[]
   }
-  expect(cat.exercises.length).toBeGreaterThanOrEqual(6)
+  expect(cat.exercises.length).toBeGreaterThanOrEqual(7)
 
   const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
     decks: { id: string; name: string }[]
@@ -261,6 +261,72 @@ test('practice/speak rejects bad input', async () => {
       )
     ).status,
   ).toBe(400)
+
+  sqlite.close()
+})
+
+test('quiet mode hides listen/speak cards for 15 minutes (XP unaffected)', async () => {
+  const { app, sqlite } = makeApp()
+  const cookie = await signup(app)
+
+  const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
+    decks: { id: string; name: string }[]
+  }
+  const deckId = decks.decks.find((d) => d.name === 'HSK 1')!.id
+  const cards = (await (await app.request(`/api/decks/${deckId}/cards`, auth(cookie))).json()) as {
+    cards: { id: string; back: string }[]
+  }
+  const card = cards.cards[0]!
+
+  // Turn the option on.
+  const on = (await (
+    await app.request('/api/practice/quiet', auth(cookie, json({ enabled: true })))
+  ).json()) as { quietUntil: number }
+  expect(on.quietUntil).toBeGreaterThan(Date.now())
+
+  // Auto-picked drills never come up as a listen/speak card.
+  for (let i = 0; i < 30; i++) {
+    const r = (await (
+      await app.request('/api/practice/next', auth(cookie, json({ deckId })))
+    ).json()) as { instance: { modality: string } }
+    expect(r.instance.modality).not.toBe('voice')
+  }
+
+  // A forced voice exercise is swapped for a text one instead.
+  const forced = (await (
+    await app.request(
+      '/api/practice/next',
+      auth(cookie, json({ deckId, exerciseId: 'type_listen' })),
+    )
+  ).json()) as { instance: { exerciseId: string; modality: string } }
+  expect(forced.instance.exerciseId).not.toBe('type_listen')
+  expect(forced.instance.modality).not.toBe('voice')
+
+  // Grading a text card still works and still earns its XP.
+  const graded = (await (
+    await app.request(
+      '/api/practice/grade',
+      auth(
+        cookie,
+        json({ exerciseId: 'translate.front_to_back', cardId: card.id, answer: card.back }),
+      ),
+    )
+  ).json()) as { result: { correct: boolean; xp: number }; stats: { xp: number } }
+  expect(graded.result.correct).toBe(true)
+  expect(graded.result.xp).toBeGreaterThan(0)
+  expect(graded.stats.xp).toBe(graded.result.xp)
+
+  // Stats reports the open window.
+  const stats = (await (await app.request('/api/stats', auth(cookie))).json()) as {
+    quietUntil: number
+  }
+  expect(stats.quietUntil).toBeGreaterThan(0)
+
+  // Turning it off clears the window.
+  const off = (await (
+    await app.request('/api/practice/quiet', auth(cookie, json({ enabled: false })))
+  ).json()) as { quietUntil: number }
+  expect(off.quietUntil).toBe(0)
 
   sqlite.close()
 })

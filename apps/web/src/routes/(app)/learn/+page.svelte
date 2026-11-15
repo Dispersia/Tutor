@@ -2,18 +2,52 @@
   import { onMount } from 'svelte'
   import { href } from '#lib/paths'
   import { getCurriculum, getSrsStats, type CurriculumDeck, type SrsStats } from '#lib/curriculum'
+  import { getSkills, type SkillsResponse } from '#lib/skills'
+  import { session } from '#lib/session.svelte'
   import { ACCENT, accentStyle } from '#lib/theme'
 
   let decks = $state<CurriculumDeck[]>([])
   let stats = $state<SrsStats | null>(null)
+  let ref = $state<SkillsResponse | null>(null)
+  let actionId = $state('')
   let loading = $state(true)
   let error = $state('')
 
+  const storageKey = $derived(`tutor.profession.${session.user?.id ?? 'anon'}`)
+
+  /** Actions you can actually train: unlocked and with materials in the bank. */
+  const usable = $derived(
+    (ref?.skills ?? []).flatMap((skill) =>
+      skill.actions
+        .filter((action) => action.unlocked && action.affordable)
+        .map((action) => ({ skill, action })),
+    ),
+  )
+  const selected = $derived(usable.find((u) => u.action.id === actionId))
+
+  /** The same actions grouped by profession, for the selector. */
+  const groups = $derived(
+    (ref?.skills ?? [])
+      .map((skill) => ({
+        skill,
+        actions: skill.actions.filter((action) => action.unlocked && action.affordable),
+      }))
+      .filter((group) => group.actions.length > 0),
+  )
+
   onMount(async () => {
     try {
-      const [c, s] = await Promise.all([getCurriculum(), getSrsStats()])
-      decks = c.decks
+      const [c, s, sk] = await Promise.all([
+        getCurriculum(),
+        getSrsStats(),
+        getSkills().catch(() => null),
+      ])
+      // the frequency path first — that is where you start
+      decks = c.decks.sort((a, b) => rank(a.level) - rank(b.level))
       stats = s
+      ref = sk
+      const saved = localStorage.getItem(storageKey)
+      if (saved && usable.some((u) => u.action.id === saved)) actionId = saved
     } catch (e) {
       error = (e as Error).message
     } finally {
@@ -21,20 +55,38 @@
     }
   })
 
+  function chooseProfession(e: Event) {
+    actionId = (e.target as HTMLSelectElement).value
+    if (actionId) localStorage.setItem(storageKey, actionId)
+    else localStorage.removeItem(storageKey)
+  }
+
+  /** A practice URL that carries the selected profession action. */
+  function practiceHref(params: { lesson?: string; deck?: string }): string {
+    const query = new URLSearchParams()
+    if (params.lesson) query.set('lesson', params.lesson)
+    if (params.deck) query.set('deck', params.deck)
+    if (actionId) query.set('action', actionId)
+    return href(`/practice?${query.toString()}`)
+  }
+
+  const rank = (level: string) => (level === 'zhfreq' ? 0 : level === 'hsk1' ? 1 : 2)
+
   const deckAccent = (level: string) =>
-    level === 'n5' ? ACCENT.level : level === 'hsk1' ? ACCENT.arcane : ACCENT.streak
+    level === 'zhfreq' ? ACCENT.green : level === 'n5' ? ACCENT.level : ACCENT.arcane
 
-  const unlocked = (d: CurriculumDeck, i: number) => i === 0 || d.lessons[i - 1]!.complete
-
+  /** The next step of the path: the first lesson not yet finished. */
   const nextLesson = (d: CurriculumDeck) =>
-    d.lessons.find((l) => !l.complete && unlocked(d, l.index)) ?? d.lessons[0]
+    d.lessons.find((l) => !l.complete) ?? d.lessons[d.lessons.length - 1]
+
+  const done = (d: CurriculumDeck) => d.cardCount > 0 && d.learned >= d.cardCount
 </script>
 
 <div class="flex items-center justify-between pt-5 pb-4">
   <div>
     <p class="eyebrow">Your path</p>
     <h1 class="display text-2xl text-gold-200">Learn</h1>
-    <p class="text-xs text-ink-400">A guided path, one small lesson at a time.</p>
+    <p class="text-xs text-ink-400">One new word at a time — tap next and go.</p>
   </div>
   {#if stats}
     <div class="text-right">
@@ -52,79 +104,106 @@
 
 {#if loading}
   <p class="text-sm text-ink-400">Loading…</p>
+{:else if decks.length === 0}
+  <p class="text-sm text-ink-400">No courses yet.</p>
 {:else}
+  <section class="panel mb-4 p-4" style="--accent: {ACCENT.arcane}">
+    <div class="flex items-baseline justify-between">
+      <p class="eyebrow">Profession</p>
+      {#if selected}
+        <span class="chip" style="--accent: {ACCENT.arcane}">
+          {selected.skill.icon}
+          {selected.skill.name}
+        </span>
+      {/if}
+    </div>
+    {#if groups.length === 0}
+      <p class="mt-2 text-sm text-ink-400">
+        No profession is ready to train.
+        <a href={href('/skills')} class="gold">Unlock one in Skills</a>.
+      </p>
+    {:else}
+      <select
+        value={actionId}
+        onchange={chooseProfession}
+        class="mt-2 w-full rounded-xl border border-ink-700 bg-ink-900 px-3 py-2 text-sm"
+      >
+        <option value="">Choose a profession…</option>
+        {#each groups as group (group.skill.id)}
+          <optgroup label="{group.skill.icon} {group.skill.name}">
+            {#each group.actions as action (action.id)}
+              <option value={action.id}>{action.name}</option>
+            {/each}
+          </optgroup>
+        {/each}
+      </select>
+      {#if selected}
+        <p class="mt-2 text-xs text-ink-400">{selected.action.description}</p>
+      {:else}
+        <p class="mt-2 text-xs text-amber-300">
+          Pick a profession first — lessons train that profession.
+        </p>
+      {/if}
+    {/if}
+  </section>
+
   {#each decks as d (d.deckId)}
-    {@const next = nextLesson(d)}
     {@const acc = deckAccent(d.level ?? '')}
+    {@const next = nextLesson(d)}
+    {@const progress = d.cardCount > 0 ? (d.learned / d.cardCount) * 100 : 0}
     <section class="panel panel-accent mb-5 p-4" style={accentStyle(acc)}>
       <div class="flex items-baseline justify-between">
         <h2 class="display text-lg" style="color: {acc}">{d.name}</h2>
         <span class="text-xs text-ink-400">{d.learned}/{d.cardCount} learned</span>
       </div>
       <div class="bar mt-2">
-        <i style="width: {d.cardCount > 0 ? (d.learned / d.cardCount) * 100 : 0}%"></i>
+        <i style="width: {progress}%"></i>
       </div>
 
       {#if next}
-        <a
-          href={href(`/practice?lesson=${encodeURIComponent(next.id)}`)}
-          class="btn btn-primary mt-3 w-full py-3"
-        >
-          {d.learned > 0 ? 'Continue' : 'Start'} · {next.title}
-        </a>
+        {#if actionId}
+          <a
+            href={practiceHref({ lesson: next.id })}
+            class="btn btn-primary mt-3 w-full py-3"
+          >
+            {d.learned > 0 ? 'Next' : 'Start'} · {next.newWord ?? next.title}
+            {#if next.reading && next.reading !== next.newWord}
+              <span class="ml-1 text-xs opacity-75">{next.reading}</span>
+            {/if}
+          </a>
+        {:else}
+          <button disabled class="btn btn-primary mt-3 w-full py-3 opacity-60">
+            Select a profession to start
+          </button>
+        {/if}
+        {#if next.newWord}
+          <p class="mt-1.5 text-center text-xs text-ink-400">new word · {next.description}</p>
+        {:else if next.description}
+          <p class="mt-1.5 text-center text-xs text-ink-400">{next.description}</p>
+        {/if}
+        {#if next.cards > 1}
+          <p class="mt-1.5 text-center text-[11px] text-ink-500">
+            {next.learned}/{next.cards} in this lesson
+          </p>
+        {/if}
+      {:else}
+        <p class="mt-3 text-center text-sm text-ink-400">🎉 Course complete</p>
       {/if}
 
-      <ul class="mt-3 space-y-1.5">
-        {#each d.lessons as l, i (l.id)}
-          {@const open = unlocked(d, i)}
-          <li>
-            {#if open}
-              <a
-                href={href(`/practice?lesson=${encodeURIComponent(l.id)}`)}
-                class="panel panel-accent flex items-center gap-3 px-2.5 py-2"
-                style={accentStyle(acc)}
-              >
-                <span
-                  class="grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-bold {l.complete
-                    ? 'bg-emerald-500 text-ink-950'
-                    : 'text-ink-200'}"
-                  style={l.complete ? '' : `border: 1px solid ${acc}88; background: ${acc}1f`}
-                >
-                  {l.complete ? '✓' : i + 1}
-                </span>
-                <span class="flex-1">
-                  <span class="flex items-baseline justify-between">
-                    <span class="display text-sm text-ink-300">{l.title}</span>
-                    <span class="text-[11px] text-ink-400">{l.learned}/{l.cards}</span>
-                  </span>
-                  <span class="block text-[11px] text-ink-400">{l.description}</span>
-                </span>
-                {#if l.due > 0}
-                  <span class="chip" style="--accent: #ef9d45">{l.due} due</span>
-                {/if}
-              </a>
-            {:else}
-              <div class="flex items-center gap-3 rounded-xl px-2.5 py-2 opacity-45">
-                <span
-                  class="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-ink-800 text-xs"
-                  >🔒</span
-                >
-                <span class="flex-1">
-                  <span class="display text-sm text-ink-300">{l.title}</span>
-                  <span class="block text-[11px] text-ink-400">
-                    finish “{d.lessons[i - 1]?.title}” first
-                  </span>
-                </span>
-              </div>
-            {/if}
-          </li>
-        {/each}
-      </ul>
-
       {#if d.due > 0}
-        <a href={href(`/practice?deck=${d.deckId}`)} class="btn btn-gold mt-3 w-full">
-          Review {d.due} due on {d.name}
-        </a>
+        {#if actionId}
+          <a href={practiceHref({ deck: d.deckId })} class="btn btn-gold mt-2 w-full">
+            Review {d.due} due
+          </a>
+        {:else}
+          <button disabled class="btn btn-gold mt-2 w-full opacity-60">
+            Select a profession to review
+          </button>
+        {/if}
+      {/if}
+
+      {#if done(d)}
+        <p class="mt-2 text-center text-[11px] text-emerald-400">All words learned ✓</p>
       {/if}
     </section>
   {/each}

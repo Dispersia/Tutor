@@ -1,7 +1,7 @@
 import { addCard, createDeck, getDeck, getRoles, listCards, listDecks } from '../db/repo'
 import { OpenRouter } from '../llm/openrouter'
 import { resolveUserKey } from '../llm/userkey'
-import { seedStarterDecks } from '../seed/service'
+import { readingsFor, seedStarterDecks } from '../seed/service'
 import type { App } from '../context'
 
 const LANG_LABEL: Record<string, string> = {
@@ -24,6 +24,7 @@ const DECK_SCHEMA = {
           front: { type: 'string' },
           back: { type: 'string' },
           reading: { type: 'string' },
+          kana: { type: 'string' },
         },
         required: ['front', 'back', 'reading'],
         additionalProperties: false,
@@ -71,7 +72,7 @@ export function registerDecks(app: App) {
       const or = new OpenRouter(key, deps.or.baseUrl)
       try {
         const { json } = await or.chatJSON<{
-          cards: { front: string; back: string; reading: string }[]
+          cards: { front: string; back: string; reading: string; kana?: string }[]
         }>({
           model: getRoles(deps.db, user.id, deps.defaults).generator,
           schemaName: 'deck',
@@ -84,7 +85,11 @@ export function registerDecks(app: App) {
             },
             {
               role: 'user',
-              content: `Create ${count} ${LANG_LABEL[targetLang] ?? targetLang} vocabulary cards (level ${body.level ?? 'beginner'}) about "${body.topic}". "front" is English, "back" is the ${LANG_LABEL[targetLang] ?? targetLang} text, "reading" is pinyin/romaji.`,
+              content: `Create ${count} ${LANG_LABEL[targetLang] ?? targetLang} vocabulary cards (level ${body.level ?? 'beginner'}) about "${body.topic}". "front" is English, "back" is the ${LANG_LABEL[targetLang] ?? targetLang} text. ${
+                targetLang === 'ja'
+                  ? '"reading" is romaji and "kana" is the hiragana reading (furigana).'
+                  : '"reading" is pinyin with tone marks.'
+              }`,
             },
           ],
         })
@@ -102,7 +107,7 @@ export function registerDecks(app: App) {
             targetLang,
             front: cd.front,
             back: cd.back,
-            readings: { [targetLang === 'ja' ? 'romaji' : 'pinyin']: cd.reading },
+            readings: readingsFor(targetLang, cd.reading, cd.kana),
             origin: 'llm',
           })
         }

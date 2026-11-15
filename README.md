@@ -54,9 +54,10 @@ those keys at rest.
 | `PUT /api/settings/openrouter-key` | each user's own key (server key is a fallback) |
 | `POST /api/chat` · `/api/chat/json` | streamed chat (SSE) + structured output |
 | `GET/POST /api/sessions`, `GET /api/sessions/:id` | per-user history |
-| `GET/POST /api/decks`, `GET /api/decks/:id/cards` | starter decks (HSK 1, JLPT N5) + AI-generated decks |
+| `GET/POST /api/decks`, `GET /api/decks/:id/cards` | starter decks (frequency, HSK 1, JLPT N5) + AI-generated decks |
 | `GET /api/exercises` | the exercise registry |
 | `POST /api/practice/next` · `/api/practice/grade` · `/api/practice/speak` | next drill · grade it (+XP) · pronunciation |
+| `POST /api/practice/quiet` | "can't speak or listen right now": hide listen/speak cards for 15 min |
 | `GET /api/skills` | the profession board (skills, actions, talents, bank, gear) |
 | `POST /api/skills/talents` · `/api/skills/equip` | choose a talent · equip/unequip gear |
 | `GET /api/combat` · `POST /api/combat/{start,hit}` | monsters, player HP · start a fight · land a hit |
@@ -111,6 +112,7 @@ docs/          DESIGN.md (architecture + execution plan)
 - [x] Phase 6 — gamification (XP ledger, levels, UTC streaks, daily goal, event bus)
 - [x] Phase 7 — packaging (`nix build` / `nix run .`) + docs
 - [x] Phase 8 — professions, per-level effects, talents (5/10), materials, combat (monsters, HP, auto food/potions, drops)
+- [x] Phase 9 — the frequency path: a dynamic, n+1 curriculum built off a word list, with sentence-building drills
 
 ## Configuration
 

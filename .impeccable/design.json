@@ -1,0 +1,535 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-15T03:29:00.928Z",
+  "title": "Design System: tutor",
+  "extensions": {
+    "colorMeta": {
+      "night-ink": {
+        "role": "neutral",
+        "displayName": "Night Ink",
+        "canonical": "#12141b",
+        "tonalRamp": [
+          "#101218",
+          "#171a22",
+          "#1f2330",
+          "#272c3a",
+          "#353c4d",
+          "#454e63",
+          "#5a657d",
+          "#8b95aa"
+        ]
+      },
+      "slate-950": {
+        "role": "neutral",
+        "displayName": "Slate Ink 950",
+        "canonical": "#101218",
+        "tonalRamp": [
+          "#101218",
+          "#171a22",
+          "#1f2330",
+          "#272c3a",
+          "#353c4d",
+          "#454e63",
+          "#5a657d",
+          "#8b95aa"
+        ]
+      },
+      "slate-900": {
+        "role": "neutral",
+        "displayName": "Slate Ink 900",
+        "canonical": "#171a22",
+        "tonalRamp": [
+          "#101218",
+          "#171a22",
+          "#1f2330",
+          "#272c3a",
+          "#353c4d",
+          "#454e63",
+          "#5a657d",
+          "#8b95aa"
+        ]
+      },
+      "slate-850": {
+        "role": "neutral",
+        "displayName": "Slate Ink 850",
+        "canonical": "#1f2330",
+        "tonalRamp": [
+          "#101218",
+          "#171a22",
+          "#1f2330",
+          "#272c3a",
+          "#353c4d",
+          "#454e63",
+          "#5a657d",
+          "#8b95aa"
+        ]
+      },
+      "slate-800": {
+        "role": "neutral",
+        "displayName": "Slate Ink 800",
+        "canonical": "#272c3a",
+        "tonalRamp": [
+          "#101218",
+          "#171a22",
+          "#1f2330",
+          "#272c3a",
+          "#353c4d",
+          "#454e63",
+          "#5a657d",
+          "#8b95aa"
+        ]
+      },
+      "slate-700": {
+        "role": "neutral",
+        "displayName": "Slate Ink 700",
+        "canonical": "#353c4d",
+        "tonalRamp": [
+          "#101218",
+          "#171a22",
+          "#1f2330",
+          "#272c3a",
+          "#353c4d",
+          "#454e63",
+          "#5a657d",
+          "#8b95aa"
+        ]
+      },
+      "slate-600": {
+        "role": "neutral",
+        "displayName": "Slate Ink 600",
+        "canonical": "#454e63",
+        "tonalRamp": [
+          "#101218",
+          "#171a22",
+          "#1f2330",
+          "#272c3a",
+          "#353c4d",
+          "#454e63",
+          "#5a657d",
+          "#8b95aa"
+        ]
+      },
+      "slate-500": {
+        "role": "neutral",
+        "displayName": "Ash Ink 500",
+        "canonical": "#5a657d",
+        "tonalRamp": [
+          "#101218",
+          "#171a22",
+          "#1f2330",
+          "#272c3a",
+          "#353c4d",
+          "#454e63",
+          "#5a657d",
+          "#8b95aa"
+        ]
+      },
+      "slate-400": {
+        "role": "neutral",
+        "displayName": "Ash Ink 400",
+        "canonical": "#8b95aa",
+        "tonalRamp": [
+          "#101218",
+          "#171a22",
+          "#1f2330",
+          "#272c3a",
+          "#353c4d",
+          "#454e63",
+          "#5a657d",
+          "#8b95aa"
+        ]
+      },
+      "slate-300": {
+        "role": "neutral",
+        "displayName": "Ash Ink 300",
+        "canonical": "#bcc4d3",
+        "tonalRamp": [
+          "#101218",
+          "#171a22",
+          "#1f2330",
+          "#272c3a",
+          "#353c4d",
+          "#454e63",
+          "#5a657d",
+          "#8b95aa"
+        ]
+      },
+      "chalk": {
+        "role": "neutral",
+        "displayName": "Chalk",
+        "canonical": "#e7eaf1",
+        "tonalRamp": [
+          "#8b95aa",
+          "#5a657d",
+          "#454e63",
+          "#353c4d",
+          "#272c3a",
+          "#1f2330",
+          "#171a22",
+          "#101218"
+        ]
+      },
+      "ledger-gold-200": {
+        "role": "secondary",
+        "displayName": "Ledger Gold Light",
+        "canonical": "#f6e6ae",
+        "tonalRamp": [
+          "#40300c",
+          "#785a17",
+          "#ab8121",
+          "#d7a532",
+          "#e1bb65",
+          "#ebd299",
+          "#f3e5c3",
+          "#faf4e5"
+        ]
+      },
+      "ledger-gold-300": {
+        "role": "secondary",
+        "displayName": "Ledger Gold",
+        "canonical": "#e8c15a",
+        "tonalRamp": [
+          "#40300c",
+          "#785a17",
+          "#ab8121",
+          "#d7a532",
+          "#e1bb65",
+          "#ebd299",
+          "#f3e5c3",
+          "#faf4e5"
+        ]
+      },
+      "ledger-gold-400": {
+        "role": "secondary",
+        "displayName": "Ledger Gold Deep",
+        "canonical": "#d9a93c",
+        "tonalRamp": [
+          "#40300c",
+          "#785a17",
+          "#ab8121",
+          "#d7a532",
+          "#e1bb65",
+          "#ebd299",
+          "#f3e5c3",
+          "#faf4e5"
+        ]
+      },
+      "ledger-gold-500": {
+        "role": "secondary",
+        "displayName": "Ledger Gold Border",
+        "canonical": "#b9862a",
+        "tonalRamp": [
+          "#40300c",
+          "#785a17",
+          "#ab8121",
+          "#d7a532",
+          "#e1bb65",
+          "#ebd299",
+          "#f3e5c3",
+          "#faf4e5"
+        ]
+      },
+      "ledger-gold-600": {
+        "role": "secondary",
+        "displayName": "Ledger Gold Shadow",
+        "canonical": "#8f6620",
+        "tonalRamp": [
+          "#40300c",
+          "#785a17",
+          "#ab8121",
+          "#d7a532",
+          "#e1bb65",
+          "#ebd299",
+          "#f3e5c3",
+          "#faf4e5"
+        ]
+      },
+      "moonlit-blue": {
+        "role": "primary",
+        "displayName": "Moonlit Blue",
+        "canonical": "#5b9be0",
+        "tonalRamp": [
+          "#0c2540",
+          "#174678",
+          "#2063ac",
+          "#3181d8",
+          "#65a1e2",
+          "#98c0ec",
+          "#c3daf4",
+          "#e5effa"
+        ]
+      },
+      "grove-green": {
+        "role": "tertiary",
+        "displayName": "Grove Green",
+        "canonical": "#5cc46a",
+        "tonalRamp": [
+          "#143819",
+          "#26692f",
+          "#369643",
+          "#4bbe5b",
+          "#78ce84",
+          "#a5dead",
+          "#cbeccf",
+          "#e9f7ea"
+        ]
+      },
+      "brass-amber": {
+        "role": "tertiary",
+        "displayName": "Brass Amber",
+        "canonical": "#e6a83c",
+        "tonalRamp": [
+          "#422e0b",
+          "#7b5514",
+          "#af7a1d",
+          "#dd9c2c",
+          "#e5b561",
+          "#eece96",
+          "#f5e2c2",
+          "#fbf3e5"
+        ]
+      },
+      "arcane-violet": {
+        "role": "tertiary",
+        "displayName": "Arcane Violet",
+        "canonical": "#a97fe0",
+        "tonalRamp": [
+          "#230f3e",
+          "#421c73",
+          "#5e28a4",
+          "#7b3acf",
+          "#9c6bdb",
+          "#bd9ce7",
+          "#d8c6f1",
+          "#eee6f9"
+        ]
+      },
+      "ember-red": {
+        "role": "tertiary",
+        "displayName": "Ember Red",
+        "canonical": "#e05858",
+        "tonalRamp": [
+          "#410c0c",
+          "#781616",
+          "#ac2020",
+          "#d93131",
+          "#e26464",
+          "#ec9898",
+          "#f4c3c3",
+          "#fae5e5"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Iowan Display",
+        "purpose": "Names, headings and every earned number, with tabular figures."
+      },
+      "body": {
+        "displayName": "System Sans",
+        "purpose": "All body copy, labels and controls; never serif."
+      },
+      "label": {
+        "displayName": "Eyebrow Label",
+        "purpose": "Tracked uppercase label above values and fields."
+      }
+    },
+    "shadows": [
+      {
+        "name": "panel-highlight",
+        "value": "inset 0 1px 0 rgba(255, 255, 255, 0.04)",
+        "purpose": "Hairline of lamp light along the top edge of every panel."
+      },
+      {
+        "name": "bar-groove",
+        "value": "inset 0 1px 2px rgba(0, 0, 0, 0.5)",
+        "purpose": "Makes a progress bar read as a recessed groove."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-standard",
+        "value": "ease",
+        "purpose": "Default easing for hover and colour transitions."
+      },
+      {
+        "name": "state-fast",
+        "value": "0.12s",
+        "purpose": "Hover, border and background changes."
+      },
+      {
+        "name": "press-translate",
+        "value": "translateY(1px) 0.06s",
+        "purpose": "Button press and tile lift."
+      },
+      {
+        "name": "bar-fill",
+        "value": "width 0.4s ease",
+        "purpose": "Progress bars and XP fill."
+      },
+      {
+        "name": "pulse-rec",
+        "value": "scale + opacity, 1s ease-in-out infinite",
+        "purpose": "Recording indicator only."
+      },
+      {
+        "name": "float-up",
+        "value": "translateY(6px) to 0, 0.25s ease, opacity 0 to 1",
+        "purpose": "Entering exercise steps and result rows."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "column",
+        "value": "42rem",
+        "purpose": "Content max width; the app never becomes multi-column."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one action that moves the session forward.",
+      "html": "<button class=\"ds-btn ds-btn-primary\">Continue</button>",
+      "css": ".ds-btn{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;border-radius:.5rem;padding:.55rem .9rem;font:600 .875rem/1 system-ui, -apple-system, \"Segoe UI\", sans-serif;cursor:pointer;border:1px solid transparent;transition:filter .12s ease,transform .06s ease}.ds-btn:active{transform:translateY(1px)}.ds-btn:disabled{opacity:.4;cursor:not-allowed}.ds-btn:focus-visible{outline:2px solid #d9a93c;outline-offset:2px}.ds-btn-primary{color:#fff;background:#5b9be0;border-color:#3f78b8}.ds-btn-primary:hover{filter:brightness(1.08)}"
+    },
+    {
+      "name": "Gold Button",
+      "kind": "button",
+      "refersTo": "button-gold",
+      "description": "Spending, claiming, rewarding.",
+      "html": "<button class=\"ds-btn ds-btn-gold\">Claim reward</button>",
+      "css": ".ds-btn{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;border-radius:.5rem;padding:.55rem .9rem;font:600 .875rem/1 system-ui, -apple-system, \"Segoe UI\", sans-serif;cursor:pointer;border:1px solid transparent;transition:filter .12s ease,transform .06s ease}.ds-btn:active{transform:translateY(1px)}.ds-btn:disabled{opacity:.4;cursor:not-allowed}.ds-btn:focus-visible{outline:2px solid #d9a93c;outline-offset:2px}.ds-btn-gold{color:#2a1d03;background:#d9a93c;border-color:#b9862a}.ds-btn-gold:hover{filter:brightness(1.08)}"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Secondary and destructive-adjacent actions.",
+      "html": "<button class=\"ds-btn ds-btn-ghost\">Skip</button>",
+      "css": ".ds-btn{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;border-radius:.5rem;padding:.55rem .9rem;font:600 .875rem/1 system-ui, -apple-system, \"Segoe UI\", sans-serif;cursor:pointer;border:1px solid transparent;transition:filter .12s ease,transform .06s ease}.ds-btn:active{transform:translateY(1px)}.ds-btn:disabled{opacity:.4;cursor:not-allowed}.ds-btn:focus-visible{outline:2px solid #d9a93c;outline-offset:2px}.ds-btn-ghost{color:#bcc4d3;background:#272c3a;border-color:#454e63}.ds-btn-ghost:hover{color:#eef2f9;border-color:#5a657d}"
+    },
+    {
+      "name": "HUD Stat Card",
+      "kind": "card",
+      "refersTo": "stat-card",
+      "description": "Streak / XP / review counts with a 3px accent edge.",
+      "html": "<div class=\"ds-stat\"><div class=\"ds-stat-label\">Streak</div><div class=\"ds-stat-value\">12<span class=\"ds-stat-unit\">days</span></div></div>",
+      "css": ".ds-stat{border:1px solid #353c4d;border-left:3px solid #e6a83c;border-radius:.6rem;background:#1f2330;padding:.75rem}.ds-stat-label{font:400 .68rem/1.3 system-ui, -apple-system, \"Segoe UI\", sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#8b95aa}.ds-stat-value{font-family:\"Iowan Old Style\", \"Palatino Linotype\", Palatino, Georgia, \"Noto Serif\", \"Times New Roman\", serif;font-variant-numeric:tabular-nums;font-size:1.25rem;font-weight:700;color:#e6a83c;margin-top:.25rem}.ds-stat-unit{margin-left:.125rem;font-size:.75rem;font-weight:400;color:#8b95aa}"
+    },
+    {
+      "name": "Challenge Tile",
+      "kind": "custom",
+      "description": "Accent-tinted card with the signature 3px top stripe.",
+      "html": "<a class=\"ds-tile\" href=\"#\"><span class=\"ds-tile-title\">Gathering</span><span class=\"ds-tile-meta\">Chop wood · 12 XP</span></a>",
+      "css": ".ds-tile{position:relative;display:flex;flex-direction:column;gap:.25rem;overflow:hidden;border:1px solid #353c4d;border-radius:.6rem;background:#252b35;padding:1rem;text-decoration:none;transition:transform .12s ease,border-color .15s ease,background .15s ease}.ds-tile::before{content:\"\";position:absolute;inset:0 0 auto 0;height:3px;background:#5cc46a}.ds-tile:hover,.ds-tile:focus-visible{transform:translateY(-1px);border-color:#40914d;background:#28362b}.ds-tile-title{font-family:\"Iowan Old Style\", \"Palatino Linotype\", Palatino, Georgia, \"Noto Serif\", \"Times New Roman\", serif;font-size:1rem;color:#e7eaf1}.ds-tile-meta{font:400 .75rem/1.4 system-ui, -apple-system, \"Segoe UI\", sans-serif;color:#8b95aa}"
+    },
+    {
+      "name": "Rank Badge",
+      "kind": "custom",
+      "refersTo": "level-badge",
+      "description": "Gold tabular numerals in a small bordered pill.",
+      "html": "<span class=\"ds-badge\">48 / 99</span>",
+      "css": ".ds-badge{display:inline-block;min-width:1.6rem;border:1px solid #8f6620;border-radius:.4rem;background:rgba(0,0,0,.25);padding:.1rem .35rem;text-align:center;font-family:\"Iowan Old Style\", \"Palatino Linotype\", Palatino, Georgia, \"Noto Serif\", \"Times New Roman\", serif;font-variant-numeric:tabular-nums;font-weight:700;color:#e8c15a}"
+    },
+    {
+      "name": "Progress Bar",
+      "kind": "custom",
+      "description": "Inset groove that fills in the panel accent.",
+      "html": "<div class=\"ds-bar\"><i style=\"width:62%\"></i></div>",
+      "css": ".ds-bar{height:.5rem;border-radius:999px;overflow:hidden;background:#272c3a;box-shadow:inset 0 1px 2px rgba(0,0,0,.5)}.ds-bar>i{display:block;height:100%;border-radius:999px;background:#5cc46a;transition:width .4s ease}"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "description": "Dark field, gold border on focus, no glow.",
+      "html": "<label class=\"ds-field\"><span class=\"ds-field-label\">Username</span><input class=\"ds-input\" placeholder=\"Type your answer…\" /></label>",
+      "css": ".ds-field{display:block}.ds-field-label{display:block;margin-bottom:.25rem;font:500 .68rem/1.3 system-ui, -apple-system, \"Segoe UI\", sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#8b95aa}.ds-input{width:100%;box-sizing:border-box;border:1px solid #454e63;border-radius:.75rem;background:#171a22;padding:.75rem 1rem;color:#e7eaf1;font:400 1.125rem/1.4 system-ui, -apple-system, \"Segoe UI\", sans-serif;outline:none}.ds-input::placeholder{color:#5a657d}.ds-input:focus{border-color:#b9862a}"
+    },
+    {
+      "name": "Panel with Header",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "The base board: slate-850 fill, hairline highlight, lighter header.",
+      "html": "<section class=\"ds-panel\"><header class=\"ds-panel-hd\"><span>Daily goal</span><span class=\"ds-panel-meta\">0 / 50 XP</span></header><div class=\"ds-panel-body\">Practise today to keep your streak alive.</div></section>",
+      "css": ".ds-panel{overflow:hidden;border:1px solid #353c4d;border-radius:.6rem;background:#1f2330;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}.ds-panel-hd{display:flex;align-items:center;justify-content:space-between;gap:.5rem;border-bottom:1px solid #353c4d;background:#272c3a;padding:.5rem .9rem;font:700 .875rem/1.3 system-ui, -apple-system, \"Segoe UI\", sans-serif;color:#eef1f7}.ds-panel-meta{font:400 .75rem/1.3 system-ui, -apple-system, \"Segoe UI\", sans-serif;color:#8b95aa}.ds-panel-body{padding:1rem;font:400 .875rem/1.4 system-ui, -apple-system, \"Segoe UI\", sans-serif;color:#bcc4d3}"
+    },
+    {
+      "name": "Bottom Navigation",
+      "kind": "nav",
+      "refersTo": "nav-item-active",
+      "description": "Six equal tabs; active tab gets a slate pill and gold text.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-nav-item ds-nav-item--active\" href=\"#\">🏠<span>Home</span></a><a class=\"ds-nav-item\" href=\"#\">📖<span>Learn</span></a><a class=\"ds-nav-item\" href=\"#\">⚒️<span>Skills</span></a></nav>",
+      "css": ".ds-nav{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid #353c4d;background:rgba(16,18,24,.9);padding:.375rem 0}.ds-nav-item{display:flex;flex-direction:column;align-items:center;gap:.125rem;font:500 11px/1.2 system-ui, -apple-system, \"Segoe UI\", sans-serif;color:#8b95aa;text-decoration:none}.ds-nav-item span{display:block}.ds-nav-item:hover{color:#bcc4d3}.ds-nav-item--active{color:#e8c15a}.ds-nav-item--active span{background:#272c3a;border-radius:.5rem;padding:.25rem .75rem}"
+    },
+    {
+      "name": "Accent Chip",
+      "kind": "chip",
+      "description": "Small accent-tinted label for tiers and tags.",
+      "html": "<span class=\"ds-chip\">refined</span>",
+      "css": ".ds-chip{display:inline-flex;align-items:center;gap:.25rem;border:1px solid rgba(91,155,224,.4);border-radius:.4rem;background:rgba(91,155,224,.18);padding:.15rem .45rem;font:400 .68rem/1.3 system-ui, -apple-system, \"Segoe UI\", sans-serif;color:#93baea}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Night Academy",
+    "overview": "A game HUD a household actually uses every day. The room is dark: near-black slate boards, one-pixel ink borders, flat fills, an inset hairline catching light along the top of every panel. The reward layer is where color lives — a saturated profession accent tints a card, gold ranks and numbers sit in a serif face, a progress bar fills in the green of a daily streak. Nothing glows, nothing gradients, nothing floats.\n\nThe game register is carried by structure and color semantics, not by novelty: accent edges, rank badges, progress bars, XP numerals, and emoji confined to the navigation and celebration moments. The professional register is carried by discipline: one column, one accent per panel, one serif, tabular numbers, and motion capped at a quarter-second unless it is a bar filling. Fun is allowed to be loud in hue; it is never allowed to be sloppy in spacing or alignment.",
+    "keyCharacteristics": [
+      "Dark slate surfaces (#101218–#454e63), flat, no gradients or glows",
+      "One saturated accent per panel, assigned with a --accent custom property",
+      "Iowan Old Style serif for names, headings and every number that matters",
+      "0.6rem cards with 1px ink borders and an inset 1px top highlight",
+      "Game signals: 3px accent edges, rank badges, progress bars, tier colors",
+      "Mobile-first single column (max 42rem), six-tab bottom navigation"
+    ],
+    "rules": [
+      {
+        "name": "The One Accent Rule",
+        "body": "A surface carries exactly one accent. Set it with --accent (accentStyle(color)); tints and borders derive from it with color-mix. Two accents in one panel is a bug, not a flourish.",
+        "section": "colors"
+      },
+      {
+        "name": "The Ledger Gold Rule",
+        "body": "Gold is reserved for what the player earned: numbers, ranks, levels, currency, the active tab. Gold is never a background for body copy.",
+        "section": "colors"
+      },
+      {
+        "name": "The Flat Color Rule",
+        "body": "No gradients, no glows, no glassmorphism. The game energy comes from saturated hues on flat ground — the Melvor-idle discipline, not neon.",
+        "section": "colors"
+      },
+      {
+        "name": "The Serif-For-Stats Rule",
+        "body": "If it is a number the player earned, it is set in the display serif with font-variant-numeric: tabular-nums. If it is a sentence, it is set in the sans.",
+        "section": "typography"
+      },
+      {
+        "name": "The Quiet Body Rule",
+        "body": "Body copy is never serif and never uppercase. Uppercase is reserved for the tracked eyebrow label.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat-By-Default Rule",
+        "body": "Depth is a lightness step plus a hairline. If a surface seems to float, it is wrong; lower its fill instead of adding a shadow.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do assign color through --accent per panel, so tints, borders and edges all derive from one hue.",
+      "Do set earned numbers in the display serif with tabular figures, gold when they are ranks or currency.",
+      "Do convey depth with one lightness step plus a 1px hairline, and the inset top highlight on panels.",
+      "Do keep game color semantic: green = gathering/health/goal, amber = artisan/streak/coin, violet = support/talent, red = combat/damage, blue = arcane/primary.",
+      "Do keep emoji functional — navigation icons and celebration cues only.",
+      "Do cap decorative transitions at 0.25s; bars may animate to 0.4s."
+    ],
+    "donts": [
+      "Don't add gradients, glows, colored drop shadows, or glassmorphism. The energy budget is hue, not light.",
+      "Don't put two accent edges on one card (top stripe plus left border) or two accent hues in one panel.",
+      "Don't use gold as a fill behind body text or as a generic hover color.",
+      "Don't set body copy in the serif, or uppercase anything except the tracked eyebrow label.",
+      "Don't introduce a second display family, a mascot, or a cartoon illustration style; the game reads as a ledger, not a nursery.",
+      "Don't replace the flat 1px border language with Material-style elevation cards."
+    ]
+  }
+}

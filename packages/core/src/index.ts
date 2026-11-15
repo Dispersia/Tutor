@@ -87,6 +87,17 @@ export interface ExerciseContext {
   learner: Learner
   /** distractors for choice exercises (same target language) */
   distractors: string[]
+  /**
+   * display reading (Zhuyin for Chinese, kana for Japanese) keyed by the
+   * target-language text — lets choice exercises annotate every option.
+   */
+  readings?: Record<string, string>
+  /**
+   * target-language words the learner already knows (learned + the current
+   * card). Used by exercises that must build on prior knowledge (n+1), such as
+   * `sentence_build`. Absent when the caller has no learner state (e.g. tests).
+   */
+  known?: string[]
   /** optional LLM helper, injected by the server (absent when no key is set) */
   judge?: (prompt: string, schema: object) => Promise<unknown>
   /** optional speech assessor, injected by the server for audio grading */
@@ -106,6 +117,12 @@ export interface ExerciseDef<Answer = unknown> {
   needsAudio?: boolean
   /** can this exercise be generated for this card? */
   supports(card: Card, learner: Learner): boolean
+  /**
+   * Optional second gate that needs learner state (the `known` set, etc.).
+   * `supports` is static; `available` may look at the full context. When it
+   * returns false the exercise is skipped for this card.
+   */
+  available?(ctx: ExerciseContext): boolean
   generate(ctx: ExerciseContext): Promise<ExerciseInstance>
   grade(ctx: ExerciseContext, instance: ExerciseInstance, answer: Answer): Promise<GradeResult>
   /** audio grading path used when `needsAudio` is set */

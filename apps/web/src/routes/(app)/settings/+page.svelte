@@ -5,7 +5,7 @@
   import { api } from '#lib/api'
   import { getStats } from '#lib/exercises'
   import { session, updateProfile } from '#lib/session.svelte'
-  import { speechStatus, unloadSpeech } from '#lib/speech'
+  import { speechStatus, unloadSpeech, wakeSpeech } from '#lib/speech'
   import { accentStyle } from '#lib/theme'
   import type { ModelInfo, PublicUser, Role, Roles, SpeechStatus } from '#lib/types'
   import { VOICE_PRESETS } from '#lib/voices'
@@ -36,11 +36,21 @@
   let foodThreshold = $state(50)
   let desiredRetention = $state(90)
   let speech = $state<SpeechStatus | null>(null)
+  let waking = $state(false)
   let users = $state<PublicUser[]>([])
   let note = $state('')
   let error = $state('')
 
   const isAdmin = $derived(session.user?.role === 'admin')
+
+  $effect(() => {
+    const msg = note
+    if (!msg) return
+    const timer = setTimeout(() => {
+      if (note === msg) note = ''
+    }, 6000)
+    return () => clearTimeout(timer)
+  })
 
   onMount(async () => {
     handle = session.user?.handle ?? ''
@@ -204,7 +214,24 @@
     void loadUsers()
   }
 
+  async function wake() {
+    if (waking) return
+    waking = true
+    error = ''
+    note = 'Waking the speech models…'
+    try {
+      speech = await wakeSpeech()
+      note = 'Speech models ready.'
+    } catch (e) {
+      note = ''
+      error = (e as Error).message
+    } finally {
+      waking = false
+    }
+  }
+
   async function free() {
+    note = ''
     await unloadSpeech().catch(() => {})
     await refreshSpeech()
     note = 'Speech models unloaded.'
@@ -328,7 +355,7 @@
 
 <!-- Speech engine -------------------------------------------------------->
 <section class="mb-5 panel panel-accent p-4" style={accentStyle('#58c46b')}>
-  <div class="flex items-center justify-between">
+  <div class="flex items-center justify-between gap-3">
     <div>
       <h2 class="display text-sm text-gold-200">Speech engine</h2>
       <p class="text-xs text-ink-400">
@@ -336,10 +363,26 @@
         {#if speech?.models?.length}· {speech.models.join(', ')}{/if}
       </p>
     </div>
-    <button onclick={free} class="rounded-lg border border-ink-600 px-3 py-1.5 text-xs"
-      >Free RAM</button
-    >
+    <div class="flex gap-2">
+      {#if !speech?.ready}
+        <button
+          type="button"
+          onclick={wake}
+          disabled={waking || speech?.running}
+          aria-busy={waking || speech?.running}
+          class="btn btn-ghost px-3 py-1.5 text-xs"
+        >
+          {waking || speech?.running ? 'Waking…' : 'Wake'}
+        </button>
+      {/if}
+      <button type="button" onclick={free} class="btn btn-ghost px-3 py-1.5 text-xs"
+        >Free memory</button
+      >
+    </div>
   </div>
+  <p class="mt-2 text-xs text-ink-400">
+    Voice cards start the models on demand; they unload when idle.
+  </p>
 </section>
 
 <!-- Daily goal ----------------------------------------------------------->

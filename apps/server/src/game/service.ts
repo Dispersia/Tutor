@@ -30,6 +30,7 @@ import {
 } from '../db/repo'
 import type { EventBus } from '../events'
 import { seedStarterDecks } from '../seed/service'
+import { pinyinToZhuyin } from '../seed/zhuyin'
 import { buildLessons } from './curriculum'
 import {
   NEW_STATE,
@@ -811,6 +812,16 @@ export function srsStateMap(db: Db, userId: string): Map<string, FsrsState> {
   )
 }
 
+/** The target-language words a learner currently knows (learned cards). */
+export function knownWords(db: Db, userId: string): Set<string> {
+  const srsMap = srsStateMap(db, userId)
+  const known = new Set<string>()
+  for (const c of listCards(db, userId)) {
+    if (isLearned(srsMap.get(c.id))) known.add(c.back)
+  }
+  return known
+}
+
 export interface SrsStats {
   total: number
   learned: number
@@ -839,8 +850,9 @@ export function curriculumView(db: Db, userId: string) {
   const now = Date.now()
 
   return decks.map((d) => {
-    const ids = listCards(db, userId, d.id).map((c) => c.id)
-    const lessons = buildLessons(d.level ?? '', ids).map((l) => {
+    const cards = listCards(db, userId, d.id)
+    const ids = cards.map((c) => c.id)
+    const lessons = buildLessons(d.level ?? '', stepCards(cards)).map((l) => {
       const learned = l.cardIds.filter((id) => isLearned(srsMap.get(id))).length
       const due = countDue(l.cardIds, srsMap, now)
       return {
@@ -864,6 +876,24 @@ export function curriculumView(db: Db, userId: string) {
   })
 }
 
+/** Maps stored cards to the shape the curriculum builder needs. */
+function stepCards(cards: ReturnType<typeof listCards>) {
+  return cards.map((c) => ({
+    id: c.id,
+    front: c.front,
+    back: c.back,
+    reading: cardReading(c),
+  }))
+}
+
+/** The reading a learner sees: Zhuyin for Chinese, kana for Japanese. */
+function cardReading(c: { targetLang: string; readings: Record<string, string> }): string {
+  const r = c.readings
+  if (c.targetLang === 'ja') return r.kana || ''
+  if (c.targetLang === 'zh') return r.zhuyin || (r.pinyin ? pinyinToZhuyin(r.pinyin) : '')
+  return Object.values(r).find(Boolean) ?? ''
+}
+
 /** Marks a lesson complete when every card in it has been learned. */
 export function checkLessonCompletion(
   db: Db,
@@ -876,8 +906,8 @@ export function checkLessonCompletion(
   if (!level || !Number.isFinite(index) || index < 0) return false
   const deck = listDecks(db, userId).find((d) => d.level === level)
   if (!deck) return false
-  const ids = listCards(db, userId, deck.id).map((c) => c.id)
-  const lesson = buildLessons(level, ids)[index]
+  const cards = listCards(db, userId, deck.id)
+  const lesson = buildLessons(level, stepCards(cards))[index]
   if (!lesson || lesson.cardIds.length === 0) return false
   const srsMap = srsStateMap(db, userId)
   const done = lesson.cardIds.every((id) => isLearned(srsMap.get(id)))
