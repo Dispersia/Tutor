@@ -9,8 +9,15 @@ import { unzip } from './zip'
  * holding a SQLite collection; newer Anki zstd-compresses that file
  * (`collection.anki21b`), older ones store it raw (`collection.anki2`/`anki21`).
  *
- * Only the fields the deck builder needs are read: each note's fields (joined
- * with U+001F in Anki), its model's field names, and the deck order.
+ * Two things about modern packages need handling:
+ *
+ * - the collection is a **WAL** database, so it cannot be opened read-only;
+ * - Anki declares a custom `unicase` collation on the `fields`/`templates`
+ *   tables, which bun:sqlite cannot register, so we rewrite that collation to
+ *   the built-in `BINARY` in the schema text (same byte length) before opening.
+ *
+ * Modern packages also drop the JSON blobs in `col` (models/decks) in favour of
+ * `notetypes` + `fields` + `decks` tables, so the model is read from either.
  */
 
 export interface AnkiModel {
@@ -20,6 +27,8 @@ export interface AnkiModel {
 }
 
 export interface AnkiNote {
+  /** The note type (model) id. */
+  mid: number
   /** One entry per field of the note's model, in field order. */
   fields: string[]
   tags: string[]
@@ -48,6 +57,20 @@ function collectionBytes(entries: Map<string, Uint8Array>): Uint8Array | undefin
   return undefined
 }
 
+/**
+ * Anki's custom `unicase` collation is unknown to bun:sqlite, which then refuses
+ * to prepare any statement against the tables that declare it. Rewriting the
+ * schema text to the built-in `BINARY` (the replacement is the same byte length)
+ * makes those tables readable without touching any data.
+ */
+function relaxCollations(bytes: Uint8Array): Uint8Array {
+  const buf = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  if (!buf.includes('COLLATE unicase')) return bytes
+  return new Uint8Array(
+    Buffer.from(buf.toString('latin1').replaceAll('COLLATE unicase', 'COLLATE BINARY '), 'latin1'),
+  )
+}
+
 function parseModels(json: string | null): Record<string, AnkiModel> {
   const out: Record<string, AnkiModel> = {}
   if (!json) return out
@@ -69,22 +92,101 @@ function parseModels(json: string | null): Record<string, AnkiModel> {
   return out
 }
 
+/** Reads the note-type field names from the legacy `col` blob or the v18 tables. */
+function readModels(db: Database): Record<string, AnkiModel> {
+  // legacy containers: a JSON blob in the `col` table
+  let legacy: string | null = null
+  try {
+    legacy = (db.query('SELECT models FROM col LIMIT 1').get() as { models?: string } | undefined)
+      ?.models ?? null
+  } catch {
+    // no col table
+  }
+  const fromJson = parseModels(legacy)
+  if (Object.keys(fromJson).length) return fromJson
+
+  // modern containers: notetypes + fields tables
+  const out: Record<string, AnkiModel> = {}
+  try {
+    const notetypes = db.query('SELECT id, name FROM notetypes').all() as {
+      id: number
+      name: string
+    }[]
+    for (const nt of notetypes) out[String(nt.id)] = { name: nt.name, fields: [] }
+    const fields = db
+      .query('SELECT ntid, ord, name FROM fields ORDER BY ntid, ord')
+      .all() as { ntid: number; ord: number; name: string }[]
+    for (const f of fields) {
+      const model = out[String(f.ntid)]
+      if (model) model.fields[f.ord] = f.name
+    }
+  } catch {
+    // fall through with whatever we have
+  }
+  return out
+}
+
+/** Anki joins parent/child deck names with U+001F; make that readable. */
+function prettyDeckName(name: string | undefined): string | undefined {
+  if (!name) return name
+  const cleaned = name.replace(/\u001f/g, ' / ').trim()
+  return cleaned || undefined
+}
+
+/** The deck that holds most of the cards, by name. */
+function readDeckName(db: Database): string | undefined {
+  // legacy containers: a JSON blob in `col`
+  try {
+    const decksJson = (db.query('SELECT decks FROM col LIMIT 1').get() as
+      | { decks?: string }
+      | undefined)?.decks
+    if (decksJson) {
+      const decks = JSON.parse(decksJson) as Record<string, { name?: string }>
+      const top = db
+        .query('SELECT did, COUNT(*) AS n FROM cards GROUP BY did ORDER BY n DESC LIMIT 1')
+        .get() as { did: number } | undefined
+      if (top && decks[String(top.did)]?.name) return decks[String(top.did)]!.name
+      const first = Object.values(decks).find((d) => d.name && d.name !== 'Default')
+      if (first?.name) return first.name
+    }
+  } catch {
+    // no col table / bad JSON
+  }
+  // modern containers: a decks table
+  try {
+    const top = db
+      .query('SELECT did, COUNT(*) AS n FROM cards GROUP BY did ORDER BY n DESC LIMIT 1')
+      .get() as { did: number } | undefined
+    if (top) {
+      const deck = db.query('SELECT name FROM decks WHERE id = ?').get(top.did) as
+        | { name?: string }
+        | undefined
+      if (deck?.name && deck.name !== 'Default') return deck.name
+    }
+    const first = db
+      .query("SELECT name FROM decks WHERE name <> 'Default' ORDER BY id LIMIT 1")
+      .get() as { name?: string } | undefined
+    return first?.name
+  } catch {
+    return undefined
+  }
+}
+
 /** Reads an `.apkg` (or `.colpkg`) into a deck of notes. */
 export async function readApkg(bytes: Uint8Array): Promise<AnkiDeck> {
   const entries = await unzip(bytes)
-  const sqlite = collectionBytes(entries)
-  if (!sqlite) throw new Error('no Anki collection found in the package')
+  const collection = collectionBytes(entries)
+  if (!collection) throw new Error('no Anki collection found in the package')
+  const sqlite = relaxCollations(collection)
 
   const dir = mkdtempSync(join(tmpdir(), 'tutor-anki-'))
   const path = join(dir, 'collection.anki2')
   try {
     writeFileSync(path, sqlite)
-    const db = new Database(path, { readonly: true })
+    // read-write: the collection is a WAL database, which cannot open read-only
+    const db = new Database(path)
     try {
-      const col = db.query('SELECT models, decks FROM col LIMIT 1').get() as
-        | { models: string | null; decks: string | null }
-        | undefined
-      const models = parseModels(col?.models ?? null)
+      const models = readModels(db)
 
       // order notes by their earliest card's due value (Anki's new-card order)
       const orderRows = db.query('SELECT nid, MIN(due) AS due FROM cards GROUP BY nid').all() as {
@@ -99,33 +201,18 @@ export async function readApkg(bytes: Uint8Array): Promise<AnkiDeck> {
 
       const notes: AnkiNote[] = rows
         .map((r) => ({
+          mid: r.mid,
           fields: r.flds.split('\u001f'),
           tags: r.tags.trim().split(/\s+/).filter(Boolean),
           order: order.get(r.id) ?? r.id,
         }))
         .sort((a, b) => a.order - b.order)
 
-      return { name: deckName(db, col?.decks ?? null), models, notes }
+      return { name: prettyDeckName(readDeckName(db)), models, notes }
     } finally {
       db.close()
     }
   } finally {
     rmSync(dir, { recursive: true, force: true })
-  }
-}
-
-/** The deck that holds most of the cards, by name. */
-function deckName(db: Database, decksJson: string | null): string | undefined {
-  if (!decksJson) return undefined
-  try {
-    const decks = JSON.parse(decksJson) as Record<string, { name?: string }>
-    const top = db
-      .query('SELECT did, COUNT(*) AS n FROM cards GROUP BY did ORDER BY n DESC LIMIT 1')
-      .get() as { did: number } | undefined
-    if (top && decks[String(top.did)]?.name) return decks[String(top.did)]!.name
-    const first = Object.values(decks).find((d) => d.name && d.name !== 'Default')
-    return first?.name
-  } catch {
-    return undefined
   }
 }
