@@ -12,6 +12,9 @@ dependencies = [
   "numpy>=1.26",
   "soundfile>=0.12",
   "huggingface_hub>=0.26",
+  # The Qwen3 forced aligner needs nagisa to split Japanese text into words
+  # (`tokenize_japanese`). Without it every Japanese "Say it" attempt 500s.
+  "nagisa>=0.3.2",
 ]
 
 [tool.uv]
