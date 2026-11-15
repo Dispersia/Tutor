@@ -258,10 +258,14 @@
     </div>
     <button onclick={leave} class="btn btn-primary mt-4 w-full py-3">Back to monsters</button>
   {:else if instance}
-    {@const Comp = componentFor(instance.exerciseId)}
-    <div class="panel p-5">
-      <Comp {instance} {busy} onsubmit={submit} />
-    </div>
+    <!-- Key on the instance so a fresh drill remounts the component. Otherwise
+         two same-type drills in a row reuse it and keep the last answer text. -->
+    {#key instance}
+      {@const Comp = componentFor(instance.exerciseId)}
+      <div class="panel p-5">
+        <Comp {instance} {busy} onsubmit={submit} />
+      </div>
+    {/key}
   {:else}
     <p class="text-sm text-ink-400">No drill available — try again.</p>
   {/if}
