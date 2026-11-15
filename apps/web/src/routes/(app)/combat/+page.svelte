@@ -5,6 +5,7 @@
   import { componentFor } from '#lib/components/exercises'
   import { api } from '#lib/api'
   import {
+    abandonFight,
     combatHit,
     getCombat,
     startFight,
@@ -59,6 +60,12 @@
       data = c
       ref = s
       encounter = c.encounter
+      // Resuming a fight: adopt the drill the server rebuilt for this encounter
+      // and which monster we're facing, so the fight keeps going after a reload.
+      if (c.encounter) {
+        instance = c.instance
+        monster = c.monsters.find((m) => m.id === c.encounter!.monsterId) ?? null
+      }
       if (set?.foodThreshold) foodThreshold = set.foodThreshold
     } catch (e) {
       error = (e as Error).message
@@ -115,6 +122,22 @@
     hit = null
     drank = null
     void refresh()
+  }
+
+  /** Flee: drop the encounter on the server, then return to the monster list. */
+  async function flee() {
+    if (busy) return
+    if (!confirm('Leave the fight? Your progress in this battle is lost.')) return
+    busy = true
+    error = ''
+    try {
+      await abandonFight()
+      leave()
+    } catch (e) {
+      error = (e as Error).message
+    } finally {
+      busy = false
+    }
   }
 
   /**
@@ -194,6 +217,11 @@
     </div>
     <div class="bar mt-1" style="--accent: {ACCENT.jade}">
       <i style="width: {(encounter.playerHp / encounter.playerMaxHp) * 100}%"></i>
+    </div>
+    <div class="mt-3 flex justify-end">
+      <button onclick={flee} disabled={busy} class="btn btn-ghost px-3 py-1.5 text-xs">
+        Leave fight
+      </button>
     </div>
   </div>
 

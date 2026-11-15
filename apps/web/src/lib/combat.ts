@@ -42,6 +42,8 @@ export interface CombatResponse {
   monsters: MonsterDTO[]
   player: { maxHp: number; armour: number; weaponPower: number }
   encounter: EncounterDTO | null
+  /** The current drill when a fight is in progress (null otherwise). */
+  instance: Instance | null
 }
 
 export interface Buff {
@@ -72,6 +74,9 @@ export const startFight = (monsterId: string) =>
     instance: Instance | null
     drank: { item: string; buff: Buff } | null
   }>('/api/combat/start', { method: 'POST', body: JSON.stringify({ monsterId }) })
+
+/** Flee the active fight: drop the encounter, no rewards, no penalty. */
+export const abandonFight = () => api<{ encounter: null }>('/api/combat/leave', { method: 'POST' })
 
 export const combatHit = (body: { exerciseId: string; cardId: string; answer: unknown }) =>
   api<{
