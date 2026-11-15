@@ -38,6 +38,19 @@ beforeAll(() => {
         })
         return new Response(body, { headers: { 'content-type': 'text/event-stream' } })
       }
+      if (path.endsWith('/models/user')) {
+        return Response.json({
+          data: [
+            {
+              id: 'user/key-model',
+              name: 'Key Model',
+              context_length: 2000,
+              pricing: {},
+              architecture: { output_modalities: ['text'] },
+            },
+          ],
+        })
+      }
       if (path.endsWith('/models')) {
         return Response.json({
           data: [
@@ -59,11 +72,11 @@ beforeAll(() => {
 
 afterAll(() => stub.stop())
 
-function makeApp(allowRegistration = true) {
+function makeApp(allowRegistration = true, serverKey: string | null = 'test-key') {
   const { db, sqlite } = openDb(':memory:')
   const deps: Deps = {
     db,
-    or: new OpenRouter('test-key', stub.url),
+    or: new OpenRouter(serverKey ?? undefined, stub.url),
     supervisor: new SpeechSupervisor({
       url: 'http://127.0.0.1:1',
       port: 1,
@@ -73,7 +86,7 @@ function makeApp(allowRegistration = true) {
       autostart: false,
     }),
     defaults,
-    serverKey: 'test-key',
+    serverKey: serverKey ?? undefined,
     secret: undefined,
     allowRegistration,
     sessionTtlMs: 86_400_000,
@@ -107,6 +120,21 @@ test('public endpoints need no session', async () => {
   expect(((await health.json()) as { openrouter: boolean }).openrouter).toBe(true)
   const models = await app.request('/api/models')
   expect(models.status).toBe(200)
+})
+
+test('model catalogue follows the key: /models/user when set, public otherwise', async () => {
+  const ids = async (serverKey: string | null) => {
+    const { app } = makeApp(true, serverKey)
+    const body = (await (await app.request('/api/models')).json()) as {
+      models: { id: string }[]
+    }
+    return body.models.map((m) => m.id)
+  }
+  // A key present (server or the user's own) → key-filtered catalogue.
+  expect(await ids('test-key')).toContain('user/key-model')
+  // No key anywhere → public catalogue, no key required.
+  expect(await ids(null)).toContain('qwen/test')
+  expect(await ids(null)).not.toContain('user/key-model')
 })
 
 test('protected endpoints reject anonymous requests', async () => {

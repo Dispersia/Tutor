@@ -26,7 +26,7 @@
   })
   let roleDefaults = $state<Roles | null>(null)
   let models = $state<ModelInfo[]>([])
-  let modelFilter = $state('qwen')
+  let modelFilter = $state('')
   let voiceMode = $state<'preset' | 'design'>('preset')
   let voices = $state<Record<string, string>>({})
   let keyStatus = $state<'user' | 'server' | false>(false)
@@ -74,7 +74,9 @@
   async function loadModels() {
     try {
       models = (
-        await api<{ models: ModelInfo[] }>(`/api/models?q=${encodeURIComponent(modelFilter)}`)
+        await api<{ models: ModelInfo[] }>(
+          `/api/models?limit=1000&q=${encodeURIComponent(modelFilter)}`,
+        )
       ).models
     } catch {
       /* catalogue is best-effort */
@@ -173,6 +175,8 @@
       keyStatus = r.openrouter.key
       keyInput = ''
       note = keyStatus ? 'Key saved.' : 'Key cleared.'
+      // The model list is scoped to the key — refresh it.
+      void loadModels()
     } catch (e) {
       error = (e as Error).message
     }
@@ -243,7 +247,8 @@
 <section class="mb-5 panel panel-accent p-4" style={accentStyle('#e8c264')}>
   <h2 class="display text-sm text-gold-200">Models per role</h2>
   <p class="mt-1 text-xs text-ink-400">
-    Pick any OpenRouter model — use Qwen, or point a role at DeepSeek/OpenAI/etc.
+    Pick any model your OpenRouter key can use. The list comes from the API and follows your
+    account's provider preferences, privacy settings and guardrails.
   </p>
   <input
     bind:value={modelFilter}

@@ -88,6 +88,7 @@ export function parseSseData(data: string): ChatEvent | null {
 export class OpenRouter {
   #key?: string
   #models?: ModelInfo[]
+  #modelsPath?: string
 
   constructor(
     key?: string,
@@ -110,12 +111,20 @@ export class OpenRouter {
     return h
   }
 
-  /** Live OpenRouter catalogue (public endpoint). Cached for the process. */
-  async listModels(): Promise<ModelInfo[]> {
-    if (this.#models) return this.#models
-    const res = await fetch(`${this.baseUrl}/models`)
-    if (!res.ok) throw new Error(`openrouter models -> ${res.status}`)
+  /**
+   * Live OpenRouter catalogue. `{ user: true }` uses `/models/user`, which the
+   * key filters by provider preferences, privacy settings and guardrails — so a
+   * user picks from exactly the models their own key can call (§10.1). Without
+   * it we hit the public `/models`. Cached per client instance.
+   */
+  async listModels(opts: { user?: boolean } = {}): Promise<ModelInfo[]> {
+    const path = opts.user ? '/models/user' : '/models'
+    if (opts.user && !this.#key) throw new Error('OPENROUTER_API_KEY is not set')
+    if (this.#models && this.#modelsPath === path) return this.#models
+    const res = await fetch(`${this.baseUrl}${path}`, { headers: this.#headers() })
+    if (!res.ok) throw new Error(`openrouter models${opts.user ? '/user' : ''} -> ${res.status}`)
     const json = (await res.json()) as { data?: Record<string, never>[] }
+    this.#modelsPath = path
     this.#models = (json.data ?? []).map((m) => {
       const raw = m as unknown as {
         id: string
