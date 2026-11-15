@@ -27,16 +27,16 @@
 </div>
 
 {#if error}
-  <p class="text-sm text-red-300">{error}</p>
+  <p class="text-sm text-ember-300">{error}</p>
 {:else}
   <div class="space-y-3 pb-10">
     {#each messages as m (m.id)}
       <div class={m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
         <div
-          class="max-w-[85%] rounded-2xl px-4 py-2.5 text-[15px] whitespace-pre-wrap {m.role ===
+          class="max-w-[85%] rounded-lg px-4 py-2.5 text-[15px] whitespace-pre-wrap {m.role ===
           'user'
-            ? 'bg-emerald-600/90 text-white'
-            : 'border border-ink-700 bg-ink-900'}"
+            ? 'bg-seal-500/90 text-white'
+            : 'border border-ink-700 bg-ink-900 text-ink-100'}"
         >
           {m.text}
         </div>

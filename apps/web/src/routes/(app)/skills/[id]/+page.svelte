@@ -3,7 +3,8 @@
   import { page } from '$app/state'
   import { goto } from '$app/navigation'
   import { chooseTalent, getSkill, type ActionDTO, type SkillPageResponse } from '#lib/skills'
-  import { CATEGORY, accentStyle, categoryAccent } from '#lib/theme'
+  import { CATEGORY, ACCENT, accentStyle, categoryAccent } from '#lib/theme'
+  import Icon from '#lib/components/Icon.svelte'
 
   let data = $state<SkillPageResponse | null>(null)
   let error = $state('')
@@ -15,7 +16,7 @@
   const id = $derived(page.params.id)
   const pct = (v: number) => `${Math.round(v * 100)}%`
   const skill = $derived(data?.skill ?? null)
-  const accent = $derived(skill ? categoryAccent(skill.category) : '#4fb0e8')
+  const accent = $derived(skill ? categoryAccent(skill.category) : ACCENT.azure)
   const catLabel = $derived(skill ? CATEGORY[skill.category].label : '')
   const itemMap = $derived(new Map((data?.items ?? []).map((i) => [i.id, i])))
 
@@ -68,186 +69,197 @@
   }
 </script>
 
-<div class="pt-5 pb-3">
-  <button onclick={() => goto(href('/skills'))} class="text-sm text-ink-400 hover:text-ink-300">
+<div class="pt-5">
+  <button
+    onclick={() => goto(href('/skills'))}
+    class="text-sm text-ink-400 hover:text-ink-200"
+  >
     ← Skills
   </button>
 </div>
 
 {#if error}
-  <p class="mb-3 rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300">{error}</p>
+  <p class="mt-3 rounded-[4px] bg-ember-950 px-3 py-2 text-sm text-ember-300">{error}</p>
 {/if}
 {#if note}
-  <p class="mb-3 rounded-lg bg-emerald-950/60 px-3 py-2 text-sm text-emerald-300">{note}</p>
+  <p class="mt-3 rounded-[4px] bg-jade-950 px-3 py-2 text-sm text-jade-300">{note}</p>
 {/if}
 
 {#if loading}
-  <p class="text-sm text-ink-400">Loading…</p>
+  <p class="mt-4 text-sm text-ink-400">Loading…</p>
 {:else if skill}
   <!-- Header ---------------------------------------------------------------->
-  <section class="panel panel-accent p-4" style={accentStyle(accent)}>
-    <div class="flex items-center gap-3">
-      <span
-        class="grid h-14 w-14 shrink-0 place-items-center rounded-xl border text-3xl"
-        style="border-color: {accent}66; background: {accent}1f">{skill.icon}</span
-      >
-      <div class="min-w-0 flex-1">
-        <h1 class="display text-2xl" style="color: {accent}">{skill.name}</h1>
-        <p class="text-xs text-ink-400">{catLabel} · {skill.description}</p>
-      </div>
-      <div class="level-badge px-2.5 py-1 text-base">{skill.level}</div>
+  <header
+    class="mt-3 flex items-center justify-between gap-3 border-b border-ink-700 pb-4"
+    style={accentStyle(accent)}
+  >
+    <div class="min-w-0">
+      <h1 class="display truncate text-3xl text-ink-100">{skill.name}</h1>
+      <p class="mt-1 text-xs text-ink-400">{catLabel} · {skill.description}</p>
     </div>
-
-    <div class="bar mt-4">
-      <i style="width: {skill.progress * 100}%"></i>
-    </div>
-    <div class="mt-1.5 flex justify-between text-[11px] text-ink-400">
-      <span>{skill.intoLevel} / {skill.forNext} xp</span>
-      <span>{skill.xp} xp total</span>
-    </div>
-
-    <p
-      class="mt-3 flex items-center gap-2 rounded-lg border border-ink-700 bg-ink-950/40 px-3 py-2 text-xs text-ink-300"
+    <div
+      class="grid h-14 w-14 shrink-0 place-items-center rounded-[4px]"
+      style="border: 1.5px solid {accent}; background: {accent}1f; color: {accent}"
+      aria-label="Level {skill.level}"
     >
-      <span class="chip" style={accentStyle(accent)}>{pct(skill.effect.value)}</span>
-      {skill.effectLabel}
-    </p>
+      <span class="display text-2xl leading-none font-bold">{skill.level}</span>
+      <span class="text-[8px] tracking-[0.16em]">LEVEL</span>
+    </div>
+  </header>
 
+  <!-- Ledger ---------------------------------------------------------------->
+  <section style={accentStyle(accent)}>
+    <div class="border-b border-ink-700 py-3">
+      <div class="flex items-baseline justify-between gap-2 text-sm">
+        <span class="text-ink-300">Progress</span>
+        <span class="text-ink-300 tabular-nums">{skill.intoLevel} / {skill.forNext} xp</span>
+      </div>
+      <div class="bar mt-2"><i style="width: {skill.progress * 100}%"></i></div>
+    </div>
+    <div class="flex items-baseline justify-between gap-2 border-b border-ink-700 py-3 text-sm">
+      <span class="min-w-0 text-ink-300">{skill.effectLabel}</span>
+      <span class="display shrink-0 text-lg font-bold" style="color: {accent}"
+        >{pct(skill.effect.value)}</span
+      >
+    </div>
+    <div class="flex items-baseline justify-between gap-2 border-b border-ink-700 py-3 text-sm">
+      <span class="text-ink-300">XP total</span>
+      <span class="display text-lg font-bold text-gold-200 tabular-nums">{skill.xp}</span>
+    </div>
     {#if skill.category === 'combat'}
       <a
         href={href('/combat')}
-        class="btn mt-3 w-full"
-        style="color:#08111b; background: {accent}; border: 1px solid color-mix(in oklab, {accent} 65%, black)"
-        >⚔️ Go to combat →</a
+        class="flex items-center gap-2 border-b border-ink-700 py-3 text-sm"
+        style={accentStyle(accent)}
       >
+        <Icon name="skull" size={17} />
+        <span class="flex-1 text-ink-100">Go to combat</span>
+        <span class="text-ink-500">→</span>
+      </a>
     {/if}
   </section>
 
   <!-- Talents --------------------------------------------------------------->
-  <h2 class="eyebrow mt-6 mb-2" style="color: {accent}">Talents</h2>
+  <h2 class="mt-6 text-xs font-bold tracking-widest uppercase" style="color: {accent}">Talents</h2>
 
   {#if skill.talent.pendingChoice}
-    <div class="panel panel-accent p-4" style={accentStyle('#e8c264')}>
-      <p class="mb-3 text-sm text-gold-200">
-        🎉 Level {skill.talent.milestone} — choose one talent:
-      </p>
-      <div class="grid gap-2">
-        {#each skill.talent.options as o (o.id)}
+    <p class="mt-2 border-b border-ink-700 pb-3 text-sm text-ink-300">
+      Level {skill.talent.milestone} — choose one:
+    </p>
+    <ul>
+      {#each skill.talent.options as o (o.id)}
+        <li>
           <button
             onclick={() => pick(o.id)}
             disabled={busy}
-            class="rounded-xl border border-gold-600/60 bg-gold-500/10 px-3 py-3 text-left hover:bg-gold-500/15 disabled:opacity-50"
+            class="flex w-full items-center gap-3 border-b border-ink-700 py-3 text-left disabled:opacity-50"
+            style={accentStyle(ACCENT.gold)}
           >
-            <span class="display block text-sm text-gold-200">{o.name}</span>
-            <span class="block text-xs text-ink-400">{o.description}</span>
+            <span class="h-2 w-2 shrink-0 rounded-[2px]" style="background: var(--accent)"></span>
+            <span class="min-w-0 flex-1">
+              <span class="display block text-sm text-ink-100">{o.name}</span>
+              <span class="mt-0.5 block text-xs text-ink-400">{o.description}</span>
+            </span>
+            <span class="shrink-0 text-xs text-gold-300">Choose</span>
           </button>
-        {/each}
-      </div>
-    </div>
+        </li>
+      {/each}
+    </ul>
   {:else}
-    <p
-      class="panel panel-accent mb-2 px-3 py-2 text-xs text-ink-300"
-      style={accentStyle('#e8c264')}
-    >
-      No talent waiting. Next choice at
-      <span class="gold">Lv {skill.talent.nextMilestone}</span>.
+    <p class="mt-2 border-b border-ink-700 py-3 text-xs text-ink-400">
+      No talent waiting. Next choice at <span class="gold">Lv {skill.talent.nextMilestone}</span>.
     </p>
   {/if}
 
   {#if skill.talent.owned.length}
-    <div class="mt-2 space-y-2">
+    <ul class="mt-2">
       {#each skill.talent.owned as t (t.id)}
-        <div class="panel panel-accent p-3" style={accentStyle('#e8c264')}>
-          <div class="flex items-start gap-3">
-            <span class="text-lg">🔹</span>
-            <div class="min-w-0 flex-1">
-              <div class="flex items-baseline justify-between gap-2">
-                <span class="display text-sm text-gold-200">{t.name}</span>
-                <span class="level-badge text-[11px]">Lv {t.milestone}</span>
-              </div>
-              <p class="text-xs text-ink-300">{t.description}</p>
-            </div>
+        <li class="border-b border-ink-700 py-3" style={accentStyle(ACCENT.gold)}>
+          <div class="flex items-baseline justify-between gap-2">
+            <span class="display text-sm text-ink-100">{t.name}</span>
+            <span class="text-[11px] text-ink-500">Lv {t.milestone}</span>
           </div>
-
+          <p class="mt-0.5 text-xs text-ink-400">{t.description}</p>
           <button
             onclick={() => (changing = changing === t.id ? null : t.id)}
-            class="mt-2 text-[11px] text-emerald-400 hover:text-emerald-300"
+            class="mt-1 text-[11px] text-ink-400 underline hover:text-ink-200"
           >
             {changing === t.id ? 'Cancel' : 'Change talent'}
           </button>
           {#if changing === t.id}
-            <div class="mt-2 grid gap-2">
+            <div class="mt-2">
               {#each t.options.filter((o) => o.id !== t.id) as o (o.id)}
                 <button
                   onclick={() => pick(o.id)}
                   disabled={busy}
-                  class="rounded-xl border border-ink-600 bg-ink-900/60 px-3 py-2 text-left hover:border-ink-500 disabled:opacity-50"
+                  class="flex w-full items-center gap-3 border-t border-ink-700 py-2.5 text-left disabled:opacity-50"
                 >
-                  <span class="display block text-sm text-ink-300">{o.name}</span>
-                  <span class="block text-xs text-ink-400">{o.description}</span>
+                  <span class="min-w-0 flex-1">
+                    <span class="display block text-sm text-ink-200">{o.name}</span>
+                    <span class="block text-xs text-ink-400">{o.description}</span>
+                  </span>
+                  <span class="shrink-0 text-xs text-ink-500">Pick</span>
                 </button>
               {/each}
             </div>
           {/if}
-        </div>
+        </li>
       {/each}
-    </div>
+    </ul>
   {:else}
-    <p class="panel panel-accent p-3 text-xs text-ink-300" style={accentStyle('#e8c264')}>
-      No talents yet — reach <span class="gold">Lv {skill.talent.nextMilestone}</span> to pick your first.
+    <p class="mt-2 border-b border-ink-700 py-3 text-xs text-ink-400">
+      No talents yet — reach <span class="gold">Lv {skill.talent.nextMilestone}</span> to pick your
+      first.
     </p>
   {/if}
 
   <!-- Actions --------------------------------------------------------------->
-  <h2 class="eyebrow mt-6 mb-2" style="color: {accent}">Actions</h2>
-  <div class="space-y-2">
+  <h2 class="mt-6 text-xs font-bold tracking-widest uppercase" style="color: {accent}">Actions</h2>
+  <ul>
     {#each skill.actions as a (a.id)}
-      <div
-        class="panel panel-accent p-3"
+      <li
+        class="flex items-start gap-3 border-b border-ink-700 py-3"
         class:opacity-60={!a.unlocked}
         style={accentStyle(accent)}
       >
-        <div class="flex items-start justify-between gap-3">
-          <div class="min-w-0">
-            <div class="display text-sm text-ink-300">{a.name}</div>
-            <div class="text-[11px] text-ink-400">{a.description}</div>
-            <div class="mt-1 flex flex-wrap gap-1 text-[11px]">
+        <div class="min-w-0 flex-1">
+          <div class="flex items-baseline justify-between gap-2">
+            <span class="text-sm font-medium text-ink-100">{a.name}</span>
+            <span class="shrink-0 text-[11px] text-ink-400 tabular-nums">+{a.xp} xp</span>
+          </div>
+          <div class="mt-0.5 text-[11px] text-ink-400">{a.description}</div>
+          {#if (a.consumes ?? []).length || (a.produces ?? []).length}
+            <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
               {#each a.consumes ?? [] as c (c.item)}
-                <span class="chip" style="--accent: #6b7a96">
-                  −{c.count}
-                  {itemMap.get(c.item)?.icon ?? ''}
-                  {itemMap.get(c.item)?.name ?? c.item}
+                <span class="text-ember-300">
+                  −{c.count} {itemMap.get(c.item)?.icon ?? ''} {itemMap.get(c.item)?.name ?? c.item}
                 </span>
               {/each}
               {#each a.produces ?? [] as p (p.item)}
-                <span class="chip" style="--accent: #58c46b">
-                  +{p.count}
-                  {itemMap.get(p.item)?.icon ?? ''}
-                  {itemMap.get(p.item)?.name ?? p.item}
+                <span class="text-jade-400">
+                  +{p.count} {itemMap.get(p.item)?.icon ?? ''} {itemMap.get(p.item)?.name ?? p.item}
                 </span>
               {/each}
-              <span class="chip" style="--accent: #4fb0e8">+{a.xp} xp</span>
             </div>
-          </div>
-          <button
-            onclick={() => train(a)}
-            disabled={!a.unlocked || !a.affordable}
-            class="btn btn-accent shrink-0 px-3 py-2 text-sm"
-            style={accentStyle(accent)}
-          >
-            Train
-          </button>
+          {/if}
+          {#if !a.unlocked || !a.affordable}
+            <p class="mt-1 text-[11px] text-brass-300">
+              {a.unlocked ? 'needs' : 'locked —'}
+              {lockedReason(a)}
+            </p>
+          {/if}
         </div>
-        {#if !a.unlocked || !a.affordable}
-          <p class="mt-1 text-[11px] text-amber-300">
-            {a.unlocked ? 'needs' : 'locked —'}
-            {lockedReason(a)}
-          </p>
-        {/if}
-      </div>
+        <button
+          onclick={() => train(a)}
+          disabled={!a.unlocked || !a.affordable}
+          class="btn {a.unlocked && a.affordable ? 'btn-primary' : 'btn-ghost'} shrink-0 px-3 py-2 text-sm"
+        >
+          Train
+        </button>
+      </li>
     {/each}
-  </div>
+  </ul>
   <div class="h-6"></div>
 {:else}
-  <p class="text-sm text-ink-400">Profession not found.</p>
+  <p class="mt-4 text-sm text-ink-400">Profession not found.</p>
 {/if}

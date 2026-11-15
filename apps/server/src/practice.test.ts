@@ -61,13 +61,13 @@ test('decks are seeded per user and list their cards', async () => {
   const { app, sqlite } = makeApp()
   const cookie = await signup(app)
   const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
-    decks: { id: string; name: string; cardCount: number }[]
+    decks: { id: string; name: string; level: string; cardCount: number }[]
   }
-  expect(decks.decks.length).toBe(3)
+  expect(decks.decks.length).toBe(2)
   expect(decks.decks.every((d) => Number(d.cardCount) > 40)).toBe(true)
 
-  const hsk = decks.decks.find((d) => d.name === 'HSK 1')!
-  const cards = (await (await app.request(`/api/decks/${hsk.id}/cards`, auth(cookie))).json()) as {
+  const zh = decks.decks.find((d) => d.level === 'zhfreq')!
+  const cards = (await (await app.request(`/api/decks/${zh.id}/cards`, auth(cookie))).json()) as {
     cards: { back: string; front: string }[]
   }
   expect(cards.cards.length).toBeGreaterThan(40)
@@ -84,9 +84,9 @@ test('practice: next -> grade -> xp, and exercise catalog', async () => {
   expect(cat.exercises.length).toBeGreaterThanOrEqual(7)
 
   const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
-    decks: { id: string; name: string }[]
+    decks: { id: string; name: string; level: string }[]
   }
-  const deckId = decks.decks.find((d) => d.name === 'HSK 1')!.id
+  const deckId = decks.decks.find((d) => d.level === 'zhfreq')!.id
 
   // a specific exercise type (requires auth)
   const nextAuthed = (await (
@@ -190,9 +190,9 @@ test('practice/speak grades recorded audio via the assessor', async () => {
   const cookie = await signup(app)
 
   const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
-    decks: { id: string; name: string }[]
+    decks: { id: string; name: string; level: string }[]
   }
-  const deckId = decks.decks.find((d) => d.name === 'HSK 1')!.id
+  const deckId = decks.decks.find((d) => d.level === 'zhfreq')!.id
   const cards = (await (await app.request(`/api/decks/${deckId}/cards`, auth(cookie))).json()) as {
     cards: { id: string }[]
   }
@@ -223,7 +223,7 @@ test('practice/speak rejects bad input', async () => {
   const { app, sqlite } = makeApp(assess)
   const cookie = await signup(app)
   const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
-    decks: { id: string; name: string }[]
+    decks: { id: string; name: string; level: string }[]
   }
   const deckId = decks.decks[0]!.id
   const cards = (await (await app.request(`/api/decks/${deckId}/cards`, auth(cookie))).json()) as {
@@ -270,9 +270,9 @@ test('quiet mode hides listen/speak cards for 15 minutes (XP unaffected)', async
   const cookie = await signup(app)
 
   const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
-    decks: { id: string; name: string }[]
+    decks: { id: string; name: string; level: string }[]
   }
-  const deckId = decks.decks.find((d) => d.name === 'HSK 1')!.id
+  const deckId = decks.decks.find((d) => d.level === 'zhfreq')!.id
   const cards = (await (await app.request(`/api/decks/${deckId}/cards`, auth(cookie))).json()) as {
     cards: { id: string; back: string }[]
   }
@@ -328,5 +328,99 @@ test('quiet mode hides listen/speak cards for 15 minutes (XP unaffected)', async
   ).json()) as { quietUntil: number }
   expect(off.quietUntil).toBe(0)
 
+  sqlite.close()
+})
+
+test('study preferences: readings can be hidden per user', async () => {
+  const { app, sqlite } = makeApp()
+  const cookie = await signup(app)
+
+  const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
+    decks: { id: string; name: string; level: string }[]
+  }
+  const deckId = decks.decks.find((d) => d.level === 'zhfreq')!.id
+  const nextReading = async () =>
+    (
+      (await (
+        await app.request(
+          '/api/practice/next',
+          auth(cookie, json({ deckId, exerciseId: 'translate.back_to_front' })),
+        )
+      ).json()) as { instance: { data: { reading?: string } } }
+    ).instance.data.reading
+
+  // Zhuyin shows by default.
+  expect(await nextReading()).toBeTruthy()
+
+  // Turning it off hides it from the prompt.
+  const saved = (await (
+    await app.request(
+      '/api/settings',
+      auth(cookie, { ...json({ study: { showZhuyin: false } }), method: 'PUT' }),
+    )
+  ).json()) as { study: { showZhuyin: boolean; disabledExercises: string[] } }
+  expect(saved.study.showZhuyin).toBe(false)
+  expect(await nextReading()).toBe('')
+
+  // GET reflects the stored preference.
+  const got = (await (await app.request('/api/settings', auth(cookie))).json()) as {
+    study: { showZhuyin: boolean }
+  }
+  expect(got.study.showZhuyin).toBe(false)
+  sqlite.close()
+})
+
+test('study preferences: disabled exercise kinds are skipped', async () => {
+  const { app, sqlite } = makeApp()
+  const cookie = await signup(app)
+
+  const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
+    decks: { id: string; name: string; level: string }[]
+  }
+  const deckId = decks.decks.find((d) => d.level === 'zhfreq')!.id
+
+  const saved = (await (
+    await app.request(
+      '/api/settings',
+      auth(cookie, {
+        ...json({ study: { disabledExercises: ['type_listen', 'speak_word', 'multiple_choice'] } }),
+        method: 'PUT',
+      }),
+    )
+  ).json()) as { study: { disabledExercises: string[] } }
+  expect([...saved.study.disabledExercises].sort()).toEqual([
+    'multiple_choice',
+    'speak_word',
+    'type_listen',
+  ])
+
+  // Auto-picked drills never come up as a disabled kind.
+  for (let i = 0; i < 30; i++) {
+    const r = (await (
+      await app.request('/api/practice/next', auth(cookie, json({ deckId })))
+    ).json()) as { instance?: { exerciseId: string } }
+    if (r.instance) expect(r.instance.exerciseId).not.toBe('multiple_choice')
+  }
+
+  // Forcing a disabled kind swaps in one that is allowed.
+  const forced = (await (
+    await app.request(
+      '/api/practice/next',
+      auth(cookie, json({ deckId, exerciseId: 'multiple_choice' })),
+    )
+  ).json()) as { instance: { exerciseId: string } }
+  expect(forced.instance.exerciseId).not.toBe('multiple_choice')
+
+  // Unknown ids (and the first-exposure teach step) are ignored by validation.
+  const junk = (await (
+    await app.request(
+      '/api/settings',
+      auth(cookie, {
+        ...json({ study: { disabledExercises: ['nope', 'introduce'] } }),
+        method: 'PUT',
+      }),
+    )
+  ).json()) as { study: { disabledExercises: string[] } }
+  expect(junk.study.disabledExercises).toEqual([])
   sqlite.close()
 })

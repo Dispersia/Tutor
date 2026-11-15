@@ -1,6 +1,6 @@
 import { streamSSE } from 'hono/streaming'
 import { addMessage, createSession, getOwnedSession, getRoles, listMessages } from '../db/repo'
-import type { Role } from '../env'
+import { roleReasoning, type Role } from '../env'
 import { OpenRouter, type ChatMessage, type Usage } from '../llm/openrouter'
 import { systemPrompt } from '../llm/prompts'
 import { resolveUserKey } from '../llm/userkey'
@@ -52,7 +52,11 @@ export function registerChat(app: App) {
       let full = ''
       let usage = EMPTY_USAGE
       try {
-        for await (const ev of or.streamChat({ model, messages: msgs })) {
+        for await (const ev of or.streamChat({
+          model,
+          messages: msgs,
+          reasoning: roleReasoning[role],
+        })) {
           if (ev.type === 'delta') {
             full += ev.text
             await stream.writeSSE({ event: 'delta', data: ev.text })
@@ -99,6 +103,7 @@ export function registerChat(app: App) {
         messages: body.messages ?? [],
         schema: body.schema,
         schemaName: body.schemaName,
+        reasoning: roleReasoning[role],
       })
       return c.json({ result: json, usage, model })
     } catch (err) {

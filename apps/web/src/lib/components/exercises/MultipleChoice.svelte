@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Instance } from '#lib/exercises'
+  import Spinner from '../Spinner.svelte'
   import Word from '../Word.svelte'
 
   let {
@@ -22,10 +23,15 @@
       <button
         onclick={() => onsubmit(choice)}
         disabled={busy}
-        class="flex flex-col items-center gap-0.5 rounded-xl border border-ink-600 bg-ink-900 px-4 py-4 text-left text-lg hover:border-gold-500 disabled:opacity-50"
+        class="flex flex-col items-center gap-0.5 rounded-md border border-ink-600 bg-ink-900 px-4 py-4 text-left text-lg transition-colors hover:border-seal-400 hover:bg-ink-850 disabled:opacity-50"
       >
         <Word word={choice} reading={readings[i] ?? ''} {lang} furigana={furigana[i]} size="md" />
       </button>
     {/each}
   </div>
+  {#if busy}
+    <p class="flex items-center gap-2 text-xs text-ink-400">
+      <Spinner size={13} label="Checking your answer" /> Checking…
+    </p>
+  {/if}
 </div>

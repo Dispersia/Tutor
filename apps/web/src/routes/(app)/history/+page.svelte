@@ -3,7 +3,9 @@
   import { onMount } from 'svelte'
   import { api } from '#lib/api'
   import { accentStyle } from '#lib/theme'
+  import { KIND_ACCENT, ACCENT } from '#lib/theme'
   import type { ChatSession } from '#lib/types'
+  import Spinner from '#lib/components/Spinner.svelte'
 
   let sessions = $state<ChatSession[]>([])
   let error = $state('')
@@ -27,23 +29,23 @@
       minute: '2-digit',
     })
 
-  const kindAccent = (kind: string) =>
-    kind === 'chat' ? '#4fb0e8' : kind === 'voice' ? '#b085ef' : '#58c46b'
+  const kindAccent = (kind: string) => KIND_ACCENT[kind] ?? ACCENT.azure
 </script>
 
-<div class="pt-5 pb-5">
-  <p class="eyebrow">Your log</p>
-  <h1 class="display text-2xl text-gold-200">History</h1>
-  <p class="text-xs text-ink-400">Everything you have practised, only visible to you.</p>
+<div class="border-b border-ink-700 pt-5 pb-5">
+  <h1 class="display text-3xl text-ink-100">History</h1>
+  <p class="mt-1 text-xs text-ink-400">Everything you have practised, only visible to you.</p>
 </div>
 
 {#if loading}
-  <p class="text-sm text-ink-400">Loading…</p>
+  <p class="flex items-center gap-2 text-sm text-ink-400">
+    <Spinner size={14} label="Loading history" /> Loading…
+  </p>
 {:else if error}
-  <p class="text-sm text-red-300">{error}</p>
+  <p class="text-sm text-ember-300">{error}</p>
 {:else if sessions.length === 0}
   <p class="panel p-4 text-sm text-ink-400">
-    No conversations yet. <a class="text-emerald-400 underline" href={href('/chat')}>Start one →</a>
+    No conversations yet. <a class="text-jade-400 underline" href={href('/chat')}>Start one →</a>
   </p>
 {:else}
   <ul class="space-y-2">

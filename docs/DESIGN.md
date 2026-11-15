@@ -735,9 +735,10 @@ and intervals derived from a **desired retention** (default `0.9`, per-user).
 ## 13.7 The frequency path & n+1 sentences
 
 The flagship path is built **dynamically off a frequency list**, not hand-written
-lessons. `seed/frequency.ts` holds a frequency-ordered Mandarin list tagged with a
-part of speech; the deck is seeded in that order and the curriculum walks it **one
-word per step**, so a step can only ever introduce a single new thing:
+lessons. `seed/frequency.ts` (Mandarin) and `seed/frequency-ja.ts` (Japanese) hold
+frequency-ordered lists tagged with a part of speech; the deck is seeded in that
+order and the curriculum walks it **one word per step**, so a step can only ever
+introduce a single new thing:
 
 ```
 我 → 你 → 是 → 不 → 好 → 很 → …                (frequency order)
@@ -764,8 +765,8 @@ Patterns contribute function words as they are learned (是, 很, 不, 在, 吗,
 and an exercise is only offered once a sentence can actually be built. The learner
 builds the sentence by tapping word tiles in order **or** typing it.
 
-Two flavours of lesson come out of the same builder: themed 8-card chunks for HSK 1
-and JLPT N5, and one-word steps for the frequency path.
+Every course is the frequency path: the same builder emits one-word steps for
+both Mandarin (`zhfreq`) and Japanese (`jafreq`).
 
 **Readings are native scripts only.** Every card stores the phonetic script, never a
 Latin transliteration — the UI shows:
@@ -777,6 +778,39 @@ Latin transliteration — the UI shows:
 
 No pinyin or romaji is stored or shown; the Latin source is used only to derive the
 native reading at seed time. Grading accepts the characters or the native reading.
+The rule is enforced everywhere text is generated too: every LLM call (chat, judge,
+deck generator) is told to write **Traditional characters only** and readings in
+**Zhuyin only** (`MANDARIN_RULE` in `llm/prompts.ts`), and the deck generator is
+required to return Traditional `back` values.
+
+**Teach before you test.** The first time a learner meets a card, the practice route
+serves the `introduce` exercise instead of a drill: it shows the word, its native
+reading and its meaning, plus a short **n+1 example sentence built only from words
+the learner has already met** (the new word plus prior vocabulary — never an unseen
+word), and a **Got it** button. That step
+records the introduction (a review row tagged `introduce`) but carries **no SRS
+state and no XP** — there was nothing to recall yet. The next time the card comes up
+it is a normal graded drill. `pickNextExercise` filters `introduce` out of the
+rotation, so it only ever appears as this first-exposure prelude.
+
+## 13.8 Study preferences (per user)
+
+Decks are shared content; how you *drill* them is personal. `game/study.ts` keeps
+a small bag of per-user knobs in `user_settings` (no migration needed), editable
+in **Settings › Study** and applied everywhere practice is served (the practice
+routes and the combat drill both read them):
+
+- **Readings** — `showZhuyin` (Chinese) and `showFurigana` (Japanese). Turning one
+  off hides native readings from prompts, choice options and feedback, making the
+  card harder. Grading still accepts the reading as a correct answer.
+- **Exercise kinds** — `disabledExercises`, a list of exercise ids the learner
+  turned off (e.g. every `voice` kind, to skip speaking and listening). Disabled
+  kinds are filtered out of the drill rotation and swapped for an allowed one even
+  when a caller forces them. The first-exposure `introduce` step is never a drill
+  and cannot be disabled.
+
+Preferences are per account, so two people on the same server can study the same
+decks with different scripts and exercise sets.
 
 ---
 
@@ -1035,7 +1069,7 @@ stack before any UI work.**
 - `packages/core`: `Card`, `ExerciseDef`, registry; backend generate/grade;
   frontend component map; built-in `translate.*`, `multiple_choice`,
   `type_listen`, `converse`.
-- Seed the first curated decks: **HSK 1** (Mandarin) and **JLPT N5** (Japanese)
+- Seed the first curated decks: the **Mandarin** and **Japanese frequency** lists
   - LLM deck generation.
 - **Acceptance:** run a practice session mixing exercise types; each yields a
   graded result; adding a new exercise needs no core edits (documented).
@@ -1081,7 +1115,7 @@ stack before any UI work.**
 | --- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1   | Product / package name      | **`tutor`** (kept)                                                                                                                                                                 |
 | 2   | Frontend                    | **SvelteKit** — most performant at runtime; shipped as a **mobile-first PWA** for Android                                                                                          |
-| 3   | First languages / levels    | **Mandarin → HSK 1**, **Japanese → JLPT N5**                                                                                                                                       |
+| 3   | First languages / levels    | **Mandarin**, **Japanese** — both frequency-ordered, one word per step (themed HSK 1 / JLPT N5 decks were dropped)                                                                  |
 | 4   | OpenRouter models           | **User-selectable per role in-app** from OpenRouter's catalogue (defaults: Qwen for convo/judge, cheap model for generator/translator); works with any key (DeepSeek, OpenAI, …)   |
 | 5   | Voice strategy              | **User-selectable**: **CustomVoice presets** _or_ **VoiceDesign** personas (per language), switchable in Settings; one TTS checkpoint resident at a time (§9.2). Cloning → Phase 8 |
 | 6   | Idle timeout                | **10 min** (configurable 2–30)                                                                                                                                                     |

@@ -11,6 +11,7 @@ import {
   startEncounter,
   summary,
 } from '../game/service'
+import { readStudyPrefs, showsReadings } from '../game/study'
 import { pickNextExercise, readingMap } from './practice'
 import { seedStarterDecks } from '../seed/service'
 import type { App, Deps } from '../context'
@@ -34,14 +35,17 @@ async function buildDrill(deps: Deps, user: User, deckLevel: string) {
   const card = pickCard(deps.db, user.id, deck?.id)
   if (!card) return null
   const learner = learnerOf(user)
+  const prefs = readStudyPrefs(deps.db, user.id)
+  const disabled = new Set(prefs.disabledExercises)
   const ctx = {
     card,
     learner,
     distractors: otherBacks(deps.db, user.id, card.targetLang, card.back, 3),
     readings: readingMap(deps.db, user.id, card.targetLang),
     known: [...knownWords(deps.db, user.id), card.back],
+    showReadings: showsReadings(prefs, card.targetLang),
   }
-  const def = pickNextExercise(deps.db, user.id, card, learner, ctx)
+  const def = pickNextExercise(deps.db, user.id, card, learner, ctx, { disabled })
   if (!def) return null
   const instance = await def.generate(ctx)
   return { instance, card }
@@ -119,11 +123,14 @@ export function registerCombat(app: App) {
     if (!def) return c.json({ error: 'exercise not found' }, 404)
 
     const learner = learnerOf(user)
+    const prefs = readStudyPrefs(deps.db, user.id)
     const ctx = {
       card,
       learner,
       distractors: otherBacks(deps.db, user.id, card.targetLang, card.back, 3),
+      readings: readingMap(deps.db, user.id, card.targetLang),
       known: [...knownWords(deps.db, user.id), card.back],
+      showReadings: showsReadings(prefs, card.targetLang),
     }
     const instance = await def.generate(ctx)
     const result = await def.grade(ctx, instance, body.answer)

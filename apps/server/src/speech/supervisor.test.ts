@@ -61,6 +61,37 @@ test('ensure() spawns once and stop() kills', async () => {
   globalThis.fetch = orig
 })
 
+test('warm() spawns once and asks the gateway to load its models', async () => {
+  const orig = globalThis.fetch
+  const calls: string[] = []
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    calls.push(`${init?.method ?? 'GET'} ${String(input)}`)
+    return new Response('{"ok":true,"models":["asr","align","tts_preset"]}', { status: 200 })
+  }) as unknown as typeof fetch
+
+  let spawned = 0
+  const sup = new SpeechSupervisor({
+    url: 'http://127.0.0.1:9',
+    port: 9,
+    pythonDir: '.',
+    modelsDir: '.',
+    idleTimeoutMs: 600_000,
+    autostart: false,
+    spawn: () => {
+      spawned++
+      return { pid: 1, exitCode: null as number | null, kill: () => undefined }
+    },
+  })
+
+  await sup.warm()
+  await sup.warm() // idempotent: already running → no respawn
+  expect(spawned).toBe(1)
+  expect(calls.filter((c) => c === 'POST http://127.0.0.1:9/v1/warm').length).toBe(2)
+  expect(sup.activity().activeStreams).toBe(0)
+
+  globalThis.fetch = orig
+})
+
 test('ensure() surfaces a crashed gateway', async () => {
   const orig = globalThis.fetch
   globalThis.fetch = (async () => {

@@ -74,3 +74,23 @@ export function splitSentences(text: string): string[] {
   const parts = text.match(/[^.!?。！？\n]+[.!?。！？]?/g) ?? [text]
   return parts.map((p) => p.trim()).filter(Boolean)
 }
+
+const SENTENCE_END = /[.!?。！？\n]/
+
+/**
+ * Streaming splitter: pulls every complete sentence off the front of the buffer
+ * and returns the trailing fragment to carry into the next delta, so TTS can
+ * start on sentence 1 while the model is still writing sentence 3.
+ */
+export function drainSentences(buffer: string): { sentences: string[]; rest: string } {
+  const sentences: string[] = []
+  let start = 0
+  for (let i = 0; i < buffer.length; i++) {
+    if (SENTENCE_END.test(buffer[i]!)) {
+      const s = buffer.slice(start, i + 1).trim()
+      if (s) sentences.push(s)
+      start = i + 1
+    }
+  }
+  return { sentences, rest: buffer.slice(start) }
+}

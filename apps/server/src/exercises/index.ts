@@ -28,11 +28,16 @@ const label = (lang: string) => LANG_LABEL[lang] ?? lang
 const readingsOf = (ctx: ExerciseContext): string[] =>
   Object.values(ctx.card.readings).filter(Boolean)
 
+/** Whether native readings should be shown (the learner can turn them off). */
+const readingsShown = (ctx: ExerciseContext): boolean => ctx.showReadings !== false
+
 /**
  * The reading a learner should see: Zhuyin for Chinese, kana (furigana) for
  * Japanese. Never Latin transliteration — a legacy pinyin value is converted.
+ * Empty when the learner has hidden readings in their study preferences.
  */
 const displayReading = (ctx: ExerciseContext): string => {
+  if (!readingsShown(ctx)) return ''
   const r = ctx.card.readings
   if (ctx.card.targetLang === 'ja') return r.kana || ''
   if (ctx.card.targetLang === 'zh') return r.zhuyin || (r.pinyin ? pinyinToZhuyin(r.pinyin) : '')
@@ -48,7 +53,9 @@ const wordView = (ctx: ExerciseContext) => ({
   word: ctx.card.back,
   reading: displayReading(ctx),
   readingLang: ctx.card.targetLang,
-  furigana: furiganaFor(ctx.card.targetLang, ctx.card.back, displayReading(ctx)),
+  furigana: readingsShown(ctx)
+    ? furiganaFor(ctx.card.targetLang, ctx.card.back, displayReading(ctx))
+    : undefined,
 })
 
 function shuffle<T>(items: T[]): T[] {
@@ -150,10 +157,10 @@ const multipleChoice: ExerciseDef<string> = {
       prompt: `Which one means “${ctx.card.front}”?`,
       data: {
         choices,
-        choiceReadings: choices.map((c) => ctx.readings?.[c] ?? ''),
-        choiceFurigana: choices.map((c) =>
-          furiganaFor(ctx.card.targetLang, c, ctx.readings?.[c] ?? ''),
-        ),
+        choiceReadings: readingsShown(ctx) ? choices.map((c) => ctx.readings?.[c] ?? '') : [],
+        choiceFurigana: readingsShown(ctx)
+          ? choices.map((c) => furiganaFor(ctx.card.targetLang, c, ctx.readings?.[c] ?? ''))
+          : [],
         reading: displayReading(ctx),
         readingLang: ctx.card.targetLang,
       },
@@ -296,7 +303,7 @@ const speakWord: ExerciseDef<string> = {
 The learner said (ASR): “${a.transcript}”.
 Missing tokens: ${f.missing.join('、') || 'none'}. Character error rate: ${f.cer.toFixed(2)}.
 Word timings: ${timings}. Long pauses: ${f.pauses.map((p) => `${p.after}+${p.seconds}s`).join(', ') || 'none'}.
-Length ${f.duration.toFixed(2)}s. Be encouraging; flag the specific tokens that need work.`,
+Length ${f.duration.toFixed(2)}s. Write the summary and each word tip in the learner's native language (${label(ctx.learner.nativeLang)}); only the target tokens stay in ${label(ctx.card.targetLang)}. Be encouraging; flag the specific tokens that need work.`,
         PRON_SCHEMA,
       )) as
         | {
@@ -451,7 +458,7 @@ const sentenceBuild: ExerciseDef<unknown> = {
       const e = LEXICON.get(t)
       return e ? pinyinToZhuyin(e.pinyin) : ''
     }
-    const tokenReadings = data.tokens.map(zhuyinOf)
+    const tokenReadings = readingsShown(ctx) ? data.tokens.map(zhuyinOf) : []
     return {
       exerciseId: this.id,
       cardId: ctx.card.id,
@@ -459,10 +466,11 @@ const sentenceBuild: ExerciseDef<unknown> = {
       prompt: `Build the sentence: “${data.gloss}”`,
       data: {
         tokens: data.tokens,
-        tokenReadings,
         bank: data.bank,
-        bankReadings: data.bank.map(zhuyinOf),
         gloss: data.gloss,
+        // No per-token readings here: hearing the sentence before building it
+        // would hand over the answer. `reading` is only for the feedback shown
+        // after the learner answers.
         reading: build ? tokenReadings.join(' ') : displayReading(ctx),
         target: data.target,
         newWord: entry?.word ?? ctx.card.back,
@@ -490,11 +498,72 @@ const sentenceBuild: ExerciseDef<unknown> = {
   xp: (r) => (r.correct ? 12 + (r.score === 100 ? 3 : 0) : 1),
 }
 
+// --- introduce: first exposure teaches, never quizzes (DESIGN §13.7) ----------
+
+/** Registry id of the first-exposure "teach" step. */
+export const INTRODUCE_ID = 'introduce'
+
+/** A short n+1 example sentence for the new word, using only words already met. */
+function exampleFor(
+  ctx: ExerciseContext,
+): { text: string; reading: string; gloss: string; target: string } | undefined {
+  if (ctx.card.targetLang !== 'zh') return undefined
+  const entry = LEXICON.get(ctx.card.back)
+  if (!entry || !SENTENCE_POS.has(entry.pos)) return undefined
+  // n+1: every other token must be a word the learner has already met.
+  const known = new Set([...(ctx.seen ?? ctx.known ?? []), ctx.card.back])
+  if (!canBuildSentence(entry, known)) return undefined
+  const build = buildSentence(entry, known, seededRandom(hashSeed(ctx.card.id)))
+  if (!build) return undefined
+  const zhuyinOf = (t: string) => {
+    const e = LEXICON.get(t)
+    return e ? pinyinToZhuyin(e.pinyin) : ''
+  }
+  return {
+    text: build.tokens.join(''),
+    reading: readingsShown(ctx) ? build.tokens.map(zhuyinOf).filter(Boolean).join(' ') : '',
+    gloss: build.gloss,
+    target: build.target,
+  }
+}
+
+/**
+ * The first time a learner meets a card, this presents it — the word, its native
+ * reading and its meaning, with an example — instead of quizzing something they
+ * have not been shown. It is never part of the drill rotation (`pickNextExercise`
+ * filters it out); the practice route forces it for a new, unintroduced card.
+ */
+const introduce: ExerciseDef<string> = {
+  id: INTRODUCE_ID,
+  title: 'Meet a new word',
+  modality: 'text',
+  supports: () => true,
+  async generate(ctx) {
+    return {
+      exerciseId: this.id,
+      cardId: ctx.card.id,
+      modality: 'text',
+      prompt: `A new word: “${ctx.card.front}”`,
+      data: {
+        ...wordView(ctx),
+        meaning: ctx.card.front,
+        example: exampleFor(ctx),
+      },
+    }
+  },
+  async grade(ctx) {
+    // Nothing to recall yet — the teach step always "passes" and never schedules.
+    return { score: 100, correct: true, expected: ctx.card.back }
+  },
+  xp: () => 0,
+}
+
 /**
  * The registry. To add an exercise: create the def, `register` it here, and add a
  * matching Svelte component keyed by the same `id` — no core changes (DESIGN §11.2).
  */
 export const registry = new ExerciseRegistry()
+  .register(introduce)
   .register(translateFrontToBack)
   .register(translateBackToFront)
   .register(multipleChoice)

@@ -2,6 +2,8 @@
   import type { Instance } from '#lib/exercises'
   import { speak } from '#lib/speech'
   import { voiceFor } from '#lib/voices'
+  import Icon from '../Icon.svelte'
+  import Spinner from '../Spinner.svelte'
 
   let {
     instance,
@@ -40,23 +42,22 @@
     type="button"
     onclick={play}
     disabled={playing}
-    class="w-full rounded-xl border border-ink-600 bg-ink-900 py-4 text-lg disabled:opacity-50"
+    class="btn btn-ghost w-full gap-1.5 py-4 text-lg disabled:opacity-50"
   >
-    {playing ? '🔊 playing…' : '🔊 Play again'}
+    {#if playing}<Spinner size={17} label="Playing audio" /> playing…{:else}<Icon
+        name="sound"
+        size={17}
+      /> Play again{/if}
   </button>
-  {#if err}<p class="text-xs text-red-300">{err}</p>{/if}
+  {#if err}<p class="text-xs text-ember-300">{err}</p>{/if}
   <input
     bind:value={answer}
     autocomplete="off"
     autocapitalize="off"
-    class="w-full rounded-xl border border-ink-600 bg-ink-900 px-4 py-4 text-lg outline-none focus:border-gold-500"
+    class="w-full rounded-md border border-ink-600 bg-ink-900 px-4 py-4 text-lg outline-none focus:border-seal-400"
     placeholder="Type what you hear…"
   />
-  <button
-    type="submit"
-    disabled={busy || !answer.trim()}
-    class="w-full rounded-xl bg-emerald-500 py-3 font-medium text-black disabled:opacity-40"
-  >
-    Check
+  <button type="submit" disabled={busy || !answer.trim()} class="btn btn-primary w-full py-3">
+    {#if busy}<Spinner size={15} label="Checking your answer" /> Checking…{:else}Check{/if}
   </button>
 </form>

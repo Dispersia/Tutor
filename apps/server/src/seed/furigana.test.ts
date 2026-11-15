@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { STARTER_DECKS } from './decks'
+import { FREQUENCY_JA } from './frequency-ja'
 import { furiganaSegments } from './furigana'
 
 const render = (word: string, reading: string) =>
@@ -20,11 +20,10 @@ test('kana-only words have no ruby', () => {
   expect(furiganaSegments('あなた', 'あなた')).toEqual([{ base: 'あなた' }])
 })
 
-test('every N5 card produces furigana that covers the word', () => {
-  const n5 = STARTER_DECKS.find((d) => d.targetLang === 'ja')!
-  for (const card of n5.cards) {
-    const segments = furiganaSegments(card.back, card.kana ?? '')
+test('every Japanese frequency word produces furigana that covers the word', () => {
+  for (const w of FREQUENCY_JA) {
+    const segments = furiganaSegments(w.word, w.kana)
     const joined = segments.map((s) => s.base).join('')
-    expect(joined).toBe(card.back)
+    expect(joined).toBe(w.word)
   }
 })

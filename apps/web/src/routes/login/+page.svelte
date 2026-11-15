@@ -29,7 +29,7 @@
 
 <div class="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-6 pt-safe pb-safe">
   <div class="mb-7 text-center">
-    <div class="display text-4xl text-gold-200">tutor</div>
+    <div class="display text-4xl text-ink-100">tutor</div>
     <p class="mt-1 text-sm text-ink-400">
       {mode === 'login' ? 'Sign in to continue.' : 'Create your account.'}
     </p>
@@ -43,7 +43,7 @@
         autocomplete="username"
         autocapitalize="none"
         required
-        class="w-full rounded-xl border border-ink-600 bg-ink-900 px-3 py-3 outline-none focus:border-gold-500"
+        class="w-full rounded-md border border-ink-600 bg-ink-900 px-3 py-3 outline-none focus:border-seal-400"
       />
     </label>
     <label class="block">
@@ -53,7 +53,7 @@
         bind:value={password}
         autocomplete={mode === 'login' ? 'current-password' : 'new-password'}
         required
-        class="w-full rounded-xl border border-ink-600 bg-ink-900 px-3 py-3 outline-none focus:border-gold-500"
+        class="w-full rounded-md border border-ink-600 bg-ink-900 px-3 py-3 outline-none focus:border-seal-400"
       />
     </label>
 
@@ -63,7 +63,7 @@
           <span class="eyebrow mb-1 block">Learning</span>
           <select
             bind:value={targetLang}
-            class="w-full rounded-xl border border-ink-600 bg-ink-900 px-3 py-3"
+            class="w-full rounded-md border border-ink-600 bg-ink-900 px-3 py-3"
           >
             <option value="zh">Mandarin</option>
             <option value="ja">Japanese</option>
@@ -75,7 +75,7 @@
           <span class="eyebrow mb-1 block">Level</span>
           <select
             bind:value={level}
-            class="w-full rounded-xl border border-ink-600 bg-ink-900 px-3 py-3"
+            class="w-full rounded-md border border-ink-600 bg-ink-900 px-3 py-3"
           >
             <option value="hsk1">HSK 1</option>
             <option value="n5">JLPT N5</option>
@@ -86,10 +86,10 @@
     {/if}
 
     {#if error}
-      <p class="rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300">{error}</p>
+      <p class="rounded-lg bg-ember-950 px-3 py-2 text-sm text-ember-300">{error}</p>
     {/if}
 
-    <button type="submit" disabled={busy} class="btn btn-gold w-full py-3">
+    <button type="submit" disabled={busy} class="btn btn-primary w-full py-3">
       {busy ? '…' : mode === 'login' ? 'Sign in' : 'Create account'}
     </button>
   </form>

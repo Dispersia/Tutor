@@ -4,6 +4,8 @@
   import { speak, transcribe } from '#lib/speech'
   import { voiceFor } from '#lib/voices'
   import Word from '../Word.svelte'
+  import Icon from '../Icon.svelte'
+  import Spinner from '../Spinner.svelte'
 
   let {
     instance,
@@ -61,30 +63,34 @@
 
 <div class="space-y-4">
   <p class="text-lg leading-snug">{instance.prompt}</p>
-  <div class="panel p-4 text-center">
-    <Word word={target} {reading} {lang} {furigana} />
+  <div class="flex justify-center py-2">
+    <span class="cell min-h-[7rem] min-w-[7rem] px-7 py-5"
+      ><Word word={target} {reading} {lang} {furigana} /></span
+    >
   </div>
 
   <div class="flex gap-2">
     <button
       type="button"
       onclick={() => speak(target, { voice: voiceFor(language), language })}
-      class="flex-1 rounded-xl border border-ink-600 py-3 text-sm">🔊 Hear it</button
+      class="btn btn-ghost flex-1 gap-1.5 py-3"><Icon name="sound" size={15} /> Hear it</button
     >
     {#if canMic}
       <button
         type="button"
         onclick={record}
         disabled={busy || working}
-        class="flex-1 rounded-xl py-3 text-sm {recording
+        class="btn flex-1 gap-1.5 py-3 {recording
           ? 'recording bg-red-600 text-white'
-          : 'bg-emerald-500 text-black'} disabled:opacity-50"
+          : 'btn-primary'}"
       >
-        {working ? '…' : recording ? '● Stop & check' : '🎤 Say it'}
+        {#if working}<Spinner size={15} label="Transcribing your voice" cls="my-0.5" /> Transcribing…
+        {:else if busy}<Spinner size={15} label="Checking your answer" cls="my-0.5" /> Checking…
+        {:else if recording}■ Stop &amp; check{:else}<Icon name="mic" size={15} /> Say it{/if}
       </button>
     {/if}
   </div>
-  {#if err}<p class="text-xs text-red-300">{err}</p>{/if}
+  {#if err}<p class="text-xs text-ember-300">{err}</p>{/if}
   {#if !canMic}
     <form
       onsubmit={(e) => {
@@ -96,9 +102,11 @@
     >
       <input
         placeholder="No mic here — type it instead"
-        class="flex-1 rounded-xl border border-ink-600 bg-ink-900 px-3 py-2 text-sm"
+        class="flex-1 rounded-md border border-ink-600 bg-ink-900 px-3 py-2 text-sm"
       />
-      <button class="rounded-xl bg-emerald-500 px-3 py-2 text-sm text-black">Check</button>
+      <button class="btn btn-primary px-3 py-2 text-sm" disabled={busy}>
+        {#if busy}<Spinner size={14} label="Checking your answer" /> Checking…{:else}Check{/if}
+      </button>
     </form>
   {/if}
 </div>

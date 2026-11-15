@@ -5,6 +5,7 @@
   import { getSkills, type SkillsResponse } from '#lib/skills'
   import { session } from '#lib/session.svelte'
   import { ACCENT, accentStyle } from '#lib/theme'
+  import Spinner from '#lib/components/Spinner.svelte'
 
   let decks = $state<CurriculumDeck[]>([])
   let stats = $state<SrsStats | null>(null)
@@ -70,10 +71,10 @@
     return href(`/practice?${query.toString()}`)
   }
 
-  const rank = (level: string) => (level === 'zhfreq' ? 0 : level === 'hsk1' ? 1 : 2)
+  const rank = (level: string) => (level === 'zhfreq' ? 0 : level === 'jafreq' ? 1 : 2)
 
   const deckAccent = (level: string) =>
-    level === 'zhfreq' ? ACCENT.green : level === 'n5' ? ACCENT.level : ACCENT.arcane
+    level === 'zhfreq' ? ACCENT.green : level === 'jafreq' ? ACCENT.level : ACCENT.arcane
 
   /** The next step of the path: the first lesson not yet finished. */
   const nextLesson = (d: CurriculumDeck) =>
@@ -82,15 +83,14 @@
   const done = (d: CurriculumDeck) => d.cardCount > 0 && d.learned >= d.cardCount
 </script>
 
-<div class="flex items-center justify-between pt-5 pb-4">
+<div class="flex items-center justify-between border-b border-ink-700 pt-5 pb-4">
   <div>
-    <p class="eyebrow">Your path</p>
-    <h1 class="display text-2xl text-gold-200">Learn</h1>
-    <p class="text-xs text-ink-400">One new word at a time — tap next and go.</p>
+    <h1 class="display text-3xl text-ink-100">Learn</h1>
+    <p class="mt-1 text-xs text-ink-400">One new word at a time — tap next and go.</p>
   </div>
   {#if stats}
     <div class="text-right">
-      <div class="display text-2xl {stats.due > 0 ? 'text-amber-300' : 'text-gold-200'}">
+      <div class="display text-2xl {stats.due > 0 ? 'text-brass-300' : 'text-ink-100'}">
         {stats.due}
       </div>
       <div class="eyebrow">due · {stats.learned}/{stats.total} learned</div>
@@ -99,11 +99,13 @@
 </div>
 
 {#if error}
-  <p class="mb-3 rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300">{error}</p>
+  <p class="mb-3 rounded-md bg-ember-950 px-3 py-2 text-sm text-ember-300">{error}</p>
 {/if}
 
 {#if loading}
-  <p class="text-sm text-ink-400">Loading…</p>
+  <p class="flex items-center gap-2 text-sm text-ink-400">
+    <Spinner size={14} label="Loading your path" /> Loading…
+  </p>
 {:else if decks.length === 0}
   <p class="text-sm text-ink-400">No courses yet.</p>
 {:else}
@@ -126,7 +128,7 @@
       <select
         value={actionId}
         onchange={chooseProfession}
-        class="mt-2 w-full rounded-xl border border-ink-700 bg-ink-900 px-3 py-2 text-sm"
+        class="mt-2 w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm"
       >
         <option value="">Choose a profession…</option>
         {#each groups as group (group.skill.id)}
@@ -140,7 +142,7 @@
       {#if selected}
         <p class="mt-2 text-xs text-ink-400">{selected.action.description}</p>
       {:else}
-        <p class="mt-2 text-xs text-amber-300">
+        <p class="mt-2 text-xs text-brass-300">
           Pick a profession first — lessons train that profession.
         </p>
       {/if}
@@ -162,17 +164,14 @@
 
       {#if next}
         {#if actionId}
-          <a
-            href={practiceHref({ lesson: next.id })}
-            class="btn btn-primary mt-3 w-full py-3"
-          >
+          <a href={practiceHref({ lesson: next.id })} class="btn btn-primary mt-3 w-full py-3">
             {d.learned > 0 ? 'Next' : 'Start'} · {next.newWord ?? next.title}
             {#if next.reading && next.reading !== next.newWord}
               <span class="ml-1 text-xs opacity-75">{next.reading}</span>
             {/if}
           </a>
         {:else}
-          <button disabled class="btn btn-primary mt-3 w-full py-3 opacity-60">
+          <button disabled class="btn btn-ghost mt-3 w-full py-3">
             Select a profession to start
           </button>
         {/if}
@@ -187,23 +186,23 @@
           </p>
         {/if}
       {:else}
-        <p class="mt-3 text-center text-sm text-ink-400">🎉 Course complete</p>
+        <p class="mt-3 text-center text-sm text-ink-400">Course complete</p>
       {/if}
 
       {#if d.due > 0}
         {#if actionId}
-          <a href={practiceHref({ deck: d.deckId })} class="btn btn-gold mt-2 w-full">
+          <a href={practiceHref({ deck: d.deckId })} class="btn btn-ghost mt-2 w-full">
             Review {d.due} due
           </a>
         {:else}
-          <button disabled class="btn btn-gold mt-2 w-full opacity-60">
+          <button disabled class="btn btn-ghost mt-2 w-full">
             Select a profession to review
           </button>
         {/if}
       {/if}
 
       {#if done(d)}
-        <p class="mt-2 text-center text-[11px] text-emerald-400">All words learned ✓</p>
+        <p class="mt-2 text-center text-[11px] text-jade-400">All words learned ✓</p>
       {/if}
     </section>
   {/each}

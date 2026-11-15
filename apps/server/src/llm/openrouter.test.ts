@@ -31,7 +31,8 @@ function streamResponse(sse: string): Response {
 test('streamChat yields deltas, usage then done; listModels maps + caches', async () => {
   const orig = globalThis.fetch
   let modelCalls = 0
-  const fetchMock = (async (url: string | URL) => {
+  const bodies: Record<string, unknown>[] = []
+  const fetchMock = (async (url: string | URL, init?: RequestInit) => {
     const u = String(url)
     if (u.includes('/models')) {
       modelCalls++
@@ -47,6 +48,7 @@ test('streamChat yields deltas, usage then done; listModels maps + caches', asyn
         ],
       })
     }
+    if (init?.body) bodies.push(JSON.parse(String(init.body)))
     return streamResponse(
       'data: {"choices":[{"delta":{"content":"你"}}]}\n\n' +
         'data: {"choices":[{"delta":{"content":"好"}}]}\n\n' +
@@ -82,16 +84,22 @@ test('streamChat yields deltas, usage then done; listModels maps + caches', asyn
   expect(events.at(-1)).toEqual({ type: 'done' })
   expect(usage.totalTokens).toBe(7)
 
+  // Thinking models must not spend hidden reasoning unless asked to.
+  expect(bodies[0]!.reasoning).toEqual({ effort: 'none' })
+
   globalThis.fetch = orig
 })
 
-test('chatJSON parses structured output', async () => {
+test('chatJSON requests no hidden reasoning by default and honours an override', async () => {
   const orig = globalThis.fetch
-  globalThis.fetch = (async () =>
-    Response.json({
+  const bodies: Record<string, unknown>[] = []
+  globalThis.fetch = (async (_url: string | URL, init?: RequestInit) => {
+    if (init?.body) bodies.push(JSON.parse(String(init.body)))
+    return Response.json({
       choices: [{ message: { content: '{"score":88}' } }],
       usage: { prompt_tokens: 3, completion_tokens: 1, total_tokens: 4 },
-    })) as unknown as typeof fetch
+    })
+  }) as unknown as typeof fetch
 
   const or = new OpenRouter('k', 'http://stub')
   const { json } = await or.chatJSON<{ score: number }>({
@@ -100,6 +108,15 @@ test('chatJSON parses structured output', async () => {
     schema: { type: 'object', properties: { score: { type: 'number' } } },
   })
   expect(json.score).toBe(88)
+  expect(bodies[0]!.reasoning).toEqual({ effort: 'none' })
+
+  await or.chatJSON<{ score: number }>({
+    model: 'm',
+    messages: [{ role: 'user', content: 'grade' }],
+    schema: { type: 'object', properties: { score: { type: 'number' } } },
+    reasoning: 'low',
+  })
+  expect(bodies[1]!.reasoning).toEqual({ effort: 'low' })
 
   globalThis.fetch = orig
 })

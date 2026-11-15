@@ -1,5 +1,7 @@
 import { addCard, createDeck, getDeck, getRoles, listCards, listDecks } from '../db/repo'
+import { roleReasoning } from '../env'
 import { OpenRouter } from '../llm/openrouter'
+import { MANDARIN_RULE } from '../llm/prompts'
 import { resolveUserKey } from '../llm/userkey'
 import { readingsFor, seedStarterDecks } from '../seed/service'
 import type { App } from '../context'
@@ -39,7 +41,7 @@ export function registerDecks(app: App) {
   app.get('/api/decks', (c) => {
     const deps = c.get('deps')
     const user = c.get('user')!
-    seedStarterDecks(deps.db, user.id) // every user gets HSK 1 + JLPT N5
+    seedStarterDecks(deps.db, user.id) // every user gets the frequency decks
     return c.json({ decks: listDecks(deps.db, user.id) })
   })
 
@@ -75,20 +77,20 @@ export function registerDecks(app: App) {
           cards: { front: string; back: string; reading: string; kana?: string }[]
         }>({
           model: getRoles(deps.db, user.id, deps.defaults).generator,
+          reasoning: roleReasoning.generator,
           schemaName: 'deck',
           schema: DECK_SCHEMA,
           messages: [
             {
               role: 'system',
-              content:
-                'You generate vocabulary decks for a language learner. Be accurate and level-appropriate.',
+              content: `You generate vocabulary decks for a language learner. Be accurate and level-appropriate.\n${MANDARIN_RULE}`,
             },
             {
               role: 'user',
               content: `Create ${count} ${LANG_LABEL[targetLang] ?? targetLang} vocabulary cards (level ${body.level ?? 'beginner'}) about "${body.topic}". "front" is English, "back" is the ${LANG_LABEL[targetLang] ?? targetLang} text. ${
                 targetLang === 'ja'
                   ? '"reading" is romaji and "kana" is the hiragana reading (furigana).'
-                  : '"reading" is pinyin with tone marks.'
+                  : '"back" must be in Traditional characters (繁體字), never Simplified. "reading" is pinyin with tone marks — it is used only to derive Zhuyin and is never shown to the learner.'
               }`,
             },
           ],

@@ -374,6 +374,36 @@ export function addCard(db: Db, userId: string, c: NewCard) {
   return row
 }
 
+/**
+ * Updates a card's content in place. Keeps the same id, so review history and
+ * SRS scheduling survive a curated-data fix (e.g. Simplified -> Traditional).
+ */
+export function updateCard(
+  db: Db,
+  cardId: string,
+  userId: string,
+  patch: { front?: string; back?: string; readings?: Record<string, string> },
+): void {
+  const row = db.select().from(cards).where(eq(cards.id, cardId)).get()
+  if (!row || row.userId !== userId) return
+  const set: Partial<typeof cards.$inferInsert> = {}
+  if (patch.front !== undefined) set.front = patch.front
+  if (patch.back !== undefined) set.back = patch.back
+  if (patch.readings !== undefined) set.readingsJson = JSON.stringify(patch.readings)
+  if (Object.keys(set).length > 0) db.update(cards).set(set).where(eq(cards.id, cardId)).run()
+}
+
+/**
+ * Deletes a deck and its cards. Review / SRS rows are keyed by card id and are
+ * left behind (harmless), so this never touches another user's history.
+ */
+export function deleteDeck(db: Db, deckId: string, userId: string): void {
+  const row = db.select().from(decks).where(eq(decks.id, deckId)).get()
+  if (!row || row.userId !== userId) return
+  db.delete(cards).where(eq(cards.deckId, deckId)).run()
+  db.delete(decks).where(eq(decks.id, deckId)).run()
+}
+
 function toCard(row: typeof cards.$inferSelect): Card {
   const parse = <T>(json: string, fallback: T): T => {
     try {
@@ -707,6 +737,20 @@ export function lastExerciseUse(db: Db, userId: string): Map<string, number> {
   return new Map(
     rows.filter((r) => r.exerciseId).map((r) => [r.exerciseId as string, Number(r.last)]),
   )
+}
+
+/**
+ * Card ids the learner has already been introduced to (the first-exposure teach
+ * step). Recorded as a review row with exerciseId `introduce`; it is not a recall
+ * test, so it carries no SRS state.
+ */
+export function introducedCardIds(db: Db, userId: string): Set<string> {
+  const rows = db
+    .select({ cardId: reviews.cardId })
+    .from(reviews)
+    .where(and(eq(reviews.userId, userId), eq(reviews.exerciseId, 'introduce')))
+    .all()
+  return new Set(rows.map((r) => r.cardId).filter((c): c is string => Boolean(c)))
 }
 
 // --- combat encounters (Phase 8) ---------------------------------------------
