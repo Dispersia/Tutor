@@ -9,6 +9,7 @@ import {
 import type { Role } from '../env'
 import type { Db } from './client'
 import {
+  actionProgress,
   attempts,
   authSessions,
   cards,
@@ -21,7 +22,6 @@ import {
   reviews,
   sessions,
   settings,
-  skillProgress,
   srs,
   stats,
   talents,
@@ -688,32 +688,32 @@ export function setDailyGoal(db: Db, userId: string, goal: number): void {
   upsertStats(db, userId, { dailyGoal: Math.max(10, Math.min(1000, Math.round(goal))) })
 }
 
-// --- skills + materials bank (Phase 8) ---------------------------------------
+// --- action levels + materials bank (Phase 8) --------------------------------
 
-export function getSkillXp(db: Db, userId: string, skillId: string): number {
+export function getActionXp(db: Db, userId: string, actionId: string): number {
   const row = db
     .select()
-    .from(skillProgress)
-    .where(and(eq(skillProgress.userId, userId), eq(skillProgress.skillId, skillId)))
+    .from(actionProgress)
+    .where(and(eq(actionProgress.userId, userId), eq(actionProgress.actionId, actionId)))
     .get()
   return row?.xp ?? 0
 }
 
-export function listSkillProgress(db: Db, userId: string) {
-  return db.select().from(skillProgress).where(eq(skillProgress.userId, userId)).all()
+export function listActionProgress(db: Db, userId: string) {
+  return db.select().from(actionProgress).where(eq(actionProgress.userId, userId)).all()
 }
 
-export function setSkillXp(
+export function setActionXp(
   db: Db,
   userId: string,
-  skillId: string,
+  actionId: string,
   xp: number,
   level: number,
 ): void {
-  db.insert(skillProgress)
-    .values({ userId, skillId, xp, level, updatedAt: now() })
+  db.insert(actionProgress)
+    .values({ userId, actionId, xp, level, updatedAt: now() })
     .onConflictDoUpdate({
-      target: [skillProgress.userId, skillProgress.skillId],
+      target: [actionProgress.userId, actionProgress.actionId],
       set: { xp, level, updatedAt: now() },
     })
     .run()

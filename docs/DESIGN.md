@@ -659,13 +659,14 @@ conversation turn +5, perfect streak bonus +25.
 
 The game is a **RuneScape/WoW-style profession system** layered on top of the
 language drills. It is *not* an idle game: you pick a profession action, the app
-gives you "the next drill", and a correct answer awards that profession's XP and
+gives you "the next drill", and a correct answer awards that action's XP and
 materials.
 
-**Actions are exercise-agnostic.** A profession action defines its tier, XP,
-materials and unlock/equipment requirements — but not the exercise type. The
-trainer picks the eligible drill you have practised *least recently*
+**Actions are exercise-agnostic.** A profession action defines its tier, its own
+XP pool, materials and unlock/equipment requirements — but not the exercise type.
+The trainer picks the eligible drill you have practised *least recently*
 (`pickNextExercise`), so you always get variety instead of the same question type.
+The action — `Mine copper` — is also the unit that **levels up**; see below.
 
 **22 professions** in four groups:
 
@@ -691,19 +692,48 @@ Thieving ──gems──► Crafting ──vials──► Herblore ; ──leat
 Slayer ──bones──► Prayer ; combat drops ──hides/bones/gems──► Crafting/Prayer
 ```
 
-**Every level increases something meaningful** — a per-profession passive:
-gathering +1% yield/level, artisans +0.5% bonus-product chance/level, Agility
-+0.5% **XP to every profession**/level, combat +1% power/level, Slayer +1% rare
-drops/level, Thieving +2% coins/level. Talents stack on top.
+**The level lives on the action, not the profession.** Every action has its own
+XP pool and its own level, and its own passive that grows with *that* action:
+gathering +1% **of the action's own output**/level (`Mine copper` gives more
+copper, `Mine essence` more essence — not more of everything), artisans +0.5%
+bonus-product chance/level, Agility +0.5% **XP to every profession**/level, combat
++1% power/level, Slayer +1% rare drops/level, Thieving +2% coins/level.
 
-**Talents:**
+**The curve is gentle by design.** One action level costs `10 + (level − 1)` XP,
+so maxing a single action is ≈5.8k XP and a 4-action profession ≈23k. Level 100 is
+a long goal, not an impossible one.
+
+**The profession level is derived — the mean of its actions, out of 100.** A
+profession has no XP of its own, and every action is capped at level 100, so a
+profession's level is `round(mean(action levels))`:
+
+```
+Mining  Lv 2          ← "overall skill", always out of 100
+├─ Mine copper   Lv 4   → +4% copper per action level
+├─ Mine essence  Lv 2   → +2% essence
+├─ Mine iron     Lv 1
+└─ Mine coal     Lv 1
+```
+
+Everything that used to read a profession level now reads this mean: unlock
+requirements (`Needs Mining 5`), the combat power formula, and the talent
+milestones. A fresh profession is level 1 **however many actions it has**.
+
+**Adding content lowers the level, by design.** Because the profession is a mean,
+shipping a new action (mythril ore, a new fish) adds a fresh level-1 component to
+the denominator: a maxed 4-action Mining drops from 100 to 80 until the new action
+is trained. Levels stay comparable as the game grows — `100` always means
+"everything in this profession is maxed", and the skills board's total is the
+mean of the professions so it also reads out of 100.
+
+**Talents** are still per profession, taken at milestones of the derived level:
 - **Every 10 levels** (10, 20, 30, …) → choose **one of two** talents:
-  *Prospector* (+15% yield; combat professions instead get *Keen strikes*, +15%
-  power) or *Studious* (+5% XP to every profession). A choice can be changed
-  later at the same milestone (a free respec).
+  *Prospector* (+15% yield on every action of the profession; combat professions
+  instead get *Keen strikes*, +15% power) or *Studious* (+5% XP to every
+  profession). A choice can be changed later at the same milestone (a free respec).
 
 Talent ids encode skill + milestone, so progression continues indefinitely.
-All effects aggregate through `computeBonuses(levels, talents)`.
+All effects aggregate through `computeBonuses(actionLevels, talents)`.
 
 **Equipment & combat:** Smithing forges weapons/armour, Fletching makes bows and
 arrows, Crafting makes leather armour. Combat actions declare `equip: {slot, tag}`
@@ -713,12 +743,13 @@ runes). `actionState()` reports `locked / affordable / equipOk` for every action
 **Fights (active, language-driven):** 6 monsters with HP, damage and drop tables.
 Starting a fight requires the monster's skill levels and (sometimes) gear. Each
 drill you answer **correctly lands a hit** for
-`playerPower = (3 + skillLevel*1.5 + weaponPower) * (1 + damageBonus)`; a **miss**
-lets the monster hit you for `monster.damage − armour` (min 1). Your HP is
+`playerPower = (3 + skillLevel*1.5 + weaponPower) * (1 + damageBonus)` (`skillLevel`
+is the profession's **derived** level); a **miss** lets the monster hit you for
+`monster.damage − armour` (min 1). Your HP is
 `20 + constitution*4 + hpBonus*20 + armour*2`. **Win** → drops (with the Slayer
-bonus) + combat XP + overall XP; **lose** → the fight ends with nothing. One
-active encounter per player (`encounters` table). Events: `combat.hit`,
-`combat.ended`.
+bonus) + combat XP (credited to the profession's combat action) + overall XP;
+**lose** → the fight ends with nothing. One active encounter per player
+(`encounters` table). Events: `combat.hit`, `combat.ended`.
 
 **Auto-consumables:** food (`cooked_shrimp`/`trout`/`lobster` heal 4/8/14) and
 potions (`attack_potion` +25% power, `restore_potion` +25% max HP). A potion is
@@ -1153,7 +1184,9 @@ stack before any UI work.**
 
 ### Phase 8 — post-MVP
 
-- **Done:** professions (22), per-level effects, talents (minor every 5 / major
+- **Done:** professions (22) with **per-action levels** (each action capped at 100;
+  the profession level is the mean of its actions, so it reads out of 100 and new
+  content lowers it), talents (minor every 5 / major
   every 10), materials + crafting chains, equipment & gear-gated combat actions,
   deeper combat (monsters, HP, damage rolls, drops), **FSRS-6 spaced repetition**
   (Anki 25.07-style scheduler with the V6 default weights, learning/relearning

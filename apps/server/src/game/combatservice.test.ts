@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { openDb } from '../db/client'
-import { addItems, createUser, getEncounter, getItemCount, getSkillXp } from '../db/repo'
+import { addItems, createUser, getActionXp, getEncounter, getItemCount } from '../db/repo'
 import { EventBus } from '../events'
 import { MONSTER_BY_ID } from './combat'
 import {
@@ -56,7 +56,7 @@ test('a fight: hits damage the monster, a kill grants drops + XP', () => {
   expect(kill.monsterHp).toBe(0)
   expect(kill.drops).toEqual([{ item: 'bones', count: 1 }])
   expect(getItemCount(db, user.id, 'bones')).toBeGreaterThanOrEqual(1)
-  expect(getSkillXp(db, user.id, 'attack')).toBeGreaterThan(0)
+  expect(getActionXp(db, user.id, 'train-attack')).toBeGreaterThan(0)
   expect(getEncounter(db, user.id)).toBeUndefined()
   sqlite.close()
 })

@@ -14,7 +14,12 @@
   const pct = (v: number) => `${Math.round(v * 100)}%`
   const itemMap = $derived(new Map((data?.items ?? []).map((i) => [i.id, i])))
   const bank = $derived((data?.inventory ?? []).filter((i) => i.count > 0))
-  const totalLevel = $derived((data?.skills ?? []).reduce((n, s) => n + s.level, 0))
+  // the average profession level, so it also reads out of 100
+  const totalLevel = $derived.by(() => {
+    const skills = data?.skills ?? []
+    if (!skills.length) return 1
+    return Math.round(skills.reduce((n, s) => n + s.level, 0) / skills.length)
+  })
   const pendingTalents = $derived((data?.skills ?? []).filter((s) => s.talent.pendingChoice))
 
   const groups = $derived(
@@ -58,9 +63,9 @@
     <h1 class="display text-3xl text-ink-100">Skills</h1>
     <p class="mt-1 text-xs text-ink-400">Train a trade, gather materials, grow stronger.</p>
   </div>
-  <div class="seal h-14 w-14 shrink-0" aria-label="Total level {totalLevel}">
+  <div class="seal h-14 w-14 shrink-0" aria-label="Average level {totalLevel}">
     <span class="text-2xl leading-none font-bold">{totalLevel}</span>
-    <span class="text-[8px] tracking-[0.16em]">TOTAL</span>
+    <span class="text-[8px] tracking-[0.16em]">AVG</span>
   </div>
 </div>
 
@@ -118,7 +123,8 @@
             </div>
             <div class="bar mt-2"><i style="width: {s.progress * 100}%"></i></div>
             <div class="mt-1.5 text-[10px] text-ink-400">
-              now <span class="font-bold" style="color: {g.accent}">{pct(s.effect.value)}</span>
+              <span class="font-bold" style="color: {g.accent}">{pct(s.effect.value)}</span>/lv
+              <span class="ml-1 text-ink-500">· {s.actions.length} actions</span>
               {#if s.talent.pendingChoice}
                 <span class="ml-1 text-gold-300">· talent</span>
               {:else if s.talent.owned.length}

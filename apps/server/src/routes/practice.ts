@@ -16,7 +16,7 @@ import {
 import { exerciseCatalog, INTRODUCE_ID, registry } from '../exercises'
 import {
   actionState,
-  awardSkillXp,
+  awardActionXp,
   awardXp,
   checkLessonCompletion,
   consumeItems,
@@ -200,7 +200,7 @@ async function judgeFor(c: Context<AppEnv>) {
   }
 }
 
-/** Applies profession XP + the material economy for a completed action. */
+/** Applies action XP + the material economy for a completed action. */
 function settleAction(
   deps: AppEnv['Variables']['deps'],
   userId: string,
@@ -213,23 +213,28 @@ function settleAction(
   const success = result.correct && result.score >= minScore
   if (!success) {
     return {
+      actionId: action.id,
       skillId: action.skillId,
       xp: 0,
+      level: null,
+      skillLevel: null,
       leveledUp: false,
       gained: [],
       consumed: [],
       talentUnlocked: null,
     }
   }
-  const award = awardSkillXp(deps.db, deps.events, userId, action.skillId, action.xp)
+  const award = awardActionXp(deps.db, deps.events, userId, action.id, action.xp)
   const produces = action.produces ?? []
   const consumes = action.consumes ?? []
-  grantItems(deps.db, deps.events, userId, action.skillId, produces)
+  grantItems(deps.db, deps.events, userId, action.id, produces)
   consumeItems(deps.db, deps.events, userId, consumes)
   return {
+    actionId: award.actionId,
     skillId: award.skillId,
-    xp: award.xp,
+    xp: award.gained,
     level: award.level,
+    skillLevel: award.skillLevel,
     leveledUp: award.leveledUp,
     gained: produces,
     consumed: consumes,

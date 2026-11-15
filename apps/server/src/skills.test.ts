@@ -85,7 +85,10 @@ test('GET /api/skills returns the profession board', async () => {
     equipment: unknown[]
   }
   expect(body.skills.length).toBeGreaterThanOrEqual(20)
-  expect(body.skills.find((s) => s.id === 'mining')?.level).toBe(1)
+  // the profession level is the mean of its actions' levels: Mining has four, all 1
+  const mining = body.skills.find((s) => s.id === 'mining')
+  expect(mining?.level).toBe(1)
+  expect(mining?.actions.filter((a) => (a as { level: number }).level === 1).length).toBe(4)
   expect(body.skills.every((s) => s.actions.length > 0)).toBe(true)
   expect(body.items.length).toBeGreaterThan(20)
   expect(body.inventory.length).toBe(body.items.length)

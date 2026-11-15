@@ -6,23 +6,23 @@ import {
   clearEncounter,
   completeLesson,
   deckKey,
+  getActionXp,
   getEncounter,
   getItemCount,
-  getSkillXp,
   getSrs,
   getStats,
   getUserSetting,
+  listActionProgress,
   listCards,
   listDecks,
   listEquipment,
   listInventory,
   listLessonProgress,
-  listSkillProgress,
   listSrs,
   listTalents,
   replaceTalent,
+  setActionXp,
   setEquipment,
-  setSkillXp,
   sumXp,
   upsertEncounter,
   upsertSrs,
@@ -53,6 +53,7 @@ import {
 import { levelInfo } from './levels'
 import { computeBonuses, applyYield, type Bonuses } from './modifiers'
 import {
+  ACTION_BY_ID,
   ITEMS,
   ITEM_BY_ID,
   SKILLS,
@@ -61,9 +62,10 @@ import {
   type ItemDef,
   type SkillId,
   type UnlockReq,
+  actionLevelInfo,
+  actionsForSkill,
   missingMaterials,
   missingUnlocks,
-  skillLevelInfo,
 } from './skills'
 import {
   type TalentDef,
@@ -190,55 +192,110 @@ export function rebuildStats(db: Db, userId: string): GameSummary {
   return summary(db, userId)
 }
 
-// --- professions: bonuses ----------------------------------------------------
+// --- action levels + bonuses (docs/DESIGN.md §13.5) --------------------------
 
+/** Every action's level for a user; actions never trained sit at level 1. */
+export function actionLevelMap(db: Db, userId: string): Map<string, number> {
+  return new Map(
+    listActionProgress(db, userId).map((r) => [r.actionId, actionLevelInfo(r.xp).level]),
+  )
+}
+
+export function actionLevelOf(db: Db, userId: string, actionId: string): number {
+  return (actionLevelMap(db, userId).get(actionId) ?? 1) as number
+}
+
+/**
+ * A profession's level — the **mean** of its actions' levels, so it always reads
+ * out of 100 however much content the profession has. Adding an action (a new ore,
+ * say) raises the denominator and so lowers the level until you train it: that is
+ * the point, a maxed profession stays 100 and old progress is "reduced by the new
+ * available levels".
+ */
 export function skillLevelOf(db: Db, userId: string, skillId: SkillId): number {
-  return skillLevelInfo(getSkillXp(db, userId, skillId)).level
+  const acts = actionsForSkill(skillId)
+  if (!acts.length) return 1
+  const levels = actionLevelMap(db, userId)
+  const total = acts.reduce((n, a) => n + (levels.get(a.id) ?? 1), 0)
+  return Math.round(total / acts.length)
+}
+
+/** The action a profession-awarded XP lands on (combat has one action per skill). */
+export function primaryActionOf(skillId: SkillId): string {
+  return actionsForSkill(skillId)[0]!.id
 }
 
 export function aggregateBonuses(db: Db, userId: string): Bonuses {
-  const levels = new Map<SkillId, number>(
-    SKILLS.map((s) => [s.id, skillLevelInfo(getSkillXp(db, userId, s.id)).level]),
-  )
-  return computeBonuses(levels, resolveTalents(listTalents(db, userId)))
+  return computeBonuses(actionLevelMap(db, userId), resolveTalents(listTalents(db, userId)))
 }
 
-// --- professions: XP + talents ----------------------------------------------
+// --- action XP + talents -----------------------------------------------------
 
-export interface SkillAward {
-  skillId: string
+export interface ActionAward {
+  actionId: string
+  skillId: SkillId
+  /** the action's total XP after the award */
   xp: number
+  /** the action's own level after the award */
   level: number
+  /** the profession's derived level after the award */
+  skillLevel: number
+  /** the action levelled up */
   leveledUp: boolean
+  /** XP actually credited (after bonuses) */
   gained: number
-  /** the milestone level whose talent choice just opened up (or null) */
+  /** the profession milestone whose talent choice just opened up (or null) */
   talentUnlocked: number | null
 }
 
-export function awardSkillXp(
+export function awardActionXp(
   db: Db,
   bus: EventBus,
   userId: string,
-  skillId: SkillId,
+  actionId: string,
   amount: number,
-): SkillAward {
-  const beforeXp = getSkillXp(db, userId, skillId)
+): ActionAward {
+  const action = ACTION_BY_ID.get(actionId)!
+  const beforeXp = getActionXp(db, userId, actionId)
   const bonus = aggregateBonuses(db, userId)
-  const gained = Math.max(0, Math.round(amount * (1 + bonus.xp(skillId) + bonus.globalXp)))
+  const gained = Math.max(0, Math.round(amount * (1 + bonus.xp(actionId) + bonus.globalXp)))
   const xp = beforeXp + gained
-  const info = skillLevelInfo(xp)
-  const before = skillLevelInfo(beforeXp).level
-  setSkillXp(db, userId, skillId, xp, info.level)
-  bus.emit('skill.xp', { userId, skillId, amount: gained, xp, level: info.level })
+  const info = actionLevelInfo(xp)
+  const before = actionLevelInfo(beforeXp).level
+  const skillBefore = skillLevelOf(db, userId, action.skillId)
+  setActionXp(db, userId, actionId, xp, info.level)
+  bus.emit('skill.xp', {
+    userId,
+    actionId,
+    skillId: action.skillId,
+    amount: gained,
+    xp,
+    level: info.level,
+  })
 
   const leveledUp = info.level > before
   let talentUnlocked: number | null = null
   if (leveledUp) {
-    bus.emit('skill.level.up', { userId, skillId, level: info.level })
-    const milestone = Math.floor(info.level / 10) * 10
-    if (milestone >= 10 && milestone > before) talentUnlocked = milestone
+    bus.emit('skill.level.up', {
+      userId,
+      actionId,
+      skillId: action.skillId,
+      level: info.level,
+    })
+    const skillLevel = skillLevelOf(db, userId, action.skillId)
+    const milestone = Math.floor(skillLevel / 10) * 10
+    if (milestone >= 10 && milestone > skillBefore) talentUnlocked = milestone
   }
-  return { skillId, xp, level: info.level, leveledUp, gained, talentUnlocked }
+  return {
+    actionId,
+    skillId: action.skillId,
+    xp,
+    level: info.level,
+    skillLevel: skillLevelOf(db, userId, action.skillId),
+    leveledUp,
+    gained,
+    talentUnlocked,
+  }
 }
 
 /** Chooses one of two talents at a 10-level milestone (or changes it later). */
@@ -334,18 +391,18 @@ export function talentView(db: Db, userId: string) {
 
 // --- professions: materials --------------------------------------------------
 
-/** Grants materials, applying the profession's yield + double bonuses. */
+/** Grants materials, applying the action's own yield + double bonuses. */
 export function grantItems(
   db: Db,
   bus: EventBus,
   userId: string,
-  skillId: SkillId,
+  actionId: string,
   costs: Cost[],
   rand: () => number = Math.random,
 ): void {
   const bonus = aggregateBonuses(db, userId)
   for (const c of costs) {
-    const count = applyYield(c.count, bonus.yield(skillId), bonus.double(skillId), rand)
+    const count = applyYield(c.count, bonus.yield(actionId), bonus.double(actionId), rand)
     if (count <= 0) continue
     addItems(db, userId, c.item, count)
     bus.emit('item.gained', {
@@ -369,12 +426,44 @@ export function consumeItems(db: Db, bus: EventBus, userId: string, costs: Cost[
   }
 }
 
+export interface ActionProgress {
+  actionId: string
+  xp: number
+  level: number
+  intoLevel: number
+  forNext: number
+  progress: number
+}
+
+/** Per-action XP + level (actions never trained are absent — callers default to 1). */
+export function actionProgressView(db: Db, userId: string): Map<string, ActionProgress> {
+  return new Map(
+    listActionProgress(db, userId).map((r) => [
+      r.actionId,
+      { actionId: r.actionId, xp: r.xp, ...actionLevelInfo(r.xp) },
+    ]),
+  )
+}
+
+/**
+ * Per-profession summary with its **derived** level (the sum of its actions). The
+ * profession has no XP bar of its own, so `progress` is the average of its
+ * actions' progress toward their next level.
+ */
 export function skillSummaries(db: Db, userId: string) {
-  const map = new Map(listSkillProgress(db, userId).map((r) => [r.skillId, r]))
+  const byAction = actionProgressView(db, userId)
   return SKILLS.map((s) => {
-    const xp = map.get(s.id)?.xp ?? 0
-    const info = skillLevelInfo(xp)
-    return { skillId: s.id, xp, ...info }
+    const acts = actionsForSkill(s.id)
+    const rows = acts.map((a) => byAction.get(a.id))
+    // the mean of the action levels: reads out of 100, and a new action lowers it
+    const level = acts.length
+      ? Math.round(rows.reduce((n, r) => n + (r?.level ?? 1), 0) / acts.length)
+      : 1
+    const xp = rows.reduce((n, r) => n + (r?.xp ?? 0), 0)
+    const progress = acts.length
+      ? rows.reduce((n, r) => n + (r?.progress ?? 0), 0) / acts.length
+      : 0
+    return { skillId: s.id, xp, level, intoLevel: 0, forNext: 0, progress }
   })
 }
 
@@ -669,7 +758,7 @@ export function combatResolve(
     outcome = 'lost'
   }
 
-  const award = xp > 0 ? awardSkillXp(db, bus, userId, m.combatSkill, xp) : null
+  const award = xp > 0 ? awardActionXp(db, bus, userId, primaryActionOf(m.combatSkill), xp) : null
   if (outcome === 'won') {
     grantExactItems(db, bus, userId, drops)
     awardXp(db, bus, userId, m.xp, 'combat', m.id)

@@ -2,16 +2,17 @@ import { expect, test } from 'bun:test'
 import { applyYield, computeBonuses } from './modifiers'
 import {
   ACTIONS,
+  ACTION_MAX_LEVEL,
   ITEMS,
   ITEM_BY_ID,
   SKILLS,
   SKILL_BY_ID,
+  actionLevelInfo,
   actionsForSkill,
   missingMaterials,
   missingUnlocks,
   skillLevelInfo,
   skillXpForLevel,
-  type SkillId,
 } from './skills'
 import { parseTalentId, talentMilestones, talentOptions } from './talents'
 
@@ -54,11 +55,22 @@ test('combat actions are gated by forged/fletched gear', () => {
 })
 
 test('skill XP curve + level info', () => {
-  expect(skillXpForLevel(1)).toBe(50)
-  expect(skillXpForLevel(2)).toBe(75)
-  expect(skillLevelInfo(0)).toMatchObject({ level: 1, intoLevel: 0, forNext: 50 })
-  expect(skillLevelInfo(50)).toMatchObject({ level: 2, intoLevel: 0 })
-  expect(skillLevelInfo(125)).toMatchObject({ level: 3 })
+  expect(skillXpForLevel(1)).toBe(10)
+  expect(skillXpForLevel(2)).toBe(11)
+  expect(skillLevelInfo(0)).toMatchObject({ level: 1, intoLevel: 0, forNext: 10 })
+  expect(skillLevelInfo(10)).toMatchObject({ level: 2, intoLevel: 0 })
+  expect(skillLevelInfo(21)).toMatchObject({ level: 3 }) // 10 + 11
+  // ~5.8k XP maxes one action, so the level-100 cap is within reach
+  let total = 0
+  for (let i = 1; i < ACTION_MAX_LEVEL; i++) total += skillXpForLevel(i)
+  expect(total).toBeLessThan(6500)
+})
+
+test('action levels cap at 100 (so a profession reads out of 100)', () => {
+  expect(actionLevelInfo(0).level).toBe(1)
+  expect(actionLevelInfo(1_000).level).toBe(skillLevelInfo(1_000).level)
+  expect(actionLevelInfo(10_000_000).level).toBe(ACTION_MAX_LEVEL)
+  expect(actionLevelInfo(10_000_000).progress).toBe(1)
 })
 
 test('every level increases the skill effect', () => {
@@ -103,17 +115,21 @@ test('talent options: two choices, unique ids, parseable', () => {
   expect(parseTalentId('nope')).toBeNull()
 })
 
-test('computeBonuses: per-level effects + talents stack', () => {
-  const levels = new Map<SkillId, number>([
-    ['mining', 11], // +10% yield
-    ['agility', 11], // +5% global XP
+test('computeBonuses: per-action levels + talents stack', () => {
+  const levels = new Map<string, number>([
+    ['mine-copper', 11], // +10% copper
+    ['agility-drill', 11], // +5% global XP
   ])
   const b = computeBonuses(levels, [])
-  expect(b.yield('mining')).toBeCloseTo(0.1)
+  expect(b.yield('mine-copper')).toBeCloseTo(0.1)
+  // the level lives on the action: a sibling action gains nothing
+  expect(b.yield('mine-essence')).toBeCloseTo(0)
   expect(b.globalXp).toBeCloseTo(0.05)
 
+  // a talent is scoped to the whole profession, so it boosts every action
   const withTalent = computeBonuses(levels, [talentOptions('mining', 10)[0]!])
-  expect(withTalent.yield('mining')).toBeCloseTo(0.25) // +15% talent
+  expect(withTalent.yield('mine-copper')).toBeCloseTo(0.25) // +15% talent
+  expect(withTalent.yield('mine-essence')).toBeCloseTo(0.15)
 })
 
 test('applyYield applies yield bonus and double chance deterministically', () => {

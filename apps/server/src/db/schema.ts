@@ -158,12 +158,16 @@ export const settings = sqliteTable('settings', {
   value: text('value').notNull(),
 })
 
-/** Per-user skill levels (docs/DESIGN.md §13.5). */
-export const skillProgress = sqliteTable('skill_progress', {
+/**
+ * Per-user **action** levels (docs/DESIGN.md §13.5). The level lives on the
+ * action (`Mine copper`), not the profession; a profession's level is the sum of
+ * its actions' levels and is derived, never stored.
+ */
+export const actionProgress = sqliteTable('action_progress', {
   userId: text('user_id')
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
-  skillId: text('skill_id').notNull(),
+  actionId: text('action_id').notNull(),
   xp: integer('xp').notNull().default(0),
   level: integer('level').notNull().default(1),
   updatedAt: integer('updated_at').notNull(),

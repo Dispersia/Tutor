@@ -105,8 +105,13 @@ export interface ActionDef {
 
 // --- skill XP curve ----------------------------------------------------------
 
+/**
+ * XP to advance one **action** level. Deliberately gentle and linear, so the
+ * level-100 cap stays reachable: ~5.8k XP maxes a single action, and a whole
+ * 4-action profession is ~23k.
+ */
 export function skillXpForLevel(level: number): number {
-  return 50 + (level - 1) * 25
+  return 10 + (level - 1)
 }
 
 export interface SkillLevelInfo {
@@ -125,6 +130,25 @@ export function skillLevelInfo(xp: number): SkillLevelInfo {
   }
   const forNext = skillXpForLevel(level)
   return { level, intoLevel: remaining, forNext, progress: Math.min(1, remaining / forNext) }
+}
+
+/**
+ * The most any **action** can reach. The profession level is the mean of its
+ * actions, so this cap is what makes a profession read out of 100: a maxed
+ * 4-action profession is level 100, and adding a 5th action lowers it again.
+ */
+export const ACTION_MAX_LEVEL = 100
+
+/** An action's level info, capped at `ACTION_MAX_LEVEL` (progress pinned at 100%). */
+export function actionLevelInfo(xp: number): SkillLevelInfo {
+  const info = skillLevelInfo(xp)
+  if (info.level < ACTION_MAX_LEVEL) return info
+  return {
+    level: ACTION_MAX_LEVEL,
+    intoLevel: info.forNext,
+    forNext: info.forNext,
+    progress: 1,
+  }
 }
 
 // --- professions -------------------------------------------------------------
