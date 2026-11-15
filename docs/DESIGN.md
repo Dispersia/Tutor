@@ -445,9 +445,11 @@ This mirrors `~/.config/opencode/opencode.json` `model` / `small_model`: a map f
 role → OpenRouter model id, **editable by the user in the app**.
 
 **User picks the model, the app ships defaults.** The Settings screen lets the user
-choose a model per role from OpenRouter's live catalogue (`GET /api/v1/models`),
-using whatever key they have set. Defaults on first run (all OpenRouter ids, so
-swapping is one click):
+choose a model per role from OpenRouter's live catalogue, using whatever key they
+have set: `GET /api/v1/models/user` (filtered by that key's provider
+preferences, privacy settings and guardrails) when a key is present, falling back
+to the public `GET /api/v1/models` otherwise. Defaults on first run (all OpenRouter
+ids, so swapping is one click):
 
 - `conversation` + `judge` → a strong general model (e.g. a Qwen3 flagship).
 - `generator` + `translator` → a cheap/fast model.

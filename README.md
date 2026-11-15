@@ -49,7 +49,7 @@ those keys at rest.
 | `POST /api/auth/register` · `/login` · `/logout` · `GET/PUT /api/auth/me` | accounts (first user is admin) |
 | `GET /api/users` · `DELETE /api/users/:id` | admin: manage accounts |
 | `GET /api/health` | server + speech status |
-| `GET /api/models?q=` | live OpenRouter catalogue for the model picker |
+| `GET /api/models?q=` | live OpenRouter catalogue for the model picker (key-filtered when a key is set) |
 | `GET/PUT /api/settings` | per-user roles, voice + daily goal |
 | `PUT /api/settings/openrouter-key` | each user's own key (server key is a fallback) |
 | `POST /api/chat` · `/api/chat/json` | streamed chat (SSE) + structured output |

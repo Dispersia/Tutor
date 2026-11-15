@@ -103,3 +103,26 @@ test('chatJSON parses structured output', async () => {
 
   globalThis.fetch = orig
 })
+
+test('listModels({user:true}) uses /models/user and requires a key', async () => {
+  const orig = globalThis.fetch
+  const paths: string[] = []
+  globalThis.fetch = (async (url: string | URL) => {
+    const u = String(url)
+    paths.push(new URL(u).pathname)
+    return Response.json({
+      data: [{ id: 'user/only', name: 'User Only', pricing: {}, architecture: {} }],
+    })
+  }) as unknown as typeof fetch
+
+  const or = new OpenRouter('test-key', 'http://stub')
+  const models = await or.listModels({ user: true })
+  expect(paths).toEqual(['/models/user'])
+  expect(models[0]!.id).toBe('user/only')
+
+  expect(new OpenRouter(undefined, 'http://stub').listModels({ user: true })).rejects.toThrow(
+    'OPENROUTER_API_KEY is not set',
+  )
+
+  globalThis.fetch = orig
+})
