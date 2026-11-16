@@ -258,7 +258,7 @@
   const langLabel = (code: string) => LANGUAGES.find((l) => l.code === code)?.label ?? code
 </script>
 
-<div class="flex items-center justify-between border-b border-ink-700 pt-4 pb-4">
+<div class="flex items-center justify-between border-b border-ink-700 pt-4 pb-4 mb-4">
   <div>
     <h1 class="display text-3xl text-ink-100">Learn</h1>
     <p class="mt-1 text-xs text-ink-400">One new word at a time — tap next and go.</p>
@@ -282,334 +282,348 @@
     <Spinner size={14} label="Loading your path" /> Loading…
   </p>
 {:else}
-  <section class="panel panel-accent mb-4 p-4" style="--accent: {ACCENT.azure}">
-    <p class="eyebrow">Build a deck</p>
-    <p class="mt-1 text-xs text-ink-400">
-      Describe what you want. It pulls a real frequency list and writes the cards — one new word at
-      a time.
-    </p>
-    <label class="mt-2 block text-[11px] text-ink-400">
-      Language
-      <select
-        bind:value={buildLang}
-        class="mt-1 w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm"
-      >
-        {#each LANGUAGES as l (l.code)}<option value={l.code}>{l.label}</option>{/each}
-      </select>
-    </label>
-    <textarea
-      bind:value={instruction}
-      rows="2"
-      placeholder="a traditional Chinese frequency list, with grammar, using only traditional characters and zhuyin"
-      class="mt-2 w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm outline-none focus:border-seal-400"
-    ></textarea>
-    <button
-      type="button"
-      onclick={build}
-      disabled={building || !instruction.trim()}
-      class="btn btn-primary mt-2 w-full py-3 disabled:opacity-60"
-    >
-      {#if building}<Spinner size={15} label="Building the deck" /> Pulling the list &amp; writing cards…{:else}Build
-        deck{/if}
-    </button>
-    {#if buildError}
-      <p class="mt-2 rounded-md bg-ember-950 px-3 py-2 text-xs text-ember-300">{buildError}</p>
-    {/if}
-    <label class="mt-3 block cursor-pointer text-center text-[11px] text-ink-400 underline">
-      {#if importing}<Spinner size={12} label="Reading the deck" /> Reading the deck…{:else}…or
-        import an Anki deck (.apkg){/if}
-      <input
-        type="file"
-        accept=".apkg,.colpkg"
-        class="hidden"
-        onchange={inspectApkg}
-        disabled={importing}
-      />
-    </label>
-    {#if importError}
-      <p class="mt-2 rounded-md bg-ember-950 px-3 py-2 text-xs text-ember-300">{importError}</p>
-    {/if}
-  </section>
-
-  {#if inspection}
-    <section class="panel panel-accent mb-4 p-4" style="--accent: {ACCENT.violet}">
-      <div class="flex items-baseline justify-between">
-        <p class="eyebrow">Import {inspection.name ?? 'Anki deck'}</p>
-        <span class="text-[11px] text-ink-400">{inspection.noteCount} notes</span>
-      </div>
-      <p class="mt-1 text-xs text-ink-400">
-        Pick the deck's language and which field is the real word. The whole deck is imported — the
-        AI weaves sentence and grammar cards through its words and fills it in the background.
-      </p>
-
-      <label class="mt-3 block text-[11px] text-ink-400">
-        Language
-        <select
-          bind:value={importLang}
-          class="mt-1 w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm"
-        >
-          {#if importLang && !LANGUAGES.some((l) => l.code === importLang)}
-            <option value={importLang}>{importLang}</option>
-          {/if}
-          {#each LANGUAGES as l (l.code)}<option value={l.code}>{l.label}</option>{/each}
-        </select>
-      </label>
-      {#if inspection.suggestedLang}
-        <p class="mt-1 text-[11px] text-jade-400">
-          Detected {langLabel(inspection.suggestedLang)} from the deck.
+  <!-- Desktop: the composer sits in a left rail, the path fills the page. -->
+  <div class="xl:grid xl:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] xl:items-start xl:gap-24">
+    <div>
+      <section class="panel panel-accent mb-4 p-4" style="--accent: {ACCENT.azure}">
+        <p class="eyebrow">Build a deck</p>
+        <p class="mt-1 text-xs text-ink-400">
+          Describe what you want. It pulls a real frequency list and writes the cards — one new word
+          at a time.
         </p>
-      {/if}
-
-      <label class="mt-3 block text-[11px] text-ink-400">
-        Word field
-        <select
-          bind:value={wordField}
-          class="mt-1 w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm"
-        >
-          {#each inspection.fields as f, i (i)}<option value={i}>{f}</option>{/each}
-        </select>
-      </label>
-
-      <div class="mt-2 grid grid-cols-2 gap-2">
-        <label class="block text-[11px] text-ink-400">
-          Reading (optional)
+        <label class="mt-2 block text-[11px] text-ink-400">
+          Language
           <select
-            bind:value={readingField}
+            bind:value={buildLang}
             class="mt-1 w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm"
           >
-            <option value={-1}>None</option>
-            {#each inspection.fields as f, i (i)}<option value={i}>{f}</option>{/each}
+            {#each LANGUAGES as l (l.code)}<option value={l.code}>{l.label}</option>{/each}
           </select>
         </label>
-        <label class="block text-[11px] text-ink-400">
-          Meaning (optional)
-          <select
-            bind:value={meaningField}
-            class="mt-1 w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm"
-          >
-            <option value={-1}>None</option>
-            {#each inspection.fields as f, i (i)}<option value={i}>{f}</option>{/each}
-          </select>
+        <textarea
+          bind:value={instruction}
+          rows="2"
+          placeholder="a traditional Chinese frequency list, with grammar, using only traditional characters and zhuyin"
+          class="mt-2 w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm outline-none focus:border-seal-400"
+        ></textarea>
+        <button
+          type="button"
+          onclick={build}
+          disabled={building || !instruction.trim()}
+          class="btn btn-primary mt-2 w-full py-3 disabled:opacity-60"
+        >
+          {#if building}<Spinner size={15} label="Building the deck" /> Pulling the list &amp; writing
+            cards…{:else}Build deck{/if}
+        </button>
+        {#if buildError}
+          <p class="mt-2 rounded-md bg-ember-950 px-3 py-2 text-xs text-ember-300">{buildError}</p>
+        {/if}
+        <label class="mt-3 block cursor-pointer text-center text-[11px] text-ink-400 underline">
+          {#if importing}<Spinner size={12} label="Reading the deck" /> Reading the deck…{:else}…or
+            import an Anki deck (.apkg){/if}
+          <input
+            type="file"
+            accept=".apkg,.colpkg"
+            class="hidden"
+            onchange={inspectApkg}
+            disabled={importing}
+          />
         </label>
-      </div>
-
-      <div class="mt-3 overflow-x-auto">
-        <table class="w-full text-left text-[11px] text-ink-400">
-          <thead>
-            <tr
-              >{#each inspection.fields as f (f)}<th class="pr-2 font-normal">{f}</th>{/each}</tr
-            >
-          </thead>
-          <tbody>
-            {#each inspection.sample.slice(0, 3) as row, r (r)}
-              <tr>
-                {#each row as value, i (i)}<td class="pr-2 text-ink-300">{cell(value)}</td>{/each}
-              </tr>
-            {/each}
-          </tbody>
-        </table>
-      </div>
-
-      <div class="mt-3 flex gap-2">
-        <button
-          type="button"
-          onclick={confirmImport}
-          disabled={importing}
-          class="btn btn-primary flex-1 py-3 disabled:opacity-60"
-        >
-          {#if importing}<Spinner size={15} label="Building the deck" /> Building…{:else}Build deck
-          {/if}
-        </button>
-        <button
-          type="button"
-          onclick={cancelImport}
-          disabled={importing}
-          class="btn btn-ghost px-4"
-        >
-          Cancel
-        </button>
-      </div>
-    </section>
-  {/if}
-
-  {#if decks.length === 0}
-    <p class="text-sm text-ink-400">No decks yet — describe one above and build it.</p>
-  {:else}
-    <section class="panel mb-4 p-4" style="--accent: {ACCENT.arcane}">
-      <div class="flex items-baseline justify-between">
-        <p class="eyebrow">Profession</p>
-        {#if selected}
-          <span class="chip" style="--accent: {ACCENT.arcane}">
-            {selected.skill.icon}
-            {selected.skill.name}
-          </span>
+        {#if importError}
+          <p class="mt-2 rounded-md bg-ember-950 px-3 py-2 text-xs text-ember-300">{importError}</p>
         {/if}
-      </div>
-      {#if groups.length === 0}
-        <p class="mt-2 text-sm text-ink-400">
-          No profession is ready to train.
-          <a href={href('/skills')} class="gold">Unlock one in Skills</a>.
-        </p>
-      {:else}
-        <select
-          value={actionId}
-          onchange={chooseProfession}
-          class="mt-2 w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm"
-        >
-          <option value="">Choose a profession…</option>
-          {#each groups as group (group.skill.id)}
-            <optgroup label="{group.skill.icon} {group.skill.name}">
-              {#each group.actions as action (action.id)}
-                <option value={action.id}>{action.name}</option>
-              {/each}
-            </optgroup>
-          {/each}
-        </select>
-        {#if selected}
-          <p class="mt-2 text-xs text-ink-400">{selected.action.description}</p>
-        {:else}
-          <p class="mt-2 text-xs text-brass-300">
-            Pick a profession first — lessons train that profession.
-          </p>
-        {/if}
-      {/if}
-    </section>
+      </section>
 
-    {#each decks as d (d.deckId)}
-      {@const acc = deckAccent(d.level ?? '')}
-      {@const next = nextLesson(d)}
-      {@const progress = d.cardCount > 0 ? (d.learned / d.cardCount) * 100 : 0}
-      <section class="panel panel-accent mb-5 p-4" style={accentStyle(acc)}>
-        <div class="flex items-baseline justify-between">
-          <h2 class="display text-lg" style="color: {acc}">{d.name}</h2>
-          <span class="text-xs text-ink-400">{d.learned}/{d.cardCount} learned</span>
-        </div>
-        <div class="bar mt-2">
-          <i style="width: {progress}%"></i>
-        </div>
-
-        {#if d.settings?.building}
-          {@const built = d.settings.cursor ?? 0}
-          {@const total = d.settings.buildTotal ?? 0}
-          <div class="mt-2">
-            <div class="flex items-baseline justify-between text-[11px] text-ink-400">
-              <span class="flex items-center gap-1.5">
-                <Spinner size={12} label="Generating cards" /> Generating cards…
-              </span>
-              <span>{built}{total > 0 ? ` / ${total}` : ''} words</span>
-            </div>
-            <div class="bar mt-1">
-              <i style="width: {total > 0 ? (built / total) * 100 : 0}%"></i>
-            </div>
+      {#if inspection}
+        <section class="panel panel-accent mb-4 p-4" style="--accent: {ACCENT.violet}">
+          <div class="flex items-baseline justify-between">
+            <p class="eyebrow">Import {inspection.name ?? 'Anki deck'}</p>
+            <span class="text-[11px] text-ink-400">{inspection.noteCount} notes</span>
           </div>
-        {:else if d.settings?.buildError}
-          <p class="mt-2 rounded-md bg-ember-950 px-3 py-2 text-[11px] text-ember-300">
-            Generation stopped: {d.settings.buildError}
+          <p class="mt-1 text-xs text-ink-400">
+            Pick the deck's language and which field is the real word. The whole deck is imported —
+            the AI weaves sentence and grammar cards through its words and fills it in the
+            background.
           </p>
-        {/if}
 
-        {#if d.settings?.instruction}
-          <p class="mt-2 line-clamp-2 text-[11px] text-ink-500" title={d.settings.instruction}>
-            Prompt · {d.settings.instruction}
-          </p>
-        {/if}
-
-        {#if next}
-          {#if actionId}
-            <a href={practiceHref({ lesson: next.id })} class="btn btn-primary mt-3 w-full py-3">
-              {d.learned > 0 ? 'Next' : 'Start'} · {next.newWord ?? next.title}
-              {#if next.reading && next.reading !== next.newWord}
-                <span class="ml-1 text-xs opacity-75">{next.reading}</span>
+          <label class="mt-3 block text-[11px] text-ink-400">
+            Language
+            <select
+              bind:value={importLang}
+              class="mt-1 w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm"
+            >
+              {#if importLang && !LANGUAGES.some((l) => l.code === importLang)}
+                <option value={importLang}>{importLang}</option>
               {/if}
-            </a>
-          {:else}
-            <button disabled class="btn btn-ghost mt-3 w-full py-3">
-              Select a profession to start
-            </button>
-          {/if}
-          {#if next.newWord}
-            <p class="mt-1.5 text-center text-xs text-ink-400">new word · {next.description}</p>
-          {:else if next.description}
-            <p class="mt-1.5 text-center text-xs text-ink-400">{next.description}</p>
-          {/if}
-          {#if next.cards > 1}
-            <p class="mt-1.5 text-center text-[11px] text-ink-500">
-              {next.learned}/{next.cards} in this lesson
+              {#each LANGUAGES as l (l.code)}<option value={l.code}>{l.label}</option>{/each}
+            </select>
+          </label>
+          {#if inspection.suggestedLang}
+            <p class="mt-1 text-[11px] text-jade-400">
+              Detected {langLabel(inspection.suggestedLang)} from the deck.
             </p>
           {/if}
-        {:else}
-          <p class="mt-3 text-center text-sm text-ink-400">Course complete</p>
-        {/if}
 
-        {#if d.due > 0}
-          {#if actionId}
-            <a href={practiceHref({ deck: d.deckId })} class="btn btn-ghost mt-2 w-full">
-              Review {d.due} due
-            </a>
-          {:else}
-            <button disabled class="btn btn-ghost mt-2 w-full">
-              Select a profession to review
+          <label class="mt-3 block text-[11px] text-ink-400">
+            Word field
+            <select
+              bind:value={wordField}
+              class="mt-1 w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm"
+            >
+              {#each inspection.fields as f, i (i)}<option value={i}>{f}</option>{/each}
+            </select>
+          </label>
+
+          <div class="mt-2 grid grid-cols-2 gap-2">
+            <label class="block text-[11px] text-ink-400">
+              Reading (optional)
+              <select
+                bind:value={readingField}
+                class="mt-1 w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm"
+              >
+                <option value={-1}>None</option>
+                {#each inspection.fields as f, i (i)}<option value={i}>{f}</option>{/each}
+              </select>
+            </label>
+            <label class="block text-[11px] text-ink-400">
+              Meaning (optional)
+              <select
+                bind:value={meaningField}
+                class="mt-1 w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm"
+              >
+                <option value={-1}>None</option>
+                {#each inspection.fields as f, i (i)}<option value={i}>{f}</option>{/each}
+              </select>
+            </label>
+          </div>
+
+          <div class="mt-3 overflow-x-auto">
+            <table class="w-full text-left text-[11px] text-ink-400">
+              <thead>
+                <tr
+                  >{#each inspection.fields as f (f)}<th class="pr-2 font-normal">{f}</th
+                    >{/each}</tr
+                >
+              </thead>
+              <tbody>
+                {#each inspection.sample.slice(0, 3) as row, r (r)}
+                  <tr>
+                    {#each row as value, i (i)}<td class="pr-2 text-ink-300">{cell(value)}</td
+                      >{/each}
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="mt-3 flex gap-2">
+            <button
+              type="button"
+              onclick={confirmImport}
+              disabled={importing}
+              class="btn btn-primary flex-1 py-3 disabled:opacity-60"
+            >
+              {#if importing}<Spinner size={15} label="Building the deck" /> Building…{:else}Build
+                deck
+              {/if}
             </button>
-          {/if}
-        {/if}
+            <button
+              type="button"
+              onclick={cancelImport}
+              disabled={importing}
+              class="btn btn-ghost px-4"
+            >
+              Cancel
+            </button>
+          </div>
+        </section>
+      {/if}
+    </div>
 
-        {#if done(d)}
-          <p class="mt-2 text-center text-[11px] text-jade-400">All words learned ✓</p>
-        {/if}
-
-        {#if !d.settings?.building && (d.remaining ?? 0) > 0}
-          <button
-            type="button"
-            onclick={() => finish(d)}
-            disabled={Boolean(growing)}
-            class="btn btn-primary mt-3 w-full py-3 disabled:opacity-60"
-          >
-            {#if growing === d.deckId}
-              <Spinner size={13} label="Finishing the deck" /> Finishing…
+    <div>
+      {#if decks.length === 0}
+        <p class="text-sm text-ink-400">No decks yet — describe one above and build it.</p>
+      {:else}
+        <section class="panel mb-4 p-4" style="--accent: {ACCENT.arcane}">
+          <div class="flex items-baseline justify-between">
+            <p class="eyebrow">Profession</p>
+            {#if selected}
+              <span class="chip" style="--accent: {ACCENT.arcane}">
+                {selected.skill.icon}
+                {selected.skill.name}
+              </span>
+            {/if}
+          </div>
+          {#if groups.length === 0}
+            <p class="mt-2 text-sm text-ink-400">
+              No profession is ready to train.
+              <a href={href('/skills')} class="gold">Unlock one in Skills</a>.
+            </p>
+          {:else}
+            <select
+              value={actionId}
+              onchange={chooseProfession}
+              class="mt-2 w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm"
+            >
+              <option value="">Choose a profession…</option>
+              {#each groups as group (group.skill.id)}
+                <optgroup label="{group.skill.icon} {group.skill.name}">
+                  {#each group.actions as action (action.id)}
+                    <option value={action.id}>{action.name}</option>
+                  {/each}
+                </optgroup>
+              {/each}
+            </select>
+            {#if selected}
+              <p class="mt-2 text-xs text-ink-400">{selected.action.description}</p>
             {:else}
-              Finish importing · {d.remaining} left
+              <p class="mt-2 text-xs text-brass-300">
+                Pick a profession first — lessons train that profession.
+              </p>
             {/if}
-          </button>
-        {/if}
+          {/if}
+        </section>
 
-        <div class="mt-3 flex items-center gap-2">
-          <input
-            bind:value={growTopic}
-            placeholder="grow on a topic (optional)"
-            class="min-w-0 flex-1 rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-xs outline-none focus:border-seal-400"
-          />
-          <button
-            type="button"
-            onclick={() => grow(d)}
-            disabled={Boolean(growing) || Boolean(d.settings?.building)}
-            class="btn btn-ghost px-3 py-2 text-xs disabled:opacity-60"
-          >
-            {#if growing === d.deckId}<Spinner size={13} label="Growing the deck" /> Growing…{:else}Grow
+        {#each decks as d (d.deckId)}
+          {@const acc = deckAccent(d.level ?? '')}
+          {@const next = nextLesson(d)}
+          {@const progress = d.cardCount > 0 ? (d.learned / d.cardCount) * 100 : 0}
+          <section class="panel panel-accent mb-5 p-4" style={accentStyle(acc)}>
+            <div class="flex items-baseline justify-between">
+              <h2 class="display text-lg" style="color: {acc}">{d.name}</h2>
+              <span class="text-xs text-ink-400">{d.learned}/{d.cardCount} learned</span>
+            </div>
+            <div class="bar mt-2">
+              <i style="width: {progress}%"></i>
+            </div>
+
+            {#if d.settings?.building}
+              {@const built = d.settings.cursor ?? 0}
+              {@const total = d.settings.buildTotal ?? 0}
+              <div class="mt-2">
+                <div class="flex items-baseline justify-between text-[11px] text-ink-400">
+                  <span class="flex items-center gap-1.5">
+                    <Spinner size={12} label="Generating cards" /> Generating cards…
+                  </span>
+                  <span>{built}{total > 0 ? ` / ${total}` : ''} words</span>
+                </div>
+                <div class="bar mt-1">
+                  <i style="width: {total > 0 ? (built / total) * 100 : 0}%"></i>
+                </div>
+              </div>
+            {:else if d.settings?.buildError}
+              <p class="mt-2 rounded-md bg-ember-950 px-3 py-2 text-[11px] text-ember-300">
+                Generation stopped: {d.settings.buildError}
+              </p>
             {/if}
-          </button>
-        </div>
-        <div class="mt-3 flex items-center justify-center gap-4">
-          <button
-            type="button"
-            onclick={() => (settingsDeck = d)}
-            class="text-[11px] text-ink-400 underline"
-          >
-            Deck settings
-          </button>
-          <button
-            type="button"
-            onclick={() => (editing = d)}
-            class="text-[11px] text-ink-400 underline"
-          >
-            Card metadata
-          </button>
-        </div>
-      </section>
-    {/each}
-  {/if}
-  {#if deckError}
-    <p class="mb-3 rounded-md bg-ember-950 px-3 py-2 text-sm text-ember-300">{deckError}</p>
-  {/if}
+
+            {#if d.settings?.instruction}
+              <p class="mt-2 line-clamp-2 text-[11px] text-ink-500" title={d.settings.instruction}>
+                Prompt · {d.settings.instruction}
+              </p>
+            {/if}
+
+            {#if next}
+              {#if actionId}
+                <a
+                  href={practiceHref({ lesson: next.id })}
+                  class="btn btn-primary mt-3 w-full py-3"
+                >
+                  {d.learned > 0 ? 'Next' : 'Start'} · {next.newWord ?? next.title}
+                  {#if next.reading && next.reading !== next.newWord}
+                    <span class="ml-1 text-xs opacity-75">{next.reading}</span>
+                  {/if}
+                </a>
+              {:else}
+                <button disabled class="btn btn-ghost mt-3 w-full py-3">
+                  Select a profession to start
+                </button>
+              {/if}
+              {#if next.newWord}
+                <p class="mt-1.5 text-center text-xs text-ink-400">new word · {next.description}</p>
+              {:else if next.description}
+                <p class="mt-1.5 text-center text-xs text-ink-400">{next.description}</p>
+              {/if}
+              {#if next.cards > 1}
+                <p class="mt-1.5 text-center text-[11px] text-ink-500">
+                  {next.learned}/{next.cards} in this lesson
+                </p>
+              {/if}
+            {:else}
+              <p class="mt-3 text-center text-sm text-ink-400">Course complete</p>
+            {/if}
+
+            {#if d.due > 0}
+              {#if actionId}
+                <a href={practiceHref({ deck: d.deckId })} class="btn btn-ghost mt-2 w-full">
+                  Review {d.due} due
+                </a>
+              {:else}
+                <button disabled class="btn btn-ghost mt-2 w-full">
+                  Select a profession to review
+                </button>
+              {/if}
+            {/if}
+
+            {#if done(d)}
+              <p class="mt-2 text-center text-[11px] text-jade-400">All words learned ✓</p>
+            {/if}
+
+            {#if !d.settings?.building && (d.remaining ?? 0) > 0}
+              <button
+                type="button"
+                onclick={() => finish(d)}
+                disabled={Boolean(growing)}
+                class="btn btn-primary mt-3 w-full py-3 disabled:opacity-60"
+              >
+                {#if growing === d.deckId}
+                  <Spinner size={13} label="Finishing the deck" /> Finishing…
+                {:else}
+                  Finish importing · {d.remaining} left
+                {/if}
+              </button>
+            {/if}
+
+            <div class="mt-3 flex items-center gap-2">
+              <input
+                bind:value={growTopic}
+                placeholder="grow on a topic (optional)"
+                class="min-w-0 flex-1 rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-xs outline-none focus:border-seal-400"
+              />
+              <button
+                type="button"
+                onclick={() => grow(d)}
+                disabled={Boolean(growing) || Boolean(d.settings?.building)}
+                class="btn btn-ghost px-3 py-2 text-xs disabled:opacity-60"
+              >
+                {#if growing === d.deckId}<Spinner size={13} label="Growing the deck" /> Growing…{:else}Grow
+                {/if}
+              </button>
+            </div>
+            <div class="mt-3 flex items-center justify-center gap-4">
+              <button
+                type="button"
+                onclick={() => (settingsDeck = d)}
+                class="text-[11px] text-ink-400 underline"
+              >
+                Deck settings
+              </button>
+              <button
+                type="button"
+                onclick={() => (editing = d)}
+                class="text-[11px] text-ink-400 underline"
+              >
+                Card metadata
+              </button>
+            </div>
+          </section>
+        {/each}
+      {/if}
+      {#if deckError}
+        <p class="mb-3 rounded-md bg-ember-950 px-3 py-2 text-sm text-ember-300">{deckError}</p>
+      {/if}
+    </div>
+  </div>
 {/if}
 {#if editing}
   <CardEditor

@@ -93,10 +93,7 @@
       // Speak as the reply streams: push each sentence to the speaker the moment
       // it is complete, so audio starts before the model has finished writing.
       if (ttsOn) {
-        sp = createSpeaker(
-          speechOpts(lang),
-          (e) => (error = `Playback: ${e.message}`),
-        )
+        sp = createSpeaker(speechOpts(lang), (e) => (error = `Playback: ${e.message}`))
         speaker = sp
         speaking = true
       }
@@ -189,7 +186,7 @@
   }
 </script>
 
-<div class="border-b border-ink-700 pt-4 pb-4">
+<div class="border-b border-ink-700 pt-4 pb-4 lg:mx-auto lg:max-w-3xl">
   <h1 class="display text-3xl text-ink-100">Talk to your Tutor</h1>
   <p class="mt-1 text-xs text-ink-400">
     {lang ? lang.toUpperCase() : 'EN'} · replies are spoken
@@ -197,7 +194,7 @@
   </p>
 </div>
 
-<div class="space-y-3 pt-4 pb-28">
+<div class="space-y-3 pt-4 pb-28 lg:mx-auto lg:max-w-3xl">
   {#if messages.length === 0}
     <p class="panel panel-accent p-4 text-sm text-ink-300" style={accentStyle(ACCENT.azure)}>
       Say or type something in your target language to begin. Your Tutor answers out loud and keeps
@@ -231,13 +228,13 @@
 
 {#if error}
   <div
-    class="fixed inset-x-0 bottom-24 mx-auto max-w-md rounded-md bg-ember-950 px-3 py-2 text-center text-sm text-ember-300"
+    class="fixed inset-x-0 bottom-24 mx-auto max-w-md rounded-md bg-ember-950 px-3 py-2 text-center text-sm text-ember-300 lg:bottom-6"
   >
     {error}
   </div>
 {/if}
 
-<div class="sticky bottom-16 z-10 mx-auto w-full max-w-2xl pb-3">
+<div class="sticky bottom-16 z-10 mx-auto w-full max-w-2xl pb-3 lg:bottom-4 lg:max-w-3xl lg:pb-4">
   <div class="panel panel-accent flex items-end gap-2 p-2" style={accentStyle(ACCENT.azure)}>
     <textarea
       bind:value={input}

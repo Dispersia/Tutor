@@ -9,8 +9,14 @@ import {
   listTalents,
 } from '../db/repo'
 import { EventBus } from '../events'
-import { ACTION_BY_ID, actionsForSkill, skillLevelInfo, skillXpForLevel } from './skills'
-import { talentOptions } from './talents'
+import {
+  ACTION_BY_ID,
+  actionsForSkill,
+  skillLevelInfo,
+  skillXpForLevel,
+  type SkillId,
+} from './skills'
+import { masteryOptions, talentOptions } from './talents'
 import {
   actionState,
   aggregateBonuses,
@@ -29,14 +35,16 @@ function xpForLevel(level: number): number {
   return total
 }
 
-const MINING = actionsForSkill('mining').map((a) => a.id)
-
-/** Brings every mining action to `to` levels (there are no XP bonuses in tests). */
-function setMining(db: Db, bus: EventBus, userId: string, to: number): void {
-  for (const id of MINING) {
-    const cur = skillLevelInfo(getActionXp(db, userId, id)).level
-    awardActionXp(db, bus, userId, id, xpForLevel(to) - xpForLevel(cur))
+/** Brings every action of `skill` to `to` levels (there are no XP bonuses in tests). */
+function setSkill(db: Db, bus: EventBus, userId: string, skill: SkillId, to: number): void {
+  for (const a of actionsForSkill(skill)) {
+    const cur = skillLevelInfo(getActionXp(db, userId, a.id)).level
+    awardActionXp(db, bus, userId, a.id, xpForLevel(to) - xpForLevel(cur))
   }
+}
+
+function setMining(db: Db, bus: EventBus, userId: string, to: number): void {
+  setSkill(db, bus, userId, 'mining', to)
 }
 
 function setup() {
@@ -51,12 +59,13 @@ test('awardActionXp levels the action up; the profession rounds the mean to 100'
   const events: string[] = []
   bus.on('skill.level.up', (e) => events.push(`lvl:${e.level}`))
 
-  // one action alone does not max the profession: Mining is the mean of its four
+  // one action alone does not max the profession: Mining is the mean of its actions
   const first = awardActionXp(db, bus, user.id, 'mine-copper', xpForLevel(10))
   expect(first.level).toBe(10)
   expect(first.leveledUp).toBe(true)
   expect(first.talentUnlocked).toBeNull()
-  expect(skillLevelOf(db, user.id, 'mining')).toBe(3) // (10+1+1+1) / 4
+  // (10 + 6×1) / 7 = 2.29 → 2
+  expect(skillLevelOf(db, user.id, 'mining')).toBe(2)
 
   // levelling every mining action to 10 brings the mean to 10 and opens the choice
   setMining(db, bus, user.id, 10)
@@ -99,7 +108,7 @@ test('per-action effects boost XP gains', () => {
   sqlite.close()
 })
 
-test('chooseTalent: pick one of two at a 10-level milestone, and change it later', () => {
+test('chooseTalent: pick one of three at a 10-level milestone, and change it later', () => {
   const { db, bus, user, sqlite } = setup()
   const changes: string[] = []
   bus.on('talent.changed', (e) => changes.push(`${e.fromTalentId}->${e.talentId}`))
@@ -146,15 +155,68 @@ test('talentView exposes the chosen talents and the next milestone', () => {
   const at10 = view()
   expect(at10.pendingChoice).toBe(true)
   expect(at10.milestone).toBe(10)
-  expect(at10.options.length).toBe(2)
+  expect(at10.options.length).toBe(3)
 
   const choice = talentOptions('mining', 10)[0]!
   expect(chooseTalent(db, bus, user.id, choice.id).ok).toBe(true)
   const chosen = view()
   expect(chosen.pendingChoice).toBe(false)
   expect(chosen.owned.map((t) => t.id)).toEqual([choice.id])
-  expect(chosen.owned[0]!.options.length).toBe(2)
+  expect(chosen.owned[0]!.options.length).toBe(3)
   expect(chosen.nextMilestone).toBe(20)
+  // the synergy talent is the third option; nothing taken yet
+  expect(chosen.synergy.taken).toEqual([])
+  // take it at 20: `taken` records the milestone so the page can show the stacks
+  setMining(db, bus, user.id, 20)
+  expect(chooseTalent(db, bus, user.id, talentOptions('mining', 20)[2]!.id).ok).toBe(true)
+  expect(view().synergy.taken).toEqual([20])
+  sqlite.close()
+})
+
+test('a mastery capstone needs Lv 50 and a level in the partner profession', () => {
+  const { db, bus, user, sqlite } = setup()
+  const view = () => talentView(db, user.id).find((t) => t.skillId === 'mining')!
+
+  // Mining's partner (the profession that feeds it) is Smithing.
+  setSkill(db, bus, user.id, 'mining', 50)
+  const grandmaster = masteryOptions('mining', 50)[0]!
+  const blocked = chooseTalent(db, bus, user.id, grandmaster.id)
+  expect(blocked.ok).toBe(false)
+  expect(blocked.error).toContain('smithing 20')
+
+  // The capstone shows up as pending, with its prerequisite unmet.
+  const pending = view().mastery.pending.find((p) => p.milestone === 50)!
+  expect(pending.options.map((o) => o.requires[0]!.met)).toEqual([false, false])
+
+  // Train Smithing to 20 → the Grandmaster option opens.
+  setSkill(db, bus, user.id, 'smithing', 20)
+  expect(view().mastery.pending[0]!.options[0]!.requires[0]!.met).toBe(true)
+  expect(chooseTalent(db, bus, user.id, grandmaster.id).ok).toBe(true)
+
+  const mine = listTalents(db, user.id).filter((t) => t.skillId === 'mining')
+  expect(mine.map((t) => t.tier)).toEqual(['mastery'])
+  const after = view()
+  expect(after.mastery.owned[0]!.tier).toBe('mastery')
+  expect(after.mastery.next).toBe(100)
+  // a mastery does not consume a choice milestone: the Lv 10 choice is still open
+  expect(after.pendingChoice).toBe(true)
+  expect(after.milestone).toBe(10)
+
+  // The Patron option needs the partner higher still, so it is still refused.
+  const patron = masteryOptions('mining', 50)[1]!
+  const stillBlocked = chooseTalent(db, bus, user.id, patron.id)
+  expect(stillBlocked.ok).toBe(false)
+  expect(stillBlocked.error).toContain('smithing 30')
+
+  // A free respec applies to masteries too: taking the Lv 100 capstone is separate.
+  setSkill(db, bus, user.id, 'mining', 100)
+  setSkill(db, bus, user.id, 'smithing', 50)
+  expect(chooseTalent(db, bus, user.id, masteryOptions('mining', 100)[1]!.id).ok).toBe(true)
+  expect(
+    view()
+      .mastery.owned.map((t) => t.milestone)
+      .sort((a, b) => a - b),
+  ).toEqual([50, 100])
   sqlite.close()
 })
 

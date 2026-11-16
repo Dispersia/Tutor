@@ -1,5 +1,6 @@
 import { listEquipment } from '../db/repo'
 import {
+  ACTIONS,
   ITEMS,
   SKILLS,
   SKILL_BY_ID,
@@ -9,6 +10,7 @@ import {
   type SkillDef,
   type SkillId,
 } from '../game/skills'
+import { SYNERGY } from '../game/talents'
 import type { Bonuses } from '../game/modifiers'
 import {
   actionProgressView,
@@ -85,6 +87,21 @@ function bonusSummary(b: Bonuses) {
   return { globalXp: b.globalXp, damage: b.damage, drop: b.drop, hp: b.hp }
 }
 
+/**
+ * Where every material is produced: itemId → the action that makes it. A recipe's
+ * "needs" cost can then link to the profession that supplies it (copper ore →
+ * Mining · Mine copper). When several actions make the same thing, first wins.
+ */
+function itemSources(): Record<string, { skillId: SkillId; actionId: string }> {
+  const out: Record<string, { skillId: SkillId; actionId: string }> = {}
+  for (const a of ACTIONS) {
+    for (const p of a.produces ?? []) {
+      if (!out[p.item]) out[p.item] = { skillId: a.skillId, actionId: a.id }
+    }
+  }
+  return out
+}
+
 export function registerSkills(app: App) {
   // The profession board: skills (+derived level), their actions (each with its
   // own level/effect), talents and the materials bank. DESIGN §13.5.
@@ -108,17 +125,33 @@ export function registerSkills(app: App) {
     const user = c.get('user')!
     const id = c.req.param('id') as SkillId
     if (!SKILL_BY_ID.has(id)) return c.json({ error: 'unknown profession' }, 404)
-    const skill = boardSkills(db, user.id).find((s) => s.id === id)!
+    const views = boardSkills(db, user.id)
+    const skill = views.find((s) => s.id === id)!
+    // The reverse edge of the web: professions whose synergy talent feeds this
+    // one. A skill can be fed by more than one trade, so this is a list; `taken`
+    // tells the page whether the player actually has that talent (only then does
+    // the link make sense).
+    const fedBy = SKILLS.filter((s) => SYNERGY[s.id].target === id).map((s) => {
+      const from = views.find((v) => v.id === s.id)
+      return {
+        skillId: s.id,
+        name: s.name,
+        label: SYNERGY[s.id].name,
+        taken: from?.talent.synergy.taken ?? [],
+      }
+    })
     return c.json({
       skill,
+      fedBy,
       items: ITEMS,
+      sources: itemSources(),
       inventory: inventoryView(db, user.id),
       equipment: listEquipment(db, user.id).map((e) => ({ slot: e.slot, itemId: e.itemId })),
       bonuses: bonusSummary(aggregateBonuses(db, user.id)),
     })
   })
 
-  // Pick one of two talents at a 10-level milestone (or change an earlier one).
+  // Pick one of three talents at a 10-level milestone (or change an earlier one).
   app.post('/api/skills/talents', async (c) => {
     const deps = c.get('deps')
     const user = c.get('user')!

@@ -20,6 +20,7 @@ export type SkillId =
   | 'crafting'
   | 'firemaking'
   | 'construction'
+  | 'enchanting'
   | 'thieving'
   | 'agility'
   | 'attack'
@@ -41,6 +42,14 @@ export interface Mod {
   value: number
   /** scope for yield/double/xp (defaults to the owning skill) */
   skill?: SkillId
+  /**
+   * Cross-profession synergy: when set, `value` is **multiplied by this skill's
+   * derived level** before it is applied to `skill`. So a talent with
+   * `{ kind: 'xp', value: 0.005, skill: 'smithing', synergy: 'mining' }` gives
+   * Smithing +0.5% XP per point of Mining level. This is how professions feed each
+   * other's progression, not just each other's materials.
+   */
+  synergy?: SkillId
 }
 
 export interface SkillDef {
@@ -73,7 +82,7 @@ export interface ItemDef {
   buff?: { kind: 'power' | 'maxHp'; value: number }
 }
 
-export type Slot = 'weapon' | 'body' | 'legs'
+export type Slot = 'weapon' | 'body' | 'legs' | 'neck'
 
 export interface Cost {
   item: string
@@ -198,6 +207,12 @@ export const SKILLS: SkillDef[] = [
   artisan('crafting', 'Crafting', '💎', 'Cut gems, make vials and leather'),
   artisan('firemaking', 'Firemaking', '🔥', 'Burn logs to ash'),
   artisan('construction', 'Construction', '🏠', 'Turn logs into planks and furniture'),
+  artisan(
+    'enchanting',
+    'Enchanting',
+    '🔯',
+    'Bind cut gems and runes into gear that grows stronger',
+  ),
   // support
   {
     id: 'thieving',
@@ -355,6 +370,69 @@ export const ITEMS: ItemDef[] = [
     tags: ['armour'],
     armour: 3,
   }),
+  // --- tier 4–5 chains (a profession feeds the next, and cross-gated recipes) ---
+  item('mythril_ore', 'Mythril ore', '🔵', 'raw'),
+  item('adamant_ore', 'Adamant ore', '🟩', 'raw'),
+  item('yew_log', 'Yew log', '🪵', 'raw'),
+  item('ranarr', 'Ranarr', '🌿', 'raw'),
+  item('mythril_bar', 'Mythril bar', '🔹', 'refined'),
+  item('adamant_bar', 'Adamant bar', '🟢', 'refined'),
+  item('steel_legs', 'Steel leggings', '🦿', 'equipment', 'Leg armour.', {
+    slot: 'legs',
+    tags: ['armour'],
+    armour: 2,
+  }),
+  item('mythril_legs', 'Mythril leggings', '🦿', 'equipment', 'Leg armour.', {
+    slot: 'legs',
+    tags: ['armour'],
+    armour: 4,
+  }),
+  item('mythril_sword', 'Mythril sword', '🗡️', 'equipment', 'A keen melee weapon.', {
+    slot: 'weapon',
+    tags: ['melee'],
+    power: 10,
+  }),
+  item('adamant_platebody', 'Adamant platebody', '🛡️', 'equipment', 'The heaviest armour.', {
+    slot: 'body',
+    tags: ['armour'],
+    armour: 5,
+  }),
+  item('yew_longbow', 'Yew longbow', '🏹', 'equipment', 'A marksman’s bow.', {
+    slot: 'weapon',
+    tags: ['bow'],
+    power: 12,
+  }),
+  item(
+    'super_attack_potion',
+    'Super attack potion',
+    '🧪',
+    'consumable',
+    '+40% combat power for a fight.',
+    {
+      buff: { kind: 'power', value: 0.4 },
+    },
+  ),
+  // --- jewellery: Crafting cuts the gem, Enchanting binds the runes ---
+  item('sapphire_amulet', 'Sapphire amulet', '🔷', 'equipment', 'A cut gem on a chain.', {
+    slot: 'neck',
+    tags: ['amulet'],
+    power: 2,
+  }),
+  item('enchanted_amulet', 'Amulet of power', '🔮', 'equipment', 'A rune-bound amulet.', {
+    slot: 'neck',
+    tags: ['amulet'],
+    power: 5,
+  }),
+  item('blessed_sword', 'Blessed sword', '🗡️', 'equipment', 'A mythril blade bound with runes.', {
+    slot: 'weapon',
+    tags: ['melee'],
+    power: 14,
+  }),
+  item('mystic_robe', 'Mystic robe', '🥋', 'equipment', 'Rune-stitched armour.', {
+    slot: 'body',
+    tags: ['armour'],
+    armour: 4,
+  }),
 ]
 
 // --- actions -----------------------------------------------------------------
@@ -372,6 +450,16 @@ export const ACTIONS: ActionDef[] = [
     xp: 8,
     deckLevel: 'zhfreq',
     produces: [{ item: 'copper_ore', count: 1 }],
+  }),
+  A({
+    id: 'mine-tin',
+    skillId: 'mining',
+    name: 'Mine tin',
+    description: 'Common ore. Smelt with copper.',
+    tier: 1,
+    xp: 8,
+    deckLevel: 'zhfreq',
+    produces: [{ item: 'tin_ore', count: 1 }],
   }),
   A({
     id: 'mine-essence',
@@ -392,10 +480,7 @@ export const ACTIONS: ActionDef[] = [
     xp: 12,
     deckLevel: 'zhfreq',
     requires: [{ skill: 'mining', level: 5 }],
-    produces: [
-      { item: 'iron_ore', count: 1 },
-      { item: 'tin_ore', count: 1 },
-    ],
+    produces: [{ item: 'iron_ore', count: 1 }],
   }),
   A({
     id: 'mine-coal',
@@ -967,6 +1052,243 @@ export const ACTIONS: ActionDef[] = [
       { item: 'bones', count: 1 },
     ],
   }),
+
+  // --- tier 4–5: deeper chains, and recipes gated on a second profession ---------
+  A({
+    id: 'mine-mythril',
+    skillId: 'mining',
+    name: 'Mine mythril',
+    description: 'Needs Mining 25.',
+    tier: 4,
+    xp: 22,
+    deckLevel: 'zhfreq',
+    requires: [{ skill: 'mining', level: 25 }],
+    produces: [{ item: 'mythril_ore', count: 1 }],
+  }),
+  A({
+    id: 'mine-adamant',
+    skillId: 'mining',
+    name: 'Mine adamant',
+    description: 'Needs Mining 40.',
+    tier: 5,
+    xp: 30,
+    deckLevel: 'jafreq',
+    requires: [{ skill: 'mining', level: 40 }],
+    produces: [{ item: 'adamant_ore', count: 1 }],
+  }),
+  A({
+    id: 'smelt-mythril',
+    skillId: 'smithing',
+    name: 'Smelt mythril bar',
+    description: 'Needs Smithing 20 and Mining 20.',
+    tier: 4,
+    xp: 26,
+    deckLevel: 'jafreq',
+    requires: [
+      { skill: 'smithing', level: 20 },
+      { skill: 'mining', level: 20 },
+    ],
+    consumes: [
+      { item: 'mythril_ore', count: 1 },
+      { item: 'coal', count: 4 },
+    ],
+    produces: [{ item: 'mythril_bar', count: 1 }],
+  }),
+  A({
+    id: 'smelt-adamant',
+    skillId: 'smithing',
+    name: 'Smelt adamant bar',
+    description: 'Needs Smithing 35 and Mining 35.',
+    tier: 5,
+    xp: 34,
+    deckLevel: 'zhfreq',
+    requires: [
+      { skill: 'smithing', level: 35 },
+      { skill: 'mining', level: 35 },
+    ],
+    consumes: [
+      { item: 'adamant_ore', count: 1 },
+      { item: 'coal', count: 6 },
+    ],
+    produces: [{ item: 'adamant_bar', count: 1 }],
+  }),
+  A({
+    id: 'forge-mythril-sword',
+    skillId: 'smithing',
+    name: 'Forge mythril sword',
+    description: 'Needs Smithing 25 and Mining 20.',
+    tier: 4,
+    xp: 32,
+    deckLevel: 'zhfreq',
+    requires: [
+      { skill: 'smithing', level: 25 },
+      { skill: 'mining', level: 20 },
+    ],
+    consumes: [{ item: 'mythril_bar', count: 2 }],
+    produces: [{ item: 'mythril_sword', count: 1 }],
+  }),
+  A({
+    id: 'forge-adamant-plate',
+    skillId: 'smithing',
+    name: 'Forge adamant platebody',
+    description: 'Needs Smithing 40 and Mining 35.',
+    tier: 5,
+    xp: 44,
+    deckLevel: 'jafreq',
+    requires: [
+      { skill: 'smithing', level: 40 },
+      { skill: 'mining', level: 35 },
+    ],
+    consumes: [{ item: 'adamant_bar', count: 3 }],
+    produces: [{ item: 'adamant_platebody', count: 1 }],
+  }),
+  A({
+    id: 'forge-steel-legs',
+    skillId: 'smithing',
+    name: 'Forge steel leggings',
+    description: 'Needs Smithing 15.',
+    tier: 3,
+    xp: 22,
+    deckLevel: 'jafreq',
+    requires: [{ skill: 'smithing', level: 15 }],
+    consumes: [{ item: 'steel_bar', count: 3 }],
+    produces: [{ item: 'steel_legs', count: 1 }],
+  }),
+  A({
+    id: 'forge-mythril-legs',
+    skillId: 'smithing',
+    name: 'Forge mythril leggings',
+    description: 'Needs Smithing 25 and Mining 20.',
+    tier: 4,
+    xp: 30,
+    deckLevel: 'zhfreq',
+    requires: [
+      { skill: 'smithing', level: 25 },
+      { skill: 'mining', level: 20 },
+    ],
+    consumes: [{ item: 'mythril_bar', count: 2 }],
+    produces: [{ item: 'mythril_legs', count: 1 }],
+  }),
+  A({
+    id: 'chop-yew',
+    skillId: 'woodcutting',
+    name: 'Chop yew',
+    description: 'Needs Woodcutting 30.',
+    tier: 4,
+    xp: 22,
+    deckLevel: 'jafreq',
+    requires: [{ skill: 'woodcutting', level: 30 }],
+    produces: [{ item: 'yew_log', count: 1 }],
+  }),
+  A({
+    id: 'fletch-yew-bow',
+    skillId: 'fletching',
+    name: 'Fletch yew longbow',
+    description: 'Needs Fletching 25 and Woodcutting 30.',
+    tier: 4,
+    xp: 30,
+    deckLevel: 'zhfreq',
+    requires: [
+      { skill: 'fletching', level: 25 },
+      { skill: 'woodcutting', level: 30 },
+    ],
+    consumes: [{ item: 'yew_log', count: 2 }],
+    produces: [{ item: 'yew_longbow', count: 1 }],
+  }),
+  A({
+    id: 'farm-ranarr',
+    skillId: 'farming',
+    name: 'Harvest ranarr',
+    description: 'Needs Farming 30.',
+    tier: 4,
+    xp: 22,
+    deckLevel: 'jafreq',
+    requires: [{ skill: 'farming', level: 30 }],
+    produces: [{ item: 'ranarr', count: 1 }],
+  }),
+  A({
+    id: 'brew-super-attack',
+    skillId: 'herblore',
+    name: 'Brew super attack potion',
+    description: 'Needs Herblore 20 and Farming 25.',
+    tier: 4,
+    xp: 30,
+    deckLevel: 'jafreq',
+    requires: [
+      { skill: 'herblore', level: 20 },
+      { skill: 'farming', level: 25 },
+    ],
+    consumes: [
+      { item: 'ranarr', count: 1 },
+      { item: 'vial', count: 1 },
+    ],
+    produces: [{ item: 'super_attack_potion', count: 1 }],
+  }),
+  A({
+    id: 'craft-sapphire-amulet',
+    skillId: 'crafting',
+    name: 'String a sapphire amulet',
+    description: 'Needs Crafting 20.',
+    tier: 3,
+    xp: 22,
+    deckLevel: 'zhfreq',
+    requires: [{ skill: 'crafting', level: 20 }],
+    consumes: [{ item: 'cut_gem', count: 1 }],
+    produces: [{ item: 'sapphire_amulet', count: 1 }],
+  }),
+
+  // Enchanting: gems (Crafting) + runes (Runecrafting) become combat gear.
+  A({
+    id: 'enchant-amulet',
+    skillId: 'enchanting',
+    name: 'Enchant sapphire amulet',
+    description: 'Cut gem + air and nature runes.',
+    tier: 1,
+    xp: 18,
+    deckLevel: 'jafreq',
+    consumes: [
+      { item: 'sapphire_amulet', count: 1 },
+      { item: 'air_rune', count: 2 },
+      { item: 'nature_rune', count: 1 },
+    ],
+    produces: [{ item: 'enchanted_amulet', count: 1 }],
+  }),
+  A({
+    id: 'enchant-robe',
+    skillId: 'enchanting',
+    name: 'Enchant a mystic robe',
+    description: 'Needs Enchanting 13 and Crafting 10.',
+    tier: 2,
+    xp: 26,
+    deckLevel: 'zhfreq',
+    requires: [
+      { skill: 'enchanting', level: 13 },
+      { skill: 'crafting', level: 10 },
+    ],
+    consumes: [
+      { item: 'leather_body', count: 1 },
+      { item: 'air_rune', count: 3 },
+    ],
+    produces: [{ item: 'mystic_robe', count: 1 }],
+  }),
+  A({
+    id: 'enchant-blade',
+    skillId: 'enchanting',
+    name: 'Bind a blessed sword',
+    description: 'Needs Enchanting 20 and Smithing 25.',
+    tier: 3,
+    xp: 34,
+    deckLevel: 'zhfreq',
+    requires: [
+      { skill: 'enchanting', level: 20 },
+      { skill: 'smithing', level: 25 },
+    ],
+    consumes: [
+      { item: 'mythril_sword', count: 1 },
+      { item: 'nature_rune', count: 3 },
+    ],
+    produces: [{ item: 'blessed_sword', count: 1 }],
+  }),
 ]
 
 // --- lookups -----------------------------------------------------------------
@@ -989,6 +1311,26 @@ export function weaponSkill(tags: string[] | undefined): SkillId {
 
 export function actionsForSkill(skillId: SkillId): ActionDef[] {
   return ACTIONS.filter((a) => a.skillId === skillId)
+}
+
+/**
+ * Each profession's **derived** level (the mean of its actions' levels, rounded)
+ * from a map of action id → level. The same formula `skillLevelOf` uses against
+ * the database, but pure — so `computeBonuses` can resolve synergy talents without
+ * touching the db.
+ */
+export function skillLevelsFrom(levels: Map<string, number>): Map<SkillId, number> {
+  const out = new Map<SkillId, number>()
+  for (const s of SKILLS) {
+    const acts = actionsForSkill(s.id)
+    if (!acts.length) {
+      out.set(s.id, 1)
+      continue
+    }
+    const total = acts.reduce((n, a) => n + Math.max(1, levels.get(a.id) ?? 1), 0)
+    out.set(s.id, Math.round(total / acts.length))
+  }
+  return out
 }
 
 export function missingUnlocks(action: ActionDef, levelOf: (s: SkillId) => number): UnlockReq[] {

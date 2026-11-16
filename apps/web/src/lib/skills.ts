@@ -33,11 +33,21 @@ export interface ActionDTO {
   equipMissing: { slot: string; tag: string } | null
 }
 
+export interface TalentRequirement {
+  /** the profession that must be trained */
+  skill: string
+  level: number
+  /** whether the player currently meets it (server-computed) */
+  met?: boolean
+}
+
 export interface TalentOption {
   id: string
   name: string
   description: string
-  mods: { kind: ModKind; value: number }[]
+  mods: { kind: ModKind; value: number; skill?: string; synergy?: string }[]
+  /** cross-profession gate (mastery options only) */
+  requires?: TalentRequirement[]
 }
 
 export interface OwnedTalent {
@@ -45,9 +55,47 @@ export interface OwnedTalent {
   name: string
   description: string
   milestone: number
-  mods: { kind: ModKind; value: number; skill?: string }[]
-  /** the other option(s) at this milestone, so it can be changed */
+  tier: 'choice' | 'mastery'
+  mods: { kind: ModKind; value: number; skill?: string; synergy?: string }[]
+  requires?: TalentRequirement[]
+  /** the other option(s) at this tier + milestone, so it can be changed */
   options: TalentOption[]
+}
+
+/** A mastery capstone whose level is reached but that is not taken yet. */
+export interface MasteryPending {
+  milestone: number
+  options: TalentOption[]
+}
+
+export interface SkillTalentDTO {
+  pendingChoice: boolean
+  milestone: number | null
+  options: TalentOption[]
+  /** the next 10-level milestone, or null once every one is taken */
+  nextMilestone: number | null
+  /** talents already chosen for this profession (choice tier) */
+  owned: OwnedTalent[]
+  /**
+   * The profession this one trades with: this profession feeds `target`, and
+   * `target` gates this profession's mastery capstone. The web, made explicit.
+   * `label` is the synergy talent's name; `taken` is where it is already owned.
+   */
+  synergy: {
+    target: string
+    name: string
+    label: string
+    /** milestones where the synergy talent is taken (empty → no link shown) */
+    taken: number[]
+  }
+  /** the Lv 50 / Lv 100 capstone tier, gated on the profession that feeds this one */
+  mastery: {
+    milestones: number[]
+    /** the next not-yet-reached capstone (50, 100, then null) */
+    next: number | null
+    pending: MasteryPending[]
+    owned: OwnedTalent[]
+  }
 }
 
 export interface SkillDTO {
@@ -64,15 +112,7 @@ export interface SkillDTO {
   /** the passive every action of this profession gains per level */
   effect: { kind: ModKind; value: number }
   effectLabel: string
-  talent: {
-    pendingChoice: boolean
-    milestone: number | null
-    options: TalentOption[]
-    /** the next 10-level milestone (whether or not it has been reached) */
-    nextMilestone: number
-    /** talents already chosen for this profession */
-    owned: OwnedTalent[]
-  }
+  talent: SkillTalentDTO
   actions: ActionDTO[]
 }
 
@@ -98,9 +138,23 @@ export interface SkillsResponse {
 
 export const getSkills = () => api<SkillsResponse>('/api/skills')
 
+/** One cross-training edge: a talent in `skillId` that feeds this profession. */
+export interface FedBy {
+  skillId: string
+  name: string
+  /** the talent's name, e.g. "Deep Veins" */
+  label: string
+  /** milestones where the feeder owns that talent (empty → nothing is fed) */
+  taken: number[]
+}
+
 export interface SkillPageResponse {
   skill: SkillDTO
+  /** professions whose synergy talent feeds this one (the reverse edge of the web) */
+  fedBy: FedBy[]
   items: ItemDTO[]
+  /** where each material is produced: itemId → the action that makes it */
+  sources: Record<string, { skillId: string; actionId: string }>
   inventory: { itemId: string; count: number }[]
   equipment: { slot: string; itemId: string }[]
   bonuses: { globalXp: number; damage: number; drop: number; hp: number }

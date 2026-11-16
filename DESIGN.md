@@ -155,6 +155,7 @@ palette and theme again later.
 - One **vermilion seal** for the forward action; brass gold for earned numbers
 - Ruled entries (1px rules) instead of a card grid; 3–5px radii
 - Mobile-first single column (max 42rem), three-tab bottom bar, and a title bar with the account behind a profile stamp
+- Desktop moves both bars into a persistent **left rail** and opens pages into a wider, sometimes two-column **spread**
 
 ## Colors
 
@@ -231,19 +232,34 @@ the display serif with `font-variant-numeric: tabular-nums`. Sentences are sans.
 
 One column, mobile first. Content sits in a centered `max-width: 42rem` column
 with 1rem side padding and safe-area insets. Pages open with a header carrying a
-1px rule beneath it; content below is **ruled entries** — rows separated by 1px
-`ink-700` rules — rather than a grid of cards. Density is high but never cramped:
-rows carry 0.75–1rem vertical padding.
+1px rule beneath it; the rule always keeps 1rem of air below it, so a panel or
+heading never sits on the line. Content below is **ruled entries** — rows
+separated by 1px `ink-700` rules — rather than a grid of cards. Density is high
+but never cramped: rows carry 0.75–1rem vertical padding.
 
-Navigation is two fixed surfaces. A **title bar** at the top carries the app mark
-and, on the right, a personal **profile stamp** — a small square holding the
-member's initial — whose menu holds Chat, Bank, History, Settings and Sign out.
-Three equal tabs sit in the thumb zone at the bottom: **Home, Learn, Skills**.
+From `min-width: 1024px` the column widens (`max-width: 72rem`) and a page may
+open into a **spread** — two ruled columns set side by side, like the two pages of
+an open dictionary — while a focused task (the drill, a conversation) stays in a
+centered narrower measure. Pages that spread: Home (activity map beside the earned
+figures), Learn (the deck composer beside the path), Skills (categories flowing
+into two balanced columns), Skills detail (the ledger beside the talent ladder and
+actions), Settings (panels in two columns). Lists with ragged heights use CSS
+columns so the two sides stay balanced; card lists use a plain two-column grid.
+
+Navigation is two fixed surfaces on a phone. A **title bar** at the top carries the
+app mark and, on the right, a personal **profile stamp** — a small square holding
+the member's initial — whose menu holds Chat, Bank, History, Settings and Sign out.
+Three equal tabs sit in the thumb zone at the bottom: **Home, Skills, Learn**.
 Both are safe-area padded and blurred `ink-950/90` over the content; the active
 tab, and the stamp on an account screen, read in seal vermilion on a
-`seal-400/12` pill, with drawn single-stroke SVG icons. Primary actions live in
-the thumb zone; on desktop the same column simply gets more whitespace — there is
-no multi-column dashboard.
+`seal-400/12` pill, with drawn single-stroke SVG icons.
+
+On desktop both bars disappear and every destination moves into a persistent
+**left rail** — the dictionary's spine: the wordmark, then Home / Skills / Learn,
+a hairline rule, then Chat / Bank / History / Settings, with the member's stamp and
+Sign out pinned at the foot. The rail is flat `ink-950` behind a 1px `ink-700`
+rule and takes the same `seal-400/12` active pill as the phone tab. The page
+scrolls beside it; primary actions stay with the content rather than the rail.
 
 ## Elevation & Depth
 
@@ -313,6 +329,9 @@ with a vermilion border holding the earned level.
 - **Style:** a sticky top title bar (app mark + profile stamp) over three equal
   seal-active tabs in a sticky bottom bar; a drawn single-stroke SVG icon above an
   11px label; `ink-950/90` blurred background; 1px `ink-700` border.
+- **Desktop (≥1024px):** both bars give way to one fixed 15rem left rail — wordmark,
+  Home / Skills / Learn, a hairline, Chat / Bank / History / Settings, then the
+  member stamp and Sign out at the foot; flat `ink-950` behind a 1px `ink-700` rule.
 - **Default / Hover:** `ink-400` label with `ink-200` on hover.
 - **Active:** `seal-400/12` pill, `seal-300` label and icon. The profile stamp takes
   the same seal border when its menu is open or its screen is current.

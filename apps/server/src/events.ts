@@ -33,6 +33,7 @@ export interface GameEventMap {
     talentId: string
     skillId: string
     milestone: number
+    tier: 'choice' | 'mastery'
   }
   'talent.changed': {
     userId: string
@@ -40,6 +41,7 @@ export interface GameEventMap {
     fromTalentId: string
     skillId: string
     milestone: number
+    tier: 'choice' | 'mastery'
   }
   'item.equipped': { userId: string; itemId: string; slot: string }
   'combat.hit': { userId: string; monsterId: string; damage: number; monsterHp: number }

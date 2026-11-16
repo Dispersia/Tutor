@@ -25,10 +25,18 @@
     food: '<path d="M5 4v7a3 3 0 0 0 6 0V4M8 4v16M16 4c-1.5 1.5-2 3-2 5s.5 3 2 3 2-1 2-3-.5-3.5-2-5zM16 12v8" />',
     potion: '<path d="M9 3h6M10 3v5l-4 8a3 3 0 0 0 2.7 4.3h6.6A3 3 0 0 0 18 16l-4-8V3" />',
     burst: '<path d="m12 2 2 6 6-2-4.5 4.5L22 14l-6 1 1 6-5-3.5L7 21l1-6-6-1 6.5-3.5L4 6l6 2z" />',
-    trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0zM8 5H5v2a3 3 0 0 0 3 3M16 5h3v2a3 3 0 0 1-3 3M9 20h6M12 13v7" />',
-    skull: '<path d="M12 3a7 7 0 0 0-7 7v4l2 2v3h10v-3l2-2v-4a7 7 0 0 0-7-7zM9.5 11h.01M14.5 11h.01M10 17h4" />',
+    trophy:
+      '<path d="M8 4h8v5a4 4 0 0 1-8 0zM8 5H5v2a3 3 0 0 0 3 3M16 5h3v2a3 3 0 0 1-3 3M9 20h6M12 13v7" />',
+    skull:
+      '<path d="M12 3a7 7 0 0 0-7 7v4l2 2v3h10v-3l2-2v-4a7 7 0 0 0-7-7zM9.5 11h.01M14.5 11h.01M10 17h4" />',
     dot: '<circle cx="12" cy="12" r="3" />',
     mark: '<path d="M5 12h14" />',
+    // the web: two links of a chain
+    link: '<path d="M10.5 13.5a3.5 3.5 0 0 0 5 0l3-3a3.5 3.5 0 0 0-5-5l-1.4 1.4M13.5 10.5a3.5 3.5 0 0 0-5 0l-3 3a3.5 3.5 0 0 0 5 5l1.4-1.4" />',
+    // not yet earned
+    lock: '<path d="M6.5 11h11v9h-11zM9 11V8.5a3 3 0 0 1 6 0V11" />',
+    // the flow between two trades
+    arrow: '<path d="M4 12h15M15 8l4 4-4 4" />',
   }
 </script>
 
