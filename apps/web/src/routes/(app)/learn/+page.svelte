@@ -71,6 +71,9 @@
   )
   const selected = $derived(usable.find((u) => u.action.id === actionId))
 
+  /** Decks still generating their cards in the background. */
+  const generating = $derived(decks.filter((d) => d.settings?.building))
+
   /** The same actions grouped by profession, for the selector. */
   const groups = $derived(
     (ref?.skills ?? [])
@@ -103,6 +106,14 @@
     } finally {
       loading = false
     }
+  })
+
+  /** While a deck is generating in the background, follow its progress. */
+  onMount(() => {
+    const timer = setInterval(() => {
+      if (decks.some((d) => d.settings?.building)) void reload()
+    }, 4000)
+    return () => clearInterval(timer)
   })
 
   function chooseProfession(e: Event) {
@@ -311,8 +322,8 @@
         <span class="text-[11px] text-ink-400">{inspection.noteCount} notes</span>
       </div>
       <p class="mt-1 text-xs text-ink-400">
-        Pick the deck's language and which field is the real word. The prompt above is applied to
-        this deck too.
+        Pick the deck's language and which field is the real word. The whole deck is imported — the
+        AI weaves sentence and grammar cards through its words and fills it in the background.
       </p>
 
       <label class="mt-3 block text-[11px] text-ink-400">
@@ -461,6 +472,26 @@
           <i style="width: {progress}%"></i>
         </div>
 
+        {#if d.settings?.building}
+          {@const built = d.settings.cursor ?? 0}
+          {@const total = d.settings.buildTotal ?? 0}
+          <div class="mt-2">
+            <div class="flex items-baseline justify-between text-[11px] text-ink-400">
+              <span class="flex items-center gap-1.5">
+                <Spinner size={12} label="Generating cards" /> Generating cards…
+              </span>
+              <span>{built}{total > 0 ? ` / ${total}` : ''} words</span>
+            </div>
+            <div class="bar mt-1">
+              <i style="width: {total > 0 ? (built / total) * 100 : 0}%"></i>
+            </div>
+          </div>
+        {:else if d.settings?.buildError}
+          <p class="mt-2 rounded-md bg-ember-950 px-3 py-2 text-[11px] text-ember-300">
+            Generation stopped: {d.settings.buildError}
+          </p>
+        {/if}
+
         {#if d.settings?.instruction}
           <p class="mt-2 line-clamp-2 text-[11px] text-ink-500" title={d.settings.instruction}>
             Prompt · {d.settings.instruction}
@@ -519,7 +550,7 @@
           <button
             type="button"
             onclick={() => grow(d)}
-            disabled={Boolean(growing)}
+            disabled={Boolean(growing) || Boolean(d.settings?.building)}
             class="btn btn-ghost px-3 py-2 text-xs disabled:opacity-60"
           >
             {#if growing === d.deckId}<Spinner size={13} label="Growing the deck" /> Growing…{:else}Grow

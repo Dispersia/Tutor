@@ -77,9 +77,12 @@ topic ("ordering at a restaurant") and it appends another n+1 batch.
 
 You can also **import an Anki deck** (`.apkg`) — its words become the source
 instead of a frequency list, and the templates write the cards from them. The
-importer reads the collection straight from the zip (no dependency), shows the
-deck's fields with a preview, and lets you **pick which field is the real word**
-(plus optional reading/meaning fields) before it builds anything. No guessing.
+**whole deck** is imported: its ordered words are the starter and the generator
+weaves sentence and grammar cards through them, filling the deck in the
+background so the request returns at once. The importer reads the collection
+straight from the zip (no dependency), shows the deck's fields with a preview,
+and lets you **pick which field is the real word** (plus optional
+reading/meaning fields) before it builds anything. No guessing.
 
 Adding an exercise type takes a backend `ExerciseDef` + a Svelte component keyed by
 the same `id` — no core changes (see `docs/DESIGN.md` §11.2). Adding a profession

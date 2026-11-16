@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { createApp } from './app'
 import type { App, Deps } from './context'
 import { openDb } from './db/client'
-import { parseInstruction } from './deck/generate'
+import { awaitDeckBuild, parseInstruction, PLAN_CHUNK } from './deck/generate'
 import type { PlannedCard, Planner, PlanRequest } from './deck/plan'
 import type { PitchFetcher, PitchWord } from './deck/pitch'
 import type { Role } from './env'
@@ -244,6 +244,7 @@ test('a new deck reuses the prompt from the previous one', async () => {
   expect(res.status).toBe(201)
   const body = (await res.json()) as DeckBody
   expect(body.deck.settings.instruction).toBe('traditional Chinese, zhuyin only')
+  await awaitDeckBuild(body.deck.id)
   sqlite.close()
 })
 
@@ -490,25 +491,42 @@ test('POST /api/decks/inspect previews the deck fields before import', async () 
   sqlite.close()
 })
 
-test('POST /api/decks/import builds a deck from an uploaded Anki package', async () => {
+test('POST /api/decks/import builds a whole deck from an uploaded Anki package', async () => {
   const { app, sqlite } = makeApp()
   const cookie = await signup(app)
   const apkg = readFileSync(join(import.meta.dir, 'anki/fixtures/sample.apkg'))
   const form = new FormData()
   form.set('file', new File([apkg], 'sample.apkg'))
   form.set('targetLang', 'zh')
-  form.set('count', '4')
-  // the learner's explicit field choice drives the import
+  // no count: the whole deck is imported, not a 20-word first batch
   form.set('wordField', '0')
   form.set('readingField', '1')
   form.set('meaningField', '2')
   const res = await app.request('/api/decks/import', auth(cookie, { method: 'POST', body: form }))
   expect(res.status).toBe(201)
-  const body = (await res.json()) as DeckBody & { words: number; fields: string[] }
+  const body = (await res.json()) as DeckBody & {
+    words: number
+    fields: string[]
+    building: boolean
+  }
   expect(body.source).toBe('Imported Chinese')
-  expect(body.newWords).toEqual(['我', '你', '喝', '茶'])
   expect(body.words).toBe(4)
   expect(body.fields).toEqual(['Word', 'Reading', 'Meaning'])
+  // the response returns immediately; the cards fill in the background
+  expect(body.building).toBe(true)
+
+  await awaitDeckBuild(body.deck.id)
+  const after = (await (
+    await app.request(`/api/decks/${body.deck.id}/cards`, auth(cookie))
+  ).json()) as {
+    deck: { settings: Record<string, unknown> }
+    cards: { back: string; payload: Record<string, unknown> }[]
+  }
+  const vocab = after.cards.filter((c) => c.payload.template === 'vocab')
+  expect(vocab.map((c) => c.back)).toEqual(['我', '你', '喝', '茶'])
+  // the generator weaves a grammar card through the imported words
+  expect(after.cards.some((c) => c.payload.template === 'grammar')).toBe(true)
+  expect(after.deck.settings.building).toBe(false)
 
   // the imported deck can grow from its stored word list (no frequency pull)
   const grown = (await (
@@ -528,7 +546,6 @@ test('POST /api/decks/import handles a modern schema-18 package', async () => {
   const form = new FormData()
   form.set('file', new File([apkg], 'modern.apkg'))
   form.set('targetLang', 'zh')
-  form.set('count', '4')
   form.set('wordField', '0')
   form.set('readingField', '1')
   form.set('meaningField', '2')
@@ -536,7 +553,13 @@ test('POST /api/decks/import handles a modern schema-18 package', async () => {
   expect(res.status).toBe(201)
   const body = (await res.json()) as DeckBody
   expect(body.source).toBe('Imported Modern')
-  expect(body.newWords).toEqual(['我', '你', '喝', '茶'])
+
+  await awaitDeckBuild(body.deck.id)
+  const after = (await (
+    await app.request(`/api/decks/${body.deck.id}/cards`, auth(cookie))
+  ).json()) as { cards: { back: string; payload: Record<string, unknown> }[] }
+  const vocab = after.cards.filter((c) => c.payload.template === 'vocab')
+  expect(vocab.map((c) => c.back)).toEqual(['我', '你', '喝', '茶'])
   sqlite.close()
 })
 
@@ -546,13 +569,13 @@ test('POST /api/decks/import detects the deck language when none is given', asyn
   const apkg = readFileSync(join(import.meta.dir, 'anki/fixtures/modern-schema18.apkg'))
   const form = new FormData()
   form.set('file', new File([apkg], 'modern.apkg'))
-  form.set('count', '4')
   form.set('wordField', '0')
   // no targetLang: the deck's own script (Han) decides
   const res = await app.request('/api/decks/import', auth(cookie, { method: 'POST', body: form }))
   expect(res.status).toBe(201)
   const body = (await res.json()) as DeckBody
   expect(body.deck.targetLang).toBe('zh')
+  await awaitDeckBuild(body.deck.id)
   sqlite.close()
 })
 
@@ -577,5 +600,57 @@ test('GET /api/decks exposes each deck settings', async () => {
     decks: { settings: { instruction?: string } }[]
   }
   expect(body.decks[0]!.settings.instruction).toContain('chinese frequency list')
+  sqlite.close()
+})
+
+test('a large build chunks the planner and keeps n+1 across chunks', async () => {
+  const words = Array.from({ length: PLAN_CHUNK * 2 + 0 }, (_, i) => `w${i + 1}`)
+  const bigFetcher: Fetcher = async () => words.map((w, i) => `${w} ${1000 - i}`).join('\n')
+  const calls: PlanRequest[] = []
+  const chunkPlanner: Planner = async (req) => {
+    calls.push(req)
+    const vocab: PlannedCard[] = req.words.slice(0, req.count).map((w) => ({
+      template: 'vocab' as const,
+      front: `meaning ${w}`,
+      back: w,
+      reading: `r-${w}`,
+    }))
+    const first = req.words[0]
+    const sentence: PlannedCard = {
+      template: 'sentence',
+      front: 'build it',
+      back: first ?? '',
+      payload: { tokens: [first ?? ''] },
+    }
+    return [...vocab, sentence]
+  }
+  const { app, sqlite } = makeApp({ fetcher: bigFetcher, planner: chunkPlanner })
+  const cookie = await signup(app)
+  const created = (await (
+    await app.request(
+      '/api/decks',
+      auth(
+        cookie,
+        json({ instruction: 'chinese frequency list', targetLang: 'zh', count: words.length }),
+      ),
+    )
+  ).json()) as DeckBody
+
+  // one planner call per chunk, never more than PLAN_CHUNK words
+  expect(calls.length).toBe(2)
+  expect(calls.every((c) => c.words.length <= PLAN_CHUNK)).toBe(true)
+  // each later batch is told the words the earlier ones introduced (n+1)
+  expect(calls[0]!.knownWords.length).toBe(0)
+  expect(calls[1]!.knownWords.length).toBe(PLAN_CHUNK)
+  expect(created.newWords.length).toBe(words.length)
+
+  // the sentence card shares the last introduced word's n+1 step
+  const cards = (await (
+    await app.request(`/api/decks/${created.deck.id}/cards`, auth(cookie))
+  ).json()) as { cards: { payload: Record<string, unknown> }[] }
+  const steps = cards.cards
+    .filter((c) => c.payload.template === 'vocab')
+    .map((c) => c.payload.step)
+  expect(steps).toEqual(words.map((_, i) => i + 1))
   sqlite.close()
 })

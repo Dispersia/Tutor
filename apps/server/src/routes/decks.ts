@@ -15,7 +15,13 @@ import {
 import { readApkg } from '../anki/parse'
 import { parsePitchContour } from '@tutor/core'
 import { detectLanguage, inspectAnki, wordsFromAnki } from '../anki/words'
-import { buildDeck, growDeck, parseInstruction } from '../deck/generate'
+import {
+  buildDeck,
+  createDeckForBuild,
+  growDeck,
+  parseInstruction,
+  startDeckBuild,
+} from '../deck/generate'
 import { llmPlanner, type Planner } from '../deck/plan'
 import {
   backfillDeckPitch,
@@ -260,8 +266,12 @@ export function registerDecks(app: App) {
 
   /**
    * Import an Anki `.apkg`: the words come from the learner's own deck instead
-   * of a frequency list, and the templates write the cards from them. The
-   * word/reading/meaning fields are chosen by the caller (`/inspect` previews them).
+   * of a frequency list, and the templates write the cards from them. The whole
+   * deck is imported by default — its ordered words are the starter, and the
+   * generator weaves sentence/grammar cards through them — and it fills in the
+   * background because that is dozens of LLM calls. An explicit `count` imports
+   * just a prefix. The word/reading/meaning fields are chosen by the caller
+   * (`/inspect` previews them).
    */
   app.post('/api/decks/import', async (c) => {
     const deps = c.get('deps')
@@ -271,7 +281,6 @@ export function registerDecks(app: App) {
     if (!(file instanceof File)) return c.json({ error: 'an .apkg file is required' }, 400)
     const requestedLang = String(form.get('targetLang') ?? '').trim()
     const sourceLang = String(form.get('sourceLang') ?? user.nativeLang ?? 'en')
-    const count = Math.min(Math.max(Number(form.get('count') ?? 20) || 20, 1), 50)
     const fieldIndex = (name: string): number | undefined => {
       const raw = form.get(name)
       return raw != null && String(raw) !== '' ? Number(raw) : undefined
@@ -290,6 +299,14 @@ export function registerDecks(app: App) {
       const list = wordsFromAnki(parsed, targetLang, { wordField, readingField, meaningField })
       if (list.words.length === 0) return c.json({ error: 'no words found in that deck' }, 422)
 
+      // Import the whole deck by default; an explicit count takes that prefix.
+      const rawCount = String(form.get('count') ?? '').trim()
+      const requested = rawCount === '' ? NaN : Number(rawCount)
+      const count =
+        Number.isFinite(requested) && requested > 0
+          ? Math.min(Math.floor(requested), list.words.length)
+          : list.words.length
+
       const hints: Record<string, { reading?: string; meaning?: string }> = {}
       for (const w of list.words.slice(0, count)) {
         const reading = list.readings[w]
@@ -301,10 +318,14 @@ export function registerDecks(app: App) {
       const remembered = rememberedDeckInstruction(deps.db, user.id) ?? ''
       if (typed) setUserSetting(deps.db, user.id, DECK_INSTRUCTION_KEY, typed)
       // Every deck carries the learner's prompt — typed now, or the one they
-      // already gave on an earlier deck. Only fall back to a generic one.
-      const instruction = typed || remembered || `Build a deck from the imported deck "${name}"`
+      // already gave on an earlier deck. Otherwise the generic wording asks the
+      // generator to weave sentences and grammar through the imported words.
+      const instruction =
+        typed ||
+        remembered ||
+        `Build a deck from the imported deck "${name}": introduce every word in the deck's order, and weave in sentence cards built from the words already introduced, plus grammar cards that use them.`
       const rules = parseInstruction(instruction, targetLang)
-      const built = await buildDeck(deps.db, user.id, {
+      const created = await createDeckForBuild(deps.db, user.id, {
         instruction,
         targetLang,
         sourceLang,
@@ -312,18 +333,44 @@ export function registerDecks(app: App) {
         name,
         words: list.words,
         sourceLabel: parsed.name ?? 'uploaded deck',
-        hints,
-        variant: rules.variant,
-        readingScript: rules.readingScript,
         fetcher: deps.fetcher,
         planner,
       })
+      // Mark the deck building, then generate in the background: a full import
+      // is many LLM calls, well past Bun's request idle timeout. The UI watches
+      // `settings.building` + the growth cursor.
+      updateDeckSettings(deps.db, created.deckId, user.id, {
+        building: true,
+        buildTotal: count,
+        cursor: 0,
+        buildError: undefined,
+      })
+      startDeckBuild(
+        deps.db,
+        user.id,
+        created.deckId,
+        {
+          instruction,
+          targetLang,
+          sourceLang,
+          variant: rules.variant,
+          readingScript: rules.readingScript,
+          hints,
+        },
+        { words: list.words, count, knownWords: [], startStep: 0 },
+        planner,
+      )
       return c.json(
         {
-          deck: getDeck(deps.db, built.deckId, user.id),
-          ...built,
+          deck: getDeck(deps.db, created.deckId, user.id),
+          deckId: created.deckId,
+          name: created.name,
+          cardCount: 0,
+          source: parsed.name ?? 'uploaded deck',
+          newWords: [],
           words: list.words.length,
           fields: list.fields,
+          building: true,
         },
         201,
       )

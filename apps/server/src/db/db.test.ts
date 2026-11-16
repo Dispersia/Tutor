@@ -2,9 +2,12 @@ import { expect, test } from 'bun:test'
 import { openDb } from './client'
 import {
   addMessage,
+  clearDeckBuilds,
   countUsers,
+  createDeck,
   createSession,
   createUser,
+  getDeck,
   getRoles,
   getSetting,
   getOwnedSession,
@@ -13,6 +16,7 @@ import {
   listSessions,
   setRole,
   setSetting,
+  updateDeckSettings,
 } from './repo'
 
 const defaults = { conversation: 'c', judge: 'j', generator: 'g', translator: 't' } as const
@@ -67,5 +71,29 @@ test('migrations are idempotent and include the new tables', () => {
   for (const t of ['users', 'auth_sessions', 'user_settings', 'sessions', 'messages', 'settings']) {
     expect(names).toContain(t)
   }
+  sqlite.close()
+})
+
+test('clearDeckBuilds lifts a build flag left behind by a restart', () => {
+  const { db, sqlite } = openDb(':memory:')
+  const user = createUser(db, { username: 'alice', passwordHash: 'x' })
+  const deck = createDeck(db, user.id, {
+    name: 'Kaishi',
+    sourceLang: 'en',
+    targetLang: 'ja',
+    settings: { building: true, buildTotal: 1477, cursor: 30 },
+  })
+  expect(getDeck(db, deck.id, user.id)?.settings.building).toBe(true)
+
+  expect(clearDeckBuilds(db)).toBe(1)
+  const after = getDeck(db, deck.id, user.id)!.settings
+  expect(after.building).toBe(false)
+  // the progress it reached is kept — only the flag is cleared
+  expect(after.cursor).toBe(30)
+  expect(after.buildTotal).toBe(1477)
+
+  // a deck that is not building is left alone
+  updateDeckSettings(db, deck.id, user.id, { building: false })
+  expect(clearDeckBuilds(db)).toBe(0)
   sqlite.close()
 })
