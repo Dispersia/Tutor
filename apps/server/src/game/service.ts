@@ -1,6 +1,7 @@
 import type { Db } from '../db/client'
 import {
   addItems,
+  addSrsReview,
   addTalent,
   addXpEvent,
   clearEncounter,
@@ -9,6 +10,7 @@ import {
   getActionXp,
   getEncounter,
   getItemCount,
+  getPlayerHp,
   getSrs,
   getStats,
   getUserSetting,
@@ -23,6 +25,7 @@ import {
   replaceTalent,
   setActionXp,
   setEquipment,
+  setPlayerHp,
   sumXp,
   upsertEncounter,
   upsertSrs,
@@ -33,6 +36,7 @@ import type { EventBus } from '../events'
 import { pinyinToZhuyin } from '../seed/zhuyin'
 import { buildLessons } from './curriculum'
 import {
+  DAY_MS,
   NEW_STATE,
   countDue,
   countNew,
@@ -66,6 +70,7 @@ import {
   actionsForSkill,
   missingMaterials,
   missingUnlocks,
+  weaponSkill,
 } from './skills'
 import {
   type TalentDef,
@@ -530,6 +535,8 @@ export function unequipItem(db: Db, userId: string, slot: string): void {
 // --- combat (Phase 8, docs/DESIGN.md §13.5) ----------------------------------
 
 export interface PlayerCombat {
+  /** The combat profession this loadout trains (from the equipped weapon). */
+  skill: SkillId
   maxHp: number
   power: number
   armour: number
@@ -537,39 +544,55 @@ export interface PlayerCombat {
   bodyArmour: number
 }
 
-/** The player's combat numbers for a given combat profession. */
-export function getPlayerCombat(db: Db, userId: string, combatSkill: SkillId): PlayerCombat {
+/**
+ * The player's combat numbers for their current loadout. The equipped weapon
+ * decides the trained skill (sword → Strength, bow → Ranged, staff → Magic), so
+ * fights always use what you have — no per-monster choice.
+ */
+export function getPlayerCombat(db: Db, userId: string): PlayerCombat {
   const b = aggregateBonuses(db, userId)
   const eq = listEquipment(db, userId)
   const weapon = eq.find((e) => e.slot === 'weapon')
+  const weaponItem = weapon ? ITEM_BY_ID.get(weapon.itemId) : undefined
+  const weaponPower = weaponItem?.power ?? 0
+  const skill = weaponSkill(weaponItem?.tags)
   const body = eq.find((e) => e.slot === 'body')
-  const weaponPower = weapon ? (ITEM_BY_ID.get(weapon.itemId)?.power ?? 0) : 0
   const bodyArmour = body ? (ITEM_BY_ID.get(body.itemId)?.armour ?? 0) : 0
   return {
+    skill,
     maxHp: playerMaxHp(skillLevelOf(db, userId, 'constitution'), b.hp, bodyArmour),
-    power: playerPower(skillLevelOf(db, userId, combatSkill), weaponPower, b.damage),
+    power: playerPower(skillLevelOf(db, userId, skill), weaponPower, b.damage),
     armour: bodyArmour,
     weaponPower,
     bodyArmour,
   }
 }
 
+/** Every monster is fightable with whatever gear you have — no per-monster gate. */
 export function monsterState(
-  db: Db,
-  userId: string,
-  m: MonsterDef,
+  _db: Db,
+  _userId: string,
+  _m: MonsterDef,
 ): { unlocked: boolean; missing: UnlockReq[]; equipMissing: { slot: string; tag: string } | null } {
-  const missing = (m.requires ?? []).filter((r) => skillLevelOf(db, userId, r.skill) < r.level)
-  let equipMissing: { slot: string; tag: string } | null = null
-  if (m.equip) {
-    const eq = listEquipment(db, userId).find((e) => e.slot === m.equip!.slot)
-    const item = eq ? ITEM_BY_ID.get(eq.itemId) : undefined
-    if (!item?.tags?.includes(m.equip.tag)) equipMissing = m.equip
-  }
-  return { unlocked: missing.length === 0 && !equipMissing, missing, equipMissing }
+  return { unlocked: true, missing: [], equipMissing: null }
 }
 
 // --- auto-used consumables ---------------------------------------------------
+
+/**
+ * The player's HP right now. HP persists between fights (docs/DESIGN.md §13.5):
+ * damage carries over and only food/potions restore it, so re-entering a fight
+ * is not a free heal. A player who has never fought starts at full; the value is
+ * clamped to their current max HP, which moves with Constitution and armour.
+ */
+export function currentHp(db: Db, userId: string, maxHp: number): number {
+  const stored = getPlayerHp(db, userId)
+  if (stored == null) return maxHp
+  return Math.max(1, Math.min(stored, maxHp))
+}
+
+/** HP a defeat leaves you at — a sliver, so you must eat to recover. */
+export const DEFEAT_HP = 1
 
 const DEFAULT_FOOD_THRESHOLD = 0.5
 
@@ -642,7 +665,7 @@ export function startEncounter(
   }
 
   // auto-drink the best potion at the start of the fight
-  const pc = getPlayerCombat(db, userId, m.combatSkill)
+  const pc = getPlayerCombat(db, userId)
   let maxHp = pc.maxHp
   let powerBonus = 0
   let potionId: string | null = null
@@ -656,10 +679,14 @@ export function startEncounter(
     else maxHp = Math.round(maxHp * (1 + potion.buff.value))
   }
 
+  // HP carries between fights: resume from what's left, clamped to this fight's
+  // max HP (which a restore potion may have raised).
+  const startHp = currentHp(db, userId, maxHp)
+
   upsertEncounter(db, userId, {
     monsterId,
     monsterHp: m.hp,
-    playerHp: maxHp,
+    playerHp: startHp,
     playerMaxHp: maxHp,
     powerBonus,
     potionId,
@@ -670,7 +697,7 @@ export function startEncounter(
   return {
     ok: true,
     monster: m,
-    encounter: { monsterId, monsterHp: m.hp, playerHp: maxHp, playerMaxHp: maxHp },
+    encounter: { monsterId, monsterHp: m.hp, playerHp: startHp, playerMaxHp: maxHp },
     drank,
   }
 }
@@ -690,6 +717,8 @@ export function grantExactItems(db: Db, bus: EventBus, userId: string, costs: Co
 
 export interface HitOutcome {
   correct: boolean
+  /** the combat profession the equipped weapon trains */
+  skill: SkillId
   damage: number
   monsterHp: number
   playerDamage: number
@@ -698,6 +727,10 @@ export interface HitOutcome {
   outcome: 'ongoing' | 'won' | 'lost'
   drops: Cost[]
   xp: number
+  /** Defence XP gained from weathering the monster's blow. */
+  defenceXp: number
+  /** Constitution XP gained from weathering the monster's blow. */
+  constitutionXp: number
   ate: { item: string; heal: number; playerHp: number } | null
   talentUnlocked: number | null
 }
@@ -717,7 +750,7 @@ export function combatResolve(
     clearEncounter(db, userId)
     return null
   }
-  const pc = getPlayerCombat(db, userId, m.combatSkill)
+  const pc = getPlayerCombat(db, userId)
   const maxHp = enc.playerMaxHp || pc.maxHp
   let monsterHp = enc.monsterHp
   let playerHp = enc.playerHp
@@ -725,6 +758,8 @@ export function combatResolve(
   let damage = 0
   let playerDamage = 0
   let xp = 0
+  let defenceXp = 0
+  let constitutionXp = 0
   let ate: { item: string; heal: number; playerHp: number } | null = null
   const drops: Cost[] = []
 
@@ -744,10 +779,16 @@ export function combatResolve(
     monsterHp = Math.max(0, monsterHp - damage)
     xp = Math.max(1, Math.round(m.xp / 4))
     bus.emit('combat.hit', { userId, monsterId: m.id, damage, monsterHp })
-  } else {
-    playerDamage = incomingDamage(m.damage, pc.armour)
-    playerHp = Math.max(0, playerHp - playerDamage)
   }
+
+  // The monster swings on every exchange — whether you strike it, miss, or run
+  // out of time. A correct answer only adds your own hit on top. Weathering the
+  // blow trains Defence and Constitution; XP scales with what actually landed
+  // (armour reduces both damage and training).
+  playerDamage = incomingDamage(m.damage, pc.armour)
+  playerHp = Math.max(0, playerHp - playerDamage)
+  defenceXp = Math.max(1, playerDamage)
+  constitutionXp = Math.max(1, playerDamage)
 
   let outcome: HitOutcome['outcome'] = 'ongoing'
   if (monsterHp <= 0) {
@@ -758,7 +799,19 @@ export function combatResolve(
     outcome = 'lost'
   }
 
-  const award = xp > 0 ? awardActionXp(db, bus, userId, primaryActionOf(m.combatSkill), xp) : null
+  const awards = [
+    xp > 0 ? awardActionXp(db, bus, userId, primaryActionOf(pc.skill), xp) : null,
+    defenceXp > 0 ? awardActionXp(db, bus, userId, primaryActionOf('defence'), defenceXp) : null,
+    constitutionXp > 0
+      ? awardActionXp(db, bus, userId, primaryActionOf('constitution'), constitutionXp)
+      : null,
+  ]
+  const talentUnlocked = awards.find((a) => a?.talentUnlocked)?.talentUnlocked ?? null
+
+  // HP persists between fights: write the surviving value back. A defeat leaves
+  // you at a sliver, not a free full heal — you have to eat to recover.
+  setPlayerHp(db, userId, outcome === 'lost' ? DEFEAT_HP : Math.max(DEFEAT_HP, playerHp))
+
   if (outcome === 'won') {
     grantExactItems(db, bus, userId, drops)
     awardXp(db, bus, userId, m.xp, 'combat', m.id)
@@ -783,6 +836,7 @@ export function combatResolve(
 
   return {
     correct,
+    skill: pc.skill,
     damage,
     monsterHp,
     playerDamage,
@@ -791,8 +845,10 @@ export function combatResolve(
     outcome,
     drops,
     xp,
+    defenceXp,
+    constitutionXp,
     ate,
-    talentUnlocked: award?.talentUnlocked ?? null,
+    talentUnlocked,
   }
 }
 
@@ -818,7 +874,10 @@ export function desiredRetentionFor(db: Db, userId: string): number {
   return pct / 100
 }
 
-/** Advances a card's FSRS-6 schedule after a review and emits `srs.updated`. */
+/**
+ * Advances a card's FSRS-6 schedule after a review, appends to the review log
+ * and emits `srs.updated`. `source` records which surface fed the schedule.
+ */
 export function recordReview(
   db: Db,
   bus: EventBus,
@@ -826,6 +885,7 @@ export function recordReview(
   cardId: string,
   score: number,
   correct: boolean,
+  opts: { source?: string } = {},
 ): ReviewSchedule {
   const row = getSrs(db, userId, cardId)
   const prev: FsrsState = row
@@ -844,9 +904,12 @@ export function recordReview(
     : NEW_STATE
   const now = Date.now()
   const rating = ratingFromScore(score, correct)
-  const { state, intervalDays, dueAt } = schedule(prev, rating, now, {
-    desiredRetention: desiredRetentionFor(db, userId),
-  })
+  const desiredRetention = desiredRetentionFor(db, userId)
+  const elapsedDays =
+    prev.state === 'new' || prev.lastReviewAt == null
+      ? 0
+      : Math.max(0, (now - prev.lastReviewAt) / DAY_MS)
+  const { state, intervalDays, dueAt } = schedule(prev, rating, now, { desiredRetention })
   upsertSrs(db, userId, cardId, {
     state: state.state,
     step: state.step,
@@ -858,6 +921,22 @@ export function recordReview(
     dueAt: state.dueAt,
     lastRating: state.lastRating,
     lastReviewAt: state.lastReviewAt ?? now,
+  })
+  addSrsReview(db, {
+    userId,
+    cardId,
+    rating,
+    stateBefore: prev.state,
+    stateAfter: state.state,
+    stabilityBefore: prev.stability,
+    stabilityAfter: state.stability,
+    difficultyBefore: prev.difficulty,
+    difficultyAfter: state.difficulty,
+    intervalDays,
+    elapsedDays,
+    desiredRetention,
+    dueAt,
+    source: opts.source ?? 'practice',
   })
   bus.emit('srs.updated', {
     userId,

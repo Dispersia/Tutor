@@ -1,6 +1,13 @@
 import { expect, test } from 'bun:test'
 import { openDb } from '../db/client'
-import { addItems, createUser, getActionXp, getEncounter, getItemCount } from '../db/repo'
+import {
+  addItems,
+  clearEncounter,
+  createUser,
+  getActionXp,
+  getEncounter,
+  getItemCount,
+} from '../db/repo'
 import { EventBus } from '../events'
 import { MONSTER_BY_ID } from './combat'
 import {
@@ -10,6 +17,7 @@ import {
   getPlayerCombat,
   monsterState,
   startEncounter,
+  unequipItem,
 } from './service'
 
 function setup() {
@@ -19,14 +27,14 @@ function setup() {
   return { db, bus, user, sqlite }
 }
 
-test('monsters are gated by skill level and equipment', () => {
+test('every monster is fightable — no per-monster skill or gear gate', () => {
   const { db, user, sqlite } = setup()
-  const dragon = monsterState(db, user.id, MONSTER_BY_ID.get('dragon')!)
-  expect(dragon.unlocked).toBe(false)
-  expect(dragon.missing.length).toBe(2)
-  expect(dragon.equipMissing?.tag).toBe('bow')
-
-  expect(monsterState(db, user.id, MONSTER_BY_ID.get('slime')!).unlocked).toBe(true)
+  for (const m of MONSTER_BY_ID.values()) {
+    const state = monsterState(db, user.id, m)
+    expect(state.unlocked).toBe(true)
+    expect(state.missing).toEqual([])
+    expect(state.equipMissing).toBeNull()
+  }
   sqlite.close()
 })
 
@@ -35,7 +43,8 @@ test('a fight: hits damage the monster, a kill grants drops + XP', () => {
   addItems(db, user.id, 'bronze_sword', 1)
   equipItem(db, bus, user.id, 'bronze_sword')
 
-  const pc = getPlayerCombat(db, user.id, 'attack')
+  const pc = getPlayerCombat(db, user.id)
+  expect(pc.skill).toBe('strength')
   expect(pc.power).toBe(8)
   expect(pc.weaponPower).toBe(3)
 
@@ -56,8 +65,89 @@ test('a fight: hits damage the monster, a kill grants drops + XP', () => {
   expect(kill.monsterHp).toBe(0)
   expect(kill.drops).toEqual([{ item: 'bones', count: 1 }])
   expect(getItemCount(db, user.id, 'bones')).toBeGreaterThanOrEqual(1)
-  expect(getActionXp(db, user.id, 'train-attack')).toBeGreaterThan(0)
+  expect(getActionXp(db, user.id, 'train-strength')).toBeGreaterThan(0)
   expect(getEncounter(db, user.id)).toBeUndefined()
+  sqlite.close()
+})
+
+test('the weapon decides the skill the fight trains', () => {
+  const { db, bus, user, sqlite } = setup()
+  // no weapon → unarmed melee → Strength
+  expect(getPlayerCombat(db, user.id).skill).toBe('strength')
+  addItems(db, user.id, 'oak_shortbow', 1)
+  equipItem(db, bus, user.id, 'oak_shortbow')
+  expect(getPlayerCombat(db, user.id).skill).toBe('ranged')
+  unequipItem(db, user.id, 'weapon')
+  addItems(db, user.id, 'oak_staff', 1)
+  equipItem(db, bus, user.id, 'oak_staff')
+  expect(getPlayerCombat(db, user.id).skill).toBe('magic')
+  sqlite.close()
+})
+
+test('taking a hit trains Defence and Constitution', () => {
+  const { db, bus, user, sqlite } = setup()
+  startEncounter(db, bus, user.id, 'slime') // damage 2
+  const hit = combatResolve(db, bus, user.id, false)!
+  expect(hit.playerDamage).toBe(2)
+  expect(hit.defenceXp).toBe(2)
+  expect(hit.constitutionXp).toBe(2)
+  expect(getActionXp(db, user.id, 'train-defence')).toBeGreaterThan(0)
+  expect(getActionXp(db, user.id, 'train-constitution')).toBeGreaterThan(0)
+  sqlite.close()
+})
+
+test('the monster hits you even when you strike it', () => {
+  const { db, bus, user, sqlite } = setup()
+  addItems(db, user.id, 'bronze_sword', 1)
+  equipItem(db, bus, user.id, 'bronze_sword')
+  const pc = getPlayerCombat(db, user.id)
+
+  const start = startEncounter(db, bus, user.id, 'slime')
+  expect(start.ok).toBe(true)
+  if (!start.ok) return
+
+  const hit = combatResolve(db, bus, user.id, true)!
+  // You land your own hit...
+  expect(hit.damage).toBe(8)
+  expect(hit.monsterHp).toBe(7)
+  // ...and still take the slime's blow.
+  expect(hit.playerDamage).toBe(2)
+  expect(hit.playerHp).toBe(pc.maxHp - 2)
+  expect(hit.defenceXp).toBe(2)
+  expect(hit.constitutionXp).toBe(2)
+  sqlite.close()
+})
+
+test('HP persists between fights — restarting is not a free heal', () => {
+  const { db, bus, user, sqlite } = setup()
+  const pc = getPlayerCombat(db, user.id)
+
+  startEncounter(db, bus, user.id, 'slime') // damage 2
+  const first = combatResolve(db, bus, user.id, true)!
+  expect(first.playerHp).toBe(pc.maxHp - 2)
+
+  // Flee, then start a fresh fight: HP carries over rather than resetting.
+  clearEncounter(db, user.id)
+  const again = startEncounter(db, bus, user.id, 'slime')
+  expect(again.ok).toBe(true)
+  if (!again.ok) return
+  expect(again.encounter.playerHp).toBe(pc.maxHp - 2)
+  sqlite.close()
+})
+
+test('a defeat leaves you at a sliver of HP, not a full heal', () => {
+  const { db, bus, user, sqlite } = setup()
+  startEncounter(db, bus, user.id, 'goblin') // damage 3, maxHp 24
+  let outcome = 'ongoing'
+  for (let i = 0; i < 60 && outcome === 'ongoing'; i++) {
+    outcome = combatResolve(db, bus, user.id, false)!.outcome
+  }
+  expect(outcome).toBe('lost')
+
+  const again = startEncounter(db, bus, user.id, 'slime')
+  expect(again.ok).toBe(true)
+  if (!again.ok) return
+  expect(again.encounter.playerHp).toBe(1)
   sqlite.close()
 })
 
@@ -124,11 +214,11 @@ test('missing drills can lose the fight', () => {
   sqlite.close()
 })
 
-test('starting a locked monster is refused; no encounter returns null', () => {
+test('starting an unknown monster is refused; no encounter returns null', () => {
   const { db, bus, user, sqlite } = setup()
-  const res = startEncounter(db, bus, user.id, 'dragon')
+  const res = startEncounter(db, bus, user.id, 'mystery')
   expect(res.ok).toBe(false)
-  if (!res.ok) expect(res.error).toBe('locked')
+  if (!res.ok) expect(res.error).toBe('unknown monster')
   expect(combatResolve(db, bus, user.id, true)).toBeNull()
   sqlite.close()
 })

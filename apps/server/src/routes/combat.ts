@@ -1,18 +1,28 @@
 import type { Learner } from '@tutor/core'
-import { clearEncounter, getCard, getEncounter, listDecks, otherBacks, pickCard } from '../db/repo'
+import {
+  clearEncounter,
+  getCard,
+  getEncounter,
+  listCards,
+  listDecks,
+  otherBacks,
+  setPlayerHp,
+} from '../db/repo'
 import { registry } from '../exercises'
 import { MONSTERS, MONSTER_BY_ID, type MonsterDef } from '../game/combat'
 import {
   combatResolve,
+  currentHp,
   getPlayerCombat,
   knownWords,
   monsterState,
   recordReview,
+  srsStateMap,
   startEncounter,
   summary,
 } from '../game/service'
 import { readStudyPrefs, showsReadings } from '../game/study'
-import { pickNextExercise, readingMap } from './practice'
+import { pickNextExercise, pickReviewCard, readingMap } from './practice'
 import type { App, Deps } from '../context'
 
 type User = { id: string; nativeLang: string; targetLang: string | null; level: string | null }
@@ -26,11 +36,15 @@ function learnerOf(user: User): Learner {
   }
 }
 
-/** Builds "the next drill" for a monster's deck (exercise-agnostic). */
+/** Builds "the next drill" for a monster (exercise-agnostic, review only). */
 async function buildDrill(deps: Deps, user: User, deckLevel: string) {
   const decks = listDecks(deps.db, user.id)
-  const deck = decks.find((d) => d.level === deckLevel) ?? decks[0]
-  const card = pickCard(deps.db, user.id, deck?.id)
+  const deck = decks.find((d) => d.level === deckLevel)
+  // Combat is review only: never introduce a new card mid-fight. Prefer the
+  // monster's own deck, but fall back to any reviewed card (decks like Anki
+  // imports have no level, so the level match can miss).
+  const card =
+    pickReviewCard(deps, user.id, deck?.id) ?? (deck ? pickReviewCard(deps, user.id) : undefined)
   if (!card) return null
   const learner = learnerOf(user)
   const prefs = readStudyPrefs(deps.db, user.id)
@@ -49,11 +63,17 @@ async function buildDrill(deps: Deps, user: User, deckLevel: string) {
   return { instance, card }
 }
 
+/** How many of the learner's cards have a review state (combat is review only). */
+function countReviewCards(deps: Deps, userId: string): number {
+  const srs = srsStateMap(deps.db, userId)
+  return listCards(deps.db, userId).filter((c) => srs.has(c.id)).length
+}
+
 function encounterView(deps: Deps, userId: string) {
   const enc = getEncounter(deps.db, userId)
   if (!enc) return null
   const monster = MONSTER_BY_ID.get(enc.monsterId)
-  const player = getPlayerCombat(deps.db, userId, monster?.combatSkill ?? 'attack')
+  const player = getPlayerCombat(deps.db, userId)
   return {
     monsterId: enc.monsterId,
     monsterName: monster?.name ?? enc.monsterId,
@@ -77,20 +97,24 @@ export function registerCombat(app: App) {
       ...monsterState(deps.db, user.id, m),
     }))
     const view = encounterView(deps, user.id)
-    const player = getPlayerCombat(
-      deps.db,
-      user.id,
-      MONSTER_BY_ID.get(view?.monsterId ?? '')?.combatSkill ?? 'attack',
-    )
+    const player = getPlayerCombat(deps.db, user.id)
     // Resuming an in-progress fight needs a fresh drill too: the page only ever
     // gets one from `/start` or a `/hit`, so opening Combat mid-fight would sit
     // on "no drill available" with no way to continue.
     const drill = view
       ? await buildDrill(deps, user, MONSTER_BY_ID.get(view.monsterId)?.deckLevel ?? '')
       : null
+    const reviewCount = countReviewCards(deps, user.id)
     return c.json({
       monsters,
-      player: { maxHp: player.maxHp, armour: player.armour, weaponPower: player.weaponPower },
+      player: {
+        skill: player.skill,
+        maxHp: player.maxHp,
+        hp: currentHp(deps.db, user.id, player.maxHp),
+        armour: player.armour,
+        weaponPower: player.weaponPower,
+      },
+      reviewCount,
       encounter: view,
       instance: drill?.instance ?? null,
     })
@@ -101,15 +125,23 @@ export function registerCombat(app: App) {
     const user = c.get('user')!
     const { monsterId } = (await c.req.json().catch(() => ({}))) as { monsterId?: string }
     if (!monsterId) return c.json({ error: 'monsterId required' }, 400)
+    if (countReviewCards(deps, user.id) === 0) {
+      return c.json({ error: 'Review some cards in Practice before you fight.' }, 409)
+    }
     const res = startEncounter(deps.db, deps.events, user.id, monsterId)
     if (!res.ok) {
       return c.json({ error: res.error, missing: res.missing, equipMissing: res.equipMissing }, 403)
     }
     const drill = await buildDrill(deps, user, res.monster.deckLevel)
+    if (!drill) {
+      // No review drill available — don't strand the learner in an empty fight.
+      clearEncounter(deps.db, user.id)
+      return c.json({ error: 'No review cards available for this fight.' }, 409)
+    }
     return c.json({
       monster: res.monster,
       encounter: encounterView(deps, user.id),
-      instance: drill?.instance ?? null,
+      instance: drill.instance,
       drank: res.drank,
     })
   })
@@ -120,6 +152,9 @@ export function registerCombat(app: App) {
   app.post('/api/combat/leave', (c) => {
     const deps = c.get('deps')
     const user = c.get('user')!
+    // Fleeing keeps the HP you have left — HP persists between fights.
+    const enc = getEncounter(deps.db, user.id)
+    if (enc) setPlayerHp(deps.db, user.id, Math.max(1, enc.playerHp))
     clearEncounter(deps.db, user.id)
     return c.json({ encounter: null })
   })
@@ -131,6 +166,7 @@ export function registerCombat(app: App) {
       exerciseId?: string
       cardId?: string
       answer?: unknown
+      timedOut?: boolean
     }
     const card = body.cardId ? getCard(deps.db, body.cardId, user.id) : undefined
     if (!card) return c.json({ error: 'card not found' }, 404)
@@ -147,12 +183,22 @@ export function registerCombat(app: App) {
       known: [...knownWords(deps.db, user.id), card.back],
       showReadings: showsReadings(prefs, card.targetLang),
     }
-    const instance = await def.generate(ctx)
-    const result = await def.grade(ctx, instance, body.answer)
+    // A time-attack timeout is a miss even when the drill would have accepted
+    // an empty/partial answer. Skip generation: there is nothing to grade.
+    const result = body.timedOut
+      ? {
+          score: 0,
+          correct: false,
+          feedback: 'Out of time — the monster strikes.',
+          xp: 0,
+        }
+      : await def.grade(ctx, await def.generate(ctx), body.answer)
 
     const hit = combatResolve(deps.db, deps.events, user.id, result.correct)
     if (!hit) return c.json({ error: 'no active encounter' }, 409)
-    const srs = recordReview(deps.db, deps.events, user.id, card.id, result.score, result.correct)
+    const srs = recordReview(deps.db, deps.events, user.id, card.id, result.score, result.correct, {
+      source: 'combat',
+    })
 
     const view = encounterView(deps, user.id)
     let next: { instance: unknown } | null = null

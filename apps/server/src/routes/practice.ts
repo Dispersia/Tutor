@@ -52,6 +52,21 @@ function pickStudyCard(
   return id ? getCard(deps.db, id, userId) : undefined
 }
 
+/**
+ * Review-only card selection for combat: never a brand-new card. Only cards that
+ * already have a spaced-repetition state are eligible (due ones first), so a
+ * fight never introduces vocabulary — it practises what you've already met.
+ */
+export function pickReviewCard(deps: Deps, userId: string, deckId?: string): Card | undefined {
+  const srs = srsStateMap(deps.db, userId)
+  const ids = listCards(deps.db, userId, deckId)
+    .filter((c) => srs.has(c.id))
+    .map((c) => c.id)
+  if (ids.length === 0) return undefined
+  const id = selectCardId(ids, srs, Date.now())
+  return id ? getCard(deps.db, id, userId) : undefined
+}
+
 /** Maps stored cards to the curriculum builder's shape. */
 function stepCardsOf(cards: Card[]) {
   return cards.map((c) => ({

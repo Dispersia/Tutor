@@ -19,10 +19,12 @@ import {
   inventory,
   lessonProgress,
   messages,
+  playerState,
   reviews,
   sessions,
   settings,
   srs,
+  srsReviews,
   stats,
   talents,
   userSettings,
@@ -914,6 +916,20 @@ export function clearEncounter(db: Db, userId: string): void {
   db.delete(encounters).where(eq(encounters.userId, userId)).run()
 }
 
+// --- persistent player state (combat HP) -------------------------------------
+
+/** The player's persisted HP, or null when they have never fought (means "full"). */
+export function getPlayerHp(db: Db, userId: string): number | null {
+  return db.select().from(playerState).where(eq(playerState.userId, userId)).get()?.hp ?? null
+}
+
+export function setPlayerHp(db: Db, userId: string, hp: number): void {
+  db.insert(playerState)
+    .values({ userId, hp, updatedAt: now() })
+    .onConflictDoUpdate({ target: playerState.userId, set: { hp, updatedAt: now() } })
+    .run()
+}
+
 // --- spaced repetition + curriculum (Phase 9) --------------------------------
 
 export function getSrs(db: Db, userId: string, cardId: string) {
@@ -949,6 +965,39 @@ export function upsertSrs(
     .values({ userId, cardId, ...s })
     .onConflictDoUpdate({ target: [srs.userId, srs.cardId], set: { ...s } })
     .run()
+}
+
+/** Appends one FSRS review to the log (docs/DESIGN.md §13.6). */
+export function addSrsReview(
+  db: Db,
+  r: {
+    userId: string
+    cardId: string
+    rating: number
+    stateBefore: string
+    stateAfter: string
+    stabilityBefore: number
+    stabilityAfter: number
+    difficultyBefore: number
+    difficultyAfter: number
+    intervalDays: number
+    elapsedDays: number
+    desiredRetention: number
+    dueAt: number
+    source?: string
+  },
+): void {
+  db.insert(srsReviews)
+    .values({ ...r, id: id(), createdAt: now() })
+    .run()
+}
+
+/** The review log for one user, or one card, oldest first. */
+export function listSrsReviews(db: Db, userId: string, cardId?: string) {
+  const where = cardId
+    ? and(eq(srsReviews.userId, userId), eq(srsReviews.cardId, cardId))
+    : eq(srsReviews.userId, userId)
+  return db.select().from(srsReviews).where(where).orderBy(asc(srsReviews.createdAt)).all()
 }
 
 export function listLessonProgress(db: Db, userId: string) {

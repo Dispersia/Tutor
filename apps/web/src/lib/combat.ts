@@ -16,7 +16,6 @@ export interface MonsterDTO {
   level: number
   hp: number
   damage: number
-  combatSkill: string
   xp: number
   deckLevel: string
   drops: DropDef[]
@@ -40,7 +39,9 @@ export interface EncounterDTO {
 
 export interface CombatResponse {
   monsters: MonsterDTO[]
-  player: { maxHp: number; armour: number; weaponPower: number }
+  player: { skill: string; maxHp: number; hp: number; armour: number; weaponPower: number }
+  /** Cards with a review state — combat is review only. 0 means "practise first". */
+  reviewCount: number
   encounter: EncounterDTO | null
   /** The current drill when a fight is in progress (null otherwise). */
   instance: Instance | null
@@ -53,6 +54,8 @@ export interface Buff {
 
 export interface HitResult {
   correct: boolean
+  /** The combat profession the equipped weapon trains for this fight. */
+  skill: string
   damage: number
   monsterHp: number
   playerDamage: number
@@ -61,6 +64,9 @@ export interface HitResult {
   outcome: 'ongoing' | 'won' | 'lost'
   drops: { item: string; count: number }[]
   xp: number
+  /** XP trained in Defence / Constitution from the blow you take every exchange. */
+  defenceXp: number
+  constitutionXp: number
   ate: { item: string; heal: number; playerHp: number } | null
   talentUnlocked: number | null
 }
@@ -78,7 +84,16 @@ export const startFight = (monsterId: string) =>
 /** Flee the active fight: drop the encounter, no rewards, no penalty. */
 export const abandonFight = () => api<{ encounter: null }>('/api/combat/leave', { method: 'POST' })
 
-export const combatHit = (body: { exerciseId: string; cardId: string; answer: unknown }) =>
+/** Seconds a learner gets to answer each drill in a fight (time attack). */
+export const COMBAT_TIME_LIMIT_MS = 20_000
+
+export const combatHit = (body: {
+  exerciseId: string
+  cardId: string
+  answer: unknown
+  /** The timer ran out; the server grades it as a miss without grading the answer. */
+  timedOut?: boolean
+}) =>
   api<{
     result: Grade
     hit: HitResult

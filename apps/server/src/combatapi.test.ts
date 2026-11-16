@@ -3,6 +3,7 @@ import { createApp } from './app'
 import type { App, Deps } from './context'
 import { openDb } from './db/client'
 import type { Db } from './db/client'
+import { listCards, upsertSrs } from './db/repo'
 import type { Role } from './env'
 import { EventBus } from './events'
 import { OpenRouter } from './llm/openrouter'
@@ -56,6 +57,22 @@ async function signup(app: App, db: Db, username = 'alice') {
   // Decks are no longer pre-seeded; tests drill the curated fixture decks.
   const { user } = (await res.json()) as { user: { id: string } }
   seedStarterDecks(db, user.id)
+  // Combat is review only, so give every card a spent SRS state (due now).
+  const now = Date.now()
+  for (const c of listCards(db, user.id)) {
+    upsertSrs(db, user.id, c.id, {
+      state: 'review',
+      step: 0,
+      stability: 5,
+      difficulty: 5,
+      reps: 3,
+      lapses: 0,
+      intervalDays: 3,
+      dueAt: now - 1000,
+      lastRating: 3,
+      lastReviewAt: now - 86_400_000,
+    })
+  }
   return cookie
 }
 
@@ -91,10 +108,30 @@ test('GET /api/combat lists monsters, player stats and any encounter', async () 
   sqlite.close()
 })
 
-test('starting a gated monster is refused', async () => {
+test('starting a fight with no review cards is refused', async () => {
+  const { app, db, sqlite } = makeApp()
+  // Register without seeding any SRS state: nothing to review yet.
+  const res = await app.request(
+    '/api/auth/register',
+    json({ username: 'fresh', password: 'password123' }),
+  )
+  const cookie = res.headers.getSetCookie()[0]!.split(';')[0]!
+  const { user } = (await res.json()) as { user: { id: string } }
+  seedStarterDecks(db, user.id)
+
+  const start = await app.request('/api/combat/start', auth(cookie, json({ monsterId: 'slime' })))
+  expect(start.status).toBe(409)
+  const body = (await (await app.request('/api/combat', auth(cookie))).json()) as {
+    reviewCount: number
+  }
+  expect(body.reviewCount).toBe(0)
+  sqlite.close()
+})
+
+test('starting an unknown monster is refused', async () => {
   const { app, db, sqlite } = makeApp()
   const cookie = await signup(app, db)
-  const res = await app.request('/api/combat/start', auth(cookie, json({ monsterId: 'dragon' })))
+  const res = await app.request('/api/combat/start', auth(cookie, json({ monsterId: 'nope' })))
   expect(res.status).toBe(403)
   sqlite.close()
 })
@@ -143,6 +180,125 @@ test('fight a slime: hits land, a kill drops materials', async () => {
     inventory: { itemId: string; count: number }[]
   }
   expect(skills.inventory.find((i) => i.itemId === 'bones')?.count).toBeGreaterThanOrEqual(1)
+  sqlite.close()
+})
+
+test('a missed drill lets the monster hit back and trains Defence + Constitution', async () => {
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
+
+  const start = (await (
+    await app.request('/api/combat/start', auth(cookie, json({ monsterId: 'slime' })))
+  ).json()) as { encounter: { playerHp: number }; instance: Instance }
+  expect(start.encounter.playerHp).toBeGreaterThan(0)
+
+  const res = (await (
+    await app.request(
+      '/api/combat/hit',
+      auth(
+        cookie,
+        json({
+          exerciseId: start.instance.exerciseId,
+          cardId: start.instance.cardId,
+          answer: 'definitely-wrong',
+        }),
+      ),
+    )
+  ).json()) as {
+    result: { correct: boolean }
+    hit: {
+      correct: boolean
+      playerDamage: number
+      playerHp: number
+      defenceXp: number
+      constitutionXp: number
+    }
+    encounter: { playerHp: number } | null
+  }
+
+  expect(res.result.correct).toBe(false)
+  expect(res.hit.correct).toBe(false)
+  expect(res.hit.playerDamage).toBeGreaterThan(0)
+  expect(res.hit.playerHp).toBeLessThan(start.encounter.playerHp)
+  expect(res.hit.defenceXp).toBeGreaterThan(0)
+  expect(res.hit.constitutionXp).toBeGreaterThan(0)
+  expect(res.encounter?.playerHp).toBe(res.hit.playerHp)
+  sqlite.close()
+})
+
+test('a correct drill still takes the monster’s blow', async () => {
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
+
+  const start = (await (
+    await app.request('/api/combat/start', auth(cookie, json({ monsterId: 'slime' })))
+  ).json()) as { encounter: { playerHp: number }; instance: Instance }
+  const cards = await cardIndex(app, cookie)
+  const card = cards.get(start.instance.cardId)!
+  const answer = start.instance.exerciseId === 'translate.back_to_front' ? card.front : card.back
+
+  const res = (await (
+    await app.request(
+      '/api/combat/hit',
+      auth(
+        cookie,
+        json({
+          exerciseId: start.instance.exerciseId,
+          cardId: start.instance.cardId,
+          answer,
+        }),
+      ),
+    )
+  ).json()) as {
+    result: { correct: boolean }
+    hit: { playerDamage: number; playerHp: number; defenceXp: number }
+    encounter: { playerHp: number } | null
+  }
+
+  // The hit lands — and the monster still hits back on the same exchange.
+  expect(res.result.correct).toBe(true)
+  expect(res.hit.playerDamage).toBeGreaterThan(0)
+  expect(res.hit.playerHp).toBeLessThan(start.encounter.playerHp)
+  expect(res.hit.defenceXp).toBeGreaterThan(0)
+  expect(res.encounter?.playerHp).toBe(res.hit.playerHp)
+  sqlite.close()
+})
+
+test('a timed-out drill is a miss even when the answer is empty', async () => {
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
+
+  const start = (await (
+    await app.request('/api/combat/start', auth(cookie, json({ monsterId: 'slime' })))
+  ).json()) as { encounter: { playerHp: number }; instance: Instance }
+
+  const res = (await (
+    await app.request(
+      '/api/combat/hit',
+      auth(
+        cookie,
+        json({
+          exerciseId: start.instance.exerciseId,
+          cardId: start.instance.cardId,
+          answer: '',
+          timedOut: true,
+        }),
+      ),
+    )
+  ).json()) as {
+    result: { correct: boolean; score: number; feedback?: string }
+    hit: { correct: boolean; playerDamage: number; playerHp: number; defenceXp: number }
+    encounter: { playerHp: number } | null
+  }
+
+  expect(res.result.correct).toBe(false)
+  expect(res.result.score).toBe(0)
+  expect(res.result.feedback).toContain('Out of time')
+  expect(res.hit.correct).toBe(false)
+  expect(res.hit.playerDamage).toBeGreaterThan(0)
+  expect(res.hit.playerHp).toBeLessThan(start.encounter.playerHp)
+  expect(res.hit.defenceXp).toBeGreaterThan(0)
+  expect(res.encounter?.playerHp).toBe(res.hit.playerHp)
   sqlite.close()
 })
 
