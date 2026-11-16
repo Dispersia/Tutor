@@ -21,15 +21,15 @@
   })
 </script>
 
-<div class="flex items-center gap-3 pt-4 pb-4">
+<div class="flex items-center gap-3 pt-4 pb-4 lg:mx-auto lg:max-w-3xl">
   <button onclick={() => goto(href('/history'))} class="text-sm text-ink-400">← Back</button>
   <h1 class="text-sm font-medium text-ink-400">Conversation</h1>
 </div>
 
 {#if error}
-  <p class="text-sm text-ember-300">{error}</p>
+  <p class="text-sm text-ember-300 lg:mx-auto lg:max-w-3xl">{error}</p>
 {:else}
-  <div class="space-y-3 pb-10">
+  <div class="space-y-3 pb-10 lg:mx-auto lg:max-w-3xl">
     {#each messages as m (m.id)}
       <div class={m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
         <div

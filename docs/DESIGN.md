@@ -698,17 +698,18 @@ The trainer picks the eligible drill you have practised *least recently*
 (`pickNextExercise`), so you always get variety instead of the same question type.
 The action — `Mine copper` — is also the unit that **levels up**; see below.
 
-**22 professions** in four groups:
+**23 professions** in four groups:
 
 | Group | Professions |
 | --- | --- |
 | Gathering | Mining, Woodcutting, Fishing, Farming |
-| Artisan | Smithing, Cooking, Herblore, Fletching, Runecrafting, Crafting, Firemaking, Construction |
+| Artisan | Smithing, Cooking, Herblore, Fletching, Runecrafting, Crafting, Firemaking, Construction, Enchanting |
 | Support | Thieving, Agility |
 | Combat | Attack, Strength, Defence, Constitution, Ranged, Magic, Prayer, Slayer |
 
-**Materials & chains** (42 items) — gathering produces raw goods, artisans refine
-them, combat consumes gear:
+**Materials & chains** (59 items) — gathering produces raw goods, artisans refine
+them, combat consumes gear. Enchanting is the second-order artisan: it binds cut gems
+(Crafting) and runes (Runecrafting) into amulets, robes and blessed blades for Magic:
 
 ```
 Mining ──ores/essence──► Smithing ──bars──► weapons & armour ──► Attack/Strength
@@ -721,6 +722,13 @@ Farming ──herbs──► Herblore ──potions──► combat
 Thieving ──gems──► Crafting ──vials──► Herblore ; ──leather──► armour
 Slayer ──bones──► Prayer ; combat drops ──hides/bones/gems──► Crafting/Prayer
 ```
+
+**Recipes can gate on a second profession.** An action's `requires` is a list, so a
+tier-4 bar needs both the Smithing level *and* the Mining level that fed it, a super
+attack potion needs Herblore *and* Farming, and the enchanter's gear needs
+Enchanting *and* the artisan that made the base item (`enchant-blade` needs
+Enchanting 20 and Smithing 25). The result is a web, not a row: to reach tier 5 you
+train two professions, and each one's output is the other's input.
 
 **The level lives on the action, not the profession.** Every action has its own
 XP pool and its own level, and its own passive that grows with *that* action:
@@ -757,17 +765,43 @@ is trained. Levels stay comparable as the game grows — `100` always means
 mean of the professions so it also reads out of 100.
 
 **Talents** are still per profession, taken at milestones of the derived level:
-- **Every 10 levels** (10, 20, 30, …) → choose **one of two** talents:
+- **Every 10 levels** (10, 20, 30, …) → choose **one of three** talents:
   *Prospector* (+15% yield on every action of the profession; combat professions
-  instead get *Keen strikes*, +15% power) or *Studious* (+5% XP to every
-  profession). A choice can be changed later at the same milestone (a free respec).
+  instead get *Keen strikes*, +15% power), *Studious* (+5% XP to every profession),
+  or the profession's **synergy** talent. A choice can be changed later at the same
+  milestone (a free respec).
+- **Synergy talents are how the professions build off each other.** A synergy
+  talent feeds a bonus into *another* profession, **scaled by the owning
+  profession's own derived level**. Mining's *Ore Sense* gives Smithing +0.5% XP
+  per Mining level; Smithing's *Deep Veins* gives Mining +0.5% yield per Smithing
+  level; Magic's *Arcane Study* feeds Enchanting, and so on for all 23. `Mod`
+  carries the link (`{ kind, value, skill: target, synergy: owner }`) and
+  `computeBonuses` resolves it against `skillLevelsFrom(actionLevels)`, so the gift
+  grows as you invest — training one profession levels another faster.
+- **Mastery capstones at Lv 50 and Lv 100.** Each capstone offers **two** options and
+  *both* are gated on the profession that feeds this one (`SYNERGY[skill].target`):
+  **Grandmaster <Name>** (Lv 50) — +25% XP to this profession's own actions, which
+  still matters because you are only halfway (needs the partner at 20); **Legendary
+  <Name>** (Lv 100) — instead a **permanent output bonus**, the profession's own
+  passive at capstone strength (`+25% yield`, `+10% bonus product`, `+20% power`, …;
+  needs the partner at 40). The Lv-100 self option deliberately grants **no XP**: a
+  profession only reaches 100 once every action is already capped, so its XP would
+  buy nothing. The second option is either **Patron of <Partner>** (+0.5% partner XP
+  **per level of this profession**) or **Grand Patron of <Partner>** (+1% per level)
+  — a gift to a line that is *not* maxed — gated on the partner at 30 / 50. A
+  mastery is therefore earned by *cross-training*, not grinding one profession. It is
+  stored with `tier = 'mastery'`, so it never consumes a 10-level choice: the two
+  tracks run side by side and both respec freely.
 
-Talent ids encode skill + milestone, so progression continues indefinitely.
+Talent ids encode skill + milestone + tier (`<skill>:t:<milestone>:<n>` for choices,
+`<skill>:m:<milestone>:<n>` for masteries), so progression continues indefinitely.
 All effects aggregate through `computeBonuses(actionLevels, talents)`.
 
-**Equipment & combat:** Smithing forges weapons/armour, Fletching makes bows,
-arrows and staffs, Crafting makes leather armour. A fight uses **whatever you have
-equipped** — you never pick a weapon or a skill. The equipped weapon's tag decides
+**Equipment & combat:** Smithing forges weapons, body and leg armour, Fletching
+makes bows, arrows and staffs, Crafting makes leather armour, and Enchanting binds
+gems and runes into amulets, robes and blessed blades. A fight uses **whatever you
+have equipped** — you never pick a weapon or a skill: power and armour are summed
+across every worn piece (weapon, body, legs, neck). The equipped weapon's tag decides
 the combat profession the fight trains: a melee weapon (sword) trains **Strength**,
 a bow trains **Ranged**, a staff trains **Magic**, and bare hands are still melee
 (Strength). `actionState()` reports `locked / affordable / equipOk` for every
@@ -801,7 +835,8 @@ race you'll lose. Grading an action also validates unlock + affordability, so
 material costs can't be bypassed by calling the grader directly.
 
 Everything still flows through the **event bus**: `skill.xp`, `skill.level.up`,
-`item.gained`, `item.consumed`, `talent.chosen`, `talent.changed`, `item.equipped`.
+`item.gained`, `item.consumed`, `talent.chosen`, `talent.changed` (both tagging the
+talent `tier`), `item.equipped`.
 
 ## 13.6 Spaced repetition (FSRS-6, Anki-style) & guided curriculum
 

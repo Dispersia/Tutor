@@ -1,7 +1,7 @@
 /** Aggregates per-action profession effects + owned talents into concrete bonuses. */
 
 import type { Mod, ModKind, SkillId } from './skills'
-import { ACTION_BY_ID, ACTIONS, SKILL_BY_ID } from './skills'
+import { ACTION_BY_ID, ACTIONS, SKILL_BY_ID, skillLevelsFrom } from './skills'
 import type { TalentDef } from './talents'
 
 export interface Bonuses {
@@ -38,7 +38,12 @@ export function computeBonuses(levels: Map<string, number>, talents: TalentDef[]
     if (value === 0) continue
     leveled.push({ actionId: a.id, skillId: a.skillId, mod: { ...effect, value } })
   }
-  const talentMods = talents.flatMap((t) => t.mods)
+  // A synergy talent's value scales with the *other* profession's derived level, so
+  // the derived levels have to be known before the talent mods are summed.
+  const derived = skillLevelsFrom(levels)
+  const talentMods = talents
+    .flatMap((t) => t.mods)
+    .map((m) => (m.synergy ? { ...m, value: m.value * (derived.get(m.synergy) ?? 1) } : m))
 
   /** The action's own passive + talents scoped to its profession. */
   const forAction = (actionId: string, kind: ModKind): number => {

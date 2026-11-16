@@ -32,7 +32,7 @@
   const kindAccent = (kind: string) => KIND_ACCENT[kind] ?? ACCENT.azure
 </script>
 
-<div class="border-b border-ink-700 pt-4 pb-5">
+<div class="border-b border-ink-700 pt-4 pb-5 mb-4">
   <h1 class="display text-3xl text-ink-100">History</h1>
   <p class="mt-1 text-xs text-ink-400">Everything you have practised, only visible to you.</p>
 </div>
@@ -48,7 +48,7 @@
     No conversations yet. <a class="text-jade-400 underline" href={href('/chat')}>Start one →</a>
   </p>
 {:else}
-  <ul class="space-y-2">
+  <ul class="space-y-2 xl:grid xl:grid-cols-2 xl:gap-6 xl:space-y-0">
     {#each sessions as s (s.id)}
       <li>
         <a
