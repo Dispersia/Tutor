@@ -654,3 +654,72 @@ test('a large build chunks the planner and keeps n+1 across chunks', async () =>
   expect(steps).toEqual(words.map((_, i) => i + 1))
   sqlite.close()
 })
+
+test('a batch that overflows the model is retried smaller, not abandoned', async () => {
+  const words = Array.from({ length: PLAN_CHUNK * 2 }, (_, i) => `w${i + 1}`)
+  const bigFetcher: Fetcher = async () => words.map((w, i) => `${w} ${1000 - i}`).join('\n')
+  const calls: PlanRequest[] = []
+  // accept only small batches — anything wider "truncates" like a real model
+  const flaky: Planner = async (req) => {
+    calls.push(req)
+    if (req.count > 10) throw new Error('the model ran out of output space before its JSON was complete')
+    return req.words.slice(0, req.count).map((w) => ({
+      template: 'vocab' as const,
+      front: `meaning ${w}`,
+      back: w,
+      reading: `r-${w}`,
+    }))
+  }
+  const { app, sqlite } = makeApp({ fetcher: bigFetcher, planner: flaky })
+  const cookie = await signup(app)
+  const created = (await (
+    await app.request(
+      '/api/decks',
+      auth(
+        cookie,
+        json({ instruction: 'chinese frequency list', targetLang: 'zh', count: words.length }),
+      ),
+    )
+  ).json()) as DeckBody
+
+  // every word made it despite the first (large) batch failing
+  expect(created.newWords.length).toBe(words.length)
+  expect(calls[0]!.count).toBe(PLAN_CHUNK)
+  expect(calls.some((c) => c.count <= 10)).toBe(true)
+  sqlite.close()
+})
+
+test('grow { all: true } finishes a partly-imported deck in the background', async () => {
+  const { app, sqlite } = makeApp()
+  const cookie = await signup(app)
+  const apkg = readFileSync(join(import.meta.dir, 'anki/fixtures/sample.apkg'))
+  const form = new FormData()
+  form.set('file', new File([apkg], 'sample.apkg'))
+  form.set('targetLang', 'zh')
+  form.set('count', '2') // import only the first two of the deck's four words
+  form.set('wordField', '0')
+  const res = await app.request('/api/decks/import', auth(cookie, { method: 'POST', body: form }))
+  const body = (await res.json()) as DeckBody
+  await awaitDeckBuild(body.deck.id)
+
+  // the deck still has the rest of its list to build
+  const grown = (await (
+    await app.request(`/api/decks/${body.deck.id}/grow`, auth(cookie, json({ all: true })))
+  ).json()) as { remaining: number; building: boolean }
+  expect(grown.remaining).toBe(2)
+  expect(grown.building).toBe(true)
+  await awaitDeckBuild(body.deck.id)
+
+  const after = (await (
+    await app.request(`/api/decks/${body.deck.id}/cards`, auth(cookie))
+  ).json()) as {
+    deck: { settings: Record<string, unknown> }
+    cards: { back: string; payload: Record<string, unknown> }[]
+  }
+  const vocab = after.cards
+    .filter((c) => c.payload.template === 'vocab')
+    .map((c) => c.back)
+  expect(vocab).toEqual(['我', '你', '喝', '茶'])
+  expect(after.deck.settings.building).toBe(false)
+  sqlite.close()
+})

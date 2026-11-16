@@ -26,6 +26,8 @@ export interface CurriculumDeck {
   cardCount: number
   learned: number
   due: number
+  /** Source words still unbuilt — an interrupted import the UI can finish. */
+  remaining?: number
   lessons: LessonDTO[]
 }
 

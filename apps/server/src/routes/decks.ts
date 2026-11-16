@@ -21,6 +21,7 @@ import {
   growDeck,
   parseInstruction,
   startDeckBuild,
+  startDeckGrowth,
 } from '../deck/generate'
 import { llmPlanner, type Planner } from '../deck/plan'
 import {
@@ -31,7 +32,7 @@ import {
   pitchTargets,
   type PitchFetcher,
 } from '../deck/pitch'
-import { DECK_INSTRUCTION_KEY } from '../deck/settings'
+import { DECK_INSTRUCTION_KEY, publicDeckSettings, type DeckSettings } from '../deck/settings'
 import { roleReasoning } from '../env'
 import { OpenRouter } from '../llm/openrouter'
 import { MANDARIN_RULE } from '../llm/prompts'
@@ -106,11 +107,16 @@ async function pitchFetcherFor(
   return composeFetchers(dictionary, generated)
 }
 
+/** A deck as sent to a client — without the server-only source word list. */
+function deckView<T extends { settings?: DeckSettings }>(deck: T): T {
+  return deck.settings ? { ...deck, settings: publicDeckSettings(deck.settings) } : deck
+}
+
 export function registerDecks(app: App) {
   app.get('/api/decks', (c) => {
     const deps = c.get('deps')
     const user = c.get('user')!
-    return c.json({ decks: listDecks(deps.db, user.id) })
+    return c.json({ decks: listDecks(deps.db, user.id).map(deckView) })
   })
 
   app.get('/api/decks/:id/cards', (c) => {
@@ -118,7 +124,7 @@ export function registerDecks(app: App) {
     const user = c.get('user')!
     const deck = getDeck(deps.db, c.req.param('id'), user.id)
     if (!deck) return c.json({ error: 'not found' }, 404)
-    return c.json({ deck, cards: listCards(deps.db, user.id, deck.id) })
+    return c.json({ deck: deckView(deck), cards: listCards(deps.db, user.id, deck.id) })
   })
 
   /**
@@ -171,7 +177,7 @@ export function registerDecks(app: App) {
         // The prompt is the deck's constitution: remember it so every later
         // deck (including imports and growth batches) starts from it.
         setUserSetting(deps.db, user.id, DECK_INSTRUCTION_KEY, instruction)
-        return c.json({ deck: getDeck(deps.db, built.deckId, user.id), ...built }, 201)
+        return c.json({ deck: deckView(getDeck(deps.db, built.deckId, user.id)!), ...built }, 201)
       } catch (err) {
         return c.json({ error: (err as Error).message }, 502)
       }
@@ -362,7 +368,7 @@ export function registerDecks(app: App) {
       )
       return c.json(
         {
-          deck: getDeck(deps.db, created.deckId, user.id),
+          deck: deckView(getDeck(deps.db, created.deckId, user.id)!),
           deckId: created.deckId,
           name: created.name,
           cardCount: 0,
@@ -379,7 +385,11 @@ export function registerDecks(app: App) {
     }
   })
 
-  /** Grow a deck organically: add another n+1 batch (optionally on a topic). */
+  /**
+   * Grow a deck organically: add another n+1 batch (optionally on a topic).
+   * With `{ all: true }` it finishes the deck instead — every remaining word is
+   * generated in the background, so a stopped or interrupted build resumes.
+   */
   app.post('/api/decks/:id/grow', async (c) => {
     const deps = c.get('deps')
     const user = c.get('user')!
@@ -388,9 +398,32 @@ export function registerDecks(app: App) {
     const body = (await c.req.json().catch(() => ({}))) as {
       topic?: string
       count?: number
+      all?: boolean
     }
     const planner = await plannerFor(deps, user.id)
     if (!planner) return c.json({ error: 'No OpenRouter key — add one in Settings.' }, 502)
+
+    if (body.all) {
+      try {
+        const remaining = await startDeckGrowth(deps.db, user.id, deckId, {
+          topic: body.topic,
+          fetcher: deps.fetcher,
+          planner,
+        })
+        return c.json(
+          {
+            deck: deckView(getDeck(deps.db, deckId, user.id)!),
+            remaining: remaining ?? 0,
+            building: (remaining ?? 0) > 0,
+            newWords: [],
+          },
+          202,
+        )
+      } catch (err) {
+        return c.json({ error: (err as Error).message }, 502)
+      }
+    }
+
     try {
       const built = await growDeck(deps.db, user.id, deckId, {
         topic: body.topic,
@@ -398,7 +431,7 @@ export function registerDecks(app: App) {
         fetcher: deps.fetcher,
         planner,
       })
-      return c.json({ deck: getDeck(deps.db, deckId, user.id), ...built })
+      return c.json({ deck: deckView(getDeck(deps.db, deckId, user.id)!), ...built })
     } catch (err) {
       return c.json({ error: (err as Error).message }, 502)
     }
@@ -433,7 +466,10 @@ export function registerDecks(app: App) {
     const settings = body.settings
       ? updateDeckSettings(deps.db, deckId, user.id, body.settings)
       : undefined
-    return c.json({ deck: getDeck(deps.db, deckId, user.id), settings })
+    return c.json({
+      deck: deckView(getDeck(deps.db, deckId, user.id)!),
+      settings: settings ? publicDeckSettings(settings) : undefined,
+    })
   })
 
   /**

@@ -181,6 +181,22 @@
     }
   }
 
+  /** Finish a partly-built deck (an interrupted import) in the background. */
+  async function finish(d: CurriculumDeck) {
+    if (growing) return
+    growing = d.deckId
+    deckError = ''
+    try {
+      await growDeck(d.deckId, { all: true, topic: growTopic.trim() || undefined })
+      growTopic = ''
+      await reload()
+    } catch (e) {
+      deckError = (e as Error).message
+    } finally {
+      growing = ''
+    }
+  }
+
   /** Step 1: read the .apkg's fields so the learner can pick the real word. */
   async function inspectApkg(e: Event) {
     const input = e.target as HTMLInputElement
@@ -539,6 +555,21 @@
 
         {#if done(d)}
           <p class="mt-2 text-center text-[11px] text-jade-400">All words learned ✓</p>
+        {/if}
+
+        {#if !d.settings?.building && (d.remaining ?? 0) > 0}
+          <button
+            type="button"
+            onclick={() => finish(d)}
+            disabled={Boolean(growing)}
+            class="btn btn-primary mt-3 w-full py-3 disabled:opacity-60"
+          >
+            {#if growing === d.deckId}
+              <Spinner size={13} label="Finishing the deck" /> Finishing…
+            {:else}
+              Finish importing · {d.remaining} left
+            {/if}
+          </button>
         {/if}
 
         <div class="mt-3 flex items-center gap-2">

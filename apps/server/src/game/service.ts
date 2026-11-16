@@ -33,6 +33,7 @@ import {
   xpEventsFor,
 } from '../db/repo'
 import type { EventBus } from '../events'
+import { publicDeckSettings } from '../deck/settings'
 import { pinyinToZhuyin } from '../seed/zhuyin'
 import { buildLessons } from './curriculum'
 import {
@@ -1073,7 +1074,12 @@ export function curriculumView(db: Db, userId: string) {
       level: d.level,
       targetLang: d.targetLang,
       description: d.description,
-      settings: d.settings,
+      settings: publicDeckSettings(d.settings),
+      // How many source words are still unbuilt (an interrupted import), so the
+      // UI can offer to finish it. Undefined when the deck has no stored list.
+      remaining: d.settings.words
+        ? Math.max(0, d.settings.words.length - (d.settings.cursor ?? 0))
+        : undefined,
       cardCount: Number(d.cardCount),
       learned: ids.filter((id) => isLearned(srsMap.get(id))).length,
       due: countDue(ids, srsMap, now),

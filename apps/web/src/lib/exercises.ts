@@ -133,9 +133,14 @@ export const importDeck = (form: FormData) =>
     },
   )
 
-/** Grow a deck organically, optionally focusing on a topic. */
-export const growDeck = (deckId: string, body: { topic?: string; count?: number } = {}) =>
-  api<BuiltDeck>(`/api/decks/${deckId}/grow`, { method: 'POST', body: JSON.stringify(body) })
+/**
+ * Grow a deck organically, optionally focusing on a topic. With `all: true` the
+ * server finishes the deck in the background — every remaining source word.
+ */
+export const growDeck = (
+  deckId: string,
+  body: { topic?: string; count?: number; all?: boolean } = {},
+) => api<BuiltDeck>(`/api/decks/${deckId}/grow`, { method: 'POST', body: JSON.stringify(body) })
 
 /** Update a deck's own rules (e.g. hide readings for this deck). */
 export const updateDeck = (deckId: string, body: { name?: string; settings?: DeckSettings }) =>
