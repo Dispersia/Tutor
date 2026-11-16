@@ -32,7 +32,7 @@
   const kindAccent = (kind: string) => KIND_ACCENT[kind] ?? ACCENT.azure
 </script>
 
-<div class="border-b border-ink-700 pt-5 pb-5">
+<div class="border-b border-ink-700 pt-4 pb-5">
   <h1 class="display text-3xl text-ink-100">History</h1>
   <p class="mt-1 text-xs text-ink-400">Everything you have practised, only visible to you.</p>
 </div>

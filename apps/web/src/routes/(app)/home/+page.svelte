@@ -1,16 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { getCurriculum, getSrsStats, type CurriculumDeck, type SrsStats } from '#lib/curriculum'
-  import { getStats, type Stats } from '#lib/exercises'
-  import { href } from '#lib/paths'
+  import { getStats, type ActivityDay, type Stats } from '#lib/exercises'
   import { session } from '#lib/session.svelte'
   import { ACCENT, accentStyle } from '#lib/theme'
   import { LANG_NAMES } from '#lib/voices'
-  import Icon from '#lib/components/Icon.svelte'
 
   let stats = $state<Stats | null>(null)
-  let srs = $state<SrsStats | null>(null)
-  let decks = $state<CurriculumDeck[]>([])
   let error = $state('')
 
   const lang = $derived(session.user?.targetLang ?? 'zh')
@@ -26,20 +21,40 @@
     if (lang === 'zh') return raw === 'HSK 1' || raw === 'Frequency 1k' ? raw : 'HSK 1'
     return raw ?? 'Frequency 1k'
   })
-  const due = $derived(srs?.due ?? 0)
   const toGoal = $derived(stats ? Math.max(0, stats.dailyGoal - stats.dailyXp) : 0)
 
-  /** The next word on the path — the entry the page is "open" at. */
-  const next = $derived.by(() => {
-    const ordered = [...decks].sort((a, b) => rank(a.level) - rank(b.level))
-    for (const d of ordered) {
-      const l = d.lessons.find((x) => !x.complete && x.newWord) ?? d.lessons.find((x) => x.newWord)
-      if (l?.newWord) return { ...l, deck: d.name }
-    }
-    return null
-  })
+  // --- activity map ----------------------------------------------------------
+  // Daily XP over the last weeks, drawn as a heat map: one column per week
+  // (Monday first), one row per weekday, the current week last. Intensity is a
+  // quartile of the busiest day in the window, so the shape reads at a glance.
+  const activity = $derived(stats?.activity)
+  const days = $derived(activity?.days ?? [])
+  const weeks = $derived(Math.floor(days.length / 7))
+  const maxXp = $derived(Math.max(1, ...days.map((d) => d.xp)))
 
-  const rank = (level: string | null) => (level === 'zhfreq' ? 0 : level === 'hsk1' ? 1 : 2)
+  const EMPTY = 'var(--color-ink-800)'
+  const FILL = [28, 50, 72, 100]
+  const fillFor = (lv: number) =>
+    lv <= 0 ? EMPTY : `color-mix(in oklab, var(--accent) ${FILL[lv - 1]}%, var(--color-ink-850))`
+  const levelFor = (xp: number) =>
+    xp <= 0 ? 0 : Math.max(1, Math.min(4, Math.ceil((xp / maxXp) * 4)))
+  const cellStyle = (d: ActivityDay) =>
+    activity && d.day > activity.today
+      ? 'background: transparent'
+      : `background: ${fillFor(levelFor(d.xp))}`
+
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  const monthLabels = $derived.by(() => {
+    const cols: { label: string; span: number }[] = []
+    for (let w = 0; w < weeks; w++) {
+      const monday = days[w * 7]?.day
+      const label = monday ? (MONTHS[new Date(`${monday}T00:00:00Z`).getUTCMonth()] ?? '') : ''
+      const last = cols[cols.length - 1]
+      if (last && last.label === label) last.span++
+      else cols.push({ label, span: 1 })
+    }
+    return cols
+  })
 
   onMount(load)
 
@@ -50,20 +65,10 @@
     } catch (e) {
       error = (e as Error).message || 'Could not load your progress.'
     }
-    try {
-      srs = await getSrsStats()
-    } catch {
-      /* reviews are optional; the action falls back to "Start practising" */
-    }
-    try {
-      decks = (await getCurriculum()).decks
-    } catch {
-      /* the next-word plate is optional */
-    }
   }
 </script>
 
-<header class="flex items-center justify-between gap-3 border-b border-ink-700 pt-5 pb-4">
+<header class="flex items-center justify-between gap-3 border-b border-ink-700 pt-4 pb-4">
   <div class="min-w-0">
     <h1 class="display truncate text-3xl text-ink-100">{session.user?.handle}</h1>
     <p class="mt-1 text-xs text-ink-400">{LANG_NAMES[lang] ?? lang} · {levelLabel}</p>
@@ -74,41 +79,63 @@
   </div>
 </header>
 
-<a
-  href={href('/practice')}
-  class="btn btn-primary mt-4 flex w-full justify-between py-3.5 text-base"
->
-  <span>{due > 0 ? `Practise ${due} due` : 'Start practising'}</span>
-  <span aria-hidden="true">→</span>
-</a>
-
-{#if next}
-  <a
-    href={href('/practice')}
-    class="mt-4 flex items-center gap-4 border-b border-ink-700 pb-4"
-    style={accentStyle(ACCENT.azure)}
-  >
-    <span class="cell h-20 w-20 shrink-0">
-      <span class="display text-3xl leading-none">{next.newWord}</span>
-    </span>
-    <span class="min-w-0 flex-1">
-      <span class="eyebrow" style="color: var(--accent)">Next up</span>
-      <span class="display mt-1 block truncate text-xl text-ink-100"
-        >{next.reading || 'New word'}</span
-      >
-      <span class="mt-0.5 block truncate text-xs text-ink-400">{next.deck} · {next.description}</span
-      >
-    </span>
-    <span class="shrink-0 text-lg text-ink-500" aria-hidden="true">›</span>
-  </a>
-{/if}
-
 {#if error}
   <div class="panel mt-3 flex items-center justify-between gap-3 p-3" role="alert">
     <p class="text-xs text-brass-300">Couldn't load your progress — {error}</p>
     <button type="button" class="btn btn-ghost px-3 py-1.5 text-xs" onclick={load}>Retry</button>
   </div>
 {:else}
+  <section class="panel panel-accent mt-4 p-4" style={accentStyle(ACCENT.jade)}>
+    <div class="flex items-baseline justify-between gap-3">
+      <h2 class="text-xs font-bold tracking-widest uppercase" style="color: var(--accent)">
+        Activity
+      </h2>
+      <span class="text-[11px] text-ink-400">last {weeks} weeks</span>
+    </div>
+
+    {#if days.length}
+      <div class="mt-3 overflow-x-auto pb-1">
+        <div class="mx-auto w-fit">
+          <div
+            class="grid gap-[3px] text-[10px] leading-none text-ink-500"
+            style="grid-template-columns: repeat({weeks}, 0.75rem)"
+            aria-hidden="true"
+          >
+            {#each monthLabels as m, i (i)}
+              <span class="whitespace-nowrap" style="grid-column: span {m.span}">{m.label}</span>
+            {/each}
+          </div>
+
+          <div
+            class="mt-1 grid grid-flow-col gap-[3px]"
+            style="grid-template-columns: repeat({weeks}, 0.75rem); grid-template-rows: repeat(7, 0.75rem)"
+            role="img"
+            aria-label="Daily activity for the last {weeks} weeks"
+          >
+            {#each days as d (d.day)}
+              <span
+                class="rounded-[2px]"
+                style={cellStyle(d)}
+                title={d.xp > 0 ? `${d.xp} XP · ${d.day}` : d.day}
+              ></span>
+            {/each}
+          </div>
+
+          <div class="mt-3 flex items-center justify-end gap-1.5 text-[10px] text-ink-500">
+            <span>Less</span>
+            <span class="h-3 w-3 rounded-[2px]" style="background: {EMPTY}"></span>
+            {#each [1, 2, 3, 4] as lv (lv)}
+              <span class="h-3 w-3 rounded-[2px]" style="background: {fillFor(lv)}"></span>
+            {/each}
+            <span>More</span>
+          </div>
+        </div>
+      </div>
+    {:else}
+      <p class="mt-3 text-xs text-ink-400">Practise to start filling this in.</p>
+    {/if}
+  </section>
+
   <section class="mt-2" aria-label="Your progress">
     <ul>
       <li class="flex items-baseline justify-between gap-3 border-b border-ink-700 px-0 py-3">
@@ -184,24 +211,3 @@
     </ul>
   </section>
 {/if}
-
-<nav class="mt-3 pb-4" aria-label="Shortcuts">
-  <a
-    href={href('/chat')}
-    class="flex items-center gap-3 border-t border-ink-700 py-3.5"
-    style={accentStyle(ACCENT.azure)}
-  >
-    <Icon name="chat" size={20} />
-    <span class="flex-1 text-sm text-ink-100">Talk to tutor</span>
-    <span class="text-ink-500" aria-hidden="true">→</span>
-  </a>
-  <a
-    href={href('/skills')}
-    class="flex items-center gap-3 border-t border-ink-700 py-3.5"
-    style={accentStyle(ACCENT.brass)}
-  >
-    <Icon name="skills" size={20} />
-    <span class="flex-1 text-sm text-ink-100">Skills</span>
-    <span class="text-ink-500" aria-hidden="true">→</span>
-  </a>
-</nav>

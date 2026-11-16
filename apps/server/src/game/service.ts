@@ -105,6 +105,43 @@ export function shiftDay(day: string, delta: number): string {
   return dt.toISOString().slice(0, 10)
 }
 
+/** Monday of the UTC week containing `day` (the activity map's column start). */
+export function weekStart(day: string): string {
+  const dt = new Date(`${day}T00:00:00Z`)
+  const dow = (dt.getUTCDay() + 6) % 7 // Monday = 0
+  return shiftDay(day, -dow)
+}
+
+export interface ActivityDay {
+  day: string
+  xp: number
+}
+
+/**
+ * Daily XP for the last `weeks` weeks as a heat-map grid: columns are weeks
+ * (Monday first), the last column is the current week, oldest day first. One
+ * pass over the ledger — never one query per day (docs/DESIGN.md §13).
+ */
+export function activitySeries(
+  db: Db,
+  userId: string,
+  weeks = 18,
+): { today: string; days: ActivityDay[] } {
+  const today = todayDay()
+  const byDay = new Map<string, number>()
+  for (const r of xpEventsFor(db, userId)) {
+    const d = todayDay(r.createdAt)
+    byDay.set(d, (byDay.get(d) ?? 0) + r.amount)
+  }
+  const gridStart = shiftDay(weekStart(today), -(weeks - 1) * 7)
+  const days: ActivityDay[] = []
+  for (let i = 0; i < weeks * 7; i++) {
+    const d = shiftDay(gridStart, i)
+    days.push({ day: d, xp: byDay.get(d) ?? 0 })
+  }
+  return { today, days }
+}
+
 export function streakFromDays(days: string[], today: string = todayDay()): number {
   if (days.length === 0) return 0
   const set = new Set(days)

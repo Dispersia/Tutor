@@ -328,7 +328,7 @@
   }
 </script>
 
-<div class="border-b border-ink-700 pt-5 pb-6">
+<div class="border-b border-ink-700 pt-4 pb-6">
   <h1 class="display text-3xl text-ink-100">Settings</h1>
   <p class="mt-1 text-xs text-ink-400">These apply to {session.user?.username} only.</p>
 </div>

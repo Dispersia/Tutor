@@ -154,7 +154,7 @@ palette and theme again later.
 - The **character cell** — a hairline square with faint cross guides — holds the studied character
 - One **vermilion seal** for the forward action; brass gold for earned numbers
 - Ruled entries (1px rules) instead of a card grid; 3–5px radii
-- Mobile-first single column (max 42rem), six-tab bottom bar with drawn SVG icons
+- Mobile-first single column (max 42rem), three-tab bottom bar, and a title bar with the account behind a profile stamp
 
 ## Colors
 
@@ -235,11 +235,15 @@ with 1rem side padding and safe-area insets. Pages open with a header carrying a
 `ink-700` rules — rather than a grid of cards. Density is high but never cramped:
 rows carry 0.75–1rem vertical padding.
 
-Navigation is a fixed bottom bar: six equal tabs, safe-area padded, blurred
-`ink-950/90` over the content, active tab in seal vermilion on a `seal-400/12`
-pill, with drawn single-stroke SVG icons. Primary actions live in the thumb zone;
-on desktop the same column simply gets more whitespace — there is no multi-column
-dashboard.
+Navigation is two fixed surfaces. A **title bar** at the top carries the app mark
+and, on the right, a personal **profile stamp** — a small square holding the
+member's initial — whose menu holds Chat, Bank, History, Settings and Sign out.
+Three equal tabs sit in the thumb zone at the bottom: **Home, Learn, Skills**.
+Both are safe-area padded and blurred `ink-950/90` over the content; the active
+tab, and the stamp on an account screen, read in seal vermilion on a
+`seal-400/12` pill, with drawn single-stroke SVG icons. Primary actions live in
+the thumb zone; on desktop the same column simply gets more whitespace — there is
+no multi-column dashboard.
 
 ## Elevation & Depth
 
@@ -306,11 +310,12 @@ with a vermilion border holding the earned level.
 
 ### Navigation
 
-- **Style:** six equal seal-active tabs in a sticky bottom bar, a drawn single-stroke
-  SVG icon above an 11px label, `ink-950/90` blurred background, 1px `ink-700` top
-  border.
+- **Style:** a sticky top title bar (app mark + profile stamp) over three equal
+  seal-active tabs in a sticky bottom bar; a drawn single-stroke SVG icon above an
+  11px label; `ink-950/90` blurred background; 1px `ink-700` border.
 - **Default / Hover:** `ink-400` label with `ink-200` on hover.
-- **Active:** `seal-400/12` pill, `seal-300` label and icon.
+- **Active:** `seal-400/12` pill, `seal-300` label and icon. The profile stamp takes
+  the same seal border when its menu is open or its screen is current.
 
 ### Signature Components
 
@@ -320,10 +325,15 @@ with a vermilion border holding the earned level.
   serif level figure in `seal-300` with a tracked `LEVEL` label.
 - **Rank badge:** small pill, `rgba(0,0,0,0.28)` fill, 1px gold border at 60%, serif
   gold numerals with tabular figures.
+- **Profile stamp:** a 2rem square stamp, 1px `ink-600` border, holding the member's
+  initial in the display serif; seal vermilion when its menu is open.
 - **Progress bar:** 6px tall, 3px radius, `ink-800` groove with a 1px `ink-700`
   border, fill in the panel's accent, width transition 0.4s.
 - **Ruled entry:** a row separated by a 1px `ink-700` rule, label left and an earned
   figure right, or a shortcut row with a drawn accent icon.
+- **Activity map:** a heat-map grid of 0.75rem squares — one column per
+  Monday-first week, one row per weekday; empty days sit in `ink-800`, active days
+  in the section accent at 28 / 50 / 72 / 100%, with a `Less → More` legend.
 
 ## Do's and Don'ts
 

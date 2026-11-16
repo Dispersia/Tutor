@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+import { FSRS6_DEFAULT_WEIGHTS, FSRS6Model } from 'ts-fsrs/models/fsrs-6'
 import {
   AGAIN,
   DAY_MS,
@@ -16,10 +17,20 @@ import {
   nextInterval,
   ratingFromScore,
   retrievability,
+  sameDayStability,
   schedule,
   selectCardId,
   type FsrsState,
 } from './srs'
+
+/** The reference implementation, used only to assert parity in these tests. */
+const reference = FSRS6Model.create({
+  config: {
+    weights: [...FSRS6_DEFAULT_WEIGHTS],
+    enableShortTerm: true,
+    numRelearningSteps: RELEARNING_STEPS.length,
+  },
+})
 
 const DAY = DAY_MS
 const now = 1_000_000_000_000
@@ -104,6 +115,55 @@ test('a lapse drops to relearning and keeps stability from growing', () => {
   const done = schedule(lapsed.state, GOOD, later + 10 * MIN_MS)
   expect(done.state.state).toBe('review')
   expect(done.intervalDays).toBeGreaterThanOrEqual(1)
+})
+
+test('memory updates match the ts-fsrs reference for every rating', () => {
+  const card: FsrsState = {
+    ...NEW_STATE,
+    state: 'review',
+    stability: 20,
+    difficulty: 5,
+    reps: 3,
+    intervalDays: 20,
+    dueAt: now,
+    lastReviewAt: now - 10 * DAY,
+  }
+  for (const rating of [AGAIN, HARD, GOOD, EASY] as const) {
+    const ours = schedule(card, rating, now)
+    const ref = reference.step({
+      memoryState: { stability: card.stability, difficulty: card.difficulty },
+      rating,
+      elapsedDays: 10,
+    })
+    expect(ours.state.stability).toBeCloseTo(ref.stability, 9)
+    expect(ours.state.difficulty).toBeCloseTo(ref.difficulty, 9)
+  }
+})
+
+test('same-day updates match ts-fsrs, including the no-shrink floor on Hard', () => {
+  for (const stability of [0.001, 0.05, 2.3]) {
+    for (const rating of [AGAIN, HARD, GOOD, EASY] as const) {
+      const card: FsrsState = {
+        ...NEW_STATE,
+        state: 'review',
+        stability,
+        difficulty: 6,
+        intervalDays: 2,
+        dueAt: now,
+        lastReviewAt: now,
+      }
+      const ours = schedule(card, rating, now)
+      const ref = reference.step({
+        memoryState: { stability, difficulty: 6 },
+        rating,
+        elapsedDays: 0,
+      })
+      expect(ours.state.stability).toBeCloseTo(ref.stability, 9)
+      expect(ours.state.difficulty).toBeCloseTo(ref.difficulty, 9)
+    }
+  }
+  // the floor the old hand-rolled core was missing
+  expect(sameDayStability(0.05, HARD)).toBeGreaterThanOrEqual(0.05)
 })
 
 test('isLearned is true only once the card is in review with a day+ interval', () => {

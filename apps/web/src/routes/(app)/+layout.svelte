@@ -3,10 +3,11 @@
   import { goto } from '$app/navigation'
   import { page } from '$app/state'
   import { api } from '#lib/api'
-  import { session } from '#lib/session.svelte'
+  import { logout, session } from '#lib/session.svelte'
   import { href, stripBase } from '#lib/paths'
   import { setVoicePrefs, type VoicePrefs } from '#lib/voices'
   import { htmlLang } from '#lib/lang'
+  import Icon from '#lib/components/Icon.svelte'
   import type { LayoutProps } from './$types'
 
   let { children }: LayoutProps = $props()
@@ -33,31 +34,115 @@
       .catch(() => {})
   })
 
-  /** Tab icons are drawn, one stroke and weight, never emoji. */
-  const ICONS: Record<string, string> = {
-    home: '<path d="M3 10.5 12 3l9 7.5M5 9.5V20h5v-5h4v5h5V9.5" />',
-    learn:
-      '<path d="M12 6.5C10 5 7.5 4.5 4 4.5v13c3.5 0 6 .5 8 2M12 6.5c2-1.5 4.5-2 8-2v13c-3.5 0-6 .5-8 2M12 6.5v13" />',
-    skills: '<path d="m14.5 5.5 4 4M3 21l6.5-6.5M11.5 3.5l9 9-3 3-9-9zM6 14l4 4" />',
-    chat: '<path d="M4 5h16v11H9l-5 4z" />',
-    history: '<path d="M12 7v5l3.5 2M3.5 12a8.5 8.5 0 1 0 2.6-6.1M3.5 4v4h4" />',
-    settings:
-      '<path d="M4 6h5M13 6h7M4 12h11M19 12h1M4 18h7M15 18h5" /><circle cx="11" cy="6" r="2" /><circle cx="17" cy="12" r="2" /><circle cx="13" cy="18" r="2" />',
+  // Three destinations stay in the thumb zone; the tutor, the bank, the archive
+  // and the account sit behind the profile stamp in the title bar. The bar is
+  // drawn once here so every screen shares it.
+  const tabs = [
+    { href: '/home', label: 'Home', icon: 'home' },
+    { href: '/learn', label: 'Learn', icon: 'learn' },
+    { href: '/skills', label: 'Skills', icon: 'skills' },
+  ]
+  const account = [
+    { href: '/chat', label: 'Chat', icon: 'chat' },
+    { href: '/bank', label: 'Bank', icon: 'bank' },
+    { href: '/history', label: 'History', icon: 'history' },
+    { href: '/settings', label: 'Settings', icon: 'settings' },
+  ]
+
+  const active = $derived(stripBase(page.url.pathname))
+  /** On an account screen the stamp reads as active, like a selected tab. */
+  const inAccount = $derived(account.some((m) => active.startsWith(m.href)))
+
+  let open = $state(false)
+  const initial = $derived(
+    (session.user?.handle || session.user?.username || '?').trim().charAt(0).toUpperCase(),
+  )
+
+  // A new route always closes the menu (a link tap navigates, then this runs).
+  $effect(() => {
+    void active
+    open = false
+  })
+
+  function onKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape') open = false
   }
 
-  const tabs = [
-    { href: '/home', label: 'Home', icon: ICONS.home },
-    { href: '/learn', label: 'Learn', icon: ICONS.learn },
-    { href: '/skills', label: 'Skills', icon: ICONS.skills },
-    { href: '/chat', label: 'Chat', icon: ICONS.chat },
-    { href: '/history', label: 'History', icon: ICONS.history },
-    { href: '/settings', label: 'Settings', icon: ICONS.settings },
-  ]
-  const active = $derived(stripBase(page.url.pathname))
+  async function signOut() {
+    open = false
+    await logout().catch(() => {})
+    void goto(href('/login'))
+  }
 </script>
 
+<svelte:window onkeydown={onKeydown} />
+
 <div class="flex min-h-dvh flex-col">
-  <main class="mx-auto w-full max-w-2xl flex-1 px-4 pt-safe">
+  <!-- title bar: the app mark, and the account behind a personal stamp -->
+  <header
+    class="sticky top-0 z-20 border-b border-ink-700 bg-ink-950/90 pt-safe backdrop-blur-md"
+  >
+    <div class="mx-auto flex w-full max-w-2xl items-center justify-between gap-3 px-4 pb-1.5">
+      <a href={href('/home')} class="display text-lg leading-none text-ink-200">Tutor</a>
+
+      <div class="relative">
+        <button
+          type="button"
+          onclick={() => (open = !open)}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          aria-label="Account menu"
+          class="display grid h-8 w-8 shrink-0 place-items-center rounded-[3px] border text-sm font-bold transition-colors {open ||
+          inAccount
+            ? 'border-seal-400 text-seal-300'
+            : 'border-ink-600 text-ink-200 hover:border-ink-500'}"
+        >
+          {initial}
+        </button>
+
+        {#if open}
+          <button
+            type="button"
+            tabindex="-1"
+            aria-label="Close account menu"
+            onclick={() => (open = false)}
+            class="fixed inset-0 z-20 cursor-default"
+          ></button>
+          <div class="rise panel absolute right-0 z-30 mt-2 w-56" role="menu">
+            <div class="border-b border-ink-700 px-3 py-2.5">
+              <div class="display truncate text-sm text-ink-100">{session.user?.handle}</div>
+              <div class="truncate text-[11px] text-ink-400">@{session.user?.username}</div>
+            </div>
+            {#each account as m (m.href)}
+              {@const on = active.startsWith(m.href)}
+              <a
+                href={href(m.href)}
+                role="menuitem"
+                aria-current={on ? 'page' : undefined}
+                class="flex items-center gap-3 px-3 py-2.5 text-sm transition-colors hover:bg-ink-800 {on
+                  ? 'text-seal-300'
+                  : 'text-ink-200'}"
+              >
+                <Icon name={m.icon} size={16} cls={on ? 'text-seal-400' : 'text-ink-400'} />
+                {m.label}
+              </a>
+            {/each}
+            <button
+              type="button"
+              onclick={signOut}
+              role="menuitem"
+              class="flex w-full items-center gap-3 border-t border-ink-700 px-3 py-2.5 text-left text-sm text-ember-300 transition-colors hover:bg-ink-800"
+            >
+              <Icon name="logout" size={16} cls="text-ember-400" />
+              Sign out
+            </button>
+          </div>
+        {/if}
+      </div>
+    </div>
+  </header>
+
+  <main class="mx-auto w-full max-w-2xl flex-1 px-4">
     {@render children()}
   </main>
 
@@ -65,7 +150,7 @@
     class="sticky bottom-0 z-10 border-t border-ink-700 bg-ink-950/90 pb-safe backdrop-blur-md"
     aria-label="Primary"
   >
-    <ul class="mx-auto grid max-w-2xl grid-cols-6">
+    <ul class="mx-auto grid max-w-2xl grid-cols-3">
       {#each tabs as t (t.href)}
         {@const on = active.startsWith(t.href)}
         <li>
@@ -81,18 +166,7 @@
                 ? 'bg-seal-400/12'
                 : ''}"
             >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.6"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                class="h-[18px] w-[18px] {on ? '' : 'opacity-80'}"
-                aria-hidden="true"
-              >
-                {@html t.icon}
-              </svg>
+              <Icon name={t.icon} size={18} cls={on ? '' : 'opacity-80'} />
               <span>{t.label}</span>
             </span>
           </a>

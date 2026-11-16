@@ -1,6 +1,6 @@
 {
-  "name": "tutor",
-  "short_name": "tutor",
+  "name": "Tutor",
+  "short_name": "Tutor",
   "description": "AI-first language learning with local speech",
   "start_url": "/",
   "scope": "/",

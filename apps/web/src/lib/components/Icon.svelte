@@ -3,6 +3,15 @@
   let { name, size = 16, cls = '' }: { name: string; size?: number; cls?: string } = $props()
 
   const PATHS: Record<string, string> = {
+    home: '<path d="M3 10.5 12 3l9 7.5M5 9.5V20h5v-5h4v5h5V9.5" />',
+    learn:
+      '<path d="M12 6.5C10 5 7.5 4.5 4 4.5v13c3.5 0 6 .5 8 2M12 6.5c2-1.5 4.5-2 8-2v13c-3.5 0-6 .5-8 2M12 6.5v13" />',
+    history: '<path d="M12 7v5l3.5 2M3.5 12a8.5 8.5 0 1 0 2.6-6.1M3.5 4v4h4" />',
+    settings:
+      '<path d="M4 6h5M13 6h7M4 12h11M19 12h1M4 18h7M15 18h5" /><circle cx="11" cy="6" r="2" /><circle cx="17" cy="12" r="2" /><circle cx="13" cy="18" r="2" />',
+    // the bank — a strongbox: lid, body and lock
+    bank: '<path d="M4 9h16v11H4zM4 9V7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2M10 12h4v3h-4z" />',
+    logout: '<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 8l4 4-4 4M14 12H3" />',
     chat: '<path d="M4 5h16v11H9l-5 4z" />',
     skills: '<path d="m14.5 5.5 4 4M3 21l6.5-6.5M11.5 3.5l9 9-3 3-9-9zM6 14l4 4" />',
     sword: '<path d="m14.5 5.5 4 4M3 21l6.5-6.5M11.5 3.5l9 9-3 3-9-9zM6 14l4 4" />',

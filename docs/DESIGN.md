@@ -805,10 +805,13 @@ Everything still flows through the **event bus**: `skill.xp`, `skill.level.up`,
 
 ## 13.6 Spaced repetition (FSRS-6, Anki-style) & guided curriculum
 
-Scheduling is a faithful reimplementation of **FSRS-6** — the algorithm Anki
-25.07+ uses — with Anki's **default 21 weights** (`w20 = 0.1542` trainable decay),
-Anki's default **learning steps** (`1m`, `10m`) and **relearning steps** (`10m`),
-and intervals derived from a **desired retention** (default `0.9`, per-user).
+Scheduling uses **FSRS-6** — the algorithm Anki 25.07+ uses — through the
+reference TypeScript implementation (`ts-fsrs`, FSRS-6 model) with Anki's
+**default 21 weights** (`w20 = 0.1542` trainable decay), Anki's default
+**learning steps** (`1m`, `10m`) and **relearning steps** (`10m`), and intervals
+derived from a **desired retention** (default `0.9`, per-user). The state machine
+around the memory math — steps, due dates, card selection, curriculum graduation
+— is ours (`apps/server/src/game/srs.ts`).
 
 ```
    rating  ──┐

@@ -40,7 +40,7 @@
 </script>
 
 {#if !session.loaded}
-  <div class="grid h-dvh place-items-center text-ink-400">Loading tutor…</div>
+  <div class="grid h-dvh place-items-center text-ink-400">Loading Tutor…</div>
 {:else}
   {@render children()}
 {/if}

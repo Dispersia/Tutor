@@ -65,6 +65,12 @@ export interface BuiltDeck {
   newWords: string[]
 }
 
+/** One day of the activity map: the UTC day and the XP earned in it. */
+export interface ActivityDay {
+  day: string
+  xp: number
+}
+
 export interface Stats {
   xp: number
   level: number
@@ -76,6 +82,8 @@ export interface Stats {
   dailyXp: number
   goalPct: number
   todayActive: boolean
+  /** Daily XP heat-map grid: weeks as columns (Monday first), oldest day first. */
+  activity?: { today: string; days: ActivityDay[] }
   /** epoch ms when the "can't speak or listen" window lifts; 0 when off. */
   quietUntil?: number
 }

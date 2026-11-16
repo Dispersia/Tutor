@@ -1,15 +1,13 @@
 /**
  * FSRS-6 spaced repetition (docs/DESIGN.md §13.6).
  *
- * A faithful reimplementation of the Free Spaced Repetition Scheduler v6 — the
- * algorithm Anki 25.07+ uses — with Anki's default parameters (21 weights), the
- * power-law forgetting curve with trainable decay (w20), Anki's default learning
- * steps (1m, 10m) and relearning steps (10m), and intervals derived from a
- * desired retention.
- *
- * Reference: open-spaced-repetition/fsrs-rs (model_v6) + the FSRS-6 algorithm
- * write-up. Pure functions, unit-tested.
+ * The memory math comes from `ts-fsrs` (the reference TypeScript implementation,
+ * FSRS-6 model, Anki's default 21 weights, power-law curve with trainable decay
+ * w20). This module owns the scheduling state machine around it: Anki's default
+ * learning steps (1m, 10m) and relearning steps (10m), due dates, card selection
+ * and the curriculum's notion of a "learned" card.
  */
+import { FSRS6_DEFAULT_WEIGHTS, FSRS6Model } from 'ts-fsrs/models/fsrs-6'
 
 export type Rating = 1 | 2 | 3 | 4 // Again, Hard, Good, Easy
 export const AGAIN: Rating = 1
@@ -46,19 +44,8 @@ export const NEW_STATE: FsrsState = {
   lastRating: null,
 }
 
-/** Anki's FSRS-6 default parameters (also FSRS-6.1.1). */
-export const FSRS6_WEIGHTS = [
-  0.212, 1.2931, 2.3065, 8.2956, 6.4133, 0.8334, 3.0194, 0.001, 1.8722, 0.1666, 0.796, 1.4835,
-  0.0614, 0.2629, 1.6483, 0.6014, 1.8729, 0.5425, 0.0912, 0.0658, 0.1542,
-] as const
-
-export const S_MIN = 0.001
-export const S_MAX = 36500
-export const D_MIN = 1
-export const D_MAX = 10
-/** w20: the personalisable forgetting-curve decay. */
-export const DECAY = FSRS6_WEIGHTS[20]
-export const MAX_INTERVAL_DAYS = 36500
+/** Anki's FSRS-6 default parameters (also FSRS-6.1.1), from ts-fsrs. */
+export const FSRS6_WEIGHTS: readonly number[] = FSRS6_DEFAULT_WEIGHTS
 
 export const DAY_MS = 24 * 60 * 60 * 1000
 export const MIN_MS = 60 * 1000
@@ -67,74 +54,63 @@ export const MIN_MS = 60 * 1000
 export const LEARNING_STEPS = [1, 10]
 export const RELEARNING_STEPS = [10]
 
-const w = (i: number) => FSRS6_WEIGHTS[i]!
+/** The FSRS-6 core: memory-state updates, forgetting curve and intervals. */
+const core = FSRS6Model.create({
+  config: {
+    weights: [...FSRS6_WEIGHTS],
+    enableShortTerm: true,
+    numRelearningSteps: RELEARNING_STEPS.length,
+  },
+})
+
+export const S_MIN = core.bounds.sMin
+export const S_MAX = core.bounds.sMax
+export const D_MIN = core.bounds.dMin
+export const D_MAX = core.bounds.dMax
+export const MAX_INTERVAL_DAYS = 36500
+
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 
-/** `factor = 0.9^(-1/decay) − 1`, so R(t = S) = 0.9. */
-export function forgettingFactor(decay: number = DECAY): number {
-  if (Math.abs(decay) < Number.EPSILON) return 0
-  return Math.pow(0.9, -1 / decay) - 1
-}
-
 /** Retrievability after `elapsedDays` given stability `s`. */
-export function retrievability(s: number, elapsedDays: number, decay: number = DECAY): number {
+export function retrievability(s: number, elapsedDays: number): number {
   if (s <= 0) return 0
   if (elapsedDays <= 0) return 1
-  const factor = forgettingFactor(decay)
-  return clamp(Math.pow(1 + (factor * elapsedDays) / s, -decay), 0, 1)
+  return clamp(core.algorithm.forgetting_curve(elapsedDays, s), 0, 1)
 }
 
+/** ts-fsrs returns raw initial values; the model bounds them like fsrs-rs does. */
 export function initialStability(rating: Rating): number {
-  return clamp(w(rating - 1), S_MIN, S_MAX)
+  return clamp(core.algorithm.init_stability(rating), S_MIN, S_MAX)
 }
 
 export function initialDifficulty(rating: Rating): number {
-  const d = w(4) - Math.exp(w(5) * (rating - 1)) + 1
-  return clamp(d, D_MIN, D_MAX)
+  return clamp(core.algorithm.init_difficulty(rating), D_MIN, D_MAX)
 }
 
 /** ΔD = −w6·(G−3), damped by (10−D)/9, then mean-reverted toward D0(Easy). */
 export function nextDifficulty(d: number, rating: Rating): number {
-  const delta = -w(6) * (rating - 3)
-  const damped = d + (delta * (10 - d)) / 9
-  const reverted = w(7) * initialDifficulty(EASY) + (1 - w(7)) * damped
-  return clamp(reverted, D_MIN, D_MAX)
+  return clamp(core.algorithm.next_difficulty(d, rating), D_MIN, D_MAX)
 }
 
 /** Stability after a successful recall (Hard/Good/Easy). */
 export function stabilityAfterRecall(s: number, d: number, r: number, rating: Rating): number {
-  const hardPenalty = rating === HARD ? w(15) : 1
-  const easyBonus = rating === EASY ? w(16) : 1
-  const factor =
-    Math.exp(w(8)) *
-      (11 - d) *
-      Math.pow(s, -w(9)) *
-      (Math.exp(w(10) * (1 - r)) - 1) *
-      hardPenalty *
-      easyBonus +
-    1
-  return clamp(s * factor, S_MIN, S_MAX)
+  return clamp(core.algorithm.next_recall_stability(d, s, r, rating), S_MIN, S_MAX)
 }
 
-/** Stability after a lapse (Again): never larger than the old stability. */
+/** Stability after a lapse (Again), capped so it never exceeds the prior stability. */
 export function stabilityAfterForget(s: number, d: number, r: number): number {
-  const next =
-    w(11) * Math.pow(d, -w(12)) * (Math.pow(s + 1, w(13)) - 1) * Math.exp(w(14) * (1 - r))
-  return clamp(Math.min(next, s), S_MIN, S_MAX)
+  return clamp(core.algorithm.next_forget_stability(d, s, r), S_MIN, S_MAX)
 }
 
-/** FSRS-6 short-term (same-day) stability update. */
+/** FSRS-6 short-term (same-day) stability update, never shrinking on pass. */
 export function sameDayStability(s: number, rating: Rating): number {
-  const next = s * Math.exp(w(17) * (rating - 3 + w(18))) * Math.pow(s, -w(19))
-  return clamp(next, S_MIN, S_MAX)
+  return clamp(core.algorithm.next_short_term_stability(s, rating), S_MIN, S_MAX)
 }
 
 /** Interval (days) that brings stability `s` down to `desiredRetention`. */
-export function nextInterval(s: number, desiredRetention: number, decay: number = DECAY): number {
+export function nextInterval(s: number, desiredRetention: number): number {
   if (s <= 0 || desiredRetention >= 1 || desiredRetention <= 0) return 0
-  const factor = forgettingFactor(decay)
-  const interval = (s / factor) * (Math.pow(desiredRetention, -1 / decay) - 1)
-  return Math.max(0, Math.round(interval))
+  return Math.max(0, Math.round(core.algorithm.next_interval(s, desiredRetention)))
 }
 
 /** Maps an exercise score to an Anki rating (Again / Hard / Good / Easy). */

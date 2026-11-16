@@ -25,13 +25,14 @@ azure / violet / brass / ember as semantic data colours that always mean the sam
 thing. Book serif (Iowan / Songti) for characters and figures, the system sans for
 UI text. 3–5px radii, 1px rules, no shadows, no gradients.
 
-**STORY.** A member on the couch sees the one thing to do, the word that comes
-next printed on ruled paper, and the numbers they have earned — in that order.
+**STORY.** A member on the couch opens the app and reads their rhythm at a
+glance: a heat map of the last weeks of practice, then the numbers they have
+earned — in that order.
 
 **FIRST VIEWPORT.** Eyebrow (`Mandarin · HSK 1`), serif handle, vermilion level
-seal; a full-width seal action (`Practise N due →`); the next-word **paper plate**
-with the character inside a ruled cell; a two-up XP / streak strip with brass
-figures; a jade daily-goal panel; an azure next-level panel; two accent tiles.
+seal; a jade **activity heat map** panel (18 Monday-first weeks with month
+labels and a less→more legend); ruled entries below for XP earned, day streak, a
+jade daily-goal bar and an azure next-level bar.
 
 **FORM.** Candidate 7 of 7 grounded directions (night dictionary / manuscript
 lexicon). seed:4c820cebc24533d3
