@@ -7,25 +7,25 @@ import {
   playerPower,
   rollDrops,
 } from './combat'
-import { ITEM_BY_ID, SKILL_BY_ID } from './skills'
+import { ITEM_BY_ID, weaponSkill } from './skills'
 
-test('monster content is well-formed and references real items/skills', () => {
+test('monster content is well-formed and references real items', () => {
   const ids = new Set(MONSTERS.map((m) => m.id))
   expect(ids.size).toBe(MONSTERS.length)
   for (const m of MONSTERS) {
-    expect(SKILL_BY_ID.get(m.combatSkill)?.category).toBe('combat')
     expect(m.hp).toBeGreaterThan(0)
     expect(m.damage).toBeGreaterThan(0)
     for (const d of m.drops) expect(ITEM_BY_ID.has(d.item)).toBe(true)
-    for (const r of m.requires ?? []) expect(SKILL_BY_ID.has(r.skill)).toBe(true)
-    if (m.equip) {
-      const anyItem = [...ITEM_BY_ID.values()].some(
-        (i) => i.slot === m.equip!.slot && i.tags?.includes(m.equip!.tag),
-      )
-      expect(anyItem).toBe(true)
-    }
   }
-  expect(MONSTER_BY_ID.get('dragon')?.equip).toEqual({ slot: 'weapon', tag: 'bow' })
+  expect(MONSTER_BY_ID.get('dragon')?.hp).toBe(280)
+})
+
+test('a weapon decides the trained skill: sword→strength, bow→ranged, staff→magic', () => {
+  expect(weaponSkill(ITEM_BY_ID.get('bronze_sword')?.tags)).toBe('strength')
+  expect(weaponSkill(ITEM_BY_ID.get('oak_shortbow')?.tags)).toBe('ranged')
+  expect(weaponSkill(ITEM_BY_ID.get('oak_staff')?.tags)).toBe('magic')
+  // unarmed is still melee
+  expect(weaponSkill(undefined)).toBe('strength')
 })
 
 test('combat maths: HP, power and armour', () => {
@@ -53,5 +53,6 @@ test('equipment carries power / armour values', () => {
   expect(ITEM_BY_ID.get('bronze_sword')?.power).toBe(3)
   expect(ITEM_BY_ID.get('iron_sword')?.power).toBe(6)
   expect(ITEM_BY_ID.get('oak_shortbow')?.power).toBe(4)
+  expect(ITEM_BY_ID.get('oak_staff')?.power).toBe(5)
   expect(ITEM_BY_ID.get('steel_platebody')?.armour).toBe(3)
 })

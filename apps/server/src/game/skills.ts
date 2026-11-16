@@ -340,6 +340,11 @@ export const ITEMS: ItemDef[] = [
     tags: ['bow'],
     power: 8,
   }),
+  item('oak_staff', 'Oak staff', '🪄', 'equipment', 'A sorcerer’s staff.', {
+    slot: 'weapon',
+    tags: ['staff'],
+    power: 5,
+  }),
   item('leather_body', 'Leather body', '🥋', 'equipment', 'Light armour.', {
     slot: 'body',
     tags: ['armour'],
@@ -688,6 +693,17 @@ export const ACTIONS: ActionDef[] = [
     consumes: [{ item: 'willow_log', count: 1 }],
     produces: [{ item: 'willow_longbow', count: 1 }],
   }),
+  A({
+    id: 'fletch-staff',
+    skillId: 'fletching',
+    name: 'Carve an oak staff',
+    description: 'A weapon for Magic.',
+    tier: 1,
+    xp: 12,
+    deckLevel: 'jafreq',
+    consumes: [{ item: 'oak_log', count: 1 }],
+    produces: [{ item: 'oak_staff', count: 1 }],
+  }),
 
   // Runecrafting
   A({
@@ -958,6 +974,18 @@ export const ACTIONS: ActionDef[] = [
 export const SKILL_BY_ID = new Map(SKILLS.map((s) => [s.id, s]))
 export const ITEM_BY_ID = new Map(ITEMS.map((i) => [i.id, i]))
 export const ACTION_BY_ID = new Map(ACTIONS.map((a) => [a.id, a]))
+
+/**
+ * The combat profession a weapon trains. A fight uses whatever you have
+ * equipped, so the weapon's tag — not the monster — decides the skill: a melee
+ * weapon (sword) trains Strength, a bow trains Ranged, a staff trains Magic.
+ * Fighting unarmed is still melee, so it falls back to Strength.
+ */
+export function weaponSkill(tags: string[] | undefined): SkillId {
+  if (tags?.includes('bow')) return 'ranged'
+  if (tags?.includes('staff')) return 'magic'
+  return 'strength'
+}
 
 export function actionsForSkill(skillId: SkillId): ActionDef[] {
   return ACTIONS.filter((a) => a.skillId === skillId)

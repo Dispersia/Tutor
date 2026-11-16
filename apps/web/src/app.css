@@ -429,3 +429,52 @@ body {
 .rise {
   animation: float-up 0.25s ease both;
 }
+
+/* A monster's blow: the player's health block jolts, so even a small chip reads
+   as "I got hit". */
+@keyframes hit-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-4px);
+  }
+  40% {
+    transform: translateX(4px);
+  }
+  60% {
+    transform: translateX(-3px);
+  }
+  80% {
+    transform: translateX(2px);
+  }
+}
+.hit-shake {
+  animation: hit-shake 0.35s ease both;
+}
+@keyframes damage-float {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  35% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-16px);
+  }
+}
+.damage-float {
+  animation: damage-float 0.9s ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hit-shake {
+    animation: none;
+  }
+  .damage-float {
+    animation: none;
+    opacity: 1;
+  }
+}

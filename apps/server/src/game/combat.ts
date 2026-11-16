@@ -1,11 +1,12 @@
 /**
  * Combat (docs/DESIGN.md §13.5).
  *
- * Active, language-driven fights: each drill you get right lands a hit, each one
- * you miss lets the monster hit you. Monster drops feed the professions.
+ * Active, language-driven fights: the monster lands a blow on every drill, and a
+ * correct answer adds your own hit on top. Monster drops feed the professions.
+ *
+ * A fight uses whatever gear you have equipped: the weapon decides which combat
+ * profession the hits train (sword → Strength, bow → Ranged, staff → Magic).
  */
-
-import type { SkillId } from './skills'
 
 export interface DropDef {
   item: string
@@ -24,15 +25,10 @@ export interface MonsterDef {
   hp: number
   /** damage per unanswered/missed drill, before your armour */
   damage: number
-  /** which combat profession the fight trains */
-  combatSkill: SkillId
   /** profession XP per landed hit */
   xp: number
   /** drill difficulty (card deck level) */
   deckLevel: string
-  /** optional gear requirement */
-  equip?: { slot: 'weapon' | 'body' | 'legs'; tag: string }
-  requires?: { skill: SkillId; level: number }[]
   drops: DropDef[]
 }
 
@@ -45,7 +41,6 @@ export const MONSTERS: MonsterDef[] = [
     level: 1,
     hp: 15,
     damage: 2,
-    combatSkill: 'attack',
     xp: 8,
     deckLevel: 'hsk1',
     drops: [{ item: 'bones', chance: 1, min: 1, max: 1 }],
@@ -58,7 +53,6 @@ export const MONSTERS: MonsterDef[] = [
     level: 5,
     hp: 30,
     damage: 3,
-    combatSkill: 'strength',
     xp: 12,
     deckLevel: 'hsk1',
     drops: [
@@ -75,10 +69,8 @@ export const MONSTERS: MonsterDef[] = [
     level: 10,
     hp: 55,
     damage: 6,
-    combatSkill: 'defence',
     xp: 18,
     deckLevel: 'hsk1',
-    requires: [{ skill: 'attack', level: 5 }],
     drops: [
       { item: 'hide', chance: 1, min: 1, max: 2 },
       { item: 'bones', chance: 0.7, min: 1, max: 1 },
@@ -92,11 +84,8 @@ export const MONSTERS: MonsterDef[] = [
     level: 20,
     hp: 95,
     damage: 10,
-    combatSkill: 'attack',
     xp: 26,
     deckLevel: 'n5',
-    requires: [{ skill: 'attack', level: 10 }],
-    equip: { slot: 'weapon', tag: 'melee' },
     drops: [
       { item: 'bones', chance: 1, min: 2, max: 4 },
       { item: 'iron_ore', chance: 0.5, min: 1, max: 2 },
@@ -111,10 +100,8 @@ export const MONSTERS: MonsterDef[] = [
     level: 30,
     hp: 150,
     damage: 14,
-    combatSkill: 'magic',
     xp: 40,
     deckLevel: 'n5',
-    requires: [{ skill: 'magic', level: 10 }],
     drops: [
       { item: 'air_rune', chance: 0.9, min: 1, max: 3 },
       { item: 'uncut_gem', chance: 0.4, min: 1, max: 1 },
@@ -125,18 +112,12 @@ export const MONSTERS: MonsterDef[] = [
     id: 'dragon',
     name: 'Green dragon',
     icon: '🐉',
-    description: 'Bring a bow. Bring friends.',
+    description: 'A long fight. Bring food.',
     level: 50,
     hp: 280,
     damage: 22,
-    combatSkill: 'ranged',
     xp: 90,
     deckLevel: 'hsk1',
-    requires: [
-      { skill: 'ranged', level: 20 },
-      { skill: 'defence', level: 15 },
-    ],
-    equip: { slot: 'weapon', tag: 'bow' },
     drops: [
       { item: 'bones', chance: 1, min: 3, max: 6 },
       { item: 'cut_gem', chance: 0.5, min: 1, max: 2 },

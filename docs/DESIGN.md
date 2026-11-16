@@ -765,19 +765,30 @@ mean of the professions so it also reads out of 100.
 Talent ids encode skill + milestone, so progression continues indefinitely.
 All effects aggregate through `computeBonuses(actionLevels, talents)`.
 
-**Equipment & combat:** Smithing forges weapons/armour, Fletching makes bows and
-arrows, Crafting makes leather armour. Combat actions declare `equip: {slot, tag}`
-so you must have the right gear equipped (Ranged also spends arrows, Magic spends
-runes). `actionState()` reports `locked / affordable / equipOk` for every action.
+**Equipment & combat:** Smithing forges weapons/armour, Fletching makes bows,
+arrows and staffs, Crafting makes leather armour. A fight uses **whatever you have
+equipped** — you never pick a weapon or a skill. The equipped weapon's tag decides
+the combat profession the fight trains: a melee weapon (sword) trains **Strength**,
+a bow trains **Ranged**, a staff trains **Magic**, and bare hands are still melee
+(Strength). `actionState()` reports `locked / affordable / equipOk` for every
+profession-board action (those still gate on gear).
 
 **Fights (active, language-driven):** 6 monsters with HP, damage and drop tables.
-Starting a fight requires the monster's skill levels and (sometimes) gear. Each
-drill you answer **correctly lands a hit** for
+Any monster can be fought with any gear — difficulty is its HP and damage, not a
+gate. Combat drills are **review only**: a fight never introduces a new card, it
+drills cards that already have a spaced-repetition state (due ones first). Drills
+run as a **time attack**: the first drill waits for a Start click, then each drill
+gets 20 seconds and the next drill's clock starts as soon as the previous exchange
+resolves. A timeout counts as a miss. **The monster lands a blow on every
+exchange** — whether you strike it, miss, or run out of time — for
+`monster.damage − armour` (min 1), and that damage trains **Defence and
+Constitution**. A drill you answer **correctly** also lands your own hit for
 `playerPower = (3 + skillLevel*1.5 + weaponPower) * (1 + damageBonus)` (`skillLevel`
-is the profession's **derived** level); a **miss** lets the monster hit you for
-`monster.damage − armour` (min 1). Your HP is
-`20 + constitution*4 + hpBonus*20 + armour*2`. **Win** → drops (with the Slayer
-bonus) + combat XP (credited to the profession's combat action) + overall XP;
+is the spawned profession's **derived** level, the one your weapon trains). Your HP
+is `20 + constitution*4 + hpBonus*20 + armour*2` and **carries between fights**;
+**only food and potions heal it** — there is no passive regeneration, and a defeat
+leaves you at 1 HP rather than a free heal. **Win** → drops (with the Slayer
+bonus) + combat XP (credited to the trained profession) + overall XP;
 **lose** → the fight ends with nothing. One active encounter per player
 (`encounters` table). Events: `combat.hit`, `combat.ended`.
 
@@ -815,6 +826,11 @@ and intervals derived from a **desired retention** (default `0.9`, per-user).
   `≥80 → Good`, else `Hard`. Every review (practice *and* combat hits) feeds the
   scheduler, and the API returns the decision so the UI can show
   *“Good · next in 6 days · stability 38.9d · difficulty 2.1”*.
+- **Review log**: every review that moves a schedule — practice *and* combat —
+  appends to `srs_reviews` with the FSRS rating, fractional elapsed days, the
+  before/after memory state, the desired retention in force and the source. That
+  is the history a future model (FSRS-7) or a per-user weight optimizer would
+  replay; it is append-only and independent of the current scheduler.
 - **Retrievability** uses the power-law curve `R = (1 + factor·t/S)^−w20` with
   `factor = 0.9^(−1/w20) − 1`, so `R(t = S) = 0.9`. Intervals solve that curve for
   the desired retention.

@@ -205,6 +205,19 @@ export const equipment = sqliteTable('equipment', {
   updatedAt: integer('updated_at').notNull(),
 })
 
+/**
+ * Persistent combat state (docs/DESIGN.md §13.5). HP carries between fights —
+ * damage you take stays with you and only food/potions heal it. `hp` is null
+ * until the player's first fight, which means "full" (their derived max HP).
+ */
+export const playerState = sqliteTable('player_state', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  hp: integer('hp'),
+  updatedAt: integer('updated_at').notNull(),
+})
+
 /** Per-user spaced-repetition state (FSRS-6, one row per card reviewed). */
 export const srs = sqliteTable('srs', {
   userId: text('user_id')
@@ -223,6 +236,40 @@ export const srs = sqliteTable('srs', {
   lastRating: integer('last_rating'),
   lastReviewAt: integer('last_review_at'),
 })
+
+/**
+ * Append-only FSRS review log: every review that moved a schedule, practice and
+ * combat alike. Enough history to replay a card (`rating` + `elapsed_days`) under
+ * a future model (FSRS-7) or to train per-user weights later.
+ */
+export const srsReviews = sqliteTable(
+  'srs_reviews',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    cardId: text('card_id').notNull(),
+    /** The FSRS grade (1 = Again … 4 = Easy) this review produced. */
+    rating: integer('rating').notNull(),
+    stateBefore: text('state_before').notNull(),
+    stateAfter: text('state_after').notNull(),
+    stabilityBefore: real('stability_before').notNull(),
+    stabilityAfter: real('stability_after').notNull(),
+    difficultyBefore: real('difficulty_before').notNull(),
+    difficultyAfter: real('difficulty_after').notNull(),
+    intervalDays: real('interval_days').notNull(),
+    /** Days since the previous review; fractional for same-day reviews. */
+    elapsedDays: real('elapsed_days').notNull(),
+    /** The desired retention in force when this review was scheduled. */
+    desiredRetention: real('desired_retention').notNull(),
+    dueAt: integer('due_at').notNull(),
+    /** Which surface fed the schedule: `practice` or `combat`. */
+    source: text('source').notNull().default('practice'),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('idx_srs_reviews_card').on(t.userId, t.cardId, t.createdAt)],
+)
 
 /** Completed curriculum lessons. */
 export const lessonProgress = sqliteTable('lesson_progress', {

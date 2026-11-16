@@ -7,6 +7,7 @@
   import {
     abandonFight,
     combatHit,
+    COMBAT_TIME_LIMIT_MS,
     getCombat,
     startFight,
     type CombatResponse,
@@ -25,7 +26,6 @@
   let ref = $state<SkillsResponse | null>(null)
   let encounter = $state<EncounterDTO | null>(null)
   let instance = $state<Instance | null>(null)
-  let monster = $state<MonsterDTO | null>(null)
   let result = $state<Grade | null>(null)
   let hit = $state<HitResult | null>(null)
   let drank = $state<{ item: string; buff: { kind: string; value: number } } | null>(null)
@@ -33,11 +33,33 @@
   let busy = $state(false)
   let error = $state('')
   let loading = $state(true)
+  /**
+   * Time attack: each drill has a countdown. The first drill of a fight waits
+   * for a Start click; every drill after that starts its own clock. A timeout
+   * is a miss, so the monster gets to hit back.
+   */
+  let timerStarted = $state(false)
+  let deadline = $state(0)
+  let now = $state(Date.now())
+  /** One timeout per drill, so the ticking clock can't submit twice. */
+  let timeoutFired = $state(false)
+  /** Bumps on every monster hit so the health block remounts and re-shakes. */
+  let hitSeq = $state(0)
+  /** The last exchange took a monster hit — jolt the health block. */
+  let justHit = $state(false)
+  const timeLeft = $derived(Math.max(0, deadline - now))
+  const timeLeftSec = $derived(Math.ceil(timeLeft / 1000))
+  const timePct = $derived(
+    deadline > 0 ? Math.max(0, Math.min(100, (timeLeft / COMBAT_TIME_LIMIT_MS) * 100)) : 0,
+  )
 
   const itemMap = $derived(new Map((ref?.items ?? []).map((i) => [i.id, i])))
   const skillMap = $derived(new Map((ref?.skills ?? []).map((s) => [s.id, s])))
   const name = (id: string) => itemMap.get(id)?.name ?? id
   const icon = (id: string) => itemMap.get(id)?.icon ?? ''
+  // The fight trains whatever profession the equipped weapon is for.
+  const fightSkill = $derived(skillMap.get(data?.player.skill ?? '')?.name ?? '')
+  const fightSkillIcon = $derived(skillMap.get(data?.player.skill ?? '')?.icon ?? '')
   const foodCount = $derived(
     (ref?.inventory ?? []).reduce(
       (n, i) => n + ((itemMap.get(i.itemId)?.heal ?? 0) > 0 ? i.count : 0),
@@ -50,6 +72,35 @@
 
   onMount(refresh)
 
+  /** Tick the clock while a drill is live. */
+  $effect(() => {
+    if (!timerStarted) return
+    const timer = setInterval(() => (now = Date.now()), 100)
+    return () => clearInterval(timer)
+  })
+
+  /** When the clock runs out, take the miss once. */
+  $effect(() => {
+    if (!timerStarted || deadline === 0 || timeoutFired) return
+    if (now < deadline) return
+    timeoutFired = true
+    if (busy) return
+    void submit(null, true)
+  })
+
+  function startTimer() {
+    now = Date.now()
+    deadline = now + COMBAT_TIME_LIMIT_MS
+    timeoutFired = false
+    timerStarted = true
+  }
+
+  function stopTimer() {
+    timerStarted = false
+    deadline = 0
+    timeoutFired = false
+  }
+
   async function refresh() {
     try {
       const [c, s, set] = await Promise.all([
@@ -61,11 +112,12 @@
       ref = s
       encounter = c.encounter
       // Resuming a fight: adopt the drill the server rebuilt for this encounter
-      // and which monster we're facing, so the fight keeps going after a reload.
+      // so the fight keeps going after a reload. The clock waits for Start.
       if (c.encounter) {
         instance = c.instance
-        monster = c.monsters.find((m) => m.id === c.encounter!.monsterId) ?? null
+        stopTimer()
       }
+      justHit = false
       if (set?.foodThreshold) foodThreshold = set.foodThreshold
     } catch (e) {
       error = (e as Error).message
@@ -76,21 +128,22 @@
 
   async function fight(m: MonsterDTO) {
     error = ''
+    stopTimer()
     try {
       const r = await startFight(m.id)
-      monster = r.monster
       encounter = r.encounter
       instance = r.instance
       drank = r.drank
       result = null
       hit = null
+      justHit = false
     } catch (e) {
       error = (e as Error).message
     }
   }
 
-  async function submit(answer: unknown) {
-    if (!instance) return
+  async function submit(answer: unknown, timedOut = false) {
+    if (!instance || busy) return
     busy = true
     error = ''
     try {
@@ -98,29 +151,40 @@
         exerciseId: instance.exerciseId,
         cardId: instance.cardId,
         answer,
+        timedOut,
       })
       result = r.result
       hit = r.hit
+      justHit = r.hit.playerDamage > 0
+      if (r.hit.playerDamage > 0) hitSeq += 1
       encounter = r.encounter
       instance = r.instance
       if (r.hit.outcome !== 'ongoing') {
         // fight over — refresh the monster list / bank
+        stopTimer()
         void refresh()
+      } else if (r.instance) {
+        // time attack: the next drill starts its own clock straight away
+        startTimer()
+      } else {
+        stopTimer()
       }
     } catch (e) {
       error = (e as Error).message
+      stopTimer()
     } finally {
       busy = false
     }
   }
 
   function leave() {
+    stopTimer()
     encounter = null
     instance = null
-    monster = null
     result = null
     hit = null
     drank = null
+    justHit = false
     void refresh()
   }
 
@@ -159,11 +223,16 @@
 
 <svelte:window onkeydown={onKeydown} />
 
-<div class="flex items-center justify-between border-b border-ink-700 pt-5 pb-3">
+<div class="flex items-center justify-between border-b border-ink-700 pt-4 pb-3">
   <div>
     <h1 class="display text-3xl text-combat-400">Combat</h1>
     <p class="mt-1 text-xs text-ink-400">
-      {encounter ? 'Answer drills to strike; a miss lets it hit back.' : 'Pick a monster to fight.'}
+      {encounter
+        ? 'Answer drills to strike; it hits you every exchange.'
+        : 'Pick a monster to fight.'}
+      {#if fightSkill}
+        · {fightSkillIcon} {fightSkill}
+      {/if}
       · <Icon name="food" size={12} cls="align-[-2px]" />
       {foodCount} food ·
       <Icon name="potion" size={12} cls="align-[-2px]" />
@@ -173,7 +242,8 @@
   {#if data}
     <div class="flex shrink-0 flex-col items-end gap-1 text-xs">
       <span class="chip gap-1" style="--accent: {ACCENT.ember}"
-        ><Icon name="heart" size={12} /> {encounter?.playerHp ?? data.player.maxHp} HP</span
+        ><Icon name="heart" size={12} />
+        {encounter?.playerHp ?? data.player.hp}/{encounter?.playerMaxHp ?? data.player.maxHp} HP</span
       >
       <span class="chip gap-1" style="--accent: var(--color-ink-500)"
         ><Icon name="shield" size={12} />
@@ -211,13 +281,24 @@
     <div class="bar mt-1 mb-3" style="--accent: {ACCENT.ember}">
       <i style="width: {(encounter.monsterHp / encounter.monsterMaxHp) * 100}%"></i>
     </div>
-    <div class="flex items-center justify-between text-sm">
-      <span class="display text-ink-200">You</span>
-      <span class="text-ink-400">{encounter.playerHp}/{encounter.playerMaxHp}</span>
-    </div>
-    <div class="bar mt-1" style="--accent: {ACCENT.jade}">
-      <i style="width: {(encounter.playerHp / encounter.playerMaxHp) * 100}%"></i>
-    </div>
+    {#key hitSeq}
+      <div class="relative" class:hit-shake={justHit}>
+        <div class="flex items-center justify-between text-sm">
+          <span class="display text-ink-200">You</span>
+          <span class="text-ink-400">{encounter.playerHp}/{encounter.playerMaxHp}</span>
+        </div>
+        <div class="bar mt-1" style="--accent: {justHit ? ACCENT.ember : ACCENT.jade}">
+          <i style="width: {(encounter.playerHp / encounter.playerMaxHp) * 100}%"></i>
+        </div>
+        {#if justHit}
+          <span
+            class="damage-float pointer-events-none absolute -top-4 right-0 text-sm font-semibold text-ember-300"
+          >
+            -{hit?.playerDamage ?? 0}
+          </span>
+        {/if}
+      </div>
+    {/key}
     <div class="mt-3 flex justify-end">
       <button onclick={flee} disabled={busy} class="btn btn-ghost px-3 py-1.5 text-xs">
         Leave fight
@@ -231,14 +312,26 @@
         <span class="chip gap-1" style="--accent: {ACCENT.jade}"
           ><Icon name="sword" size={12} /> you hit for {hit.damage}</span
         >
-      {:else}
+      {/if}
+      {#if hit.playerDamage > 0}
         <span class="chip gap-1" style="--accent: {ACCENT.ember}"
           ><Icon name="burst" size={12} /> it hit you for {hit.playerDamage}</span
         >
       {/if}
       {#if hit.xp > 0}
         <span class="chip" style="--accent: {ACCENT.azure}">
-          {skillMap.get(monster?.combatSkill ?? '')?.icon ?? ''} +{hit.xp} xp
+          {skillMap.get(hit.skill)?.icon ?? ''} +{hit.xp}
+          {skillMap.get(hit.skill)?.name ?? hit.skill}
+        </span>
+      {/if}
+      {#if hit.defenceXp > 0}
+        <span class="chip" style="--accent: {ACCENT.jade}">
+          🛡️ +{hit.defenceXp} Defence
+        </span>
+      {/if}
+      {#if hit.constitutionXp > 0}
+        <span class="chip" style="--accent: {ACCENT.ember}">
+          ❤️ +{hit.constitutionXp} Constitution
         </span>
       {/if}
       {#if hit.ate}
@@ -247,11 +340,7 @@
         </span>
       {/if}
       {#if hit.talentUnlocked}
-        <a
-          href={href(`/skills/${monster?.combatSkill ?? ''}`)}
-          class="chip"
-          style="--accent: {ACCENT.gold}"
-        >
+        <a href={href(`/skills/${hit.skill}`)} class="chip" style="--accent: {ACCENT.gold}">
           Talent unlocked — choose one
         </a>
       {/if}
@@ -286,19 +375,45 @@
     </div>
     <button onclick={leave} class="btn btn-primary mt-4 w-full py-3">Back to monsters</button>
   {:else if instance}
-    <!-- Key on the instance so a fresh drill remounts the component. Otherwise
-         two same-type drills in a row reuse it and keep the last answer text. -->
-    {#key instance}
-      {@const Comp = componentFor(instance.exerciseId)}
-      <div class="panel p-5">
-        <Comp {instance} {busy} onsubmit={submit} />
+    {#if !timerStarted}
+      <!-- The first drill of a fight waits for Start; after that each drill's
+           clock starts on its own. -->
+      <div class="panel p-5 text-center">
+        <p class="display text-lg text-ink-200">Ready?</p>
+        <p class="mt-1 text-xs text-ink-400">
+          {COMBAT_TIME_LIMIT_MS / 1000}s per drill. It hits you every exchange — bring food.
+        </p>
+        <button onclick={startTimer} class="btn btn-primary mt-3 px-5 py-2" data-enter-action>
+          Start
+        </button>
       </div>
-    {/key}
+    {:else}
+      <div class="mb-2 flex items-center justify-between text-xs">
+        <span class="text-ink-400">Time attack</span>
+        <span class={timeLeftSec <= 5 ? 'text-ember-300' : 'text-ink-400'}>{timeLeftSec}s</span>
+      </div>
+      <div class="bar mb-2" style="--accent: {timeLeftSec <= 5 ? ACCENT.ember : ACCENT.jade}">
+        <i style="width: {timePct}%"></i>
+      </div>
+      <!-- Key on the instance so a fresh drill remounts the component. Otherwise
+           two same-type drills in a row reuse it and keep the last answer text. -->
+      {#key instance}
+        {@const Comp = componentFor(instance.exerciseId)}
+        <div class="panel p-5">
+          <Comp {instance} {busy} onsubmit={submit} />
+        </div>
+      {/key}
+    {/if}
   {:else}
     <p class="text-sm text-ink-400">No drill available — try again.</p>
   {/if}
 {:else}
   <!-- monster list -->
+  {#if data && data.reviewCount === 0}
+    <div class="panel mb-3 p-4 text-sm text-ink-300">
+      Combat is review only — practise a few cards first, then come back to fight.
+    </div>
+  {/if}
   <div class="space-y-2">
     {#each data?.monsters ?? [] as m (m.id)}
       <div
@@ -314,7 +429,7 @@
               <span class="text-xs text-ink-400">Lv {m.level} · {m.hp} HP</span>
             </div>
             <div class="text-[11px] text-ink-400">
-              {m.description} · trains {skillMap.get(m.combatSkill)?.name ?? m.combatSkill}
+              {m.description}
             </div>
             <div class="mt-1 flex flex-wrap gap-1">
               {#each m.drops as d (d.item)}
@@ -328,7 +443,7 @@
           </div>
           <button
             onclick={() => fight(m)}
-            disabled={!m.unlocked}
+            disabled={!m.unlocked || (data?.reviewCount ?? 0) === 0}
             class="btn btn-accent shrink-0 px-3 py-2 text-sm"
             style={accentStyle(ACCENT.ember)}
           >
