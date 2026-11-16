@@ -392,6 +392,25 @@ export function updateDeckSettings(
   return merged
 }
 
+/**
+ * Clears the `building` flag a deck carries when a background build did not
+ * finish (a process restart mid-build). Its cards up to the growth cursor stay;
+ * the deck simply stops claiming to be building.
+ */
+export function clearDeckBuilds(db: Db): number {
+  let cleared = 0
+  for (const row of db.select().from(decks).all()) {
+    const settings = parseDeckSettings(row.settingsJson)
+    if (!settings.building) continue
+    db.update(decks)
+      .set({ settingsJson: JSON.stringify({ ...settings, building: false }) })
+      .where(eq(decks.id, row.id))
+      .run()
+    cleared++
+  }
+  return cleared
+}
+
 export interface NewCard {
   deckId: string
   type?: CardType

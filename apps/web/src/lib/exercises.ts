@@ -44,6 +44,12 @@ export interface DeckSettings {
   cursor?: number
   batchSize?: number
   instruction?: string
+  /** True while a background build is still generating this deck's cards. */
+  building?: boolean
+  /** How many words the running build will introduce in total. */
+  buildTotal?: number
+  /** The error that stopped a background build. */
+  buildError?: string
 }
 
 export interface Deck {
@@ -115,12 +121,17 @@ export interface AnkiInspection {
 export const inspectDeck = (form: FormData) =>
   api<AnkiInspection>('/api/decks/inspect', { method: 'POST', body: form })
 
-/** Import an Anki `.apkg`: its words become the deck's word source. */
+/** Import an Anki `.apkg`: its words become the deck's word source. The whole
+ *  deck is imported and filled in the background — `building` says it is still
+ *  generating cards. */
 export const importDeck = (form: FormData) =>
-  api<BuiltDeck & { words: number; fields: string[] }>('/api/decks/import', {
-    method: 'POST',
-    body: form,
-  })
+  api<BuiltDeck & { words: number; fields: string[]; building?: boolean }>(
+    '/api/decks/import',
+    {
+      method: 'POST',
+      body: form,
+    },
+  )
 
 /** Grow a deck organically, optionally focusing on a topic. */
 export const growDeck = (deckId: string, body: { topic?: string; count?: number } = {}) =>

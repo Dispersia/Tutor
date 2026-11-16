@@ -38,6 +38,16 @@ export interface DeckSettings {
   wordSource?: 'frequency' | 'anki'
   /** The source word list (imported decks), so the deck can grow without it. */
   words?: string[]
+  /**
+   * True while a background build is still generating this deck's cards. The
+   * Learn tab watches it to show progress; a restart clears it (see
+   * `clearDeckBuilds`), so a half-built deck is never stuck.
+   */
+  building?: boolean
+  /** How many words the running build will introduce in total (progress bar). */
+  buildTotal?: number
+  /** The error that stopped a background build, so the UI can say why. */
+  buildError?: string
 }
 
 /** Parses a stored settings blob, ignoring anything malformed. */
