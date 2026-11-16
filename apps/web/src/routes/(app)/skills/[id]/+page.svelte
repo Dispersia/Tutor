@@ -3,6 +3,7 @@
   import { page } from '$app/state'
   import { goto } from '$app/navigation'
   import { chooseTalent, getSkill, type ActionDTO, type SkillPageResponse } from '#lib/skills'
+  import type { ModKind } from '#lib/types'
   import { CATEGORY, ACCENT, accentStyle, categoryAccent } from '#lib/theme'
   import Icon from '#lib/components/Icon.svelte'
 
@@ -15,6 +16,18 @@
 
   const id = $derived(page.params.id)
   const pct = (v: number) => `${Math.round(v * 100)}%`
+  // Short labels for each passive kind, so a value like "now 18%" can't be read
+  // as level progress. The kind names the stat the bonus actually boosts.
+  const EFFECT_LABEL: Record<ModKind, string> = {
+    yield: 'yield',
+    double: 'bonus product',
+    xp: 'XP',
+    coins: 'coins',
+    global_xp: 'global XP',
+    damage: 'power',
+    drop: 'rare drops',
+    hp: 'HP',
+  }
   const skill = $derived(data?.skill ?? null)
   const accent = $derived(skill ? categoryAccent(skill.category) : ACCENT.azure)
   const catLabel = $derived(skill ? CATEGORY[skill.category].label : '')
@@ -232,8 +245,17 @@
           </div>
           <div class="bar mt-1.5"><i style="width: {a.progress * 100}%"></i></div>
           <div class="mt-1 flex flex-wrap items-center gap-x-3 text-[11px] text-ink-500">
-            <span class="tabular-nums">+{a.xp} xp</span>
-            <span style="color: {accent}">now {pct(a.effect.value)}</span>
+            {#if a.level >= 100}
+              <span>Max level</span>
+            {:else}
+              <span class="tabular-nums">{a.intoLevel} / {a.forNext} XP to Lv {a.level + 1}</span>
+            {/if}
+            <span class="text-ink-600">+{a.xp} xp a drill</span>
+            {#if a.effect.value > 0}
+              <span style="color: {accent}"
+                >+{pct(a.effect.value)} {EFFECT_LABEL[a.effect.kind]}</span
+              >
+            {/if}
           </div>
           <div class="mt-0.5 text-[11px] text-ink-400">{a.description}</div>
           {#if (a.consumes ?? []).length || (a.produces ?? []).length}
