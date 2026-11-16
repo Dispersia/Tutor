@@ -16,6 +16,8 @@ import {
 } from '../frequency/source'
 import type { PlannedCard, Planner } from './plan'
 import type { DeckSettings } from './settings'
+import { kanjiumContour } from './kanjium'
+import { mandarinZhuyin } from './mandarin'
 
 /**
  * Builds and grows decks from a user instruction (docs/DESIGN.md §13.7).
@@ -123,6 +125,44 @@ function cardTypeFor(template: PlannedCard['template']): CardType {
   return 'vocab'
 }
 
+/**
+ * When a Japanese deck asks for pitch accent, prefer the bundled dictionary over
+ * the model's guess. The generator's contour is kept only where the dictionary
+ * has nothing — the generator is unreliable on Tokyo accent (DESIGN §11.1).
+ */
+function applyDictionaryPitch(
+  targetLang: string,
+  pitchAccent: boolean | undefined,
+  planned: PlannedCard[],
+): void {
+  if (targetLang !== 'ja' || !pitchAccent) return
+  for (const card of planned) {
+    if (card.template !== 'vocab' || !card.reading) continue
+    const contour = kanjiumContour(card.back, card.reading)
+    if (contour) card.metadata = { ...(card.metadata ?? {}), pitch: contour }
+  }
+}
+
+/**
+ * Chinese readings come from the bundled Taiwan dictionary instead of the
+ * generator's guess (Zhuyin only, so a pinyin deck is left alone). A word that
+ * arrived with its own reading — an Anki import — keeps that reading, which is
+ * the source deck's authority, not something to overwrite.
+ */
+function applyDictionaryReading(
+  targetLang: string,
+  readingScript: string | undefined,
+  hints: Record<string, { reading?: string; meaning?: string }> | undefined,
+  planned: PlannedCard[],
+): void {
+  if (targetLang !== 'zh' || readingScript === 'pinyin') return
+  for (const card of planned) {
+    if (hints?.[card.back]?.reading) continue
+    const zhuyin = mandarinZhuyin(card.back)
+    if (zhuyin) card.reading = zhuyin
+  }
+}
+
 /** The highest n+1 step already present in a deck (0 when empty). */
 function maxStep(cards: { payload: Record<string, unknown> }[]): number {
   let max = 0
@@ -213,6 +253,8 @@ export async function buildDeck(
     pitchAccent: opts.pitchAccent,
     hints: opts.hints,
   })
+  applyDictionaryPitch(opts.targetLang, opts.pitchAccent, planned)
+  applyDictionaryReading(opts.targetLang, opts.readingScript, opts.hints, planned)
 
   const settings: DeckSettings = {
     variant: opts.variant,
@@ -305,6 +347,8 @@ export async function growDeck(
     count,
     pitchAccent: settings.pitchAccent,
   })
+  applyDictionaryPitch(deck.targetLang, settings.pitchAccent, planned)
+  applyDictionaryReading(deck.targetLang, settings.readingScript, undefined, planned)
 
   const { newWords, cardCount } = persistCards(
     db,

@@ -6,6 +6,7 @@ import type { App, Deps } from './context'
 import { openDb } from './db/client'
 import { parseInstruction } from './deck/generate'
 import type { PlannedCard, Planner, PlanRequest } from './deck/plan'
+import type { PitchFetcher, PitchWord } from './deck/pitch'
 import type { Role } from './env'
 import { EventBus } from './events'
 import type { Fetcher } from './frequency/source'
@@ -362,6 +363,70 @@ test('pitch-accent metadata flows from the planner to the learner', async () => 
     )
   ).json()) as { instance: { data: { pitch?: { levels: string[] } } } }
   expect(next.instance.data.pitch?.levels).toEqual(['L', 'H'])
+  sqlite.close()
+})
+
+test('POST /api/decks/:id/pitch backfills pitch for cards that lack it', async () => {
+  const seen: PitchWord[][] = []
+  const pitch: PitchFetcher = async (words) => {
+    seen.push(words)
+    return new Map(words.map((w) => [w.word, { levels: ['L', 'H'], drop: 1 }]))
+  }
+  const { app, sqlite } = makeApp({ pitch })
+  const cookie = await signup(app)
+  const created = (await (
+    await app.request(
+      '/api/decks',
+      auth(cookie, json({ instruction: 'japanese frequency list', targetLang: 'ja', count: 3 })),
+    )
+  ).json()) as DeckBody
+  // the deck was built without asking for pitch
+  expect(created.deck.settings.pitchAccent).toBeFalsy()
+
+  const before = (await (
+    await app.request(`/api/decks/${created.deck.id}/cards`, auth(cookie))
+  ).json()) as { cards: { metadata: { pitch?: unknown } }[] }
+  expect(before.cards.every((c) => !c.metadata.pitch)).toBe(true)
+
+  const res = (await (
+    await app.request(`/api/decks/${created.deck.id}/pitch`, auth(cookie, { method: 'POST' }))
+  ).json()) as { updated: number; total: number }
+  expect(res.updated).toBeGreaterThan(0)
+  expect(seen[0]!.length).toBe(res.updated)
+
+  const after = (await (
+    await app.request(`/api/decks/${created.deck.id}/cards`, auth(cookie))
+  ).json()) as { cards: { metadata: { pitch?: { levels: string[] } } }[] }
+  expect(after.cards[0]!.metadata.pitch?.levels).toEqual(['L', 'H'])
+
+  // a second run has nothing left to annotate
+  const again = (await (
+    await app.request(`/api/decks/${created.deck.id}/pitch`, auth(cookie, { method: 'POST' }))
+  ).json()) as { updated: number }
+  expect(again.updated).toBe(0)
+  sqlite.close()
+})
+
+test('a generated Chinese deck reads words from the Taiwan dictionary', async () => {
+  // the planner's readings are wrong on purpose: the dictionary must win
+  const zhPlanner: Planner = async () => [
+    { template: 'vocab', front: 'possessive particle', back: '的', reading: 'r-de' },
+    { template: 'vocab', front: 'nonsense', back: 'x-test', reading: 'r-test' },
+  ]
+  const { app, sqlite } = makeApp({ planner: zhPlanner })
+  const cookie = await signup(app)
+  const created = (await (
+    await app.request(
+      '/api/decks',
+      auth(cookie, json({ instruction: 'chinese frequency list', targetLang: 'zh', count: 2 })),
+    )
+  ).json()) as DeckBody
+  const cards = (await (
+    await app.request(`/api/decks/${created.deck.id}/cards`, auth(cookie))
+  ).json()) as { cards: { back: string; readings: Record<string, string> }[] }
+  // 的 resolves to its Taiwan Zhuyin; an unknown word keeps the planner's reading
+  expect(cards.cards.find((c) => c.back === '的')?.readings.zhuyin).toBe('ㄉㄜ˙')
+  expect(cards.cards.find((c) => c.back === 'x-test')?.readings.zhuyin).toBe('r-test')
   sqlite.close()
 })
 

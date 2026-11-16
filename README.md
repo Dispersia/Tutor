@@ -56,6 +56,7 @@ those keys at rest.
 | `GET/POST /api/sessions`, `GET /api/sessions/:id` | per-user history |
 | `GET/POST /api/decks`, `GET /api/decks/:id/cards` | decks, built on demand from an instruction + a pulled frequency list |
 | `POST /api/decks/:id/grow` · `PATCH /api/decks/:id` | grow a deck organically (optionally on a topic) · set its reading rules |
+| `POST /api/decks/:id/pitch` | backfill pitch-accent metadata for the deck's existing cards |
 | `POST /api/decks/import` | build a deck from an uploaded Anki `.apkg` (its words are the source) |
 | `GET /api/exercises` | the exercise registry |
 | `POST /api/practice/next` · `/api/practice/grade` · `/api/practice/speak` | next drill · grade it (+XP) · pronunciation |
@@ -136,3 +137,23 @@ Copy `.env.example` to `.env` (dev) or `~/.config/tutor/env` and set
 `OPENROUTER_API_KEY` (server fallback), plus `TUTOR_SECRET` to encrypt per-user
 keys at rest. Each user then picks their own models and key in the app. Set
 `TUTOR_ALLOW_REGISTRATION=false` once everyone has an account.
+
+## Pitch accent data
+
+Japanese pitch accents are resolved from the bundled Kanjium dictionary
+(`apps/server/src/deck/kanjium-accents.txt`), by Uros O. and the Kanjium project,
+licensed [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
+<https://github.com/mifunetoshiro/kanjium>
+
+## Mandarin reading data
+
+Chinese (Traditional) workloads get their reading from the bundled Taiwan
+dictionary `apps/server/src/deck/mandarin-readings.txt`, built by
+`scripts/build-mandarin-readings.py` from:
+
+- 中華民國教育部《重編國語辭典修訂本》, via the
+  [g0v/moedict-data](https://github.com/g0v/moedict-data) mirror — readings used
+  verbatim, licensed
+  [CC BY-ND 3.0 TW](https://creativecommons.org/licenses/by-nd/3.0/tw/).
+- [McBopomofo](https://github.com/openvanilla/McBopomofo) — preferred character
+  readings and additional words, MIT licensed.
