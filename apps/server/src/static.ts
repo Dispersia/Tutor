@@ -7,7 +7,7 @@ const PLACEHOLDER = `<!doctype html>
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>tutor</title>
+<title>Tutor</title>
 <style>
   :root { color-scheme: dark; }
   body { font: 16px/1.5 system-ui, sans-serif; margin: 0; padding: 1.2rem; max-width: 44rem; }
@@ -23,7 +23,7 @@ const PLACEHOLDER = `<!doctype html>
 </style>
 </head>
 <body>
-  <h1>tutor — api is up</h1>
+  <h1>Tutor — api is up</h1>
   <p class="sub">Phase 2 placeholder. The SvelteKit PWA replaces this in Phase 3.
     Try the streaming chat (needs <code>OPENROUTER_API_KEY</code>):
     <a href="/api/health">/api/health</a> · <a href="/api/models?q=qwen">/api/models?q=qwen</a>

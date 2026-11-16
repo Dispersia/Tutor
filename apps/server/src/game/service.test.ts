@@ -1,15 +1,27 @@
 import { expect, test } from 'bun:test'
 import { openDb } from '../db/client'
-import { addXpEvent, createUser, getStats, sumXp, upsertStats } from '../db/repo'
+import {
+  addXpEvent,
+  createUser,
+  getSrs,
+  getStats,
+  listSrsReviews,
+  sumXp,
+  upsertSrs,
+  upsertStats,
+} from '../db/repo'
 import { EventBus } from '../events'
 import {
+  activitySeries,
   awardXp,
   rebuildStats,
+  recordReview,
   recordActivity,
   shiftDay,
   streakFromDays,
   summary,
   todayDay,
+  weekStart,
 } from './service'
 
 test('streakFromDays counts consecutive days ending today or yesterday', () => {
@@ -29,6 +41,30 @@ test('shiftDay handles month/year boundaries', () => {
   expect(shiftDay('2026-11-01', -1)).toBe('2026-10-31')
   expect(shiftDay('2026-01-01', -1)).toBe('2025-12-31')
   expect(shiftDay('2026-11-12', 1)).toBe('2026-11-13')
+})
+
+test('weekStart returns the Monday of the UTC week', () => {
+  // 2026-11-15 is a Sunday → its week starts on Monday 2026-11-09
+  expect(weekStart('2026-11-15')).toBe('2026-11-09')
+  expect(weekStart('2026-11-09')).toBe('2026-11-09')
+  expect(weekStart('2026-11-10')).toBe('2026-11-09')
+})
+
+test('activitySeries lays out Monday-first weeks and buckets today', () => {
+  const { db, sqlite } = openDb(':memory:')
+  const user = createUser(db, { username: 'carol', passwordHash: 'x' })
+  addXpEvent(db, user.id, 25, 'review', 'a')
+
+  const { today, days } = activitySeries(db, user.id, 4)
+  expect(days.length).toBe(28)
+  // the grid opens on a Monday
+  expect(new Date(`${days[0]!.day}T00:00:00Z`).getUTCDay()).toBe(1)
+  // today sits in the final week and carries the XP
+  const idx = days.findIndex((d) => d.day === today)
+  expect(idx).toBeGreaterThanOrEqual(21)
+  expect(days[idx]!.xp).toBe(25)
+  expect(days.filter((d) => d.xp > 0).length).toBe(1)
+  sqlite.close()
 })
 
 test('awardXp appends to the ledger, levels up and emits events', () => {
@@ -90,5 +126,59 @@ test('rebuildStats reconstructs everything from the XP ledger', () => {
   expect(rebuilt.level).toBe(2)
   expect(rebuilt.streak).toBe(1) // both events are today
   expect(getStats(db, user.id).xpTotal).toBe(150)
+  sqlite.close()
+})
+
+test('recordReview appends an FSRS revlog row with the before/after state', () => {
+  const { db, sqlite } = openDb(':memory:')
+  const bus = new EventBus()
+  const user = createUser(db, { username: 'dave', passwordHash: 'x' })
+
+  const schedule = recordReview(db, bus, user.id, 'card-1', 85, true)
+  const log = listSrsReviews(db, user.id, 'card-1')
+  expect(log.length).toBe(1)
+  const row = log[0]!
+  expect(row.rating).toBe(3) // 85 → Good
+  expect(row.stateBefore).toBe('new')
+  expect(row.stateAfter).toBe('learning')
+  expect(row.stabilityBefore).toBe(0)
+  expect(row.stabilityAfter).toBeCloseTo(schedule.stability, 6)
+  expect(row.difficultyAfter).toBeCloseTo(schedule.difficulty, 6)
+  expect(row.intervalDays).toBe(schedule.intervalDays)
+  expect(row.elapsedDays).toBe(0)
+  expect(row.desiredRetention).toBe(0.9)
+  expect(row.dueAt).toBe(schedule.dueAt)
+  expect(row.source).toBe('practice')
+  sqlite.close()
+})
+
+test('the revlog records fractional elapsed days and the review source', () => {
+  const { db, sqlite } = openDb(':memory:')
+  const bus = new EventBus()
+  const user = createUser(db, { username: 'erin', passwordHash: 'x' })
+
+  recordReview(db, bus, user.id, 'card-1', 85, true)
+  const prev = getSrs(db, user.id, 'card-1')!
+  // pretend the previous review happened two days ago
+  upsertSrs(db, user.id, 'card-1', {
+    state: prev.state,
+    step: prev.step,
+    stability: prev.stability,
+    difficulty: prev.difficulty,
+    reps: prev.reps,
+    lapses: prev.lapses,
+    intervalDays: prev.intervalDays,
+    dueAt: prev.dueAt,
+    lastRating: prev.lastRating,
+    lastReviewAt: Date.now() - 2 * 24 * 60 * 60 * 1000,
+  })
+
+  recordReview(db, bus, user.id, 'card-1', 0, false, { source: 'combat' })
+  const last = listSrsReviews(db, user.id, 'card-1').at(-1)!
+  expect(last.source).toBe('combat')
+  expect(last.rating).toBe(1) // wrong → Again
+  expect(last.stateBefore).toBe('learning')
+  expect(last.elapsedDays).toBeGreaterThan(1.9)
+  expect(last.elapsedDays).toBeLessThan(2.1)
   sqlite.close()
 })

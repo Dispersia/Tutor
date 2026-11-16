@@ -29,7 +29,7 @@
 
 <div class="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-6 pt-safe pb-safe">
   <div class="mb-7 text-center">
-    <div class="display text-4xl text-ink-100">tutor</div>
+    <div class="display text-4xl text-ink-100">Tutor</div>
     <p class="mt-1 text-sm text-ink-400">
       {mode === 'login' ? 'Sign in to continue.' : 'Create your account.'}
     </p>

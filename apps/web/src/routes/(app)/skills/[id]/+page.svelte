@@ -69,7 +69,7 @@
   }
 </script>
 
-<div class="pt-5">
+<div class="pt-4">
   <button onclick={() => goto(href('/skills'))} class="text-sm text-ink-400 hover:text-ink-200">
     ← Skills
   </button>

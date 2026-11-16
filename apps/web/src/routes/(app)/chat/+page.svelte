@@ -189,8 +189,8 @@
   }
 </script>
 
-<div class="border-b border-ink-700 pt-5 pb-4">
-  <h1 class="display text-3xl text-ink-100">Talk to your tutor</h1>
+<div class="border-b border-ink-700 pt-4 pb-4">
+  <h1 class="display text-3xl text-ink-100">Talk to your Tutor</h1>
   <p class="mt-1 text-xs text-ink-400">
     {lang ? lang.toUpperCase() : 'EN'} · replies are spoken
     {#if speaking}<span class="text-jade-400">· speaking…</span>{/if}
@@ -200,7 +200,7 @@
 <div class="space-y-3 pt-4 pb-28">
   {#if messages.length === 0}
     <p class="panel panel-accent p-4 text-sm text-ink-300" style={accentStyle(ACCENT.azure)}>
-      Say or type something in your target language to begin. Your tutor answers out loud and keeps
+      Say or type something in your target language to begin. Your Tutor answers out loud and keeps
       the whole history.
     </p>
   {/if}

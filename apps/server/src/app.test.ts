@@ -272,5 +272,5 @@ test('placeholder page is served when no build exists', async () => {
   const { app } = makeApp()
   const res = await app.request('/')
   expect(res.status).toBe(200)
-  expect(await res.text()).toContain('tutor')
+  expect(await res.text()).toContain('Tutor')
 })

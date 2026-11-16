@@ -12,7 +12,8 @@
     "@tutor/core": "workspace:*",
     "@tutor/speech": "workspace:*",
     "drizzle-orm": "^0.45.4",
-    "hono": "^4.13.18"
+    "hono": "^4.13.18",
+    "ts-fsrs": "6.0.0"
   },
   "devDependencies": {
     "drizzle-kit": "^0.31.11"

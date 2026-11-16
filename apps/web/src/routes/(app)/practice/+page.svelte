@@ -331,7 +331,7 @@
 
 <svelte:window onkeydown={onKeydown} />
 
-<div class="flex items-center justify-between border-b border-ink-700 pt-5 pb-3">
+<div class="flex items-center justify-between border-b border-ink-700 pt-4 pb-3">
   <div>
     <h1 class="display text-2xl text-ink-100">
       {actionId ? skillName : lesson ? lesson.title : 'Free practice'}
