@@ -531,6 +531,36 @@ truth for correctness. A deck asks the generator for it (`pitchAccent`), and a
 card's bag is editable per-card via `PATCH /api/decks/:id/cards/:cardId`
 (merged by key; `null` removes one).
 
+A deck's own rules — including `pitchAccent` — are edited from the deck's
+**settings** sheet on Learn (`DeckSettings.svelte`), which also owns deck
+deletion. Because `pitchAccent` only reaches *new* batches, the sheet can
+**backfill** the cards a deck already has: `POST /api/decks/:id/pitch` annotates
+every card that lacks a contour (keeping the rest) and returns how many it
+annotated. `deck/pitch.ts` holds the annotator and the shared backfill, so the
+route and `scripts/backfill-pitch.ts` do the same work.
+
+Pitch is **looked up, not invented**: `deck/kanjium.ts` resolves the accent
+number from the bundled **Kanjium** dictionary (`kanjium-accents.txt`, CC BY-SA
+4.0, https://github.com/mifunetoshiro/kanjium) and derives the levels and the mora
+split here, so a contour always agrees with its accent number. A language model
+guesses Tokyo accent badly (毎日 comes back heiban instead of 頭高), so the
+generator is asked only for words the dictionary does not know, and the deck
+builder overrides the model's contour with the dictionary when a Japanese deck
+asks for pitch. The settings sheet's **Re-annotate from dictionary** button
+(`{ force: true }`) rewrites the contours a deck already has from the dictionary
+alone — no key, no model.
+
+Chinese readings are looked up the same way. `deck/mandarin.ts` resolves a word's
+**Zhuyin** from `mandarin-readings.txt`, built by
+`scripts/build-mandarin-readings.py` from the Ministry of Education's
+《重編國語辭典修訂本》 (Taiwan; CC BY-ND 3.0 TW, readings used verbatim) and
+**McBopomofo** (https://github.com/openvanilla/McBopomofo, MIT; each character's
+preferred reading and the words the ministry dictionary omits). The deck builder
+overrides the generator's reading for a `zh` deck, except where the word came
+with its own reading (an Anki import) — that is the source deck's authority.
+Only Traditional characters have entries: Zhuyin is a Taiwan script, so a
+Simplified or pinyin deck keeps the generator's reading.
+
 Cards come from: a curated starter deck, LLM generation ("give me 20 HSK-1
 food words"), or manual entry.
 

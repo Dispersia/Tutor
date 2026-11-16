@@ -17,6 +17,14 @@ import { parsePitchContour } from '@tutor/core'
 import { detectLanguage, inspectAnki, wordsFromAnki } from '../anki/words'
 import { buildDeck, growDeck, parseInstruction } from '../deck/generate'
 import { llmPlanner, type Planner } from '../deck/plan'
+import {
+  backfillDeckPitch,
+  composeFetchers,
+  dictionaryFetcher,
+  llmPitchFetcher,
+  pitchTargets,
+  type PitchFetcher,
+} from '../deck/pitch'
 import { DECK_INSTRUCTION_KEY } from '../deck/settings'
 import { roleReasoning } from '../env'
 import { OpenRouter } from '../llm/openrouter'
@@ -63,6 +71,33 @@ async function plannerFor(deps: Deps, userId: string): Promise<Planner | undefin
   if (!key) return undefined
   const model = getRoles(deps.db, userId, deps.defaults).generator
   return llmPlanner(new OpenRouter(key, deps.or.baseUrl), model, roleReasoning.generator)
+}
+
+/**
+ * The pitch annotator for this user: the bundled Japanese dictionary first, and
+ * the generator model for whatever the dictionary does not know. With
+ * `dictionaryOnly` the model is skipped entirely, so a re-annotation is
+ * deterministic and needs no key.
+ */
+async function pitchFetcherFor(
+  deps: Deps,
+  userId: string,
+  targetLang: string,
+  opts: { dictionaryOnly?: boolean } = {},
+): Promise<PitchFetcher | undefined> {
+  const dictionary = dictionaryFetcher(targetLang)
+  if (deps.pitch) return composeFetchers(dictionary, deps.pitch)
+  if (opts.dictionaryOnly) return dictionary
+  const key = await resolveUserKey(deps, userId)
+  if (!key) return targetLang === 'ja' ? dictionary : undefined
+  const model = getRoles(deps.db, userId, deps.defaults).generator
+  const generated = llmPitchFetcher(
+    new OpenRouter(key, deps.or.baseUrl),
+    model,
+    roleReasoning.generator,
+    targetLang,
+  )
+  return composeFetchers(dictionary, generated)
 }
 
 export function registerDecks(app: App) {
@@ -398,5 +433,38 @@ export function registerDecks(app: App) {
     }
     updateCard(deps.db, cardId, user.id, patch)
     return c.json({ card: getCard(deps.db, cardId, user.id) })
+  })
+
+  /**
+   * Backfill pitch-accent metadata for the deck's cards that lack it. The
+   * bundled dictionary answers first (offline); the generator fills the rest.
+   * With `{ force: true }` every card with a reading is re-annotated from the
+   * dictionary alone — this replaces wrong contours without asking the model.
+   * Returns how many cards were annotated.
+   */
+  app.post('/api/decks/:id/pitch', async (c) => {
+    const deps = c.get('deps')
+    const user = c.get('user')!
+    const deckId = c.req.param('id')
+    const deck = getDeck(deps.db, deckId, user.id)
+    if (!deck) return c.json({ error: 'not found' }, 404)
+
+    const body = (await c.req.json().catch(() => ({}))) as { force?: boolean }
+    const force = body.force === true
+
+    const cards = listCards(deps.db, user.id, deckId)
+    if (pitchTargets(cards, { force }).length === 0)
+      return c.json({ updated: 0, total: cards.length })
+
+    const fetcher = await pitchFetcherFor(deps, user.id, deck.targetLang, {
+      dictionaryOnly: force,
+    })
+    if (!fetcher) return c.json({ error: 'No OpenRouter key — add one in Settings.' }, 502)
+
+    try {
+      return c.json(await backfillDeckPitch(deps.db, user.id, deckId, fetcher, { force }))
+    } catch (err) {
+      return c.json({ error: (err as Error).message }, 502)
+    }
   })
 }

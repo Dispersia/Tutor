@@ -38,6 +38,8 @@ export interface DeckSettings {
   showReadings?: boolean
   readingScript?: string
   variant?: 'traditional' | 'simplified'
+  /** Ask the generator for pitch-accent metadata (Japanese, …). */
+  pitchAccent?: boolean
   disabledExercises?: string[]
   cursor?: number
   batchSize?: number
@@ -126,6 +128,17 @@ export const updateDeck = (deckId: string, body: { name?: string; settings?: Dec
 /** Delete a deck completely: cards, SRS state, history and deck chats. */
 export const deleteDeck = (deckId: string) =>
   api<{ ok: boolean; deckId: string }>(`/api/decks/${deckId}`, { method: 'DELETE' })
+
+/**
+ * Annotate pitch metadata. The bundled Japanese dictionary answers first and the
+ * generator fills the gaps; with `force` every card is re-annotated from the
+ * dictionary alone (replaces wrong contours, no key needed).
+ */
+export const backfillPitch = (deckId: string, opts: { force?: boolean } = {}) =>
+  api<{ updated: number; total: number }>(`/api/decks/${deckId}/pitch`, {
+    method: 'POST',
+    ...(opts.force ? { body: JSON.stringify({ force: true }) } : {}),
+  })
 
 /** Every card in a deck (with its readings, payload and metadata). */
 export const getDeckCards = (deckId: string) =>
