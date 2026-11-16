@@ -50,6 +50,15 @@ export interface DeckSettings {
   buildError?: string
 }
 
+/**
+ * A deck's settings as sent to a client. The source `words` list can hold
+ * thousands of entries and no client uses it, so it never leaves the server.
+ */
+export function publicDeckSettings(settings: DeckSettings): DeckSettings {
+  const { words: _words, ...rest } = settings
+  return rest
+}
+
 /** Parses a stored settings blob, ignoring anything malformed. */
 export function parseDeckSettings(json: string | null | undefined): DeckSettings {
   if (!json) return {}

@@ -225,10 +225,20 @@ export class OpenRouter {
       throw new Error(`openrouter json -> ${res.status}: ${detail.slice(0, 400)}`)
     }
     const json = (await res.json()) as {
-      choices?: { message?: { content?: string } }[]
+      choices?: { message?: { content?: string }; finish_reason?: string }[]
       usage?: Record<string, unknown>
     }
-    const content = json.choices?.[0]?.message?.content ?? '{}'
-    return { json: JSON.parse(content) as T, usage: mapUsage(json.usage) }
+    const choice = json.choices?.[0]
+    // A response cut off by the output cap is not recoverable JSON — say so
+    // plainly so a caller (the deck builder) can retry with a smaller batch.
+    if (choice?.finish_reason === 'length') {
+      throw new Error('the model ran out of output space before its JSON was complete')
+    }
+    const content = choice?.message?.content ?? '{}'
+    try {
+      return { json: JSON.parse(content) as T, usage: mapUsage(json.usage) }
+    } catch (err) {
+      throw new Error(`the model did not return valid JSON (${(err as Error).message})`)
+    }
   }
 }

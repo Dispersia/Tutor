@@ -76,9 +76,10 @@ export interface BuiltDeck {
 /**
  * Words per planner call. Small enough that a batch (one vocab card per word
  * plus the interleaved sentence/grammar cards) stays inside the model's output
- * budget, large enough that a 1500-word import is not 1500 calls.
+ * budget, large enough that a 1500-word import is not 1500 calls. A batch that
+ * still comes back truncated is retried smaller — see {@link fillDeck}.
  */
-export const PLAN_CHUNK = 30
+export const PLAN_CHUNK = 20
 
 /** A deck never asks for more words than the importer will even read. */
 export const MAX_DECK_WORDS = 5000
@@ -347,6 +348,10 @@ export interface FillDeckResult {
  * batch carries the words already introduced, so the planner's sentence and
  * grammar cards only ever use what the learner has met. Persisting batch by
  * batch means a long build is durable: an interrupted import keeps what it made.
+ *
+ * A batch whose JSON came back truncated (the model hit its output cap) is
+ * retried with half the words, down to a single word — the build shrinks around
+ * a fussy batch rather than giving up on the whole deck, then widens again.
  */
 export async function fillDeck(
   db: Db,
@@ -362,22 +367,35 @@ export async function fillDeck(
   let cardCount = 0
   let step = opts.startStep ?? 0
   let built = 0
+  let chunkSize = PLAN_CHUNK
 
-  for (let i = 0; i < total; i += PLAN_CHUNK) {
-    const chunk = opts.words.slice(i, Math.min(i + PLAN_CHUNK, total))
-    const planned = await planner({
-      instruction: ctx.instruction,
-      targetLang: ctx.targetLang,
-      sourceLang: ctx.sourceLang,
-      topic: ctx.topic,
-      words: chunk,
-      knownWords: known.slice(),
-      variant: ctx.variant,
-      readingScript: ctx.readingScript,
-      count: chunk.length,
-      pitchAccent: ctx.pitchAccent,
-      hints: ctx.hints,
-    })
+  while (built < total) {
+    const size = Math.min(chunkSize, total - built)
+    const chunk = opts.words.slice(built, built + size)
+    let planned: PlannedCard[]
+    try {
+      planned = await planner({
+        instruction: ctx.instruction,
+        targetLang: ctx.targetLang,
+        sourceLang: ctx.sourceLang,
+        topic: ctx.topic,
+        words: chunk,
+        knownWords: known.slice(),
+        variant: ctx.variant,
+        readingScript: ctx.readingScript,
+        count: size,
+        pitchAccent: ctx.pitchAccent,
+        hints: ctx.hints,
+      })
+    } catch (err) {
+      // Retry the same words with a smaller batch. A single word that still
+      // fails is a real error — stop there, keeping everything already made.
+      if (size > 1) {
+        chunkSize = Math.max(1, Math.floor(size / 2))
+        continue
+      }
+      throw err
+    }
     applyDictionaryPitch(ctx.targetLang, ctx.pitchAccent, planned)
     applyDictionaryReading(ctx.targetLang, ctx.readingScript, ctx.hints, planned)
     const res = persistCards(
@@ -396,8 +414,10 @@ export async function fillDeck(
     known.push(...res.newWords)
     newWords.push(...res.newWords)
     cardCount += res.cardCount
-    built += chunk.length
+    built += size
     opts.onProgress?.(built, total)
+    // Recover the batch size one word at a time after a shrink.
+    if (chunkSize < PLAN_CHUNK) chunkSize = Math.min(PLAN_CHUNK, chunkSize + 1)
   }
   return { newWords, cardCount, built }
 }
@@ -431,26 +451,39 @@ export async function buildDeck(
   }
 }
 
+/** The words, rules and n+1 state one organic growth run works from. */
+export interface GrowthPlan {
+  instruction: string
+  ctx: DeckContext
+  /** The words still to introduce, in order. */
+  words: string[]
+  /** Words already in the deck, so example cards stay n+1. */
+  knownWords: string[]
+  /** The n+1 step to continue from. */
+  startStep: number
+  /** The index into the deck's source list this growth starts at. */
+  cursor: number
+}
+
 /**
- * Grows a deck organically: pulls the next slice of its frequency list (or its
- * stored word list) and adds another n+1 batch. `topic` narrows the batch to a
- * theme (e.g. a restaurant).
+ * Reads a deck's next growth batch: its remaining words, its rules and the n+1
+ * state to carry forward. An imported deck grows from its stored word list; a
+ * frequency deck re-pulls `want` words' worth (plus headroom).
  */
-export async function growDeck(
+export async function growthPlan(
   db: Db,
   userId: string,
   deckId: string,
-  opts: GrowDeckOptions,
-): Promise<BuiltDeck> {
+  opts: { topic?: string; fetcher?: Fetcher; want?: number } = {},
+): Promise<GrowthPlan | undefined> {
   const deck = getDeck(db, deckId, userId)
-  if (!deck) throw new Error('deck not found')
+  if (!deck) return undefined
   const settings = deck.settings ?? {}
   const cards = listCards(db, userId, deckId)
   const known = cards.map((c) => c.back)
-  const count = clamp(opts.count ?? settings.batchSize ?? 10, 1, MAX_DECK_WORDS)
   const cursor = settings.cursor ?? 0
+  const want = clamp(opts.want ?? PLAN_CHUNK, 1, MAX_DECK_WORDS)
 
-  // An imported deck grows from its stored word list; a frequency deck re-pulls.
   let sourceWords: string[]
   if (settings.words?.length) {
     sourceWords = settings.words
@@ -458,7 +491,7 @@ export async function growDeck(
     const { words } = await fetchFrequencyWords(deck.targetLang, {
       variant: settings.variant,
       fetcher: opts.fetcher,
-      limit: clamp(cursor + count + 200, 300, MAX_DECK_WORDS),
+      limit: clamp(cursor + want + 200, 300, MAX_DECK_WORDS),
     })
     sourceWords = words.map((w) => w.word)
   }
@@ -473,11 +506,9 @@ export async function growDeck(
     ? (rememberedDeckInstruction(db, userId) ?? settings.instruction ?? 'Continue the deck')
     : (settings.instruction ?? 'Continue the deck')
 
-  const { newWords, cardCount } = await fillDeck(
-    db,
-    userId,
-    deckId,
-    {
+  return {
+    instruction,
+    ctx: {
       // The prompt that built the deck stays in force for every later batch; a
       // topic narrows the batch without replacing the learner's rules.
       instruction,
@@ -488,13 +519,55 @@ export async function growDeck(
       readingScript: settings.readingScript,
       pitchAccent: settings.pitchAccent,
     },
-    { words: remaining, count, knownWords: known, startStep: maxStep(cards) },
+    words: remaining,
+    knownWords: known,
+    startStep: maxStep(cards),
+    cursor,
+  }
+}
+
+/**
+ * Grows a deck organically: adds another n+1 batch from its frequency list (or
+ * its stored word list). `topic` narrows the batch to a theme (e.g. a
+ * restaurant). Synchronous — {@link startDeckGrowth} finishes it in the
+ * background instead.
+ */
+export async function growDeck(
+  db: Db,
+  userId: string,
+  deckId: string,
+  opts: GrowDeckOptions,
+): Promise<BuiltDeck> {
+  const deck = getDeck(db, deckId, userId)
+  if (!deck) throw new Error('deck not found')
+  const settings = deck.settings ?? {}
+  const cards = listCards(db, userId, deckId)
+  const count = clamp(opts.count ?? settings.batchSize ?? 10, 1, MAX_DECK_WORDS)
+  const plan = await growthPlan(db, userId, deckId, {
+    topic: opts.topic,
+    fetcher: opts.fetcher,
+    want: count,
+  })
+  if (!plan) throw new Error('deck not found')
+
+  const { newWords, cardCount } = await fillDeck(
+    db,
+    userId,
+    deckId,
+    plan.ctx,
+    {
+      words: plan.words,
+      count,
+      knownWords: plan.knownWords,
+      startStep: plan.startStep,
+    },
     opts.planner,
   )
   updateDeckSettings(db, deckId, userId, {
-    cursor: cursor + count,
+    cursor: plan.cursor + count,
     batchSize: Math.min(count, PLAN_CHUNK),
-    instruction,
+    instruction: plan.instruction,
+    buildError: undefined,
   })
   return {
     deckId,
@@ -506,6 +579,50 @@ export async function growDeck(
         : (frequencySourceFor(deck.targetLang, settings.variant)?.label ?? deck.targetLang),
     newWords,
   }
+}
+
+/**
+ * Finishes a deck in the background: introduces every remaining word so an
+ * interrupted or stopped build resumes with one action. Returns how many words
+ * were left (0 when the deck was already complete).
+ */
+export async function startDeckGrowth(
+  db: Db,
+  userId: string,
+  deckId: string,
+  opts: { topic?: string; fetcher?: Fetcher; planner: Planner },
+): Promise<number | undefined> {
+  const plan = await growthPlan(db, userId, deckId, {
+    topic: opts.topic,
+    fetcher: opts.fetcher,
+    want: MAX_DECK_WORDS,
+  })
+  if (!plan) return undefined
+  if (plan.words.length === 0) {
+    updateDeckSettings(db, deckId, userId, { building: false, buildError: undefined })
+    return 0
+  }
+  const total = plan.cursor + plan.words.length
+  updateDeckSettings(db, deckId, userId, {
+    building: true,
+    buildTotal: total,
+    buildError: undefined,
+  })
+  startDeckBuild(
+    db,
+    userId,
+    deckId,
+    plan.ctx,
+    {
+      words: plan.words,
+      count: plan.words.length,
+      knownWords: plan.knownWords,
+      startStep: plan.startStep,
+    },
+    opts.planner,
+    { cursorStart: plan.cursor, total },
+  )
+  return plan.words.length
 }
 
 /**
@@ -525,6 +642,9 @@ export function awaitDeckBuild(deckId: string): Promise<void> {
  * after each one so the UI can watch the deck fill. The `building` flag is the
  * learner-visible status; it clears on success or error (and a restart clears
  * it too — see `clearDeckBuilds`).
+ *
+ * `base` places the run inside the deck's source list — an import starts at 0,
+ * a resume continues from the cursor it stopped at.
  */
 export function startDeckBuild(
   db: Db,
@@ -533,7 +653,10 @@ export function startDeckBuild(
   ctx: DeckContext,
   opts: FillDeckOptions,
   planner: Planner,
+  base: { cursorStart?: number; total?: number } = {},
 ): void {
+  const start = base.cursorStart ?? 0
+  const total = base.total ?? opts.count
   const run = (async () => {
     try {
       await fillDeck(
@@ -543,17 +666,17 @@ export function startDeckBuild(
         ctx,
         {
           ...opts,
-          onProgress: (built, total) => {
-            opts.onProgress?.(built, total)
-            updateDeckSettings(db, deckId, userId, { cursor: built, buildTotal: total })
+          onProgress: (built, chunkTotal) => {
+            opts.onProgress?.(built, chunkTotal)
+            updateDeckSettings(db, deckId, userId, { cursor: start + built, buildTotal: total })
           },
         },
         planner,
       )
       updateDeckSettings(db, deckId, userId, {
         building: false,
-        cursor: opts.count,
-        buildTotal: opts.count,
+        cursor: start + opts.count,
+        buildTotal: total,
         buildError: undefined,
       })
     } catch (err) {

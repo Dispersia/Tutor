@@ -121,6 +121,44 @@ test('chatJSON requests no hidden reasoning by default and honours an override',
   globalThis.fetch = orig
 })
 
+test('chatJSON names a response cut off by the output cap', async () => {
+  const orig = globalThis.fetch
+  globalThis.fetch = (async () =>
+    Response.json({
+      choices: [{ message: { content: '{"score":' }, finish_reason: 'length' }],
+    })) as unknown as typeof fetch
+
+  const or = new OpenRouter('k', 'http://stub')
+  await expect(
+    or.chatJSON({
+      model: 'm',
+      messages: [{ role: 'user', content: 'grade' }],
+      schema: { type: 'object' },
+    }),
+  ).rejects.toThrow(/out of output space/)
+
+  globalThis.fetch = orig
+})
+
+test('chatJSON names invalid JSON instead of leaking a parse error', async () => {
+  const orig = globalThis.fetch
+  globalThis.fetch = (async () =>
+    Response.json({
+      choices: [{ message: { content: 'not json' }, finish_reason: 'stop' }],
+    })) as unknown as typeof fetch
+
+  const or = new OpenRouter('k', 'http://stub')
+  await expect(
+    or.chatJSON({
+      model: 'm',
+      messages: [{ role: 'user', content: 'grade' }],
+      schema: { type: 'object' },
+    }),
+  ).rejects.toThrow(/did not return valid JSON/)
+
+  globalThis.fetch = orig
+})
+
 test('listModels({user:true}) uses /models/user and requires a key', async () => {
   const orig = globalThis.fetch
   const paths: string[] = []
