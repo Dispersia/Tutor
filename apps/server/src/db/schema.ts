@@ -162,6 +162,12 @@ export const settings = sqliteTable('settings', {
  * Per-user **action** levels (docs/DESIGN.md §13.5). The level lives on the
  * action (`Mine copper`), not the profession; a profession's level is the sum of
  * its actions' levels and is derived, never stored.
+ *
+ * The row also carries the action's **idle rig** (§13.5.1): `completions` is how
+ * many drills it has ever completed (which sets the run's speed and length),
+ * `runEndsAt`/`settledAt` are the run's two timestamps, and `crafts`/`remainder`
+ * are the fractional carry that keeps settlement exact. There is no timer — the
+ * whole accrual is a closed-form function of these numbers and the clock.
  */
 export const actionProgress = sqliteTable('action_progress', {
   userId: text('user_id')
@@ -170,8 +176,38 @@ export const actionProgress = sqliteTable('action_progress', {
   actionId: text('action_id').notNull(),
   xp: integer('xp').notNull().default(0),
   level: integer('level').notNull().default(1),
+  /** lifetime drill completions — drives the rig's interval and run length */
+  completions: integer('completions').notNull().default(0),
+  /** ms; the rig runs while `now < run_ends_at` (0 = still) */
+  runEndsAt: integer('run_ends_at').notNull().default(0),
+  /** ms; accrual has been credited up to here */
+  settledAt: integer('settled_at').notNull().default(0),
+  /** fractional crafts carried between settles (keeps `consumes` integral) */
+  crafts: real('crafts').notNull().default(0),
+  /** fractional produced items per item id, as JSON */
+  remainderJson: text('remainder_json').notNull().default('{}'),
   updatedAt: integer('updated_at').notNull(),
 })
+
+/**
+ * Append-only completion log (docs/DESIGN.md §13.5.1) — one row per drill that
+ * powered a rig. The live rig is an O(1) accumulator; this log exists so the bank
+ * stays reconstructible from *when things were completed* alone, and so the idle
+ * curve can be rebalanced later without rewriting anyone's materials.
+ */
+export const gatherLog = sqliteTable(
+  'gather_log',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    actionId: text('action_id').notNull(),
+    completions: integer('completions').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('idx_gather_log_user_action').on(t.userId, t.actionId, t.createdAt)],
+)
 
 /** Per-user materials bank. */
 export const inventory = sqliteTable('inventory', {

@@ -98,7 +98,8 @@ test('unlock + material helpers', () => {
       .map((c) => c.item)
       .sort(),
   ).toEqual(['guam', 'vial'])
-  expect(missingMaterials(brew, () => 1).length).toBe(0)
+  expect(missingMaterials(brew, () => 0).length).toBe(2)
+  expect(missingMaterials(brew, () => 99).length).toBe(0)
 })
 
 test('starter bronze chain is playable from Mining 1 (tin has a source)', () => {
@@ -109,7 +110,8 @@ test('starter bronze chain is playable from Mining 1 (tin has a source)', () => 
   for (const c of smelt.consumes ?? []) {
     const source = ACTIONS.find(
       (a) =>
-        missingUnlocks(a, () => 1).length === 0 && (a.produces ?? []).some((p) => p.item === c.item),
+        missingUnlocks(a, () => 1).length === 0 &&
+        (a.produces ?? []).some((p) => p.item === c.item),
     )
     expect(source).toBeDefined()
   }

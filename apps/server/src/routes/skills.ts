@@ -18,13 +18,14 @@ import {
   aggregateBonuses,
   chooseTalent,
   equipItem,
+  idleView,
   inventoryView,
+  settleAll,
   skillSummaries,
   talentView,
   unequipItem,
 } from '../game/service'
-import type { App } from '../context'
-import type { Db } from '../db/client'
+import type { App, Deps } from '../context'
 
 /** The bonus an action carries right now (its own passive at its current level). */
 function currentEffect(kind: ModKind, b: Bonuses, actionId: string): number {
@@ -52,8 +53,14 @@ function currentEffect(kind: ModKind, b: Bonuses, actionId: string): number {
  * Every profession with its derived level, and each action with its own level and
  * current passive (docs/DESIGN.md §13.5). The profession has no level of its own:
  * `level` is the sum of the action levels below it.
+ *
+ * Idle rigs settle here, on read (docs §13.5.1): the bank is credited for whatever
+ * every running machine made since the last request, so the client always sees the
+ * truth and never has to ask the server to tick.
  */
-function boardSkills(db: Db, userId: string) {
+function boardSkills(deps: Deps, userId: string, now = Date.now()) {
+  const db = deps.db
+  const settled = settleAll(db, deps.events, userId, now)
   const progress = new Map(skillSummaries(db, userId).map((s) => [s.skillId, s]))
   const byAction = actionProgressView(db, userId)
   const talents = new Map(talentView(db, userId).map((t) => [t.skillId, t]))
@@ -68,6 +75,7 @@ function boardSkills(db: Db, userId: string) {
       talent: talents.get(s.id)!,
       actions: actionsForSkill(s.id).map((a) => {
         const ap = byAction.get(a.id)
+        const rig = settled.rigs.get(a.id)
         return {
           ...a,
           level: ap?.level ?? 1,
@@ -76,6 +84,7 @@ function boardSkills(db: Db, userId: string) {
           forNext: ap?.forNext ?? skillXpForLevel(1),
           progress: ap?.progress ?? 0,
           effect: { ...s.effect, value: currentEffect(s.effect.kind, bonuses, a.id) },
+          idle: rig ? idleView(rig, a, now, bonuses.yield(a.id) + bonuses.double(a.id)) : null,
           ...actionState(db, userId, a),
         }
       }),
@@ -106,14 +115,14 @@ export function registerSkills(app: App) {
   // The profession board: skills (+derived level), their actions (each with its
   // own level/effect), talents and the materials bank. DESIGN §13.5.
   app.get('/api/skills', (c) => {
-    const db = c.get('deps').db
+    const deps = c.get('deps')
     const user = c.get('user')!
-    const bonuses = aggregateBonuses(db, user.id)
+    const bonuses = aggregateBonuses(deps.db, user.id)
     return c.json({
-      skills: boardSkills(db, user.id),
+      skills: boardSkills(deps, user.id),
       items: ITEMS,
-      inventory: inventoryView(db, user.id),
-      equipment: listEquipment(db, user.id).map((e) => ({ slot: e.slot, itemId: e.itemId })),
+      inventory: inventoryView(deps.db, user.id),
+      equipment: listEquipment(deps.db, user.id).map((e) => ({ slot: e.slot, itemId: e.itemId })),
       bonuses: bonusSummary(bonuses),
     })
   })
@@ -121,11 +130,12 @@ export function registerSkills(app: App) {
   // A single profession's page: its actions (each with its own level), the talent
   // roadmap and the materials needed to label the action costs.
   app.get('/api/skills/:id', (c) => {
-    const db = c.get('deps').db
+    const deps = c.get('deps')
+    const db = deps.db
     const user = c.get('user')!
     const id = c.req.param('id') as SkillId
     if (!SKILL_BY_ID.has(id)) return c.json({ error: 'unknown profession' }, 404)
-    const views = boardSkills(db, user.id)
+    const views = boardSkills(deps, user.id)
     const skill = views.find((s) => s.id === id)!
     // The reverse edge of the web: professions whose synergy talent feeds this
     // one. A skill can be fed by more than one trade, so this is a list; `taken`

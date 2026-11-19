@@ -2,6 +2,7 @@
   import { href } from '#lib/paths'
   import { onMount } from 'svelte'
   import { getSkills, type SkillsResponse } from '#lib/skills'
+  import { rigGainedSince } from '#lib/idle'
   import { ACCENT, CATEGORY, accentStyle, type SkillCategory } from '#lib/theme'
   import Icon from '#lib/components/Icon.svelte'
   import Spinner from '#lib/components/Spinner.svelte'
@@ -9,6 +10,10 @@
   let data = $state<SkillsResponse | null>(null)
   let error = $state('')
   let loading = $state(true)
+  /** When the board was fetched — the cursor the live counters extrapolate from. */
+  let fetchedAt = $state(0)
+  /** Ticking clock so a running rig's counter climbs in place (§13.5.1). */
+  let now = $state(Date.now())
 
   const pct = (v: number) => `${Math.round(v * 100)}%`
   // the average profession level, so it also reads out of 100
@@ -31,11 +36,35 @@
     })),
   )
 
-  onMount(refresh)
+  /** Professions with at least one rig running, and the items they made since fetch. */
+  const running = $derived.by(() => {
+    const out: { id: string; name: string; accent: string; gained: number }[] = []
+    for (const s of data?.skills ?? []) {
+      let gained = 0
+      let active = false
+      for (const a of s.actions) {
+        if (!a.idle?.active) continue
+        active = true
+        if (fetchedAt) {
+          for (const n of Object.values(rigGainedSince(a.idle, fetchedAt, now))) gained += n
+        }
+      }
+      if (active) out.push({ id: s.id, name: s.name, accent: CATEGORY[s.category].accent, gained })
+    }
+    return out
+  })
+
+  onMount(() => {
+    void refresh()
+    const timer = setInterval(() => (now = Date.now()), 250)
+    return () => clearInterval(timer)
+  })
 
   async function refresh() {
     try {
-      data = await getSkills()
+      const res = await getSkills()
+      fetchedAt = Date.now()
+      data = res
     } catch (e) {
       error = (e as Error).message
     } finally {
@@ -83,6 +112,36 @@
   <span class="flex-1 text-ink-100">Combat — fight monsters for bones, hides and gems</span>
   <span class="text-ink-500">→</span>
 </a>
+
+{#if running.length}
+  <!-- The idle tell: which rigs are running and what they have made since (§13.5.1). -->
+  <div class="mt-3 flex flex-wrap items-center gap-2 border-b border-ink-700 pb-3 text-[11px]">
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.6"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      width="12"
+      height="12"
+      class="inline-block shrink-0 text-ink-400"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="3" />
+      <path
+        d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"
+      />
+    </svg>
+    <span class="text-ink-400">Running</span>
+    {#each running as r (r.id)}
+      <a href={href(`/skills/${r.id}`)} class="chip" style={accentStyle(r.accent)}>
+        {r.name}
+        <span class="display tabular-nums">{r.gained}</span>
+      </a>
+    {/each}
+  </div>
+{/if}
 
 {#if loading}
   <p class="mt-4 flex items-center gap-2 text-sm text-ink-400">

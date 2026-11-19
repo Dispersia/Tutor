@@ -688,9 +688,10 @@ conversation turn +5, perfect streak bonus +25.
 ## 13.5 Professions & talents (the game layer)
 
 The game is a **RuneScape/WoW-style profession system** layered on top of the
-language drills. It is *not* an idle game: you pick a profession action, the app
-gives you "the next drill", and a correct answer awards that action's XP and
-materials.
+language drills: you pick a profession action, the app gives you "the next drill",
+and a correct answer awards that action's XP and materials. Since the idle pivot
+(§13.5.1) it is also an **idler** — a correct drill does not just hand you a
+material, it *powers a machine* that keeps working while you are away.
 
 **Actions are exercise-agnostic.** A profession action defines its tier, its own
 XP pool, materials and unlock/equipment requirements — but not the exercise type.
@@ -837,6 +838,129 @@ material costs can't be bypassed by calling the grader directly.
 Everything still flows through the **event bus**: `skill.xp`, `skill.level.up`,
 `item.gained`, `item.consumed`, `talent.chosen`, `talent.changed` (both tagging the
 talent `tier`), `item.equipped`.
+
+### 13.5.1 Idle rigs — a drill starts a machine (the idle pivot)
+
+**The old model was one drill = one item.** The pivot: **one drill powers a
+machine.** A correct drill still lands one immediate *strike* — the old flat yield,
+so the loop keeps its heartbeat — but its real reward is that it **starts a run**:
+a stretch of real time during which the action keeps producing its `produces` and
+consuming its `consumes` by itself. Keep completing drills for the same action and
+every run is **faster** and **longer**; stop, and the run drains out and the rig
+falls still. This is what makes the game reward *taking a break* and *coming back*.
+
+```
+   complete 1 drill          complete 10 more             come back in 4h
+   ─────────────────         ─────────────────            ──────────────
+   +1 ore  (the strike)      +1 ore  (the strike)         bank is full
+   run: 1 / 10s for 10 min   run: 1 / 7s for 48 min       pick new drills
+```
+
+**Nothing ticks.** There is no scheduler, no worker, no timer. A run is *not* a
+loop that runs every second — it is a **function of recorded facts and the clock**.
+Per `(user, action)` the database keeps only what a completion already tells us:
+
+| stored | meaning |
+| --- | --- |
+| `completions` | how many drills this action has ever completed — drives rate & length |
+| `run_ends_at` | when the current run expires (ms; `0` = still) |
+| `settled_at` | the cursor: accrual has been credited up to here |
+| `crafts` | fractional crafts carried between settles (keeps `consumes` integral) |
+| `remainder_json` | sub-item fractions carried per produced item (no rounding loss) |
+
+Given those numbers and `now`, the whole gain is **one closed-form
+computation** — `dt = clamp(now, settled_at, run_ends_at) − settled_at`, credited
+at the constant rate `craftsPerSec(completions)`. No per-second loop, no missed
+ticks, no drift. A completion settles the old rate up to *now*, then bumps the
+count and extends the run, so the rate is a step function that only ever changes at
+a completion. The exact same result can be **replayed from the completion log
+alone** (`gather_log`, append-only, one row per drill) — which is why the curve can
+be rebalanced later without rewriting anyone's bank.
+
+**The curves.** Two saturating exponentials, tunable in `game/idle.ts`
+(`IDLE` constants), so the first drill is slow and short and a long-lived action
+approaches a 2-second / 6-hour ceiling:
+
+```
+intervalSeconds(c, tier) = tierFactor(tier) · (2 + 8 · 2^(−c/15))       // 10s → 2s per item
+runSeconds(c)            = 600 + (21600 − 600) · (1 − 2^(−(c−1)/60))   // 10 min → 6 h
+tierFactor(tier)         = 1 + 0.35·(tier − 1)                          // tier 1 ×1 … tier 5 ×2.4
+```
+
+**Tier slows the rig, not the run.** Higher-tier actions run proportionally slower
+per item (`tierFactor`) but keep the same run length, so deep content (adamant,
+yew, blessed blades) stays *rarer* without costing you more real time — the run
+window is about how long you can be away, and that is the same for everyone. The
+table below is tier 1; multiply the interval by `tierFactor` for deeper rigs.
+
+| completions | 1 | 10 | 30 | 60 | 100 | 300 |
+| --- | --- | --- | --- | --- | --- | --- |
+| one item every | 9.6s | 7.0s | 4.0s | 2.5s | 2.1s | 2.0s |
+| a run lasts | 10m | 45m | 1.8h | 3.1h | 4.1h | 5.8h |
+| items per run | 62 | 380 | 1.6k | 4.4k | 7.2k | 10.5k |
+
+**Every action is a rig**, including the artisans. A gathering rig makes something
+from nothing; an artisan rig *transforms* — its run consumes the recipe inputs and
+produces the outputs, clamped by what the bank holds at settle time. You point your
+effort by choosing which action's drills to do: drill `Smelt bronze` and your smelter
+runs; drill `Forge iron sword` and your forge runs. Raw materials are effectively
+free now, so the game's real currencies are **time** (run length), **attention**
+(which rigs you power) and **XP** (levels, which still gate recipes and power).
+
+**Settlement order is fixed and deterministic.** `settleAll` walks every action in
+one canonical order — `gathering → support → artisan → combat` — against a single
+mutable bank, so a mining run's output is available to a smithing run in the *same*
+pass. The order is part of the contract: same inputs, same bank, every time.
+
+**Why this is fast.** `settleAll` is `O(actions)` = **67** rows of pure arithmetic.
+It reads the rigs and the bank in two queries, credits every live run in one fixed
+order, and writes back only what actually changed — and it only ever runs when a
+request arrives (`GET /api/skills`, `GET /api/skills/:id`, or a graded drill).
+Hundreds of offline hours cost the same as one second. The client never asks the
+server to tick: it receives each rig's rate and `runEndsAt` and **extrapolates
+locally** every 250 ms so the numbers visibly climb, then reconciles on the next
+fetch.
+
+**Rebalance.** With rigs running, raw materials pour in — by design — so the
+"1 drill = 1 ore" recipe costs no longer hold up. Two things changed. First, the
+**bottleneck moved** to machine time (how long a run lasts, how many rigs you keep
+alive), tier (deep rigs run up to 2.4× slower) and XP (levels still gate recipes,
+gear and power). Second, **recipe inputs were scaled up against an explicit time
+budget, because this is an idler**: you are *meant* to leave a 6-hour run going and
+come back. So the pace is set by how long the supply rigs must run — a few hours for
+starter gear, and **roughly a whole day for the deep gear**, which is four or five
+"leave it running" sessions spread across days of study.
+
+The budget is legible, not vibes: an action needs `⌈5841 / xp⌉` drills to reach 100,
+and its cost is chosen so the **scarcest raw material** it consumes works out to the
+tier's target. Refinement is deliberately the *cheap, fast* feeder layer (a bar costs
+2 ore); the **goal** actions carry the time.
+
+| action → Lv 100 | tier | drills | before | now | ~rig time |
+| --- | --- | --- | --- | --- | --- |
+| fletch an oak shortbow | 1 | 487 | 1 log | **12 logs** | 4h |
+| forge a bronze sword | 2 | 487 | 1 bar | **12 bars** | 8h |
+| fletch a willow longbow | 2 | 325 | 1 log | **24 logs** | 7h |
+| make a leather body | 2 | 418 | 3 leather | **14 leather** | 8h |
+| forge an iron sword | 3 | 325 | 2 bars | **20 bars** | 12h |
+| forge steel leggings | 3 | 266 | 3 bars | **20 bars** | 13h |
+| string a sapphire amulet | 3 | 266 | 1 gem | **24 gems** | 12h |
+| forge a steel platebody | 4 | 195 | 3 bars | **40 bars** | 18h |
+| forge a mythril sword | 4 | 183 | 2 bars | **30 bars** | 19h |
+| fletch a yew longbow | 4 | 195 | 2 logs | **48 logs** | 13h |
+| forge an adamant platebody | 5 | 133 | 3 bars | **38 bars** | 24h |
+
+Because metal bars each want coal, **coal becomes the deep-game bottleneck** for
+armour — thematically right for a forge, and it gives `Mine coal` a reason to exist.
+**Deep-chain actions inherit their input's cost**: `Bind a blessed sword` consumes a
+tuned mythril sword, so it lands near the tier-4 budget even though the action itself
+is tier 3. Consumables barely moved (food is still 1 raw → 1 cooked; potions 2–3×) so
+combat keeps its food economy, and `hide` for leather armour still comes from combat
+drills (a deliberate combat side-chain). The `strike` and the rig consume the same
+scaled costs, so an artisan drill still *gates on materials* — you just get those
+materials from machines now. XP, levels and combat numbers are untouched, so the
+language-learning incentive is unchanged: the idler is the economy around it, never
+the reason to open the app.
 
 ## 13.6 Spaced repetition (FSRS-6, Anki-style) & guided curriculum
 

@@ -353,6 +353,15 @@ with a vermilion border holding the earned level.
 - **Activity map:** a heat-map grid of 0.75rem squares — one column per
   Monday-first week, one row per weekday; empty days sit in `ink-800`, active days
   in the section accent at 28 / 50 / 72 / 100%, with a `Less → More` legend.
+- **Rig row:** the idle tell. A ruled entry under an action carrying a 4px gap
+  then, in `ink-400` micro-type, a drawn gear glyph, the live rate
+  (`1 ∕ 7s`), and the run clock (`48m left`); the whole line takes the panel accent.
+  Its progress bar is the **run**, not a level: a 2px `ink-800` groove filling in the
+  accent as the run drains. When the run is over the row reads `still` in
+  `ink-500` — never a spinner, never a glow.
+- **Live figure:** a bank count that is still accumulating is set in the display
+  serif with tabular figures and carries a small `+` delta chip in the item's tier
+  accent; it advances in place (no fade, no slide) as the client extrapolates.
 
 ## Do's and Don'ts
 
@@ -369,6 +378,8 @@ with a vermilion border holding the earned level.
   is support, ember is combat.
 - **Do** draw icons — one stroke and weight — and reserve emoji for server-provided
   content (item, profession and monster marks).
+- **Do** let a live idle figure advance in place with tabular figures; the run clock
+  and rate are earned numbers too, so they take the serif and the panel accent.
 - **Do** cap decorative transitions at 0.25s; bars may animate to 0.4s.
 
 ### Don't:

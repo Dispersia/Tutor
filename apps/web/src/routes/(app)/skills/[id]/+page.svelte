@@ -2,7 +2,7 @@
   import { href } from '#lib/paths'
   import { page } from '$app/state'
   import { goto } from '$app/navigation'
-  import { tick } from 'svelte'
+  import { onMount, tick } from 'svelte'
   import {
     chooseTalent,
     getSkill,
@@ -11,6 +11,7 @@
     type SkillPageResponse,
     type TalentOption,
   } from '#lib/skills'
+  import { fmtClock, fmtInterval, rigSecondsLeft } from '#lib/idle'
   import type { ModKind } from '#lib/types'
   import { CATEGORY, ACCENT, accentStyle, categoryAccent } from '#lib/theme'
   import Icon from '#lib/components/Icon.svelte'
@@ -23,6 +24,13 @@
   let changing = $state<string | null>(null)
   /** The action row a material link jumped to, briefly tinted so you can find it. */
   let flash = $state<string | null>(null)
+  /** Ticking clock so a rig's run bar and clock drain live (§13.5.1). */
+  let now = $state(Date.now())
+
+  onMount(() => {
+    const timer = setInterval(() => (now = Date.now()), 250)
+    return () => clearInterval(timer)
+  })
 
   const id = $derived(page.params.id)
   const pct = (v: number) => `${Math.round(v * 100)}%`
@@ -450,6 +458,59 @@
                       {itemMap.get(p.item)?.name ?? p.item}
                     </span>
                   {/each}
+                </div>
+              {/if}
+              {#if a.idle}
+                {@const idleLeft = rigSecondsLeft(a.idle, now)}
+                {@const runPct = Math.min(1, Math.max(0, idleLeft / a.idle.runSec))}
+                <!-- The rig row: the run's rate and clock, over a bar that is the
+                     run draining — not a level. Still when the run is over. -->
+                <div
+                  class="mt-2"
+                  style={accentStyle(accent)}
+                  aria-label={a.idle.active
+                    ? `Rig running: ${fmtInterval(a.idle.intervalSec)} per item, ${fmtClock(idleLeft)} left`
+                    : 'Rig still'}
+                >
+                  <div class="flex items-center gap-2 text-[11px] text-ink-400">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.6"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      width="12"
+                      height="12"
+                      class="inline-block shrink-0"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="3" />
+                      <path
+                        d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"
+                      />
+                    </svg>
+                    <span class="display tabular-nums" style="color: {accent}"
+                      >{fmtInterval(a.idle.intervalSec)}</span
+                    >
+                    {#if a.idle.active}
+                      <span class="display tabular-nums" style="color: {accent}"
+                        >{fmtClock(idleLeft)} left</span
+                      >
+                    {:else}
+                      <span class="text-ink-500">still</span>
+                    {/if}
+                  </div>
+                  <div
+                    class="mt-1 h-[3px] overflow-hidden rounded-[2px] border border-ink-700 bg-ink-800"
+                  >
+                    {#if a.idle.active}
+                      <div
+                        class="h-full rounded-[2px]"
+                        style="width: {runPct * 100}%; background: {accent}"
+                      ></div>
+                    {/if}
+                  </div>
                 </div>
               {/if}
               {#if !a.unlocked || !a.affordable}

@@ -144,20 +144,33 @@ test('training an action awards skill XP and materials', async () => {
     )
   ).json()) as {
     result: { correct: boolean }
-    skill: { skillId: string; xp: number; gained: unknown[] }
+    skill: {
+      skillId: string
+      xp: number
+      gained: unknown[]
+      idle: { completions: number; active: boolean; intervalSec: number; runSec: number } | null
+    }
     stats: { xp: number }
   }
   expect(graded.result.correct).toBe(true)
   expect(graded.skill.skillId).toBe('mining')
   expect(graded.skill.xp).toBeGreaterThan(0)
   expect(graded.stats.xp).toBeGreaterThan(0)
+  // the drill powered a rig (docs/DESIGN.md §13.5.1): one completion, a 10-minute run
+  expect(graded.skill.idle?.completions).toBe(1)
+  expect(graded.skill.idle?.active).toBe(true)
+  expect(graded.skill.idle?.runSec).toBe(600)
+  expect(graded.skill.idle?.intervalSec).toBeGreaterThan(2)
 
   const skills = (await (await app.request('/api/skills', auth(cookie))).json()) as {
     inventory: { itemId: string; count: number }[]
-    skills: { id: string; xp: number }[]
+    skills: { id: string; xp: number; actions: { id: string; idle: unknown }[] }[]
   }
   expect(skills.inventory.find((i) => i.itemId === 'copper_ore')?.count).toBeGreaterThanOrEqual(1)
   expect(skills.skills.find((s) => s.id === 'mining')?.xp).toBeGreaterThan(0)
+  // the board carries every action's rig, so the client can tick it locally
+  const mine = skills.skills.find((s) => s.id === 'mining')!.actions.find((a) => a.id === 'mine-copper')
+  expect(mine?.idle).toBeTruthy()
   sqlite.close()
 })
 

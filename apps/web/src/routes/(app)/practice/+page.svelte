@@ -18,10 +18,11 @@
     type WordFeedback,
   } from '#lib/exercises'
   import { getSkills, type SkillOutcome, type SkillsResponse } from '#lib/skills'
+  import { fmtClock, fmtInterval } from '#lib/idle'
   import { getCurriculum, type CurriculumDeck, type LessonDTO } from '#lib/curriculum'
   import { href } from '#lib/paths'
   import { wakeSpeech } from '#lib/speech'
-  import { ACCENT } from '#lib/theme'
+  import { ACCENT, categoryAccent } from '#lib/theme'
   import Icon from '#lib/components/Icon.svelte'
   import Spinner from '#lib/components/Spinner.svelte'
 
@@ -428,6 +429,18 @@
             {itemMap.get(g.item)?.name ?? g.item}
           </span>
         {/each}
+        {#if skill.idle}
+          <!-- The drill powered a machine: its rate and run length (§13.5.1). -->
+          <span
+            class="chip"
+            style="--accent: {categoryAccent(skillMap.get(skill.skillId)?.category ?? '')}"
+          >
+            Rig powered · <span class="display tabular-nums"
+              >{fmtInterval(skill.idle.intervalSec)}</span
+            >
+            · <span class="display tabular-nums">{fmtClock(Math.round(skill.idle.runSec))}</span> run
+          </span>
+        {/if}
         {#if skill.talentUnlocked}
           <a href={href(`/skills/${skill.skillId}`)} class="chip" style="--accent: {ACCENT.gold}">
             Talent unlocked — choose one
