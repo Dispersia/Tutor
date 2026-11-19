@@ -6,6 +6,27 @@ export interface Cost {
   count: number
 }
 
+/** One action's idle rig as the UI needs it (docs/DESIGN.md §13.5.1). */
+export interface IdleRigDTO {
+  actionId: string
+  /** lifetime drills that powered this rig */
+  completions: number
+  /** run still alive */
+  active: boolean
+  /** ms epoch when the run ends (0 if never) */
+  runEndsAt: number
+  /** whole seconds left (server-computed) */
+  secondsLeft: number
+  /** whole seconds a fresh completion's run lasts at this level */
+  runSec: number
+  /** seconds between items right now (tier-scaled) */
+  intervalSec: number
+  /** fraction already baked into a run (yield + double) */
+  yieldBonus: number
+  produces: Cost[]
+  consumes: Cost[]
+}
+
 export interface ActionDTO {
   id: string
   skillId: string
@@ -24,6 +45,8 @@ export interface ActionDTO {
   effect: { kind: ModKind; value: number }
   consumes?: Cost[]
   produces?: Cost[]
+  /** the idle rig this action powers (null = never completed) */
+  idle: IdleRigDTO | null
   equip?: { slot: string; tag: string }
   unlocked: boolean
   affordable: boolean
@@ -183,6 +206,8 @@ export interface SkillOutcome {
   leveledUp: boolean
   gained: Cost[]
   consumed: Cost[]
+  /** the rig this drill powered (null when the drill did not count) */
+  idle: IdleRigDTO | null
   /** the profession milestone whose talent choice just opened (or null) */
   talentUnlocked: number | null
 }

@@ -1,5 +1,6 @@
 import type { Db } from '../db/client'
 import {
+  addGatherLog,
   addItems,
   addSrsReview,
   addTalent,
@@ -11,6 +12,7 @@ import {
   getEncounter,
   getItemCount,
   getPlayerHp,
+  getRigState,
   getSrs,
   getStats,
   getUserSetting,
@@ -20,12 +22,14 @@ import {
   listEquipment,
   listInventory,
   listLessonProgress,
+  listRigStates,
   listSrs,
   listTalents,
   replaceTalent,
   setActionXp,
   setEquipment,
   setPlayerHp,
+  setRigState,
   sumXp,
   upsertEncounter,
   upsertSrs,
@@ -56,10 +60,12 @@ import {
   type MonsterDef,
 } from './combat'
 import { levelInfo } from './levels'
+import { extendRig, newRig, rigIntervalSec, rigRunSec, settleRig, type RigState } from './idle'
 import { computeBonuses, applyYield, type Bonuses } from './modifiers'
 import {
   ACTION_BY_ID,
   ACTION_MAX_LEVEL,
+  ACTIONS,
   ITEMS,
   ITEM_BY_ID,
   SKILLS,
@@ -560,12 +566,14 @@ export function grantItems(
   actionId: string,
   costs: Cost[],
   rand: () => number = Math.random,
-): void {
+): Cost[] {
   const bonus = aggregateBonuses(db, userId)
+  const granted: Cost[] = []
   for (const c of costs) {
     const count = applyYield(c.count, bonus.yield(actionId), bonus.double(actionId), rand)
     if (count <= 0) continue
     addItems(db, userId, c.item, count)
+    granted.push({ item: c.item, count })
     bus.emit('item.gained', {
       userId,
       itemId: c.item,
@@ -573,6 +581,7 @@ export function grantItems(
       total: getItemCount(db, userId, c.item),
     })
   }
+  return granted
 }
 
 export function consumeItems(db: Db, bus: EventBus, userId: string, costs: Cost[]): void {
@@ -585,6 +594,169 @@ export function consumeItems(db: Db, bus: EventBus, userId: string, costs: Cost[
       total: getItemCount(db, userId, c.item),
     })
   }
+}
+
+// --- idle rigs (docs/DESIGN.md §13.5.1) --------------------------------------
+
+/**
+ * The canonical settle order — **gathering → support → artisan → combat** — so a
+ * miner's output is available to a smith in the same pass. The order is part of
+ * the contract: same bank, same result, every time.
+ */
+const SETTLE_RANK: Record<string, number> = {
+  gathering: 0,
+  support: 1,
+  artisan: 2,
+  combat: 3,
+}
+const SETTLE_ORDER = [...ACTIONS].sort(
+  (a, b) =>
+    (SETTLE_RANK[SKILL_BY_ID.get(a.skillId)?.category ?? ''] ?? 9) -
+    (SETTLE_RANK[SKILL_BY_ID.get(b.skillId)?.category ?? ''] ?? 9),
+)
+
+/** One action's rig as the UI needs it: rate, run clock and recipe. */
+export interface IdleRigView {
+  actionId: string
+  /** lifetime drills that powered this rig */
+  completions: number
+  active: boolean
+  /** ms epoch when the run ends (0 = still) */
+  runEndsAt: number
+  /** whole seconds left in the run */
+  secondsLeft: number
+  /** whole seconds a fresh completion's run lasts at this level */
+  runSec: number
+  /** seconds between items right now */
+  intervalSec: number
+  /** expected-value bonus already baked into a run (yield + double) */
+  yieldBonus: number
+  produces: Cost[]
+  consumes: Cost[]
+}
+
+export interface SettleReport {
+  /** everything the runs produced since the last settle */
+  gained: Cost[]
+  /** everything the runs consumed */
+  spent: Cost[]
+  /** post-settle rig state per action (for building views without a second query) */
+  rigs: Map<string, RigState>
+}
+
+/** Fold a settled rig into the UI view. Pure. */
+export function idleView(
+  rig: RigState,
+  action: ActionDef,
+  now: number,
+  yieldBonus: number,
+): IdleRigView {
+  return {
+    actionId: action.id,
+    completions: rig.completions,
+    active: rig.runEndsAt > now,
+    runEndsAt: rig.runEndsAt,
+    secondsLeft: Math.max(0, Math.round((rig.runEndsAt - now) / 1000)),
+    runSec: Math.round(rigRunSec(rig.completions)),
+    intervalSec: rigIntervalSec(rig.completions, action.tier),
+    yieldBonus,
+    produces: action.produces ?? [],
+    consumes: action.consumes ?? [],
+  }
+}
+
+/**
+ * Credit **every** running rig up to `now`, in one pass, against one mutable bank.
+ * This is the whole idle engine: O(actions) = 67 rows of pure arithmetic, one
+ * transaction, no timers. Hundreds of offline hours cost the same as one second.
+ */
+export function settleAll(db: Db, bus: EventBus, userId: string, now = Date.now()): SettleReport {
+  const bank = new Map<string, number>()
+  for (const r of listInventory(db, userId)) bank.set(r.itemId, r.count)
+  const before = new Map(bank)
+  const rigs = listRigStates(db, userId)
+  const bonuses = aggregateBonuses(db, userId)
+
+  const produced: Record<string, number> = {}
+  const consumed: Record<string, number> = {}
+
+  for (const action of SETTLE_ORDER) {
+    const rig = rigs.get(action.id)
+    if (!rig) continue
+    const res = settleRig(
+      rig,
+      {
+        produces: action.produces,
+        consumes: action.consumes,
+        tier: action.tier,
+        // an artisan's expected bonus product is folded into the run's rate
+        yieldBonus: bonuses.yield(action.id) + bonuses.double(action.id),
+      },
+      bank,
+      now,
+    )
+    if (res.creditedSec > 0 || res.state.settledAt !== rig.settledAt) {
+      setRigState(db, userId, action.id, res.state)
+      rigs.set(action.id, res.state)
+    }
+    for (const [item, n] of Object.entries(res.produced)) produced[item] = (produced[item] ?? 0) + n
+    for (const [item, n] of Object.entries(res.consumed)) consumed[item] = (consumed[item] ?? 0) + n
+  }
+
+  for (const [item, count] of bank) {
+    const delta = count - (before.get(item) ?? 0)
+    if (delta !== 0) addItems(db, userId, item, delta)
+  }
+
+  const gained = toCosts(produced)
+  const spent = toCosts(consumed)
+  if (gained.length || spent.length) bus.emit('idle.settled', { userId, gained, spent })
+  return { gained, spent, rigs }
+}
+
+/**
+ * The drill's real reward: pay every running rig up to now, land the **strike**
+ * (the old flat yield, so the loop keeps its heartbeat), then power this action's
+ * rig — every run is faster and longer than the last.
+ */
+export function completeAction(
+  db: Db,
+  bus: EventBus,
+  userId: string,
+  actionId: string,
+  now = Date.now(),
+): { gained: Cost[]; consumed: Cost[]; idle: IdleRigView | null } {
+  const report = settleAll(db, bus, userId, now)
+  const action = ACTION_BY_ID.get(actionId)
+  if (!action) return { gained: report.gained, consumed: report.spent, idle: null }
+
+  const struckGained = grantItems(db, bus, userId, actionId, action.produces ?? [])
+  const struckSpent = action.consumes ?? []
+  if (struckSpent.length) consumeItems(db, bus, userId, struckSpent)
+
+  const current = getRigState(db, userId, actionId) ?? newRig()
+  const powered = extendRig({ ...current, settledAt: now }, now)
+  setRigState(db, userId, actionId, powered)
+  addGatherLog(db, userId, actionId, powered.completions)
+
+  const bonus = aggregateBonuses(db, userId)
+  return {
+    gained: mergeCosts(report.gained, struckGained),
+    consumed: mergeCosts(report.spent, struckSpent),
+    idle: idleView(powered, action, now, bonus.yield(actionId) + bonus.double(actionId)),
+  }
+}
+
+function toCosts(map: Record<string, number>): Cost[] {
+  return Object.entries(map)
+    .filter(([, n]) => n > 0)
+    .map(([item, count]) => ({ item, count }))
+}
+
+function mergeCosts(...lists: Cost[][]): Cost[] {
+  const out = new Map<string, number>()
+  for (const list of lists) for (const c of list) out.set(c.item, (out.get(c.item) ?? 0) + c.count)
+  return [...out].map(([item, count]) => ({ item, count })).filter((c) => c.count > 0)
 }
 
 export interface ActionProgress {

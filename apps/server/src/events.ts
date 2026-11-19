@@ -5,6 +5,7 @@
  */
 
 import type { CardState, Rating } from './game/srs'
+import type { Cost } from './game/skills'
 
 export interface GameEventMap {
   'review.completed': {
@@ -28,6 +29,8 @@ export interface GameEventMap {
   'skill.level.up': { userId: string; actionId: string; skillId: string; level: number }
   'item.gained': { userId: string; itemId: string; count: number; total: number }
   'item.consumed': { userId: string; itemId: string; count: number; total: number }
+  /** idle rigs settled (docs/DESIGN.md §13.5.1): everything the runs made and spent */
+  'idle.settled': { userId: string; gained: Cost[]; spent: Cost[] }
   'talent.chosen': {
     userId: string
     talentId: string

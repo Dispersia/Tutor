@@ -19,8 +19,7 @@ import {
   awardActionXp,
   awardXp,
   checkLessonCompletion,
-  consumeItems,
-  grantItems,
+  completeAction,
   knownWords,
   recordActivity,
   recordReview,
@@ -215,7 +214,7 @@ async function judgeFor(c: Context<AppEnv>) {
   }
 }
 
-/** Applies action XP + the material economy for a completed action. */
+/** Applies action XP + the idle-rig economy for a completed action. */
 function settleAction(
   deps: AppEnv['Variables']['deps'],
   userId: string,
@@ -236,14 +235,15 @@ function settleAction(
       leveledUp: false,
       gained: [],
       consumed: [],
+      idle: null,
       talentUnlocked: null,
     }
   }
   const award = awardActionXp(deps.db, deps.events, userId, action.id, action.xp)
-  const produces = action.produces ?? []
-  const consumes = action.consumes ?? []
-  grantItems(deps.db, deps.events, userId, action.id, produces)
-  consumeItems(deps.db, deps.events, userId, consumes)
+  // The drill powers the rig (docs/DESIGN.md §13.5.1): it pays every running rig up
+  // to now, lands the strike, then makes this action's run faster and longer. What
+  // `gained` reports is the whole windfall — the strike plus what the runs made.
+  const rig = completeAction(deps.db, deps.events, userId, action.id)
   return {
     actionId: award.actionId,
     skillId: award.skillId,
@@ -251,8 +251,9 @@ function settleAction(
     level: award.level,
     skillLevel: award.skillLevel,
     leveledUp: award.leveledUp,
-    gained: produces,
-    consumed: consumes,
+    gained: rig.gained,
+    consumed: rig.consumed,
+    idle: rig.idle,
     talentUnlocked: award.talentUnlocked,
   }
 }

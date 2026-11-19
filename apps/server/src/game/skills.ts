@@ -606,8 +606,8 @@ export const ACTIONS: ActionDef[] = [
     xp: 10,
     deckLevel: 'zhfreq',
     consumes: [
-      { item: 'copper_ore', count: 1 },
-      { item: 'tin_ore', count: 1 },
+      { item: 'copper_ore', count: 2 },
+      { item: 'tin_ore', count: 2 },
     ],
     produces: [{ item: 'bronze_bar', count: 1 }],
   }),
@@ -620,7 +620,7 @@ export const ACTIONS: ActionDef[] = [
     xp: 14,
     deckLevel: 'zhfreq',
     requires: [{ skill: 'smithing', level: 5 }],
-    consumes: [{ item: 'iron_ore', count: 1 }],
+    consumes: [{ item: 'iron_ore', count: 2 }],
     produces: [{ item: 'iron_bar', count: 1 }],
   }),
   A({
@@ -633,7 +633,7 @@ export const ACTIONS: ActionDef[] = [
     deckLevel: 'jafreq',
     requires: [{ skill: 'smithing', level: 15 }],
     consumes: [
-      { item: 'iron_ore', count: 1 },
+      { item: 'iron_ore', count: 2 },
       { item: 'coal', count: 2 },
     ],
     produces: [{ item: 'steel_bar', count: 1 }],
@@ -647,7 +647,7 @@ export const ACTIONS: ActionDef[] = [
     xp: 12,
     deckLevel: 'zhfreq',
     requires: [{ skill: 'smithing', level: 3 }],
-    consumes: [{ item: 'bronze_bar', count: 1 }],
+    consumes: [{ item: 'bronze_bar', count: 12 }],
     produces: [{ item: 'bronze_sword', count: 1 }],
   }),
   A({
@@ -659,7 +659,7 @@ export const ACTIONS: ActionDef[] = [
     xp: 18,
     deckLevel: 'zhfreq',
     requires: [{ skill: 'smithing', level: 10 }],
-    consumes: [{ item: 'iron_bar', count: 2 }],
+    consumes: [{ item: 'iron_bar', count: 20 }],
     produces: [{ item: 'iron_sword', count: 1 }],
   }),
   A({
@@ -671,7 +671,7 @@ export const ACTIONS: ActionDef[] = [
     xp: 30,
     deckLevel: 'jafreq',
     requires: [{ skill: 'smithing', level: 25 }],
-    consumes: [{ item: 'steel_bar', count: 3 }],
+    consumes: [{ item: 'steel_bar', count: 40 }],
     produces: [{ item: 'steel_platebody', count: 1 }],
   }),
 
@@ -722,8 +722,8 @@ export const ACTIONS: ActionDef[] = [
     xp: 12,
     deckLevel: 'zhfreq',
     consumes: [
-      { item: 'guam', count: 1 },
-      { item: 'vial', count: 1 },
+      { item: 'guam', count: 2 },
+      { item: 'vial', count: 2 },
     ],
     produces: [{ item: 'attack_potion', count: 1 }],
   }),
@@ -737,8 +737,8 @@ export const ACTIONS: ActionDef[] = [
     deckLevel: 'jafreq',
     requires: [{ skill: 'herblore', level: 10 }],
     consumes: [
-      { item: 'tarromin', count: 1 },
-      { item: 'vial', count: 1 },
+      { item: 'tarromin', count: 2 },
+      { item: 'vial', count: 2 },
     ],
     produces: [{ item: 'restore_potion', count: 1 }],
   }),
@@ -752,7 +752,7 @@ export const ACTIONS: ActionDef[] = [
     tier: 1,
     xp: 12,
     deckLevel: 'zhfreq',
-    consumes: [{ item: 'oak_log', count: 1 }],
+    consumes: [{ item: 'oak_log', count: 12 }],
     produces: [{ item: 'oak_shortbow', count: 1 }],
   }),
   A({
@@ -775,7 +775,7 @@ export const ACTIONS: ActionDef[] = [
     xp: 18,
     deckLevel: 'zhfreq',
     requires: [{ skill: 'fletching', level: 10 }],
-    consumes: [{ item: 'willow_log', count: 1 }],
+    consumes: [{ item: 'willow_log', count: 24 }],
     produces: [{ item: 'willow_longbow', count: 1 }],
   }),
   A({
@@ -786,7 +786,7 @@ export const ACTIONS: ActionDef[] = [
     tier: 1,
     xp: 12,
     deckLevel: 'jafreq',
-    consumes: [{ item: 'oak_log', count: 1 }],
+    consumes: [{ item: 'oak_log', count: 12 }],
     produces: [{ item: 'oak_staff', count: 1 }],
   }),
 
@@ -799,7 +799,7 @@ export const ACTIONS: ActionDef[] = [
     tier: 1,
     xp: 8,
     deckLevel: 'zhfreq',
-    consumes: [{ item: 'rune_essence', count: 1 }],
+    consumes: [{ item: 'rune_essence', count: 2 }],
     produces: [{ item: 'air_rune', count: 1 }],
   }),
   A({
@@ -811,7 +811,7 @@ export const ACTIONS: ActionDef[] = [
     xp: 12,
     deckLevel: 'jafreq',
     requires: [{ skill: 'runecrafting', level: 5 }],
-    consumes: [{ item: 'rune_essence', count: 1 }],
+    consumes: [{ item: 'rune_essence', count: 2 }],
     produces: [{ item: 'water_rune', count: 1 }],
   }),
   A({
@@ -823,7 +823,7 @@ export const ACTIONS: ActionDef[] = [
     xp: 20,
     deckLevel: 'zhfreq',
     requires: [{ skill: 'runecrafting', level: 20 }],
-    consumes: [{ item: 'rune_essence', count: 2 }],
+    consumes: [{ item: 'rune_essence', count: 3 }],
     produces: [{ item: 'nature_rune', count: 1 }],
   }),
 
@@ -846,7 +846,7 @@ export const ACTIONS: ActionDef[] = [
     tier: 2,
     xp: 12,
     deckLevel: 'jafreq',
-    consumes: [{ item: 'uncut_gem', count: 1 }],
+    consumes: [{ item: 'uncut_gem', count: 2 }],
     produces: [{ item: 'cut_gem', count: 1 }],
   }),
   A({
@@ -857,7 +857,7 @@ export const ACTIONS: ActionDef[] = [
     tier: 1,
     xp: 10,
     deckLevel: 'zhfreq',
-    consumes: [{ item: 'hide', count: 1 }],
+    consumes: [{ item: 'hide', count: 2 }],
     produces: [{ item: 'leather', count: 1 }],
   }),
   A({
@@ -869,7 +869,7 @@ export const ACTIONS: ActionDef[] = [
     xp: 14,
     deckLevel: 'zhfreq',
     requires: [{ skill: 'crafting', level: 5 }],
-    consumes: [{ item: 'leather', count: 3 }],
+    consumes: [{ item: 'leather', count: 14 }],
     produces: [{ item: 'leather_body', count: 1 }],
   }),
 
@@ -882,7 +882,7 @@ export const ACTIONS: ActionDef[] = [
     tier: 1,
     xp: 8,
     deckLevel: 'zhfreq',
-    consumes: [{ item: 'oak_log', count: 1 }],
+    consumes: [{ item: 'oak_log', count: 2 }],
     produces: [{ item: 'ash', count: 1 }],
   }),
   A({
@@ -894,7 +894,7 @@ export const ACTIONS: ActionDef[] = [
     xp: 12,
     deckLevel: 'jafreq',
     requires: [{ skill: 'firemaking', level: 10 }],
-    consumes: [{ item: 'willow_log', count: 1 }],
+    consumes: [{ item: 'willow_log', count: 2 }],
     produces: [{ item: 'ash', count: 1 }],
   }),
 
@@ -907,7 +907,7 @@ export const ACTIONS: ActionDef[] = [
     tier: 1,
     xp: 10,
     deckLevel: 'zhfreq',
-    consumes: [{ item: 'oak_log', count: 1 }],
+    consumes: [{ item: 'oak_log', count: 2 }],
     produces: [{ item: 'plank', count: 1 }],
   }),
   A({
@@ -1012,7 +1012,7 @@ export const ACTIONS: ActionDef[] = [
     xp: 16,
     deckLevel: 'zhfreq',
     equip: { slot: 'weapon', tag: 'bow' },
-    consumes: [{ item: 'arrow', count: 3 }],
+    consumes: [{ item: 'arrow', count: 5 }],
     produces: [{ item: 'hide', count: 1 }],
   }),
   A({
@@ -1023,7 +1023,7 @@ export const ACTIONS: ActionDef[] = [
     tier: 1,
     xp: 18,
     deckLevel: 'jafreq',
-    consumes: [{ item: 'air_rune', count: 2 }],
+    consumes: [{ item: 'air_rune', count: 4 }],
     produces: [{ item: 'uncut_gem', count: 1 }],
   }),
   A({
@@ -1034,7 +1034,7 @@ export const ACTIONS: ActionDef[] = [
     tier: 1,
     xp: 10,
     deckLevel: 'zhfreq',
-    consumes: [{ item: 'bones', count: 1 }],
+    consumes: [{ item: 'bones', count: 2 }],
     produces: [{ item: 'grace', count: 1 }],
   }),
   A({
@@ -1089,8 +1089,8 @@ export const ACTIONS: ActionDef[] = [
       { skill: 'mining', level: 20 },
     ],
     consumes: [
-      { item: 'mythril_ore', count: 1 },
-      { item: 'coal', count: 4 },
+      { item: 'mythril_ore', count: 2 },
+      { item: 'coal', count: 3 },
     ],
     produces: [{ item: 'mythril_bar', count: 1 }],
   }),
@@ -1107,8 +1107,8 @@ export const ACTIONS: ActionDef[] = [
       { skill: 'mining', level: 35 },
     ],
     consumes: [
-      { item: 'adamant_ore', count: 1 },
-      { item: 'coal', count: 6 },
+      { item: 'adamant_ore', count: 2 },
+      { item: 'coal', count: 4 },
     ],
     produces: [{ item: 'adamant_bar', count: 1 }],
   }),
@@ -1124,7 +1124,7 @@ export const ACTIONS: ActionDef[] = [
       { skill: 'smithing', level: 25 },
       { skill: 'mining', level: 20 },
     ],
-    consumes: [{ item: 'mythril_bar', count: 2 }],
+    consumes: [{ item: 'mythril_bar', count: 30 }],
     produces: [{ item: 'mythril_sword', count: 1 }],
   }),
   A({
@@ -1139,7 +1139,7 @@ export const ACTIONS: ActionDef[] = [
       { skill: 'smithing', level: 40 },
       { skill: 'mining', level: 35 },
     ],
-    consumes: [{ item: 'adamant_bar', count: 3 }],
+    consumes: [{ item: 'adamant_bar', count: 38 }],
     produces: [{ item: 'adamant_platebody', count: 1 }],
   }),
   A({
@@ -1151,7 +1151,7 @@ export const ACTIONS: ActionDef[] = [
     xp: 22,
     deckLevel: 'jafreq',
     requires: [{ skill: 'smithing', level: 15 }],
-    consumes: [{ item: 'steel_bar', count: 3 }],
+    consumes: [{ item: 'steel_bar', count: 20 }],
     produces: [{ item: 'steel_legs', count: 1 }],
   }),
   A({
@@ -1166,7 +1166,7 @@ export const ACTIONS: ActionDef[] = [
       { skill: 'smithing', level: 25 },
       { skill: 'mining', level: 20 },
     ],
-    consumes: [{ item: 'mythril_bar', count: 2 }],
+    consumes: [{ item: 'mythril_bar', count: 28 }],
     produces: [{ item: 'mythril_legs', count: 1 }],
   }),
   A({
@@ -1192,7 +1192,7 @@ export const ACTIONS: ActionDef[] = [
       { skill: 'fletching', level: 25 },
       { skill: 'woodcutting', level: 30 },
     ],
-    consumes: [{ item: 'yew_log', count: 2 }],
+    consumes: [{ item: 'yew_log', count: 48 }],
     produces: [{ item: 'yew_longbow', count: 1 }],
   }),
   A({
@@ -1219,8 +1219,8 @@ export const ACTIONS: ActionDef[] = [
       { skill: 'farming', level: 25 },
     ],
     consumes: [
-      { item: 'ranarr', count: 1 },
-      { item: 'vial', count: 1 },
+      { item: 'ranarr', count: 3 },
+      { item: 'vial', count: 3 },
     ],
     produces: [{ item: 'super_attack_potion', count: 1 }],
   }),
@@ -1233,7 +1233,7 @@ export const ACTIONS: ActionDef[] = [
     xp: 22,
     deckLevel: 'zhfreq',
     requires: [{ skill: 'crafting', level: 20 }],
-    consumes: [{ item: 'cut_gem', count: 1 }],
+    consumes: [{ item: 'cut_gem', count: 24 }],
     produces: [{ item: 'sapphire_amulet', count: 1 }],
   }),
 
@@ -1248,8 +1248,8 @@ export const ACTIONS: ActionDef[] = [
     deckLevel: 'jafreq',
     consumes: [
       { item: 'sapphire_amulet', count: 1 },
-      { item: 'air_rune', count: 2 },
-      { item: 'nature_rune', count: 1 },
+      { item: 'air_rune', count: 8 },
+      { item: 'nature_rune', count: 4 },
     ],
     produces: [{ item: 'enchanted_amulet', count: 1 }],
   }),
@@ -1266,8 +1266,8 @@ export const ACTIONS: ActionDef[] = [
       { skill: 'crafting', level: 10 },
     ],
     consumes: [
-      { item: 'leather_body', count: 1 },
-      { item: 'air_rune', count: 3 },
+      { item: 'leather_body', count: 2 },
+      { item: 'air_rune', count: 12 },
     ],
     produces: [{ item: 'mystic_robe', count: 1 }],
   }),
@@ -1285,7 +1285,7 @@ export const ACTIONS: ActionDef[] = [
     ],
     consumes: [
       { item: 'mythril_sword', count: 1 },
-      { item: 'nature_rune', count: 3 },
+      { item: 'nature_rune', count: 8 },
     ],
     produces: [{ item: 'blessed_sword', count: 1 }],
   }),

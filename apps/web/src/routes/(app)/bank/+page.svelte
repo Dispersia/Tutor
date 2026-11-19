@@ -1,16 +1,23 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { equipItem, getSkills, unequipSlot, type SkillsResponse } from '#lib/skills'
+  import { itemRigs, rigGainedSince } from '#lib/idle'
   import { ACCENT, accentStyle, tierAccent } from '#lib/theme'
   import Spinner from '#lib/components/Spinner.svelte'
 
   let data = $state<SkillsResponse | null>(null)
   let error = $state('')
   let loading = $state(true)
+  /** When the bank was fetched — the cursor the live figures extrapolate from. */
+  let fetchedAt = $state(0)
+  /** Ticking clock so a running rig's count climbs in place (§13.5.1). */
+  let now = $state(Date.now())
 
   const itemMap = $derived(new Map((data?.items ?? []).map((i) => [i.id, i])))
   const bank = $derived((data?.inventory ?? []).filter((i) => i.count > 0))
   const worn = $derived(data?.equipment ?? [])
+  /** itemId → the active rig that produces it, so a count can live-advance. */
+  const rigs = $derived(itemRigs(data?.skills ?? []))
 
   // Stored goods read best by kind: raw first, then what you refined, forged
   // and brewed, so a full bank stays scannable.
@@ -29,11 +36,17 @@
     })).filter((g) => g.items.length > 0),
   )
 
-  onMount(refresh)
+  onMount(() => {
+    void refresh()
+    const timer = setInterval(() => (now = Date.now()), 250)
+    return () => clearInterval(timer)
+  })
 
   async function refresh() {
     try {
-      data = await getSkills()
+      const res = await getSkills()
+      fetchedAt = Date.now()
+      data = res
     } catch (e) {
       error = (e as Error).message
     } finally {
@@ -133,10 +146,18 @@
             <div class="mt-2 flex flex-wrap gap-1.5">
               {#each g.items as b (b.itemId)}
                 {@const it = itemMap.get(b.itemId)}
+                {@const rig = rigs.get(b.itemId)}
+                {@const delta =
+                  rig && fetchedAt ? (rigGainedSince(rig, fetchedAt, now)[b.itemId] ?? 0) : 0}
                 <span class="chip" style={accentStyle(tierAccent(it?.tier))}>
                   {it?.icon ?? ''}
                   {it?.name ?? b.itemId}
-                  <span class="opacity-70">×{b.count}</span>
+                  <span class="display tabular-nums opacity-70">×{b.count + delta}</span>
+                  {#if delta > 0}
+                    <span class="chip px-1 py-0" style={accentStyle(tierAccent(it?.tier))}
+                      >+{delta}</span
+                    >
+                  {/if}
                   {#if it?.slot}
                     <button onclick={() => equip(b.itemId)} class="ml-1 font-semibold underline"
                       >equip</button

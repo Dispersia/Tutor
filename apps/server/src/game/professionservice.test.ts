@@ -6,6 +6,7 @@ import {
   getActionXp,
   getItemCount,
   listEquipment,
+  listGatherLog,
   listTalents,
 } from '../db/repo'
 import { EventBus } from '../events'
@@ -22,8 +23,10 @@ import {
   aggregateBonuses,
   awardActionXp,
   chooseTalent,
+  completeAction,
   equipItem,
   grantItems,
+  settleAll,
   skillLevelOf,
   talentView,
   unequipItem,
@@ -267,5 +270,69 @@ test('combat actions require the right equipped gear', () => {
   addItems(db, user.id, 'oak_shortbow', 1)
   equipItem(db, bus, user.id, 'oak_shortbow')
   expect(actionState(db, user.id, attack).equipOk).toBe(false)
+  sqlite.close()
+})
+
+// --- idle rigs (docs/DESIGN.md §13.5.1) --------------------------------------
+
+test('a drill lands the strike, then the rig keeps gathering while you are away', () => {
+  const { db, bus, user, sqlite } = setup()
+  const t0 = 1_000_000_000_000
+  const first = completeAction(db, bus, user.id, 'mine-copper', t0)
+
+  // the strike is the old flat yield — a drill still lands one ore
+  expect(getItemCount(db, user.id, 'copper_ore')).toBe(1)
+  expect(first.idle?.completions).toBe(1)
+  expect(first.idle?.active).toBe(true)
+  expect(first.idle?.intervalSec).toBeGreaterThan(2)
+
+  // come back a minute later: the rig kept working
+  const settled = settleAll(db, bus, user.id, t0 + 60_000)
+  const ore = getItemCount(db, user.id, 'copper_ore')
+  expect(ore).toBeGreaterThan(1)
+  expect(settled.gained.find((g) => g.item === 'copper_ore')?.count).toBe(ore - 1)
+  sqlite.close()
+})
+
+test('settling twice over the same instant never double counts', () => {
+  const { db, bus, user, sqlite } = setup()
+  const t0 = 1_500_000_000_000
+  completeAction(db, bus, user.id, 'mine-copper', t0)
+  const once = settleAll(db, bus, user.id, t0 + 30_000)
+  const twice = settleAll(db, bus, user.id, t0 + 30_000)
+  expect(once.gained.length).toBeGreaterThan(0)
+  expect(twice.gained).toEqual([])
+  expect(getItemCount(db, user.id, 'copper_ore')).toBe(1 + (once.gained[0]?.count ?? 0))
+  sqlite.close()
+})
+
+test('an artisan rig turns stock into product and runs out when the bank does', () => {
+  const { db, bus, user, sqlite } = setup()
+  const t0 = 2_000_000_000_000
+  addItems(db, user.id, 'copper_ore', 20)
+  addItems(db, user.id, 'tin_ore', 20)
+
+  const first = completeAction(db, bus, user.id, 'smelt-bronze', t0)
+  expect(first.gained.some((g) => g.item === 'bronze_bar')).toBe(true)
+  expect(getItemCount(db, user.id, 'copper_ore')).toBeLessThan(20)
+
+  settleAll(db, bus, user.id, t0 + 60_000)
+  const bars = getItemCount(db, user.id, 'bronze_bar')
+  expect(bars).toBeGreaterThan(1)
+  // clamped by the bank: never negative, and the ore was really spent
+  const perBar = ACTION_BY_ID.get('smelt-bronze')!.consumes!.find(
+    (c) => c.item === 'copper_ore',
+  )!.count
+  expect(getItemCount(db, user.id, 'copper_ore')).toBe(20 - bars * perBar)
+  sqlite.close()
+})
+
+test('every powered drill is written to the completion log', () => {
+  const { db, bus, user, sqlite } = setup()
+  const t0 = 3_000_000_000_000
+  completeAction(db, bus, user.id, 'mine-copper', t0)
+  completeAction(db, bus, user.id, 'mine-copper', t0 + 1_000)
+  const log = listGatherLog(db, user.id, 'mine-copper')
+  expect(log.map((r) => r.completions)).toEqual([1, 2])
   sqlite.close()
 })

@@ -1,0 +1,145 @@
+import { describe, expect, test } from 'bun:test'
+import {
+  IDLE,
+  extendRig,
+  newRig,
+  replayRig,
+  rigIntervalSec,
+  rigRunSec,
+  settleRig,
+  type RigRecipe,
+} from './idle'
+
+const ORE: RigRecipe = { produces: [{ item: 'copper_ore', count: 1 }] }
+const BAR: RigRecipe = {
+  consumes: [{ item: 'copper_ore', count: 1 }],
+  produces: [{ item: 'bronze_bar', count: 1 }],
+}
+
+describe('idle curves', () => {
+  test('interval starts slow, speeds up and saturates at the floor', () => {
+    expect(rigIntervalSec(0)).toBe(10)
+    expect(rigIntervalSec(15)).toBeCloseTo(6, 6)
+    expect(rigIntervalSec(60)).toBeCloseTo(2.5, 6)
+    // never below the floor, monotone
+    for (const c of [0, 1, 5, 30, 120, 1000]) expect(rigIntervalSec(c)).toBeGreaterThanOrEqual(2)
+    expect(rigIntervalSec(500)).toBeCloseTo(IDLE.floorIntervalSec, 3)
+  })
+
+  test('run length starts at 10 min and saturates under 6 h', () => {
+    expect(rigRunSec(0)).toBe(600)
+    expect(rigRunSec(61)).toBeCloseTo(600 + (21600 - 600) * 0.5, 6)
+    expect(rigRunSec(100)).toBeGreaterThan(rigRunSec(10))
+    expect(rigRunSec(10_000)).toBeLessThanOrEqual(IDLE.maxRunSec)
+    expect(rigRunSec(10_000)).toBeCloseTo(IDLE.maxRunSec, 1)
+  })
+
+  test('deeper tiers run slower per item', () => {
+    expect(rigIntervalSec(0, 5)).toBeCloseTo(rigIntervalSec(0, 1) * 2.4, 6)
+    expect(rigIntervalSec(0, 5)).toBeGreaterThan(rigIntervalSec(0, 1))
+    const t0 = extendRig(newRig(), 0)
+    const tier1 = settleRig(t0, { ...ORE, tier: 1 }, new Map(), 600_000)
+    const tier5 = settleRig(t0, { ...ORE, tier: 5 }, new Map(), 600_000)
+    expect(tier5.produced.copper_ore!).toBeLessThan(tier1.produced.copper_ore!)
+  })
+})
+
+describe('settleRig', () => {
+  test('a still rig gains nothing, however long you wait', () => {
+    const r = settleRig(newRig(), ORE, new Map(), 10 ** 9)
+    expect(r.produced).toEqual({})
+    expect(r.creditedSec).toBe(0)
+    expect(r.running).toBe(false)
+  })
+
+  test('one completion starts a 10-minute 10-second run', () => {
+    const powered = extendRig(newRig(), 0)
+    expect(powered.completions).toBe(1)
+    expect(powered.runEndsAt).toBe(Math.round(rigRunSec(1) * 1000))
+
+    const at = powered.runEndsAt - 1000
+    const r = settleRig(powered, ORE, new Map(), at)
+    const wanted = (1 / rigIntervalSec(1)) * (at / 1000)
+    expect(r.produced.copper_ore).toBe(Math.floor(wanted))
+    expect(r.running).toBe(true)
+  })
+
+  test('credit is additive: two settles equal one (no timer drift)', () => {
+    const powered = extendRig(newRig(), 0)
+    const once = settleRig(powered, ORE, new Map(), 300_000)
+
+    const half = settleRig(powered, ORE, new Map(), 150_000)
+    const twice = settleRig(half.state, ORE, new Map(), 300_000)
+    const split = (half.produced.copper_ore ?? 0) + (twice.produced.copper_ore ?? 0)
+    expect(split).toBe(once.produced.copper_ore!)
+    expect(twice.state.crafts).toBeCloseTo(once.state.crafts, 9)
+  })
+
+  test('nothing accrues past the end of the run', () => {
+    const powered = extendRig(newRig(), 0)
+    const end = powered.runEndsAt
+    const settled = settleRig(powered, ORE, new Map(), end)
+    const late = settleRig(settled.state, ORE, new Map(), end + 86_400_000)
+    expect(late.produced).toEqual({})
+    expect(late.creditedSec).toBe(0)
+    expect(late.running).toBe(false)
+  })
+
+  test('more completions make the next run faster and longer', () => {
+    const one = extendRig(newRig(), 0)
+    let ten = newRig()
+    for (let i = 0; i < 10; i++) ten = extendRig(settleRig(ten, ORE, new Map(), i).state, i)
+    expect(rigIntervalSec(ten.completions)).toBeLessThan(rigIntervalSec(one.completions))
+    expect(ten.runEndsAt).toBeGreaterThan(one.runEndsAt)
+  })
+
+  test('an artisan consumes stock and is clamped by the bank', () => {
+    const forge = extendRig(newRig(), 0)
+    // empty bank → starved, nothing made, nothing eaten
+    const starved = settleRig(forge, BAR, new Map(), forge.runEndsAt - 1)
+    expect(starved.produced).toEqual({})
+    expect(starved.consumed).toEqual({})
+
+    // 4 ore in the bank → at most 4 bars, and the ore is spent
+    const bank = new Map([['copper_ore', 4]])
+    const fed = settleRig(forge, BAR, bank, forge.runEndsAt - 1)
+    expect(fed.produced.bronze_bar).toBe(4)
+    expect(fed.consumed.copper_ore).toBe(4)
+    expect(bank.get('copper_ore')).toBe(0)
+  })
+
+  test('yield and double fold into the run as expected value', () => {
+    const powered = extendRig(newRig(), 0)
+    const plain = settleRig(powered, ORE, new Map(), 600_000)
+    const rich = settleRig(powered, { ...ORE, yieldBonus: 1, doubleBonus: 0 }, new Map(), 600_000)
+    expect(rich.produced.copper_ore).toBeGreaterThan(plain.produced.copper_ore!)
+    expect(rich.produced.copper_ore).toBeCloseTo(plain.produced.copper_ore! * 2, 0)
+  })
+})
+
+describe('determinism', () => {
+  test('the completion log alone reconstructs the bank', () => {
+    // The contract docs/DESIGN.md §13.5.1 rests on: "just recording when things are
+    // completed tells you how many resources they gained in a set amount of time."
+    const times = [0, 2_000, 5_000, 20_000, 61_000]
+    let live = newRig()
+    const liveTotal: Record<string, number> = {}
+    for (const t of times) {
+      const settled = settleRig(live, ORE, new Map(), t)
+      liveTotal.copper_ore = (liveTotal.copper_ore ?? 0) + (settled.produced.copper_ore ?? 0)
+      live = extendRig(settled.state, t)
+    }
+    const tail = settleRig(live, ORE, new Map(), 900_000)
+    liveTotal.copper_ore = (liveTotal.copper_ore ?? 0) + (tail.produced.copper_ore ?? 0)
+
+    const replayed = replayRig(times, ORE, 900_000)
+    expect(replayed.produced.copper_ore).toBe(liveTotal.copper_ore)
+    expect(replayed.state.completions).toBe(times.length)
+  })
+
+  test('replay is order-independent over the log', () => {
+    const a = replayRig([0, 5_000, 9_000], ORE, 600_000)
+    const b = replayRig([9_000, 0, 5_000], ORE, 600_000)
+    expect(a.produced).toEqual(b.produced)
+  })
+})
