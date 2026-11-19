@@ -1,12 +1,21 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { getStats, type ActivityDay, type Stats } from '#lib/exercises'
+  import { getSkills, type SkillsResponse } from '#lib/skills'
+  import { fmtClock, fmtInterval, rigGainedSince, rigSecondsLeft } from '#lib/idle'
+  import { href } from '#lib/paths'
   import { session } from '#lib/session.svelte'
-  import { ACCENT, accentStyle } from '#lib/theme'
+  import { ACCENT, CATEGORY, accentStyle, type CategoryStyle } from '#lib/theme'
   import { LANG_NAMES } from '#lib/voices'
 
   let stats = $state<Stats | null>(null)
   let error = $state('')
+  /** The idle panel is optional: Home works even if the board fails to load. */
+  let skills = $state<SkillsResponse | null>(null)
+  /** When the board was fetched — the cursor the live counters extrapolate from. */
+  let fetchedAt = $state(0)
+  /** Ticking clock so a rig's counter climbs in place (§13.5.1). */
+  let now = $state(Date.now())
 
   const lang = $derived(session.user?.targetLang ?? 'zh')
 
@@ -69,7 +78,52 @@
     return cols
   })
 
-  onMount(load)
+  // --- idle rigs (docs/DESIGN.md §13.5.1) ------------------------------------
+  // The board settles on the server; here we only extrapolate between fetches so
+  // the home panel shows what is accumulating right now.
+  const itemMap = $derived(new Map((skills?.items ?? []).map((i) => [i.id, i])))
+  const rigs = $derived.by(() => {
+    const out: {
+      actionId: string
+      skillId: string
+      actionName: string
+      icon: string
+      category: CategoryStyle
+      left: number
+      runPct: number
+      made: number
+      rate: string
+      yields: string
+    }[] = []
+    for (const s of skills?.skills ?? []) {
+      for (const a of s.actions) {
+        if (!a.idle?.active) continue
+        const left = rigSecondsLeft(a.idle, now)
+        const made = fetchedAt
+          ? Object.values(rigGainedSince(a.idle, fetchedAt, now)).reduce((n, v) => n + v, 0)
+          : 0
+        out.push({
+          actionId: a.id,
+          skillId: s.id,
+          actionName: a.name,
+          icon: s.icon,
+          category: CATEGORY[s.category],
+          left,
+          runPct: Math.min(1, Math.max(0, left / a.idle.runSec)),
+          made,
+          rate: fmtInterval(a.idle.intervalSec),
+          yields: (a.produces ?? []).map((p) => itemMap.get(p.item)?.name ?? p.item).join(' · '),
+        })
+      }
+    }
+    return out.sort((x, y) => y.made - x.made)
+  })
+
+  onMount(() => {
+    void load()
+    const timer = setInterval(() => (now = Date.now()), 250)
+    return () => clearInterval(timer)
+  })
 
   async function load() {
     error = ''
@@ -77,6 +131,12 @@
       stats = await getStats()
     } catch (e) {
       error = (e as Error).message || 'Could not load your progress.'
+    }
+    try {
+      skills = await getSkills()
+      fetchedAt = Date.now()
+    } catch {
+      // the idle panel is a bonus: a failed board must not blank the page
     }
   }
 </script>
@@ -230,4 +290,70 @@
       </ul>
     </section>
   </div>
+
+  <!-- Idle rigs (docs/DESIGN.md §13.5.1): what is accumulating right now. The
+       server settles on fetch; these figures are the client's local estimate. -->
+  <section
+    class="panel panel-accent mt-4 p-4"
+    style={accentStyle(ACCENT.jade)}
+    aria-label="Running rigs"
+  >
+    <div class="flex items-baseline justify-between gap-3">
+      <h2 class="text-xs font-bold tracking-widest uppercase" style="color: var(--accent)">Rigs</h2>
+      <span class="text-[11px] text-ink-400">
+        {#if rigs.length}
+          {rigs.length} running
+        {:else}
+          idle
+        {/if}
+      </span>
+    </div>
+
+    {#if rigs.length}
+      <ul class="mt-1">
+        {#each rigs as r (r.actionId)}
+          <li class="flex items-center gap-3 border-b border-ink-700 py-2.5 last:border-0">
+            <span class="w-5 shrink-0 text-center text-base" aria-hidden="true">{r.icon}</span>
+            <div class="min-w-0 flex-1">
+              <div class="flex items-baseline justify-between gap-2">
+                <a
+                  href={href(`/skills/${r.skillId}#action-${r.actionId}`)}
+                  class="truncate text-sm text-ink-200 hover:underline">{r.actionName}</a
+                >
+                <span
+                  class="display shrink-0 text-sm font-bold tabular-nums"
+                  style="color: {r.category.accent}">{r.rate}</span
+                >
+              </div>
+              <div
+                class="mt-0.5 flex items-baseline justify-between gap-2 text-[11px] text-ink-500"
+              >
+                <span class="truncate">{r.yields || '—'}</span>
+                <span class="shrink-0 tabular-nums">{fmtClock(r.left)} left</span>
+              </div>
+              <div
+                class="mt-1 h-[3px] overflow-hidden rounded-[2px] border border-ink-700 bg-ink-800"
+              >
+                <div
+                  class="h-full rounded-[2px]"
+                  style="width: {r.runPct * 100}%; background: {r.category.accent}"
+                ></div>
+              </div>
+            </div>
+            <span
+              class="display shrink-0 text-sm font-bold text-gold-200 tabular-nums"
+              title="Gathered since you opened this page">+{r.made}</span
+            >
+          </li>
+        {/each}
+      </ul>
+    {:else}
+      <p class="mt-2 text-xs text-ink-400">
+        No rigs running — complete a drill in <a
+          href={href('/skills')}
+          class="underline hover:text-ink-200">Skills</a
+        > to power one, then leave it be.
+      </p>
+    {/if}
+  </section>
 {/if}
