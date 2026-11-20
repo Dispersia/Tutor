@@ -269,13 +269,15 @@ function settleAction(
       gained: [],
       consumed: [],
       idle: null,
+      idleXp: 0,
       talentUnlocked: null,
     }
   }
   const award = awardActionXp(deps.db, deps.events, userId, action.id, action.xp)
   // The drill powers the rig (docs/DESIGN.md §13.5.1): it pays every running rig up
   // to now, lands the strike, then makes this action's run faster and longer. What
-  // `gained` reports is the whole windfall — the strike plus what the runs made.
+  // `gained` reports is the whole windfall — the strike plus what the runs made —
+  // and `idleXp` is the XP those runs earned on their own while you were away.
   const rig = completeAction(deps.db, deps.events, userId, action.id)
   return {
     actionId: award.actionId,
@@ -287,6 +289,7 @@ function settleAction(
     gained: rig.gained,
     consumed: rig.consumed,
     idle: rig.idle,
+    idleXp: rig.xp,
     talentUnlocked: award.talentUnlocked,
   }
 }

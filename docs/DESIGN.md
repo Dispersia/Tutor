@@ -737,7 +737,11 @@ Public endpoints (no session): `GET /api/health`, `GET /api/models`,
 
 ## 13. Gamification (skeleton now, game later)
 
-- **XP ledger** (append-only) + **level curve** (e.g. `level = f(xp)`), shown in a HUD.
+- **XP ledger** (append-only) tracks review XP; it drives the **daily goal** and the
+  **streak**, not the level. The **account level** is *derived*: the mean of every
+  profession's level (§13.5), i.e. a percent-complete figure out of 100 — 1 when you
+  start and 100 when every action is maxed. Adding a profession or an action lowers
+  it, which is the point.
 - **Streak**: one "active day" per **UTC calendar day** with ≥1 completed exercise.
 - **Daily goal**: configurable XP target with a progress ring.
 - **Combo / accuracy bonus**: small multipliers; formula lives with the exercise.
@@ -754,7 +758,9 @@ The game is a **RuneScape/WoW-style profession system** layered on top of the
 language drills: you pick a profession action, the app gives you "the next drill",
 and a correct answer awards that action's XP and materials. Since the idle pivot
 (§13.5.1) it is also an **idler** — a correct drill does not just hand you a
-material, it *powers a machine* that keeps working while you are away.
+material, it *powers a machine* that keeps working while you are away: it produces
+items **and earns the action's XP** on its own, so a profession levels from the runs
+as well as from the drills.
 
 **Actions are exercise-agnostic.** A profession action defines its tier, its own
 XP pool, materials and unlock/equipment requirements — but not the exercise type.
@@ -801,9 +807,10 @@ copper, `Mine essence` more essence — not more of everything), artisans +0.5%
 bonus-product chance/level, Agility +0.5% **XP to every profession**/level, combat
 +1% power/level, Slayer +1% rare drops/level, Thieving +2% coins/level.
 
-**The curve is gentle by design.** One action level costs `10 + (level − 1)` XP,
-so maxing a single action is ≈5.8k XP and a 4-action profession ≈23k. Level 100 is
-a long goal, not an impossible one.
+**The curve is scaled for the idle era.** One action level costs
+`100 + (level − 1) · 10` XP, so maxing a single action is ≈58.4k XP and a 4-action
+profession ≈234k — **10× the drill-only curve**, because a live rig also earns XP on
+its own (§13.5.1). Level 100 is a long goal, not an impossible one.
 
 **The profession level is derived — the mean of its actions, out of 100.** A
 profession has no XP of its own, and every action is capped at level 100, so a
@@ -825,8 +832,15 @@ milestones. A fresh profession is level 1 **however many actions it has**.
 shipping a new action (mythril ore, a new fish) adds a fresh level-1 component to
 the denominator: a maxed 4-action Mining drops from 100 to 80 until the new action
 is trained. Levels stay comparable as the game grows — `100` always means
-"everything in this profession is maxed", and the skills board's total is the
-mean of the professions so it also reads out of 100.
+"everything in this profession is maxed".
+
+**The account level is the same idea one rung up.** The **Home level** is the mean
+of all 23 professions, out of 100 — a percent-complete figure, 1 at the start and
+100 when every action is maxed. It is *derived*, never stored: drills and the idle
+rigs both feed the professions underneath it, and shipping a new profession (or a
+new action inside one) lowers it until that content is trained. Nothing levels the
+account directly — the review XP ledger drives the daily goal and the streak, not
+this number. `accountLevel()` in `game/service.ts` computes it on read.
 
 **Talents** are still per profession, taken at milestones of the derived level:
 - **Every 10 levels** (10, 20, 30, …) → choose **one of three** talents:
@@ -907,10 +921,11 @@ talent `tier`), `item.equipped`.
 **The old model was one drill = one item.** The pivot: **one drill powers a
 machine.** A correct drill still lands one immediate *strike* — the old flat yield,
 so the loop keeps its heartbeat — but its real reward is that it **starts a run**:
-a stretch of real time during which the action keeps producing its `produces` and
-consuming its `consumes` by itself. Keep completing drills for the same action and
-every run is **faster** and **longer**; stop, and the run drains out and the rig
-falls still. This is what makes the game reward *taking a break* and *coming back*.
+a stretch of real time during which the action keeps producing its `produces`,
+consuming its `consumes`, and **earning its XP** by itself. Keep completing drills
+for the same action and every run is **faster**, **longer** and worth more XP per
+item; stop, and the run drains out and the rig falls still. This is what makes the
+game reward *taking a break* and *coming back*.
 
 ```
    complete 1 drill          complete 10 more             come back in 4h
@@ -950,7 +965,19 @@ before that adds the same slice of time.
 intervalSeconds(c, tier) = tierFactor(tier) · (2 + 8 · 2^(−c/15))   // 10s → 2s per item
 runSeconds(c)            = 600 + (21600 − 600) · min(c−1, 49)/49    // 10 min → 6 h at c=50
 tierFactor(tier)         = 1 + 0.35·(tier − 1)                      // tier 1 ×1 … tier 5 ×2.4
+xpPerCraft               = 1                                        // action XP per completed craft
 ```
+
+**A live run earns XP too.** A drill hands over the action's `xp`; while a run is
+alive the rig also pays `IDLE.xpPerCraft` for **every craft it completes on its
+own** (a gathering rig every item, an artisan every transformation), credited
+through the same `awardActionXp` path so talent XP bonuses apply. So a machine
+left running levels its profession the same way drilling does, just by the clock —
+that is what makes "leave it running and come back" pay in levels, not only in ore.
+`settleAll` accrues it in the same closed-form pass as the items (a completion
+count already *is* the craft count, so nothing new is stored), and the action XP
+curve is scaled **10×** against the drill-only era to absorb the new income (see
+§13.5: ~58.4k XP to cap an action).
 
 **Tier slows the rig, not the run.** Higher-tier actions run proportionally slower
 per item (`tierFactor`) but keep the same run length, so deep content (adamant,
@@ -970,6 +997,7 @@ the cap existed is trimmed to the ceiling the next time it settles.
 | one item every | 9.6s | 7.0s | 4.0s | 2.8s | 2.1s | 2.0s |
 | a run lasts | 10m | 1.2h | 3.6h | 6h | 6h | 6h |
 | items per run | 62 | 630 | 3.3k | 7.7k | 10.4k | 10.8k |
+| XP per run | 62 | 630 | 3.3k | 7.7k | 10.4k | 10.8k |
 
 **Every action is a rig**, including the artisans. A gathering rig makes something
 from nothing; an artisan rig *transforms* — its run consumes the recipe inputs and
@@ -977,7 +1005,8 @@ produces the outputs, clamped by what the bank holds at settle time. You point y
 effort by choosing which action's drills to do: drill `Smelt bronze` and your smelter
 runs; drill `Forge iron sword` and your forge runs. Raw materials are effectively
 free now, so the game's real currencies are **time** (run length), **attention**
-(which rigs you power) and **XP** (levels, which still gate recipes and power).
+(which rigs you power) and **XP** (levels). XP is no longer drill-only: a run pays
+it as it works, so *which rigs you keep alive* is a leveling decision too.
 
 **Settlement order is fixed and deterministic.** `settleAll` walks every action in
 one canonical order — `gathering → support → artisan → combat` — against a single
@@ -996,17 +1025,20 @@ fetch.
 **Rebalance.** With rigs running, raw materials pour in — by design — so the
 "1 drill = 1 ore" recipe costs no longer hold up. Two things changed. First, the
 **bottleneck moved** to machine time (how long a run lasts, how many rigs you keep
-alive), tier (deep rigs run up to 2.4× slower) and XP (levels still gate recipes,
-gear and power). Second, **recipe inputs were scaled up against an explicit time
-budget, because this is an idler**: you are *meant* to leave a 6-hour run going and
-come back. So the pace is set by how long the supply rigs must run — a few hours for
-starter gear, and **roughly a whole day for the deep gear**, which is four or five
-"leave it running" sessions spread across days of study.
+alive), tier (deep rigs run up to 2.4× slower) and XP (levels, which now climb from
+the runs themselves, still gate recipes, gear and power). Second, **recipe inputs
+were scaled up against an explicit time budget, because this is an idler**: you are
+*meant* to leave a 6-hour run going and come back. So the pace is set by how long the
+supply rigs must run — a few hours for starter gear, and **roughly a whole day for
+the deep gear**, which is four or five "leave it running" sessions spread across days
+of study.
 
-The budget is legible, not vibes: an action needs `⌈5841 / xp⌉` drills to reach 100,
-and its cost is chosen so the **scarcest raw material** it consumes works out to the
-tier's target. Refinement is deliberately the *cheap, fast* feeder layer (a bar costs
-2 ore); the **goal** actions carry the time.
+The budget is legible, not vibes: an action needs `⌈58410 / xp⌉` drills to reach 100
+*if you only drill* — but a live rig also pays `xpPerCraft` per item, so the levels
+come from the machines too (a full 6-hour run of a maxed rig is ~10.8k XP, about a
+fifth of a cap). Material costs are chosen so the **scarcest raw material** it
+consumes works out to the tier's target. Refinement is deliberately the *cheap,
+fast* feeder layer (a bar costs 2 ore); the **goal** actions carry the time.
 
 | action → Lv 100 | tier | drills | before | now | ~rig time |
 | --- | --- | --- | --- | --- | --- |
@@ -1022,6 +1054,10 @@ tier's target. Refinement is deliberately the *cheap, fast* feeder layer (a bar 
 | fletch a yew longbow | 4 | 195 | 2 logs | **48 logs** | 13h |
 | forge an adamant platebody | 5 | 133 | 3 bars | **38 bars** | 24h |
 
+(The `drills` column is the **drill-only** count at the 10× curve — a live rig pays
+`xpPerCraft` per item it makes, so in practice the machines do most of the leveling
+and you only drill to keep them alive.)
+
 Because metal bars each want coal, **coal becomes the deep-game bottleneck** for
 armour — thematically right for a forge, and it gives `Mine coal` a reason to exist.
 **Deep-chain actions inherit their input's cost**: `Bind a blessed sword` consumes a
@@ -1030,9 +1066,10 @@ is tier 3. Consumables barely moved (food is still 1 raw → 1 cooked; potions 2
 combat keeps its food economy, and `hide` for leather armour still comes from combat
 drills (a deliberate combat side-chain). The `strike` and the rig consume the same
 scaled costs, so an artisan drill still *gates on materials* — you just get those
-materials from machines now. XP, levels and combat numbers are untouched, so the
-language-learning incentive is unchanged: the idler is the economy around it, never
-the reason to open the app.
+materials from machines now. Combat numbers are untouched, and the idler still can't
+substitute for studying: you have to drill to **start** the machines, and the action
+XP curve is scaled 10× so passive income sharpens the loop instead of replacing it.
+The runs reward *coming back*; the drills remain the reason to open the app.
 
 ## 13.6 Spaced repetition (FSRS-6, Anki-style) & guided curriculum
 

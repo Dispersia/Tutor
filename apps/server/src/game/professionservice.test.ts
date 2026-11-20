@@ -12,6 +12,8 @@ import {
 import { EventBus } from '../events'
 import {
   ACTION_BY_ID,
+  ACTION_MAX_LEVEL,
+  SKILLS,
   actionsForSkill,
   skillLevelInfo,
   skillXpForLevel,
@@ -19,6 +21,7 @@ import {
 } from './skills'
 import { masteryOptions, talentOptions } from './talents'
 import {
+  accountLevel,
   actionState,
   aggregateBonuses,
   awardActionXp,
@@ -302,7 +305,23 @@ test('settling twice over the same instant never double counts', () => {
   const twice = settleAll(db, bus, user.id, t0 + 30_000)
   expect(once.gained.length).toBeGreaterThan(0)
   expect(twice.gained).toEqual([])
+  expect(once.xp.get('mine-copper')).toBeGreaterThan(0)
+  expect(twice.xp.size).toBe(0) // the second settle credits no XP either
   expect(getItemCount(db, user.id, 'copper_ore')).toBe(1 + (once.gained[0]?.count ?? 0))
+  sqlite.close()
+})
+
+test('a rig levels its action on its own, no drill required', () => {
+  const { db, bus, user, sqlite } = setup()
+  const t0 = 2_500_000_000_000
+  completeAction(db, bus, user.id, 'mine-copper', t0)
+  const before = getActionXp(db, user.id, 'mine-copper')
+
+  // the first completion runs for 10 minutes; leave it be and it pays for itself
+  const settled = settleAll(db, bus, user.id, t0 + 600_000)
+  const gained = settled.xp.get('mine-copper') ?? 0
+  expect(gained).toBeGreaterThan(1)
+  expect(getActionXp(db, user.id, 'mine-copper')).toBe(before + gained)
   sqlite.close()
 })
 
@@ -334,5 +353,26 @@ test('every powered drill is written to the completion log', () => {
   completeAction(db, bus, user.id, 'mine-copper', t0 + 1_000)
   const log = listGatherLog(db, user.id, 'mine-copper')
   expect(log.map((r) => r.completions)).toEqual([1, 2])
+  sqlite.close()
+})
+
+test('the account level is the mean of the professions (percent complete)', () => {
+  const { db, bus, user, sqlite } = setup()
+  // nothing trained → every profession is 1, so the account reads 1
+  expect(accountLevel(db, user.id)).toEqual({ level: 1, progress: 0 })
+
+  // bring *every* action of every profession to 20 → account = 20
+  for (const s of SKILLS) setSkill(db, bus, user.id, s.id, 20)
+  expect(accountLevel(db, user.id).level).toBe(20)
+  sqlite.close()
+})
+
+test('one maxed profession only nudges the account level — that is the point', () => {
+  const { db, bus, user, sqlite } = setup()
+  setSkill(db, bus, user.id, 'mining', ACTION_MAX_LEVEL)
+  // Mining reads 100, the other 22 professions sit at 1 → the average is ~5
+  expect(accountLevel(db, user.id).level).toBe(
+    Math.round((ACTION_MAX_LEVEL + (SKILLS.length - 1)) / SKILLS.length),
+  )
   sqlite.close()
 })

@@ -123,7 +123,8 @@ test('rebuildStats reconstructs everything from the XP ledger', () => {
 
   const rebuilt = rebuildStats(db, user.id)
   expect(rebuilt.xp).toBe(150)
-  expect(rebuilt.level).toBe(2)
+  // the account level is derived from the professions now, not this ledger
+  expect(rebuilt.level).toBe(1)
   expect(rebuilt.streak).toBe(1) // both events are today
   expect(getStats(db, user.id).xpTotal).toBe(150)
   sqlite.close()

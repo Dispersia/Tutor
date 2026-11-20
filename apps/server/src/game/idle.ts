@@ -37,6 +37,13 @@ export const IDLE = {
   tierStep: 0.35,
   /** safety valve: never credit more than this much run in one settle (24 h) */
   maxCreditSec: 24 * 60 * 60,
+  /**
+   * Action XP the rig earns for **every craft it completes on its own** (before
+   * talent bonuses). A drill hands over `action.xp`; a live run hands this per
+   * item, so a machine left running levels the profession the same way drilling
+   * does — just by the clock. See docs/DESIGN.md §13.5.1.
+   */
+  xpPerCraft: 1,
 } as const
 
 const clamp = (n: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, n))
@@ -99,6 +106,8 @@ export interface RigSettle {
   produced: Record<string, number>
   /** items consumed by the run this settle */
   consumed: Record<string, number>
+  /** whole crafts completed on their own this settle (drives passive XP) */
+  crafted: number
   /** seconds of live run credited (0 when the rig was still or starved) */
   creditedSec: number
   /** whether the run is still alive at `now` */
@@ -146,7 +155,14 @@ export function settleRig(
   const runEndsAt = state.runEndsAt > 0 ? Math.min(state.runEndsAt, now + IDLE.maxRunSec * 1000) : 0
   const running = runEndsAt > now
   const next: RigState = { ...state, runEndsAt, settledAt: now, remainder: { ...state.remainder } }
-  const idle: RigSettle = { state: next, produced: {}, consumed: {}, creditedSec: 0, running }
+  const idle: RigSettle = {
+    state: next,
+    produced: {},
+    consumed: {},
+    crafted: 0,
+    creditedSec: 0,
+    running,
+  }
   if (runEndsAt <= 0 || now <= from) return idle
 
   const end = Math.min(now, runEndsAt)
@@ -179,6 +195,7 @@ export function settleRig(
       return { ...idle, state: { ...next, crafts } }
     }
     idle.creditedSec = sec
+    idle.crafted = done
     emitProduced(idle, recipe, done, bank, next)
     next.crafts = crafts
     return idle
@@ -189,6 +206,7 @@ export function settleRig(
   next.crafts = crafts
   if (done <= 0) return idle
   idle.creditedSec = sec
+  idle.crafted = done
   emitProduced(idle, recipe, done, bank, next)
   return idle
 }
@@ -247,16 +265,19 @@ export function replayRig(
   let state = newRig()
   const produced: Record<string, number> = {}
   const consumed: Record<string, number> = {}
+  let crafted = 0
   for (const at of [...completionTimes].sort((a, b) => a - b)) {
     const settled = settleRig(state, recipe, bank, at)
     merge(produced, settled.produced)
     merge(consumed, settled.consumed)
+    crafted += settled.crafted
     state = extendRig(settled.state, at)
   }
   const last = settleRig(state, recipe, bank, now)
   merge(produced, last.produced)
   merge(consumed, last.consumed)
-  return { ...last, produced, consumed }
+  crafted += last.crafted
+  return { ...last, produced, consumed, crafted }
 }
 
 function merge(into: Record<string, number>, from: Record<string, number>): void {

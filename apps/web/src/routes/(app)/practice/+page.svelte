@@ -460,7 +460,13 @@
         <Icon name="mute" size={12} />
         {quietActive ? quietClock : 'Can’t speak?'}
       </button>
-      <span class="chip" style="--accent: {ACCENT.gold}">{stats?.xp ?? 0} XP</span>
+      <span
+        class="chip"
+        style="--accent: {ACCENT.gold}"
+        title="Study XP from graded cards and won fights — fills your daily goal"
+      >
+        {stats?.xp ?? 0} study XP
+      </span>
       {#if srsStats}
         <span
           class="chip"
@@ -571,7 +577,13 @@
             Rig powered · <span class="display tabular-nums"
               >{fmtInterval(skill.idle.intervalSec)}</span
             >
-            · <span class="display tabular-nums">{fmtClock(Math.round(skill.idle.runSec))}</span> run
+            · <span class="display tabular-nums">{fmtClock(Math.round(skill.idle.runSec))}</span>
+            run · +{skill.idle.xpPerCraft} xp/item
+          </span>
+        {/if}
+        {#if skill.idleXp > 0}
+          <span class="chip" style="--accent: {ACCENT.gold}">
+            Rigs earned +{skill.idleXp} xp
           </span>
         {/if}
         {#if skill.talentUnlocked}

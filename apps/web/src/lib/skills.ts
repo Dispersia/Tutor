@@ -23,6 +23,8 @@ export interface IdleRigDTO {
   intervalSec: number
   /** fraction already baked into a run (yield + double) */
   yieldBonus: number
+  /** action XP each craft hands over while the run is live (base, before talents) */
+  xpPerCraft: number
   produces: Cost[]
   consumes: Cost[]
 }
@@ -208,6 +210,8 @@ export interface SkillOutcome {
   consumed: Cost[]
   /** the rig this drill powered (null when the drill did not count) */
   idle: IdleRigDTO | null
+  /** XP the running rigs earned on their own since the last settle */
+  idleXp: number
   /** the profession milestone whose talent choice just opened (or null) */
   talentUnlocked: number | null
 }
