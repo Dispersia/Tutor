@@ -29,10 +29,10 @@ export const IDLE = {
   intervalHalfLife: 15,
   /** seconds a run lasts after the first completion */
   firstRunSec: 10 * 60,
-  /** the longest a run ever gets */
+  /** the longest a run ever gets — also the hard cap on how far ahead a run may end */
   maxRunSec: 6 * 60 * 60,
-  /** completions needed to cover half the distance to `maxRunSec` */
-  runHalfLife: 60,
+  /** completions at which a run reaches `maxRunSec`; the climb is linear before it */
+  runFullAtCompletions: 50,
   /** each tier above 1 multiplies the interval by this much (deeper = rarer) */
   tierStep: 0.35,
   /** safety valve: never credit more than this much run in one settle (24 h) */
@@ -54,14 +54,17 @@ export function rigIntervalSec(completions: number, tier = 1): number {
 }
 
 /**
- * Drills → how long one completion's run lasts (10 min → 6 h, saturating).
- * `c − 1` so the *first* completion lands on the full 10 minutes, matching the
- * design's "do just one and it gathers for 10 minutes".
+ * Drills → how long one completion's run lasts. A **straight, equally-stepped
+ * climb**: the first completion lands on 10 minutes, every completion after adds
+ * the same slice, and the 50th reaches the full 6 hours — then it holds. `c − 1`
+ * so the first completion is `firstRunSec`, matching "do just one and it gathers
+ * for 10 minutes".
  */
 export function rigRunSec(completions: number): number {
-  const c = Math.max(0, completions - 1)
+  const steps = IDLE.runFullAtCompletions - 1
+  const c = clamp(completions - 1, 0, steps)
   const span = IDLE.maxRunSec - IDLE.firstRunSec
-  return IDLE.firstRunSec + span * (1 - 2 ** (-c / IDLE.runHalfLife))
+  return IDLE.firstRunSec + (span * c) / steps
 }
 
 /** The recorded state of one rig (mirrors the `action_progress` idle columns). */
@@ -137,12 +140,16 @@ export function settleRig(
   now: number,
 ): RigSettle {
   const from = Math.max(0, state.settledAt)
-  const running = state.runEndsAt > now
-  const next: RigState = { ...state, settledAt: now, remainder: { ...state.remainder } }
+  // The invariant `extendRig` now maintains: a live run always ends within
+  // `maxRunSec` of the current time. Reinforced here so a row written before the
+  // cap existed (a run stacked to a day or more) is trimmed on its next settle.
+  const runEndsAt = state.runEndsAt > 0 ? Math.min(state.runEndsAt, now + IDLE.maxRunSec * 1000) : 0
+  const running = runEndsAt > now
+  const next: RigState = { ...state, runEndsAt, settledAt: now, remainder: { ...state.remainder } }
   const idle: RigSettle = { state: next, produced: {}, consumed: {}, creditedSec: 0, running }
-  if (state.runEndsAt <= 0 || now <= from) return idle
+  if (runEndsAt <= 0 || now <= from) return idle
 
-  const end = Math.min(now, state.runEndsAt)
+  const end = Math.min(now, runEndsAt)
   if (end <= from) return idle
   const sec = clamp((end - from) / 1000, 0, IDLE.maxCreditSec)
 
@@ -213,10 +220,15 @@ function emitProduced(
 export function extendRig(state: RigState, now: number): RigState {
   const completions = state.completions + 1
   const base = Math.max(state.runEndsAt, now)
+  const extended = base + Math.round(rigRunSec(completions) * 1000)
+  // A drill makes the next run longer, but a run can never be scheduled to end
+  // more than `maxRunSec` (6 h) from the drill that extended it. Otherwise a
+  // flurry of drills stacks run on run and the rig mines for a day or more.
+  const cap = now + IDLE.maxRunSec * 1000
   return {
     ...state,
     completions,
-    runEndsAt: base + Math.round(rigRunSec(completions) * 1000),
+    runEndsAt: Math.min(extended, cap),
     settledAt: now,
   }
 }
