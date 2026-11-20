@@ -17,6 +17,9 @@ python/.venv/
 build/
 dist/
 
+# generated Silero VAD weights + onnxruntime wasm (scripts/sync-vad-assets.mjs)
+apps/web/static/vad/
+
 # secrets
 .env
 .env.*

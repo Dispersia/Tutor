@@ -1,7 +1,17 @@
 /** Minimal MediaRecorder wrapper for mic capture -> ASR. */
+import { trimToSpeech, warmVad } from './vad'
 
 /** Shorter than this and there is nothing to transcribe — don't send it. */
 export const MIN_CLIP_MS = 400
+
+export interface Take {
+  /** Speech only (Silero VAD), or null when the take held no speech at all. */
+  blob: Blob | null
+  /** How long the user held the mic. */
+  durationMs: number
+  /** Milliseconds of actual speech the VAD found in it. */
+  speechMs: number
+}
 
 export class Recorder {
   #rec: MediaRecorder | null = null
@@ -11,11 +21,6 @@ export class Recorder {
 
   get recording(): boolean {
     return this.#rec?.state === 'recording'
-  }
-
-  /** How long the current (or just-finished) take has been running, in ms. */
-  get elapsedMs(): number {
-    return this.#startedAt ? Date.now() - this.#startedAt : 0
   }
 
   async start(): Promise<void> {
@@ -43,12 +48,18 @@ export class Recorder {
     }
     this.#startedAt = Date.now()
     this.#rec.start()
+    // Fetch the VAD weights while the user is talking, not after.
+    warmVad()
   }
 
-  stop(): Promise<Blob> {
+  /**
+   * Stops the mic and trims the take to the speech in it (DESIGN §9.3), so the
+   * tap, the breaths and the thinking pauses never leave the phone.
+   */
+  async stop(): Promise<Take> {
     const rec = this.#rec
-    if (!rec) return Promise.resolve(new Blob())
-    return new Promise<Blob>((resolve) => {
+    if (!rec) return { blob: null, durationMs: 0, speechMs: 0 }
+    const raw = await new Promise<Blob>((resolve) => {
       rec.onstop = () => {
         this.#stream?.getTracks().forEach((t) => t.stop())
         this.#stream = null
@@ -57,6 +68,15 @@ export class Recorder {
       }
       rec.stop()
     })
+    const durationMs = this.#startedAt ? Date.now() - this.#startedAt : 0
+    this.#startedAt = 0
+    this.#chunks = []
+    const trim = await trimToSpeech(raw)
+    return {
+      blob: trim.blob,
+      durationMs: trim.durationMs || durationMs,
+      speechMs: trim.speechMs,
+    }
   }
 }
 

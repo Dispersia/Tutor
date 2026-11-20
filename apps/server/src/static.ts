@@ -69,6 +69,11 @@ function cacheHeaders(path: string): Record<string, string> {
   if (path.startsWith('/_app/immutable/')) {
     return { 'cache-control': 'public, max-age=31536000, immutable' }
   }
+  // Silero VAD weights + onnxruntime wasm (~16 MB): content-hashed at build time by
+  // apps/web/scripts/sync-vad-assets.mjs, so they can be cached forever.
+  if (path.startsWith('/vad/') && path !== '/vad/manifest.json') {
+    return { 'cache-control': 'public, max-age=31536000, immutable' }
+  }
   if (
     path === '/' ||
     path.endsWith('.html') ||

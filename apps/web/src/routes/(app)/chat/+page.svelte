@@ -144,14 +144,18 @@
     error = ''
     if (recording) {
       recording = false
-      const blob = await recorder.stop()
-      if (recorder.elapsedMs < MIN_CLIP_MS) {
+      const take = await recorder.stop()
+      if (take.durationMs < MIN_CLIP_MS) {
         error = 'That was too quick — hold the mic and speak.'
+        return
+      }
+      if (!take.blob) {
+        error = "Didn't catch that — try again."
         return
       }
       transcribing = true
       try {
-        const text = await transcribe(blob, lang)
+        const text = await transcribe(take.blob, lang)
         if (text.trim()) {
           input = text.trim()
           await send()

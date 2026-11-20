@@ -24,6 +24,7 @@ import {
   startDeckGrowth,
 } from '../deck/generate'
 import { llmPlanner, type Planner } from '../deck/plan'
+import { plannerFor } from '../deck/planner'
 import {
   backfillDeckPitch,
   composeFetchers,
@@ -71,15 +72,6 @@ const DECK_SCHEMA = {
   additionalProperties: false,
 }
 
-/** The planner for this user: a test override, or an OpenRouter-backed one. */
-async function plannerFor(deps: Deps, userId: string): Promise<Planner | undefined> {
-  if (deps.planner) return deps.planner
-  const key = await resolveUserKey(deps, userId)
-  if (!key) return undefined
-  const model = getRoles(deps.db, userId, deps.defaults).generator
-  return llmPlanner(new OpenRouter(key, deps.or.baseUrl), model, roleReasoning.generator)
-}
-
 /**
  * The pitch annotator for this user: the bundled Japanese dictionary first, and
  * the generator model for whatever the dictionary does not know. With
@@ -125,6 +117,61 @@ export function registerDecks(app: App) {
     const deck = getDeck(deps.db, c.req.param('id'), user.id)
     if (!deck) return c.json({ error: 'not found' }, 404)
     return c.json({ deck: deckView(deck), cards: listCards(deps.db, user.id, deck.id) })
+  })
+
+  /**
+   * Add a single card to a deck. With a `step` it joins that lesson — the n+1
+   * group, so a new sentence card can sit beside the word it reinforces. Without
+   * one it appends a fresh step at the end. Used by hand-authoring and by the
+   * automatic reinforcement that fires when a card keeps lapsing.
+   */
+  app.post('/api/decks/:id/cards', async (c) => {
+    const deps = c.get('deps')
+    const user = c.get('user')!
+    const deck = getDeck(deps.db, c.req.param('id'), user.id)
+    if (!deck) return c.json({ error: 'not found' }, 404)
+    const body = (await c.req.json().catch(() => ({}))) as {
+      front?: string
+      back?: string
+      type?: string
+      reading?: string
+      step?: number
+      payload?: Record<string, unknown>
+    }
+    const front = body.front?.trim()
+    const back = body.back?.trim()
+    if (!front || !back) return c.json({ error: 'front and back are required' }, 400)
+    const template = body.type?.trim() || 'vocab'
+    const cards = listCards(deps.db, user.id, deck.id)
+    const maxStep = cards.reduce(
+      (m, card) => Math.max(m, typeof card.payload?.step === 'number' ? card.payload.step : 0),
+      0,
+    )
+    const step =
+      typeof body.step === 'number' && Number.isFinite(body.step)
+        ? Math.max(1, Math.round(body.step))
+        : maxStep + 1
+    const reading = body.reading?.trim()
+    const readings: Record<string, string> = !reading
+      ? {}
+      : deck.targetLang === 'ja'
+        ? { kana: reading }
+        : deck.targetLang === 'zh' || deck.targetLang === 'yue'
+          ? { zhuyin: reading }
+          : { reading }
+    const card = addCard(deps.db, user.id, {
+      deckId: deck.id,
+      type: template as never,
+      sourceLang: deck.sourceLang,
+      targetLang: deck.targetLang,
+      front,
+      back,
+      readings,
+      tags: [deck.targetLang, template],
+      payload: { ...(body.payload ?? {}), template, step },
+      origin: 'manual',
+    })
+    return c.json({ card: getCard(deps.db, card.id, user.id), step }, 201)
   })
 
   /**

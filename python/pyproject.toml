@@ -1,7 +1,7 @@
 [project]
 name = "tutor-speech"
 version = "0.0.0"
-description = "MLX speech gateway for tutor: Qwen3-ASR + Qwen3-ForcedAligner + Qwen3-TTS"
+description = "MLX speech gateway for tutor: Whisper-turbo ASR + VoxCPM2 TTS + Qwen3-ForcedAligner"
 requires-python = ">=3.12,<3.13"
 dependencies = [
   "mlx-audio",
@@ -17,6 +17,9 @@ dependencies = [
   "nagisa>=0.3.2",
   # Same deal for Korean: the aligner's `tokenize_korean` imports soynlp.
   "soynlp>=0.0.493",
+  # Whisper can emit Simplified Mandarin; zhconv realigns a transcript to a
+  # Traditional deck's script so pronunciation scoring is not scuttled by it.
+  "zhconv>=1.4.3",
 ]
 
 [tool.uv]

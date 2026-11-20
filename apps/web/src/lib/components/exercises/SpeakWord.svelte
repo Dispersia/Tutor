@@ -38,18 +38,22 @@
     err = ''
     if (recording) {
       recording = false
-      const blob = await recorder.stop()
-      if (recorder.elapsedMs < MIN_CLIP_MS) {
+      const take = await recorder.stop()
+      if (take.durationMs < MIN_CLIP_MS) {
         err = 'That was too quick — hold the mic and speak.'
         return
       }
+      if (!take.blob) {
+        err = "Didn't catch that — try again."
+        return
+      }
       if (onspeak) {
-        onspeak(blob)
+        onspeak(take.blob)
         return
       }
       working = true
       try {
-        const text = await transcribe(blob, language)
+        const text = await transcribe(take.blob, language)
         if (text.trim()) onsubmit(text.trim())
         else err = "Didn't catch that — try again."
       } catch (e) {

@@ -96,6 +96,16 @@ export function registerSettings(app: App) {
           (id): id is string => typeof id === 'string' && id !== INTRODUCE_ID && known.has(id),
         )
       }
+      if (typeof body.study.newPerDay === 'number') patch.newPerDay = body.study.newPerDay
+      if (typeof body.study.maxReviewsPerDay === 'number')
+        patch.maxReviewsPerDay = body.study.maxReviewsPerDay
+      if (Array.isArray(body.study.learningSteps)) {
+        patch.learningSteps = body.study.learningSteps.filter(
+          (n): n is number => typeof n === 'number' && Number.isFinite(n) && n > 0,
+        )
+      }
+      if (typeof body.study.autoReinforce === 'boolean')
+        patch.autoReinforce = body.study.autoReinforce
       writeStudyPrefs(deps.db, user.id, patch)
     }
 

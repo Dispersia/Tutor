@@ -49,6 +49,10 @@ dev-web:
 build:
     bun run --cwd apps/web build
 
+# copy the Silero VAD weights + onnxruntime wasm into apps/web/static/vad
+vad:
+    bun run --cwd apps/web vad
+
 # run tests
 test:
     bun test

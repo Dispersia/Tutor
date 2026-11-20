@@ -206,12 +206,46 @@ function maxStep(cards: { payload: Record<string, unknown> }[]): number {
   return max
 }
 
-/** Persists planned cards, tagging each with its template + n+1 step. */
+/**
+ * True when a sentence/grammar card reaches ahead to a word the deck has not
+ * introduced yet — a strict n+1 violation. The planner is asked to stay inside
+ * the known words, but it cannot see the order, so a grammar point built on a
+ * word that arrives many steps later ("dono" before its own card) is dropped
+ * rather than shipped. Only the text the learner has to produce/read is checked
+ * (a sentence's tokens, a grammar card's answer), never the distractor options.
+ */
+export function leapsAhead(card: PlannedCard, future: ReadonlySet<string>): boolean {
+  if (future.size === 0) return false
+  const tokens = card.payload?.tokens
+  if (Array.isArray(tokens) && tokens.some((t) => typeof t === 'string' && future.has(t))) {
+    return true
+  }
+  const answer = card.payload?.answer
+  if (typeof answer === 'string' && future.has(answer)) return true
+  // Cards without an explicit answer produce `back` itself.
+  return future.has(card.back)
+}
+
+/**
+ * Persists planned cards, tagging each with its template + n+1 step.
+ *
+ * `futureWords` is the mutable set of words still waiting to be introduced; a
+ * vocab card removes its word as it is persisted. That makes the ordering real:
+ * a sentence printed before its word's vocab card has that word still in
+ * `future`, so {@link leapsAhead} drops it, while the same sentence after the
+ * vocab card is kept.
+ */
 function persistCards(
   db: Db,
   userId: string,
   deckId: string,
-  opts: { targetLang: string; sourceLang: string; readingScript?: string; startStep: number },
+  opts: {
+    targetLang: string
+    sourceLang: string
+    readingScript?: string
+    startStep: number
+    futureWords: Set<string>
+  },
   planned: PlannedCard[],
 ): { newWords: string[]; cardCount: number } {
   let step = opts.startStep
@@ -221,6 +255,9 @@ function persistCards(
     if (c.template === 'vocab') {
       step++
       newWords.push(c.back)
+      opts.futureWords.delete(c.back)
+    } else if (leapsAhead(c, opts.futureWords)) {
+      continue
     }
     addCard(db, userId, {
       deckId,
@@ -363,6 +400,10 @@ export async function fillDeck(
 ): Promise<FillDeckResult> {
   const total = clamp(opts.count, 0, opts.words.length)
   const known = [...(opts.knownWords ?? [])]
+  // Words still waiting to be introduced, shared across batches so a card can
+  // never reach ahead to a word a later batch will teach (strict n+1).
+  const future = new Set(opts.words)
+  for (const w of known) future.delete(w)
   const newWords: string[] = []
   let cardCount = 0
   let step = opts.startStep ?? 0
@@ -407,6 +448,7 @@ export async function fillDeck(
         sourceLang: ctx.sourceLang,
         readingScript: ctx.readingScript,
         startStep: step,
+        futureWords: future,
       },
       planned,
     )

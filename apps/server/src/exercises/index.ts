@@ -498,7 +498,9 @@ const sentenceBuild: ExerciseDef<unknown> = {
           // meaning, so any reading on the tiles gives the answer away.
           target: ctx.card.back,
           answerLang: ctx.card.targetLang,
-          newWord: typeof payload.newWord === 'string' ? payload.newWord : ctx.card.back,
+          // Only an explicit `newWord` is a hint. Falling back to `back` would
+          // print the whole sentence — the answer — under the tiles.
+          newWord: typeof payload.newWord === 'string' ? payload.newWord : undefined,
         },
       }
     }

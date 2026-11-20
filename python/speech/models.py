@@ -3,7 +3,7 @@ Model registry + lifecycle manager for the speech gateway.
 
 Design goals (docs/DESIGN.md §5, §8):
   * lazy load models on first use
-  * keep only ONE TTS checkpoint resident at a time (preset XOR design)
+  * keep only ONE TTS checkpoint resident at a time
   * unload everything + clear the MLX cache when idle, so the Mac gets its RAM back
 """
 
@@ -22,52 +22,77 @@ from typing import Any, Callable
 log = logging.getLogger("speech.models")
 
 # --- pinned checkpoints (override with env vars) -----------------------------
+#
+# ASR is Whisper large-v3-turbo (OpenAI): the distilled large-v3 decoder, ~809M
+# params, 99 languages, and the best speed/accuracy trade of the Whisper family.
+# It is autoregressive, so the energy VAD guard still matters, but it accepts
+# `hotwords` (folded into Whisper's initial prompt), so the deck vocabulary in
+# play really does bias decoding. TTS is VoxCPM2 (OpenBMB): a 2B tokenizer-free
+# multilingual model whose `instruct` argument designs a voice from a
+# description, so one checkpoint covers every language the app offers *and* the
+# "describe your tutor" feature. Both run on MLX through `mlx-audio`.
 
-ASR_MODEL = os.environ.get("TUTOR_ASR", "mlx-community/Qwen3-ASR-1.7B-8bit")
-ASR_LITE_MODEL = os.environ.get("TUTOR_ASR_LITE", "mlx-community/Qwen3-ASR-0.6B-8bit")
+ASR_MODEL = os.environ.get("TUTOR_ASR", "mlx-community/whisper-large-v3-turbo-asr-fp16")
+# Whisper ships one size per family; the "lite" path aliases it unless overridden.
+ASR_LITE_MODEL = os.environ.get("TUTOR_ASR_LITE", ASR_MODEL)
 ALIGN_MODEL = os.environ.get("TUTOR_ALIGN", "mlx-community/Qwen3-ForcedAligner-0.6B-8bit")
-TTS_PRESET_MODEL = os.environ.get(
-    "TUTOR_TTS_PRESET", "mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-8bit"
-)
-TTS_DESIGN_MODEL = os.environ.get(
-    "TUTOR_TTS_DESIGN", "mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16"
-)
+# VoxCPM2 ships bf16 (5.0 GB) / 8-bit (3.2 GB) / 4-bit (2.3 GB). 8-bit keeps the
+# quality while leaving room for ASR + aligner + browser in 16 GB.
+TTS_PRESET_MODEL = os.environ.get("TUTOR_TTS_PRESET", "mlx-community/VoxCPM2-8bit")
 VAD_MODEL = os.environ.get("TUTOR_VAD", "mlx-community/silero-vad")
 
 # Roles that map to a fixed checkpoint.
 SINGLE = {"asr": ASR_MODEL, "asr_lite": ASR_LITE_MODEL, "align": ALIGN_MODEL, "vad": VAD_MODEL}
-# TTS checkpoints are mutually exclusive — only one resident at a time.
-TTS = {"tts_preset": TTS_PRESET_MODEL, "tts_design": TTS_DESIGN_MODEL}
+# One TTS checkpoint, loaded lazily like the rest.
+TTS = {"tts_preset": TTS_PRESET_MODEL}
+# Roles that share a checkpoint, so the same weights are never loaded twice.
+_ALIASES = {"asr_lite": "asr"} if ASR_LITE_MODEL == ASR_MODEL else {}
 
-# Default CustomVoice speaker per Qwen language name (mirrors the web presets).
-# The client normally sends a voice; this is the safety net so a caller that
-# omits it still gets audio instead of a 500 (Qwen3-TTS rejects `speaker=None`).
-DEFAULT_SPEAKER_BY_LANG = {
-    "Chinese": "Serena",
-    "Cantonese": "Serena",
-    "English": "Ryan",
-    "Japanese": "Ono_Anna",
-    "Korean": "Sohee",
+# The voice the tutor speaks in when a caller sends no description of its own.
+# VoxCPM2 has no named speakers, so this *description* is what keeps one
+# consistent teacher across a whole deck.
+DEFAULT_VOICE_INSTRUCT = os.environ.get(
+    "TUTOR_TTS_INSTRUCT",
+    "A calm, professional language teacher with clear and precise articulation, "
+    "a warm and friendly tone, a steady measured pace and natural intonation.",
+)
+
+
+# --- language codes -----------------------------------------------------------
+#
+# The app speaks in short codes (zh, ja, en, …); each backend wants a different
+# spelling, so translate at the adapter rather than at the HTTP edge.
+
+# Whisper takes ISO codes and auto-detects when the code is omitted; its set
+# covers every language the app offers, including Cantonese ("yue").
+WHISPER_LANGS = {"zh", "yue", "en", "ja", "ko", "de", "fr", "es", "it", "pt", "ru"}
+# The forced aligner wants the spelled-out language name.
+ALIGN_LANG_NAMES = {
+    "zh": "Chinese",
+    "yue": "Cantonese",
+    "en": "English",
+    "ja": "Japanese",
+    "ko": "Korean",
+    "de": "German",
+    "fr": "French",
+    "es": "Spanish",
+    "it": "Italian",
+    "pt": "Portuguese",
+    "ru": "Russian",
 }
 
-# Style anchor for the CustomVoice presets. Qwen3-TTS samples emotion and
-# prosody freely at its 0.9 default temperature, so the same speaker drifts
-# between a murmur, a shout and sing-song from one clip to the next. Pinning a
-# calm teacher register keeps every clip in the same lane.
-DEFAULT_INSTRUCT = os.environ.get(
-    "TUTOR_TTS_INSTRUCT",
-    "Speak like a calm, professional language teacher: clear and precise "
-    "articulation, warm and friendly, steady measured pace, natural intonation. "
-    "Do not whisper, shout, laugh or sing.",
-)
-# VoiceDesign takes a voice *description* rather than a style cue.
-DEFAULT_DESIGN_INSTRUCT = os.environ.get(
-    "TUTOR_TTS_DESIGN_INSTRUCT",
-    "A calm, professional language teacher: clear articulation, warm and "
-    "friendly, steady measured pace, medium pitch, natural intonation.",
-)
-# Lower than the checkpoint's 0.9: same voice, much less prosody drift.
-TTS_TEMPERATURE = float(os.environ.get("TUTOR_TTS_TEMPERATURE", "0.7"))
+
+def whisper_language(code: str | None) -> str | None:
+    """Short app code → Whisper ISO code, or None to auto-detect."""
+    c = (code or "").strip().lower()
+    return c if c in WHISPER_LANGS else None
+
+
+def align_language(code: str | None) -> str | None:
+    """Short app code → spelled-out name the forced aligner expects."""
+    if not code:
+        return None
+    return ALIGN_LANG_NAMES.get(code.lower(), code)
 
 
 def model_id(kind: str) -> str:
@@ -169,6 +194,7 @@ class Manager:
 
     # --- model access -----------------------------------------------------
     def get(self, kind: str) -> Any:
+        kind = _ALIASES.get(kind, kind)
         with self._lock:
             self.touch()
             if kind in self._models:
@@ -267,10 +293,11 @@ def speech_seconds(audio_path: str) -> float:
     """
     Seconds of speech-like energy in a clip (a cheap energy VAD).
 
-    Qwen3-ASR is a generative model: fed silence or a clipped fragment it happily
-    invents a plausible word ("Okay.", "Written.", "嗯。"), which then looks like a
-    transcription error to the learner. We only run it when there is something to
-    transcribe. Returns -1.0 when the audio cannot be read (caller should not block).
+    ASR models are eager: fed silence or a clipped fragment, even a CTC model can
+    emit a stray token and an autoregressive one can invent a whole phrase
+    ("Okay.", "Written.", "嗯。"), which then looks like a transcription error to
+    the learner. We only run the recogniser when there is something to recognise.
+    Returns -1.0 when the audio cannot be read (caller should not block).
     """
     import numpy as np  # type: ignore
     import soundfile as sf  # type: ignore
@@ -305,28 +332,97 @@ def has_speech(audio_path: str) -> bool:
     return seconds >= _MIN_SPEECH_S
 
 
-def asr_transcribe(model: Any, audio_path: str, language: str | None = None, hint: str | None = None):
-    kwargs: dict[str, Any] = {}
-    if language:
-        kwargs["language"] = language
-    if hint:
-        # `hint` is a comma-separated vocabulary/context → Qwen3-ASR hotwords
-        words = [w.strip() for w in hint.split(",") if w.strip()]
-        if words:
-            kwargs["hotwords"] = words
-    result = model.generate(audio_path, **kwargs)
+def _is_whisper(model: Any) -> bool:
+    return "whisper" in type(model).__module__.lower()
+
+
+def _is_voxcpm(model: Any) -> bool:
+    return "voxcpm" in type(model).__module__.lower()
+
+
+def match_script(text: str, reference: str | None) -> str:
+    """
+    Align a transcript to the script the caller is working in.
+
+    Whisper's Mandarin output can come back Simplified, so a learner reading a
+    Traditional deck would see every card as a transcription error. When the
+    reference (the expected text, or the deck vocabulary passed as `hint`) is
+    Traditional, convert the transcript to Traditional too. Simplified and
+    non-Chinese references are left untouched.
+    """
+    if not text or not reference:
+        return text
+    try:
+        import zhconv  # type: ignore
+    except Exception:  # pragma: no cover - dependency is pinned in pyproject
+        return text
+    if zhconv.convert(reference, "zh-hans") == reference:
+        return text  # reference is Simplified (or not Chinese)
+    return zhconv.convert(text, "zh-hant")
+
+
+def asr_transcribe(
+    model: Any,
+    audio_path: str,
+    language: str | None = None,
+    hint: str | None = None,
+    reference: str | None = None,
+):
+    """
+    Transcribe with Whisper.
+
+    Whisper takes ISO language codes (omit → auto-detect) and a `hotwords` list
+    that it folds into its initial prompt, so the deck vocabulary passed as
+    `hint` biases decoding.
+
+    Caution: on a short take the decoder tends to *continue* that prompt instead
+    of listening to the audio, so `hint` can make Whisper read a course word back
+    that was never spoken. Pronunciation assessment (`/v1/assess`) therefore does
+    not pass one — see `server.assess`.
+    """
+    words = [w.strip() for w in hint.split(",") if w.strip()] if hint else []
+
+    if not _is_whisper(model):
+        raise ValueError(f"unsupported ASR checkpoint: {type(model).__module__}")
+    result = model.generate(
+        audio_path,
+        language=whisper_language(language),
+        hotwords=words or None,
+    )
 
     text = getattr(result, "text", None)
     if text is None and isinstance(result, dict):
         text = result.get("text", "")
-    segments = getattr(result, "segments", []) or []
-    return {"text": text or "", "segments": segments}
+    return {
+        "text": match_script(text or "", reference or hint),
+        "segments": _asr_segments(result),
+        "lang": getattr(result, "language", None),
+    }
+
+
+def _asr_segments(result: Any) -> list[dict[str, Any]]:
+    """Normalise each family's segment shape to {text, start, end}."""
+    raw = getattr(result, "segments", None)
+    if raw is None and isinstance(result, dict):
+        raw = result.get("segments", [])
+    out: list[dict[str, Any]] = []
+    for seg in raw or []:
+        get = seg.get if isinstance(seg, dict) else lambda k, d=None, s=seg: getattr(s, k, d)
+        out.append(
+            {
+                "text": get("text", "") or "",
+                "start": float(get("start", 0.0) or 0.0),
+                "end": float(get("end", 0.0) or 0.0),
+            }
+        )
+    return out
 
 
 def align_text(model: Any, audio_path: str, text: str, language: str | None = None):
     kwargs: dict[str, Any] = {"audio": audio_path, "text": text}
-    if language:
-        kwargs["language"] = language
+    name = align_language(language)
+    if name:
+        kwargs["language"] = name
     result = model.generate(**kwargs)
     items = []
     for it in result:
@@ -338,19 +434,6 @@ def align_text(model: Any, audio_path: str, text: str, language: str | None = No
             }
         )
     return items
-
-
-def _default_speaker(model: Any, language: str | None) -> str | None:
-    """Pick a CustomVoice speaker when the caller did not send one."""
-    speakers = list(getattr(model, "supported_speakers", None) or [])
-    if not speakers:
-        return None
-    preferred = DEFAULT_SPEAKER_BY_LANG.get(language or "")
-    if preferred:
-        for name in speakers:
-            if name.lower() == preferred.lower():
-                return name
-    return speakers[0]
 
 
 def _collect_audio(results: Any) -> tuple[Any, int]:
@@ -370,6 +453,17 @@ def _collect_audio(results: Any) -> tuple[Any, int]:
     return arr, sample_rate
 
 
+def _voxcpm_synthesize(model: Any, text: str, instruct: str | None):
+    """
+    VoxCPM2 is tokenizer-free: it infers the language from the text and has no
+    named voices. A description (`instruct`) switches it into voice-design mode,
+    which is how the tutor pins one consistent teacher voice per language; with
+    no description from the caller we fall back to the built-in teacher voice.
+    """
+    results = model.generate(text, instruct=instruct or DEFAULT_VOICE_INSTRUCT)
+    return _collect_audio(results)
+
+
 def tts_synthesize(
     model: Any,
     text: str,
@@ -380,37 +474,9 @@ def tts_synthesize(
     temperature: float | None = None,
     max_tokens: int | None = None,
 ):
-    temp = TTS_TEMPERATURE if temperature is None else temperature
-    if mode == "design" and hasattr(model, "generate_voice_design"):
-        results = model.generate_voice_design(
-            text=text,
-            language=language,
-            instruct=instruct or DEFAULT_DESIGN_INSTRUCT,
-            temperature=temp,
-            max_tokens=max_tokens,
-        )
-    elif hasattr(model, "generate_custom_voice"):
-        speaker = voice or _default_speaker(model, language)
-        results = model.generate_custom_voice(
-            text=text,
-            speaker=speaker,
-            language=language,
-            instruct=instruct or DEFAULT_INSTRUCT,
-            temperature=temp,
-            max_tokens=max_tokens,
-        )
-    else:
-        kwargs: dict[str, Any] = {"voice": voice, "temperature": temp}
-        if language:
-            kwargs["lang_code"] = language
-        if instruct or DEFAULT_INSTRUCT:
-            kwargs["instruct"] = instruct or DEFAULT_INSTRUCT
-        results = model.generate(text, **kwargs)
-
-    if not isinstance(results, (list, tuple)):
-        results = list(results)
-    arr, sample_rate = _collect_audio(results)
-    return arr, sample_rate
+    if not _is_voxcpm(model):
+        raise ValueError(f"unsupported TTS checkpoint: {type(model).__module__}")
+    return _voxcpm_synthesize(model, text, instruct)
 
 
 def write_wav(path: str | Path, arr: Any, sample_rate: int) -> None:

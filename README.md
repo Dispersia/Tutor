@@ -116,7 +116,7 @@ apps/web       SvelteKit PWA (mobile-first) — chat, voice, history, settings
 packages/core  shared types, card + exercise registry contracts
 packages/speech TS client for the speech gateway (provider interface)
 packages/ui    shared Svelte components
-python/speech  MLX speech gateway (Qwen3-ASR / ForcedAligner / Qwen3-TTS)
+python/speech  MLX speech gateway (Whisper-turbo / VoxCPM2 / Qwen3-ForcedAligner)
 nix/           packaging + model-fetch wrappers
 docs/          DESIGN.md (architecture + execution plan)
 ```
@@ -133,6 +133,21 @@ docs/          DESIGN.md (architecture + execution plan)
 - [x] Phase 7 — packaging (`nix build` / `nix run .`) + docs
 - [x] Phase 8 — professions, per-level effects, talents (5/10), materials, combat (monsters, HP, auto food/potions, drops)
 - [x] Phase 9 — the frequency path: a dynamic, n+1 curriculum built off a word list, with sentence-building drills
+- [x] Phase 10 — Silero VAD in the browser: mic takes are trimmed to the speech in them before they reach the ASR
+
+## Browser VAD
+
+Every mic take is decoded and scored by [Silero VAD](https://github.com/snakers4/silero-vad)
+on the phone (`@ricky0123/vad-web` + onnxruntime-web), and only the speech windows
+are uploaded — the tap, the breaths and the thinking pauses are spliced out and the
+clip is re-encoded as 16 kHz mono WAV. A take with no speech never leaves the
+device, so the ASR is not even woken.
+
+The weights and the wasm runtime (~16 MB) are **not** bundled or committed:
+`apps/web/scripts/sync-vad-assets.mjs` copies them from `node_modules` into
+`apps/web/static/vad/` with content-hashed names and a manifest, on every
+`dev`/`build` (or `just vad`). Browsers fetch them lazily on the first recording and
+cache them forever. If they cannot be loaded, the raw take is uploaded unchanged.
 
 ## Configuration
 

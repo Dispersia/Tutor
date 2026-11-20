@@ -37,18 +37,24 @@ export const STEP_SIZE = 1
 
 /**
  * Splits a deck's cards (in syllabus order) into n+1 steps. Cards tagged with
- * the same `step` are grouped into one lesson; without a tag each card is its
- * own step. `key` is the deck's level (curated) or id (generated).
+ * the same `step` form one lesson, wherever they sit in the list, so a card can
+ * be inserted into an existing lesson without renumbering the rest. `key` is the
+ * deck's level (curated) or id (generated). Cards without a `step` are each their
+ * own lesson (the curated path's behaviour).
  */
 export function buildLessons(key: string, cards: StepCard[]): Lesson[] {
   const groups: StepCard[][] = []
-  let current: number | undefined
+  const groupByStep = new Map<number, number>()
   for (const card of cards) {
-    if (card.step !== undefined && card.step === current && groups.length > 0) {
-      groups[groups.length - 1]!.push(card)
-    } else {
+    if (card.step === undefined) {
       groups.push([card])
-      current = card.step
+      continue
+    }
+    const existing = groupByStep.get(card.step)
+    if (existing !== undefined) groups[existing]!.push(card)
+    else {
+      groupByStep.set(card.step, groups.length)
+      groups.push([card])
     }
   }
   return groups.map((group, i) => {

@@ -8,11 +8,12 @@
     "#lib/*": "./src/lib/*"
   },
   "scripts": {
-    "dev": "vite dev",
-    "build": "vite build",
+    "dev": "bun scripts/sync-vad-assets.mjs && vite dev",
+    "build": "bun scripts/sync-vad-assets.mjs && vite build",
     "preview": "vite preview",
     "prepare": "svelte-kit sync || echo ''",
-    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "vad": "bun scripts/sync-vad-assets.mjs"
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "latest",
@@ -24,5 +25,8 @@
     "tailwindcss": "latest",
     "typescript": "^6.0.3",
     "vite": "^8.3.0"
+  },
+  "dependencies": {
+    "@ricky0123/vad-web": "^0.0.31"
   }
 }

@@ -10,6 +10,7 @@
     listDecks,
     nextExercise,
     setQuiet,
+    studyMore,
     type Deck,
     type Grade,
     type Instance,
@@ -19,7 +20,13 @@
   } from '#lib/exercises'
   import { getSkills, type SkillOutcome, type SkillsResponse } from '#lib/skills'
   import { fmtClock, fmtInterval } from '#lib/idle'
-  import { getCurriculum, type CurriculumDeck, type LessonDTO } from '#lib/curriculum'
+  import {
+    getCurriculum,
+    getSrsStats,
+    type CurriculumDeck,
+    type LessonDTO,
+    type SrsStats,
+  } from '#lib/curriculum'
   import { href } from '#lib/paths'
   import { wakeSpeech } from '#lib/speech'
   import { ACCENT, categoryAccent } from '#lib/theme'
@@ -29,10 +36,14 @@
   let decks = $state<Deck[]>([])
   let deckId = $state<string>('')
   let instance = $state<Instance | null>(null)
+  /** True when the day's new/review budget is spent and nothing can be served. */
+  let doneToday = $state(false)
   let result = $state<Grade | null>(null)
   let skill = $state<SkillOutcome | null>(null)
   let srs = $state<SrsOutcome | null>(null)
   let stats = $state<Stats | null>(null)
+  /** Spaced-repetition totals (due / new), so the header can show what is left. */
+  let srsStats = $state<SrsStats | null>(null)
   let ref = $state<SkillsResponse | null>(null)
   let lesson = $state<LessonDTO | null>(null)
   let lessonCompleted = $state(false)
@@ -85,10 +96,16 @@
 
   onMount(async () => {
     try {
-      const [d, s, sk] = await Promise.all([listDecks(), getStats(), getSkills().catch(() => null)])
+      const [d, s, sk, srs] = await Promise.all([
+        listDecks(),
+        getStats(),
+        getSkills().catch(() => null),
+        getSrsStats().catch(() => null),
+      ])
       decks = d.decks
       deckId = deckParam ?? decks[0]?.id ?? ''
       stats = s
+      srsStats = srs
       quietUntil = s.quietUntil ?? 0
       ref = sk
       if (lessonId) {
@@ -104,6 +121,11 @@
     }
   })
 
+  /** Re-reads the spaced-repetition totals (called after every graded answer). */
+  async function refreshSrs() {
+    srsStats = await getSrsStats().catch(() => srsStats)
+  }
+
   async function loadNext() {
     error = ''
     result = null
@@ -111,6 +133,7 @@
     srs = null
     lessonCompleted = false
     instance = null
+    doneToday = false
     speechWarm = 'idle'
     try {
       const body: { actionId?: string; lessonId?: string; deckId?: string } = {}
@@ -118,9 +141,27 @@
       if (lessonId) body.lessonId = lessonId
       if (!actionId && !lessonId && deckId) body.deckId = deckId
       const r = await nextExercise(body)
+      if (!r.instance || r.done) {
+        // Daily budget spent: show the goal instead of a drill.
+        doneToday = true
+        void refreshSrs()
+        return
+      }
       instance = r.instance
       startedAt = Date.now()
       if (r.instance.modality === 'voice' || r.instance.modality === 'mixed') void warmSpeech()
+    } catch (e) {
+      error = (e as Error).message
+    }
+  }
+
+  /** Raise today's allowance (Anki's "study more") and continue drilling. */
+  async function doStudyMore() {
+    error = ''
+    try {
+      const r = await studyMore()
+      if (srsStats) srsStats = { ...srsStats, budget: r.budget }
+      await loadNext()
     } catch (e) {
       error = (e as Error).message
     }
@@ -193,6 +234,7 @@
       error = (e as Error).message
     } finally {
       busy = false
+      void refreshSrs()
     }
   }
 
@@ -219,6 +261,7 @@
       error = (e as Error).message
     } finally {
       busy = false
+      void refreshSrs()
     }
   }
 
@@ -368,6 +411,24 @@
         {quietActive ? quietClock : 'Can’t speak?'}
       </button>
       <span class="chip" style="--accent: {ACCENT.gold}">{stats?.xp ?? 0} XP</span>
+      {#if srsStats}
+        <span
+          class="chip"
+          style="--accent: {srsStats.due > 0 ? ACCENT.azure : ACCENT.jade}"
+          title="Cards due for review across your decks"
+        >
+          {srsStats.due} due
+        </span>
+        {#if srsStats.budget && !srsStats.budget.newUnlimited}
+          <span
+            class="chip"
+            style="--accent: {srsStats.budget.newRemaining > 0 ? ACCENT.violet : ACCENT.jade}"
+            title="New cards left in today's budget"
+          >
+            {srsStats.budget.newRemaining} new
+          </span>
+        {/if}
+      {/if}
     </div>
   </div>
 
@@ -403,6 +464,28 @@
     <button onclick={loadNext} class="mt-3 rounded-md border border-ink-600 px-3 py-2 text-sm"
       >Back</button
     >
+  {:else if doneToday}
+    <div class="panel panel-accent p-5 text-center" style="--accent: {ACCENT.jade}">
+      <p class="display text-lg text-jade-300">Today’s goal reached</p>
+      <p class="mt-2 text-sm text-ink-300">
+        {#if srsStats?.budget}
+          {#if !srsStats.budget.newUnlimited}
+            {srsStats.budget.newToday}/{srsStats.budget.newPerDay} new
+          {/if}
+          {#if !srsStats.budget.newUnlimited && !srsStats.budget.reviewsUnlimited}·{/if}
+          {#if !srsStats.budget.reviewsUnlimited}
+            {srsStats.budget.reviewsToday}/{srsStats.budget.maxReviewsPerDay} reviews
+          {/if}
+        {/if}
+      </p>
+      <p class="mt-1 text-xs text-ink-400">
+        Everything due is done. Come back tomorrow, or keep going.
+      </p>
+      <div class="mt-4 flex flex-col gap-2">
+        <button onclick={doStudyMore} class="btn btn-primary w-full py-3">Study more</button>
+        <a href={href('/learn')} class="btn btn-ghost w-full py-3">Back to Learn</a>
+      </div>
+    </div>
   {:else if result}
     {#if lessonCompleted}
       <div class="panel panel-accent mb-3 p-4 text-center" style="--accent: {ACCENT.jade}">

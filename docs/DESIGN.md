@@ -40,7 +40,7 @@ rewriting the core.
 
 ### Goals (now)
 
-- Local TTS + ASR using the **latest Qwen3 speech models that fit in 16 GB**.
+- Local TTS + ASR using **small, fast speech models that fit in 16 GB**.
 - Brain via **OpenRouter** with **user-selectable models** (any key: Qwen,
   DeepSeek, OpenAI, …).
 - **Multi-user**: separate accounts, isolated history, per-user settings and keys.
@@ -79,31 +79,61 @@ or `$TUTOR_DATA_DIR`). See §14.
 
 ---
 
-## 4. Research: the current Qwen speech landscape
+## 4. Research: the speech model landscape
 
-### 4.1 ASR — Qwen3-ASR
+### 4.1 ASR — Whisper large-v3-turbo
 
-- Open-weights family, sizes **0.6B** and **1.7B**, multilingual
-  (Chinese, Cantonese, English, Japanese, Korean, German, Spanish, French,
-  Italian, Portuguese, Russian).
-- Beats Whisper-large-v3 on multiple benchmarks.
-- MLX support is mature: [`mlx-audio`](https://github.com/Blaizzy/mlx-audio)
-  ships `mlx-community/Qwen3-ASR-0.6B-8bit` and `Qwen3-ASR-1.7B-8bit`.
-- Companion: **Qwen3-ForcedAligner-0.6B** gives **word-level timestamps** when
-  you supply the expected text → this is our pronunciation-scoring backbone.
+- [Whisper large-v3-turbo](https://huggingface.co/openai/whisper-large-v3-turbo)
+  (OpenAI, MIT): the distilled large-v3 decoder — 4 decoder layers instead of 32,
+  ~809M params — trading a sliver of accuracy for a large speed-up. 99 languages,
+  including every language the app offers (zh, yue, ja, ko, de, fr, es, it, pt,
+  ru).
+- Autoregressive, so it *can* invent a phrase from silence — we keep the energy
+  VAD guard (§9.3) and rely on Whisper's own `no_speech_threshold`.
+- **Context biasing is a footgun for short takes:** `hotwords` fold into Whisper's
+  initial prompt, and on a short clip the decoder tends to *continue the prompt*
+  rather than listen — bias it with the deck vocabulary and the learner who says
+  いる hears います back. The generic `/v1/asr` route still takes `hint`, but
+  pronunciation assessment (`/v1/assess`) decodes unbiased; the forced aligner is
+  what anchors the attempt to the expected text (§9.4).
+- Its output script is not pinned: Mandarin can come back Simplified, so the
+  gateway realigns the transcript to a Traditional reference when one is given
+  (`models.match_script`, §9.3).
+- MLX support: `mlx-audio` ships the conversion
+  (`mlx-community/whisper-large-v3-turbo-asr-fp16`; 8/6/5/4-bit variants exist).
+- Companion: **Qwen3-ForcedAligner-0.6B** still gives **word-level timestamps**
+  when you supply the expected text → this is our pronunciation-scoring backbone.
 
-### 4.2 TTS — Qwen3-TTS
+### 4.2 TTS — VoxCPM2
 
-- Open-sourced **Jan 2026** (Apache-2.0), sizes **0.6B / 1.7B**, family:
-  `CustomVoice` (preset speakers + emotion), `VoiceDesign` (voice from a text
-  description), `Base` (3-second voice cloning).
-- 10 languages (incl. Mandarin + Japanese), streaming with ~97 ms claimed
-  first-packet latency, instruction control of tone/emotion.
-- MLX ports exist in `mlx-audio` (`mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-*`,
-  `...-0.6B-CustomVoice-*`, `...-VoiceDesign-bf16`, `...-Base-bf16`; quantized
-  bf16/6-bit variants published).
+- [VoxCPM2](https://huggingface.co/openbmb/VoxCPM2) (OpenBMB, Apache-2.0): a
+  **2B tokenizer-free** multilingual model, 48 kHz output, 30 languages
+  (English, Mandarin, Japanese, Korean, German, …).
+- **Voice design *is* the voice system:** there are no named speakers. Passing
+  `instruct` ("a calm, professional teacher…") switches it into voice-design mode
+  and that description becomes the tutor's voice — which is exactly the Settings
+  feature the app already had, now with nothing else to configure.
+- It infers the language from the text, so **one checkpoint covers every language
+  the app offers** — Korean, German, Russian and Cantonese included — with no
+  fallback model and no per-language voice packs.
+- MLX support: `mlx-audio` ships `VoxCPM2-{bf16,8bit,4bit}`; we run **8-bit**
+  (3.2 GB) so ASR + aligner + VoxCPM2 still fit in 16 GB.
+- Cost: **RTF ≈ 0.45** warm — slower than a tiny vocoder would be, but still
+  faster than playback, and the sentence queue hides it (§9.2).
 
-### 4.3 The runtime — `mlx-audio` (Neywa Labs / Blaizzy)
+### 4.3 Alternatives
+
+- The **Qwen3 speech family is gone** except for **Qwen3-ForcedAligner-0.6B**,
+  which has no replacement and is what produces the word timings pronunciation
+  scoring needs. No Qwen ASR or TTS checkpoint is referenced any more.
+- **Kokoro-82M** and **SenseVoice-Small** were removed too: one model per role
+  keeps the gateway, the deps and the docs simple.
+- **CosyVoice 3** was evaluated and rejected: it has no MLX implementation in
+  `mlx-audio` (only the `mlx-audio-plus` fork, which collides on the `mlx_audio`
+  namespace and drops the forced aligner), and it has no built-in voices — every
+  clip needs a reference recording.
+
+### 4.4 The runtime — `mlx-audio` (Neywa Labs / Blaizzy)
 
 - MIT. TTS + STT + STS + VAD + music, built on Apple **MLX**.
 - **OpenAI-compatible REST server**: `POST /v1/audio/speech`,
@@ -112,20 +142,20 @@ or `$TUTOR_DATA_DIR`). See §14.
 - Supports streaming, quantization, VAD (Silero), forced alignment.
 - Swift package (`mlx-audio-swift`) exists if we ever go native.
 
-### 4.4 Too big for this Mac
+### 4.5 Too big for this Mac
 
 - **Qwen3-Omni-30B-A3B** (~60 GB fp16, ~16 GB even at 4-bit + encoders) does not
   fit comfortably in 16 GB alongside a browser. **Rejected** for now; the
-  cascade (LLM on OpenRouter + local Qwen3-ASR/TTS) is better here anyway because
+  cascade (LLM on OpenRouter + local ASR/TTS) is better here anyway because
   it keeps RAM low and gives us a much stronger "brain".
 
-### 4.5 Cloud fallback
+### 4.6 Cloud fallback
 
 - OpenRouter launched **audio APIs (TTS + transcription)** in 2026. We can add a
   `cloud` speech provider behind the same gateway interface for when the local
   models are cold or on a second machine.
 
-### 4.6 Nix findings
+### 4.7 Nix findings
 
 - `nixpkgs` has `uv`, `bun`, `nodejs_24`, `python312`, `ffmpeg` (verified on this
   machine). No reliable `mlx` in the store → install via `uv` into a project venv.
@@ -135,44 +165,44 @@ or `$TUTOR_DATA_DIR`). See §14.
 
 ## 5. Model selection (what we will actually run)
 
-| Role             | Model (MLX)                                           | ~RAM    | Notes                                  |
-| ---------------- | ----------------------------------------------------- | ------- | -------------------------------------- |
-| **ASR**          | `mlx-community/Qwen3-ASR-1.7B-8bit`                   | ~2.0 GB | Best accuracy, ZH/JA/EN/…              |
-| **ASR (lite)**   | `mlx-community/Qwen3-ASR-0.6B-8bit`                   | ~0.9 GB | Fast path / low-memory mode            |
-| **Alignment**    | `mlx-community/Qwen3-ForcedAligner-0.6B-8bit`         | ~0.9 GB | Word timings → pronunciation scoring   |
-| **TTS (preset)** | `mlx-community/Qwen3-TTS-12Hz-1.7B-CustomVoice-8bit`¹ | ~2.5 GB | Built-in speakers + emotion, streaming |
-| **TTS (design)** | `mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16`  | ~3.5 GB | User-described voices (alt mode)       |
-| **TTS (lite)**   | `mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-*`     | ~1.5 GB | Lighter fallback                       |
-| **VAD**          | `mlx-community/silero-vad`                            | tiny    | Turn detection / silence trimming      |
-| **LLM (brain)**  | OpenRouter (cloud)                                    | 0       | Chat, grading, exercise generation     |
+| Role             | Model (MLX)                                          | ~RAM    | Notes                                      |
+| ---------------- | ---------------------------------------------------- | ------- | ------------------------------------------ |
+| **ASR**          | `mlx-community/whisper-large-v3-turbo-asr-fp16`      | ~1.6 GB | 99 languages, hotword biasing, script-safe |
+| **ASR (lite)**   | _(same checkpoint)_                                  | —       | Aliased unless `TUTOR_ASR_LITE` overrides  |
+| **Alignment**    | `mlx-community/Qwen3-ForcedAligner-0.6B-8bit`        | ~1.3 GB | Word timings → pronunciation scoring       |
+| **TTS**          | `mlx-community/VoxCPM2-8bit`                         | ~3.2 GB | 2B, 30 languages, voice design             |
+| **VAD**          | Silero v4 in the browser (ONNX, `@ricky0123/vad-web`) | 0 (phone) | Silence trimming before upload (§9.3)   |
+| **LLM (brain)**  | OpenRouter (cloud)                                   | 0       | Chat, grading, exercise generation         |
 
-¹ Quantized variants are published (bf16/6-bit; use 8-bit if available, else
-6-bit). Exact tag resolved at build time and pinned in `python/uv.lock`.
+`TUTOR_ASR` and `TUTOR_TTS_PRESET` can still point at another checkpoint of the
+same family (e.g. `whisper-large-v3-turbo-asr-8bit`, `VoxCPM2-4bit`), but the
+gateway only implements those two families plus the Qwen3 **forced aligner**.
 
-**Resident budget while active:** ASR 1.7B + aligner + **one** TTS checkpoint
-(preset _or_ design) ≈ **~6 GB**, leaving ~9–10 GB for macOS + browser. The two TTS
-checkpoints are **never both resident** — switching voice mode LRU-swaps them
-(§8.3). **When idle, everything is released** (§8).
+**Resident budget while active:** ASR + aligner + TTS ≈ **~6.1 GB** active,
+~8 GB peak, leaving the rest for macOS + browser. **When idle, everything is
+released** (§8).
 
 **Measured on this machine** (Apple M6 / 16 GB / macOS 27, `just bench`, after warm-up):
 
-| Stage                     | Result                              |
-| ------------------------- | ----------------------------------- |
-| load TTS preset 1.7B-8bit | 2.5 s → 3.1 GB MLX                  |
-| load ASR 1.7B-8bit        | 1.0 s → 5.6 GB cumulative           |
-| load ForcedAligner 0.6B   | 0.7 s → 6.9 GB cumulative           |
-| TTS (warm)                | **RTF 0.45** (2.7 s audio in 1.2 s) |
-| ASR (warm, Mandarin)      | **0.5 s**, exact transcript         |
-| Align (warm)              | **0.15 s**, word timings            |
-| peak MLX memory           | 8.6 GB                              |
-| **after `unload`**        | **MLX 6.9 GB → ~0** (RAM returned)  |
+| Stage                          | Result                              |
+| ------------------------------ | ----------------------------------- |
+| load VoxCPM2-8bit              | 2.0 s → 3.2 GB MLX                  |
+| load Whisper large-v3-turbo    | 0.7 s → 4.8 GB cumulative           |
+| load ForcedAligner 0.6B        | 0.6 s → 6.1 GB cumulative           |
+| TTS (warm, Mandarin)           | **RTF 0.44** (2.9 s audio in 1.3 s) |
+| ASR (warm, Mandarin)           | **0.7 s**, exact transcript         |
+| Align (warm)                   | **0.16 s**, word timings            |
+| peak MLX memory                | ~8.0 GB                             |
+| **after `unload`**             | **MLX 6.1 GB → ~0** (RAM returned)  |
 
-ASR-1.7B gave an exact transcript of the synthesised Mandarin; `Qwen3-ASR-0.6B`
-is available to save ~1.5 GB if needed. Cold start (all three) ≈ **4 s**, hidden by
-pre-warming when the user opens a voice exercise.
+Whisper transcribed the synthesised Mandarin, Japanese, English, Korean and
+German correctly; VoxCPM2 was verified across zh / en / ja / ko / de, including a
+7 s multi-sentence clip with no truncation. Cold start (all three) ≈ **3 s**,
+hidden by pre-warming when the user opens a voice exercise.
 
-Design policy: models are chosen from a single `models.ts`/config so swapping to
-the 0.6B lite variants on a smaller Mac is a config change, not a code change.
+Design policy: models are chosen from one registry in `python/speech/models.py`,
+so a size change (`whisper-…-8bit`, `VoxCPM2-4bit`) is a config change, not a
+code change.
 
 ---
 
@@ -182,8 +212,8 @@ the 0.6B lite variants on a smaller Mac is a config change, not a code change.
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │                 Android phone (SvelteKit PWA, mobile-first)                   │
 │   chat pane · voice recorder · card/exercise renderer · XP HUD                │
-│   MediaRecorder ▸ PCM/WAV        ◂ Web Audio playback of TTS                  │
-│   installable · offline shell · service worker                                │
+│   MediaRecorder ▸ Silero VAD ▸ 16 kHz WAV (speech only)                      │
+│   ◂ Web Audio playback of TTS · installable shell · service worker           │
 └───────────────┬───────────────────────────────────────────────┬─────────────┘
                 │ HTTPS + SSE (tokens)                          │ WAV chunks
                 │ WebSocket (audio in/out, events)               │
@@ -199,7 +229,7 @@ the 0.6B lite variants on a smaller Mac is a config change, not a code change.
                     │ supervisor: lazy start / idle stop / health   │
 ┌───────────────────▼──────────────────────────────────────────────▼──────────┐
 │                  Speech gateway  (python/speech, MLX, "sidecar")             │
-│  ASR (Qwen3-ASR) · ForcedAligner · TTS (Qwen3-TTS) · VAD · mx.clear_cache()  │
+│  ASR (Whisper) · ForcedAligner · TTS (VoxCPM2) · VAD · mx.clear_cache()       │
 │  Idle timer → unload models → exit (RAM back to macOS)                       │
 └──────────────────────────────────────────────────────────────────────────────┘
                     │
@@ -255,7 +285,7 @@ tutor/
 | Client        | **PWA** (installable, offline shell)                                | Primary target is Android; installs from the browser, no app store, no native build                                               |
 | Data fetching | SvelteKit `load` + stores, `@tanstack/svelte-query` where useful    | Streaming-friendly; optimistic XP updates                                                                                         |
 | Validation    | **zod**                                                             | Shared contracts in `packages/core`; validates LLM JSON                                                                           |
-| Speech        | **mlx-audio** (Python)                                              | Confirmed Qwen3-ASR/TTS MLX support, OpenAI-compatible API                                                                        |
+| Speech        | **mlx-audio** (Python)                                              | Runs Whisper / VoxCPM2 / the Qwen3 forced aligner on MLX, OpenAI-compatible API                                                    |
 | Brain         | **OpenRouter** REST/SSE                                             | Model-agnostic roles; one key; structured outputs                                                                                 |
 | Packaging     | **Nix flake** + `bun build --compile`                               | Single binary + assets, wraps cleanly into a derivation                                                                           |
 
@@ -346,70 +376,92 @@ OpenRouter token stream ─► sentence splitter ─► /v1/tts (stream) ─► 
 ```
 
 - Chunk by sentence so playback starts before the full reply is generated.
-- Voice mapping per target language + exercise mood (e.g. `Vivian`/`Serena` for
-  Mandarin, `Ono_Anna` for Japanese, `Ryan`/`Aiden` for English, `Sohee` for
-  Korean) — all presets of `CustomVoice`, so no cloning needed for MVP.
-- `instruct` lets an exercise ask for a specific tone ("encouraging and slow").
+- VoxCPM2 has no named voices: each request carries an **`instruct`** — the voice
+  *description* — and the model renders that voice. The app sends one built-in
+  teacher description by default, or the learner's saved description in design
+  mode.
+- Because VoxCPM2 infers the language from the text, there is **no per-language
+  voice mapping and no fallback model**: `models.tts_kind_for()` returns the same
+  checkpoint for every language the app offers.
 
 #### Voice options (what "voice strategy" means)
 
-All three are capabilities of the same Qwen3-TTS family; you can mix them per
-language or per exercise:
+| Option                        | What it is                                                                                                               | Setup       | Best for                                                                | Cost    |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ----------- | ----------------------------------------------------------------------- | ------- |
+| **Built-in teacher voice**    | VoxCPM2's zero-shot voice pinned with a fixed `instruct` ("a calm, professional teacher…").                              | none        | The default tutor voice everywhere; consistent across a deck            | low     |
+| **Voice design**              | Describe a voice in text ("a warm, patient female teacher in her 30s, slow clear articulation") and it _invents_ it.      | none        | A distinctive tutor persona; different voices per character in roleplay | low     |
+| **Reference cloning**         | Give a short clip; it speaks in that voice (`ref_audio`).                                                                | need a clip | Your tutor sounding like a specific person                               | medium  |
 
-| Option                            | What it is                                                                                                               | Setup       | Best for                                                                     | Cost    |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ----------- | ---------------------------------------------------------------------------- | ------- |
-| **CustomVoice** (preset speakers) | The model ships named voices. You just pass `speaker="Vivian"`.                                                          | none        | The default tutor voice per language; consistent everywhere                  | lowest  |
-| **VoiceDesign**                   | You describe a voice in text ("a warm, patient female teacher in her 30s, slow clear articulation") and it _invents_ it. | none        | A distinctive tutor persona; different voices per character in roleplay      | medium  |
-| **Base / voice clone**            | Give a 3-second clip + its transcript; it speaks in that voice.                                                          | need a clip | Your tutor sounding like a specific real person, or a fixed custom character | highest |
+**Voice modes in Settings** are two-selectable and map straight onto VoxCPM2:
 
-Preset speakers already shipped by `CustomVoice`:
+- **Built-in voice:** one teacher voice for every language, styled by a fixed
+  description — nothing to choose, consistent by construction.
+- **Voice design:** write a description per language (e.g. "patient Mandarin
+  teacher, warm, slow") and the model invents that voice.
 
-- Mandarin: `Vivian`, `Serena`, `Uncle_Fu`, `Dylan` (Beijing), `Eric` (Sichuan)
-- English: `Ryan`, `Aiden`
-- Japanese: `Ono_Anna`
-- Korean: `Sohee`
+**Language coverage:** VoxCPM2 is tokenizer-free and covers all 30 of its
+languages, so **every** target the app offers (including ko / de / ru / yue) uses
+the same checkpoint — no routing table, no second model. Everything sits behind
+the same `/v1/tts` request, chosen by `models.tts_kind_for(language, mode)`.
 
-**Recommendation:** expose **both CustomVoice and VoiceDesign as user-selectable
-voice modes** in Settings — they're two variants of the same Qwen3-TTS family, so
-letting the user pick costs nothing and covers both tastes:
-
-- **Preset mode (CustomVoice):** pick one of the built-in speakers per language
-  (fast, consistent, lowest memory).
-- **Design mode (VoiceDesign):** describe a voice in a sentence and save it as a
-  named persona the user can reuse (e.g. "patient Mandarin teacher, warm, slow").
-  A designed voice can be saved and reused like a preset.
-
-Because the two models exist as separate checkpoints, **keep only one TTS
-checkpoint resident at a time** and LRU-swap when the user switches mode (§8.3) —
-holding both plus ASR + aligner would blow the 16 GB budget. Voice **cloning**
-stays Phase 8. Everything is config-driven (`voiceFor(lang, mode)`), so switching
-never touches code.
+Because the optional backends are separate checkpoints, **keep only one TTS
+checkpoint resident at a time** and swap when the config changes (§8.3). Voice
+**cloning** stays Phase 8. Everything is config-driven (`speechOpts(lang)`), so
+switching never touches code.
 
 ### 9.3 ASR flow
 
 ```
-record (MediaRecorder) ─► 16 kHz mono WAV ─► /v1/asr (lang hint) ─► transcript
+record (MediaRecorder)
+   │  webm/opus take (tap + breaths + thinking pauses)
+   ▼
+Silero VAD in the browser (onnxruntime-web) — keep speech windows only
+   │  16 kHz mono WAV, silence spliced out
+   ▼
+/v1/asr (lang hint) ─► transcript
 ```
 
-- Convert to 16 kHz mono server-side with `ffmpeg` (nix-provided) or in-browser
-  via AudioWorklet PCM.
-- Language hint improves accuracy; auto-detect is the fallback.
-- **Context biasing:** the caller may pass `hint` (a comma-separated word list →
-  Qwen3-ASR `hotwords`), e.g. the deck vocabulary in play, so a half-heard course
-  word is not replaced by an unrelated one.
-- **No-speech guard:** Qwen3-ASR is generative — fed silence or a clipped
-  fragment it invents a word ("Okay.", "Written.", "嗯。"). The gateway computes a
-  cheap energy VAD (`models.has_speech`) and returns `{ text: "", noSpeech: true }`
-  for silent/too-short clips instead of hallucinating.
+- **Silero VAD runs on the phone** (`apps/web/src/lib/vad.ts`): the take is
+  decoded, every frame is scored by Silero v4 via `@ricky0123/vad-web`, and only
+  the speech windows are kept — leading/trailing silence and long thinking pauses
+  are spliced out and the result is re-encoded as a 16 kHz mono WAV. A take with
+  no speech at all never leaves the device, so no model wakes for it.
+- The weights and the onnxruntime wasm live in `apps/web/static/vad/`
+  (~16 MB), generated by `apps/web/scripts/sync-vad-assets.mjs`, fetched lazily
+  on the first recording and content-hashed so they cache forever. They are
+  *not* precached by the service worker.
+- Best-effort by design: if the assets cannot load (or the load takes longer than
+  15 s), the raw take is uploaded instead, exactly as before.
+- Convert to 16 kHz mono server-side with `ffmpeg` (nix-provided) — the gateway
+  sniffs the container, so it does not care whether it got WAV or webm.
+- Language hint improves accuracy; auto-detect is the fallback. The short app
+  code (`zh`, `ja`, …) is already the ISO code Whisper wants; an unknown code is
+  dropped so Whisper detects the language itself.
+- **No context biasing for assessment:** the caller may not pass `hint` to
+  `/v1/assess`. Whisper folds hotwords into its initial prompt, and on a short
+  take the decoder reads the prompt back instead of listening — biasing it with
+  the deck vocabulary makes a learner who says いる come back as います. The
+  transcript must report what was actually said, so the assessment decode is
+  unbiased and the forced aligner (given the expected text) does the anchoring.
+  Only the generic `/v1/asr` route takes a `hint`, and nothing in the app uses it.
+- **No-speech guard:** Whisper is autoregressive — fed silence or a clipped
+  fragment it invents a phrase ("Okay.", "Written.", "嗯。"). The gateway computes
+  a cheap energy VAD (`models.has_speech`) and returns `{ text: "", noSpeech: true }`
+  for silent/too-short clips instead of hallucinating. The browser-side Silero
+  pass above is the first line of that defence; this one catches other clients.
+- **Script realignment:** Whisper's Mandarin output can come back Simplified.
+  When the expected text / deck vocabulary is Traditional, `models.match_script`
+  rewrites the transcript to Traditional so a zhuyin deck does not read as a
+  transcription error. The chat path (no reference) keeps Whisper's own script.
 - Streaming ASR (WS) is Phase-2 for low-latency turn-taking + barge-in.
 
 ### 9.4 Pronunciation judging (approximate)
 
 ```
  expected text ─┐
-                ├─► Qwen3-ASR  ────►  hypothesis text ─┐
- recorded audio ┘                                     ├─► features
-                ├─► ForcedAligner(expected) ─► timings┘
+                ├─► ASR (Whisper) ─►  hypothesis text ─┐
+ recorded audio ┘                                      ├─► features
+                ├─► ForcedAligner(expected) ─► timings─┘
                                                         │
                     ┌───────────────────────────────────▼───────────────────┐
                     │ OpenRouter "judge" (JSON schema out)                  │
@@ -966,9 +1018,12 @@ the reason to open the app.
 
 Scheduling uses **FSRS-6** — the algorithm Anki 25.07+ uses — through the
 reference TypeScript implementation (`ts-fsrs`, FSRS-6 model) with Anki's
-**default 21 weights** (`w20 = 0.1542` trainable decay), Anki's default
-**learning steps** (`1m`, `10m`) and **relearning steps** (`10m`), and intervals
-derived from a **desired retention** (default `0.9`, per-user). The state machine
+**default 21 weights** (`w20 = 0.1542` trainable decay), configurable
+**learning steps** (default `1, 10, 60, 240` minutes, so a brand-new card repeats
+a handful of times before it graduates) and **relearning steps** (`10m`), and
+intervals derived from a **desired retention** (default `0.9`, per-user). An
+Anki-style **daily budget** — new cards/day and reviews/day (default 20 / 200),
+with a "study more" override — bounds how much a day asks for. The state machine
 around the memory math — steps, due dates, card selection, curriculum graduation
 — is ours (`apps/server/src/game/srs.ts`).
 
@@ -984,8 +1039,11 @@ around the memory math — steps, due dates, card selection, curriculum graduati
    dueAt + intervalDays ──► selectCardId() (overdue → new → soonest)
 ```
 
-- **Ratings come from the exercise score**: `!correct → Again`, `≥90 → Easy`,
-  `≥80 → Good`, else `Hard`. Every review (practice *and* combat hits) feeds the
+- **Ratings are two-way**: a wrong answer is **Again**, a right answer is
+  **Good** — deliberately never Hard/Easy. FSRS is best trained on that honest
+  signal, and an auto-derived "Easy" used to graduate a brand-new card after a
+  single answer (it vanished for a week with no same-session repetition). Every
+  review (practice *and* combat hits) feeds the
   scheduler, and the API returns the decision so the UI can show
   *“Good · next in 6 days · stability 38.9d · difficulty 2.1”*.
 - **Review log**: every review that moves a schedule — practice *and* combat —
@@ -1076,6 +1134,22 @@ routes and the combat drill both read them):
   kinds are filtered out of the drill rotation and swapped for an allowed one even
   when a caller forces them. The first-exposure `introduce` step is never a drill
   and cannot be disabled.
+- **Daily budget** — `newPerDay` and `maxReviewsPerDay` (default 20 / 200; `0`
+  = unlimited) bound a day's work. The practice route serves only new cards when
+  the new budget is left and only SRS cards when the review budget is left, then
+  reports `done` so the UI shows "today's goal reached". A per-day **"study
+  more"** override (`study.extraToday`) raises today's allowance without touching
+  the standing settings — Anki's custom study.
+- **Learning steps** — `learningSteps` (default `1, 10, 60, 240` minutes). These
+  decide how many times a brand-new card repeats before it graduates, so a session
+  can re-show it instead of dropping it for days.
+- **Auto-reinforce** — `autoReinforce` (default on). When a card reaches
+  `REINFORCE_LAPSES` lapses, `deck/reinforce.ts` asks the planner for one extra
+  sentence/grammar card that practises the same word using only words already met
+  (n+1), and adds it to that word's lesson (`payload.reinforces = <cardId>`, once
+  per card). `POST /api/decks/:id/cards` is the same insertion path for a
+  hand-authored card: a `step` places it in that lesson, no `step` appends a new
+  one.
 
 Preferences are per account, so two people on the same server can study the same
 decks with different scripts and exercise sets.
@@ -1432,9 +1506,10 @@ stack before any UI work.**
 
 ## 21. References
 
-- Qwen3-TTS (Apache-2.0): https://github.com/QwenLM/Qwen3-TTS
-- Qwen3-TTS blog: https://qwen.ai/blog?id=qwen3tts-0115
-- Qwen3-ASR / ForcedAligner / TTS in MLX (mlx-audio):
+- Whisper large-v3-turbo (MIT): https://huggingface.co/openai/whisper-large-v3-turbo
+- VoxCPM2 (Apache-2.0): https://huggingface.co/openbmb/VoxCPM2
+- CosyVoice 3 (rejected — no mlx-audio port): https://github.com/FunAudioLLM/CosyVoice
+- Whisper / VoxCPM2 / the Qwen3 forced aligner in MLX (mlx-audio):
   https://github.com/Blaizzy/mlx-audio
 - mlx-audio docs: https://neywa-labs.github.io/mlx-audio/
 - MLX: https://opensource.apple.com/projects/mlx
@@ -1443,8 +1518,7 @@ stack before any UI work.**
 - OpenRouter multimodal audio guide:
   https://openrouter.ai/docs/guides/overview/multimodal/audio
 - Selected models:
-  - https://huggingface.co/mlx-community/Qwen3-ASR-1.7B-8bit
-  - https://huggingface.co/mlx-community/Qwen3-ASR-0.6B-8bit
+  - https://huggingface.co/mlx-community/whisper-large-v3-turbo-asr-fp16
+  - https://huggingface.co/mlx-community/VoxCPM2-8bit
   - https://huggingface.co/mlx-community/Qwen3-ForcedAligner-0.6B-8bit
-  - https://huggingface.co/mlx-community/Qwen3-TTS-12Hz-1.7B-VoiceDesign-bf16
   - https://huggingface.co/mlx-community/silero-vad
