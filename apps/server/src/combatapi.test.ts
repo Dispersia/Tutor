@@ -91,7 +91,24 @@ async function cardIndex(app: App, cookie: string) {
   return out
 }
 
-type Instance = { exerciseId: string; cardId: string }
+type Instance = { exerciseId: string; cardId: string; data?: Record<string, unknown> }
+
+/**
+ * The correct answer for whatever drill the server picked. `pickNextExercise`
+ * randomises among the eligible exercise kinds (front↔back translate, multiple
+ * choice, listen, speak, converse, sentence build), so the answer has to be
+ * derived from the instance rather than assumed to be the card's front/back.
+ */
+function correctAnswer(instance: Instance, card: CardRow): string | string[] {
+  if (instance.exerciseId === 'translate.back_to_front') return card.front
+  // A sentence that *uses* the word (the bare word alone is not a sentence).
+  if (instance.exerciseId === 'converse') return `我${card.back}`
+  if (instance.exerciseId === 'sentence_build') {
+    const tokens = instance.data?.tokens
+    if (Array.isArray(tokens)) return tokens as string[]
+  }
+  return card.back
+}
 
 test('GET /api/combat lists monsters, player stats and any encounter', async () => {
   const { app, db, sqlite } = makeApp()
@@ -156,7 +173,7 @@ test('fight a slime: hits land, a kill drops materials', async () => {
 
   for (let i = 0; i < 10 && outcome === 'ongoing'; i++) {
     const card = cards.get(instance.cardId)!
-    const answer = instance.exerciseId === 'translate.back_to_front' ? card.front : card.back
+    const answer = correctAnswer(instance, card)
     const res = (await (
       await app.request(
         '/api/combat/hit',
@@ -235,7 +252,7 @@ test('a correct drill still takes the monster’s blow', async () => {
   ).json()) as { encounter: { playerHp: number }; instance: Instance }
   const cards = await cardIndex(app, cookie)
   const card = cards.get(start.instance.cardId)!
-  const answer = start.instance.exerciseId === 'translate.back_to_front' ? card.front : card.back
+  const answer = correctAnswer(start.instance, card)
 
   const res = (await (
     await app.request(
