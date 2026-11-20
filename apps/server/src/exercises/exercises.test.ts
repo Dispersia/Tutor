@@ -258,12 +258,24 @@ test('converse without a judge falls back to a heuristic', async () => {
   expect(english.correct).toBe(false)
 })
 
+test('converse rejects the bare word without a sentence', async () => {
+  const def = registry.get('converse')!
+  const c = ctx()
+  const inst = await def.generate(c)
+  const bare = await def.grade(c, inst, '你好')
+  expect(bare.correct).toBe(false)
+  expect(bare.score).toBeLessThan(60)
+  // Punctuation around the word is still the word on its own.
+  const padded = await def.grade(c, inst, '  你好。 ')
+  expect(padded.correct).toBe(false)
+})
+
 test('converse uses the injected judge when present', async () => {
   const def = registry.get('converse')!
   const c = ctx()
   c.judge = async () => ({ score: 91, correct: true, feedback: 'Great use of the word.' })
   const inst = await def.generate(c)
-  const r = await def.grade(c, inst, '你好')
+  const r = await def.grade(c, inst, '我喜歡你好嗎')
   expect(r.score).toBe(91)
   expect(r.feedback).toContain('Great')
 })

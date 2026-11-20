@@ -360,6 +360,9 @@ Length ${f.duration.toFixed(2)}s. Write the summary and each word tip in the lea
 
 // --- free conversation turn --------------------------------------------------
 
+/** Strip spaces, punctuation and symbols so “你好。” and “你好” compare equal. */
+const bare = (s: string) => s.replace(/[\s\p{P}\p{S}]/gu, '').toLowerCase()
+
 const converse: ExerciseDef<string> = {
   id: 'converse',
   title: 'Use it in conversation',
@@ -370,7 +373,7 @@ const converse: ExerciseDef<string> = {
       exerciseId: this.id,
       cardId: ctx.card.id,
       modality: 'mixed',
-      prompt: `Reply in ${label(ctx.card.targetLang)} using “${ctx.card.back}”.`,
+      prompt: `Make a sentence in ${label(ctx.card.targetLang)} using “${ctx.card.back}”.`,
       data: {
         topic: ctx.card.back,
         language: ctx.card.targetLang,
@@ -385,11 +388,20 @@ const converse: ExerciseDef<string> = {
       return {
         score: 0,
         correct: false,
-        feedback: 'Say or type a sentence in the target language.',
+        feedback: 'Write a sentence that uses the word.',
+      }
+    const target = bare(ctx.card.back)
+    // The word on its own is not a sentence: force the learner to build around it.
+    if (target && bare(text) === target)
+      return {
+        score: 20,
+        correct: false,
+        expected: ctx.card.back,
+        feedback: `Use “${ctx.card.back}” inside a sentence, not on its own.`,
       }
     if (ctx.judge) {
       const out = (await ctx.judge(
-        `The learner is practising ${label(ctx.card.targetLang)}. They should use the word “${ctx.card.back}” (${ctx.card.front}). The learner wrote/said: “${text}”. Grade the attempt (0-100) and give one short tip.`,
+        `The learner is practising ${label(ctx.card.targetLang)}. They must write or say a full sentence that *uses* the word “${ctx.card.back}” (${ctx.card.front}); repeating the word alone is not a sentence and must score low. The learner wrote/said: “${text}”. Grade the attempt (0-100) and give one short tip.`,
         JUDGE_SCHEMA,
       )) as { score?: number; correct?: boolean; feedback?: string } | undefined
       if (out && typeof out.score === 'number') {
@@ -402,17 +414,17 @@ const converse: ExerciseDef<string> = {
       }
     }
     const hasTarget = /[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]/.test(text)
-    const usedWord = text.includes(ctx.card.back)
+    const usedWord = target ? bare(text).includes(target) : false
     const score = usedWord ? 90 : hasTarget ? 65 : 35
     return {
       score,
       correct: score >= 60,
       expected: ctx.card.back,
       feedback: usedWord
-        ? 'Nice — you used the word.'
+        ? 'Nice — you used the word in a sentence.'
         : hasTarget
-          ? `Good try. Can you work “${ctx.card.back}” in?`
-          : 'Try replying in the target language.',
+          ? `Good try. Can you work “${ctx.card.back}” into a full sentence?`
+          : 'Try writing a sentence in the target language.',
     }
   },
   xp: (r) => (r.correct ? 5 + (r.score >= 90 ? 5 : 0) : 1),
