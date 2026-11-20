@@ -96,6 +96,7 @@
       runPct: number
       made: number
       rate: string
+      xpPerCraft: number
       yields: string
     }[] = []
     for (const s of skills?.skills ?? []) {
@@ -115,6 +116,7 @@
           runPct: Math.min(1, Math.max(0, left / a.idle.runSec)),
           made,
           rate: fmtInterval(a.idle.intervalSec),
+          xpPerCraft: a.idle.xpPerCraft,
           yields: (a.produces ?? []).map((p) => itemMap.get(p.item)?.name ?? p.item).join(' · '),
         })
       }
@@ -149,7 +151,8 @@
   <div class="min-w-0">
     <h1 class="display truncate text-3xl text-ink-100">{session.user?.handle}</h1>
     <p class="mt-1 text-xs text-ink-400">
-      {LANG_NAMES[lang] ?? lang} · {levelLabel}{#if deckName} · studying {deckName}{/if}
+      {LANG_NAMES[lang] ?? lang} · {levelLabel}{#if deckName}
+        · studying {deckName}{/if}
     </p>
   </div>
   <div class="seal h-14 w-14 shrink-0" aria-label="Level {stats?.level ?? 1}">
@@ -223,13 +226,18 @@
 
     <section class="mt-2 xl:mt-4" aria-label="Your progress">
       <ul>
-        <li class="flex items-baseline justify-between gap-3 border-b border-ink-700 px-0 py-3">
-          <span class="text-sm text-ink-300">XP earned</span>
-          <span class="display text-xl font-bold text-gold-200 tabular-nums"
-            >{#if stats}{stats.xp}{:else}<span
-                class="inline-block h-5 w-12 animate-pulse rounded bg-ink-700"
-              ></span>{/if}</span
-          >
+        <li class="border-b border-ink-700 px-0 py-3">
+          <div class="flex items-baseline justify-between gap-3">
+            <span class="text-sm text-ink-300">Study XP</span>
+            <span class="display text-xl font-bold text-gold-200 tabular-nums"
+              >{#if stats}{stats.xp}{:else}<span
+                  class="inline-block h-5 w-12 animate-pulse rounded bg-ink-700"
+                ></span>{/if}</span
+            >
+          </div>
+          <p class="mt-1 text-xs text-ink-500">
+            From graded cards and won fights — this fills your daily goal, not your account level.
+          </p>
         </li>
         <li class="flex items-baseline justify-between gap-3 border-b border-ink-700 px-0 py-3">
           <span class="text-sm text-ink-300">Day streak</span>
@@ -277,21 +285,22 @@
         </li>
         <li class="border-b border-ink-700 px-0 py-3" style={accentStyle(ACCENT.azure)}>
           <div class="flex items-baseline justify-between gap-2 text-sm">
-            <span class="text-ink-300">Next level</span>
-            <span class="text-ink-300 tabular-nums"
-              >{stats ? `${stats.intoLevel} / ${stats.forNext} XP` : '—'}</span
-            >
+            <span class="text-ink-300">Account level</span>
+            <span class="text-ink-300 tabular-nums">{stats ? `${stats.level} / 100` : '—'}</span>
           </div>
           <div
             class="bar mt-2"
             role="progressbar"
-            aria-label="Progress to level {(stats?.level ?? 1) + 1}"
+            aria-label="Account level {stats?.level ?? 1} of 100 — the average of every profession"
             aria-valuemin="0"
-            aria-valuemax={stats?.forNext ?? 0}
-            aria-valuenow={stats?.intoLevel ?? 0}
+            aria-valuemax="100"
+            aria-valuenow={stats ? Math.round(stats.progress * 100) : 0}
           >
             <i style="width: {stats ? Math.min(100, stats.progress * 100) : 0}%"></i>
           </div>
+          <p class="mt-2 text-xs text-ink-500">
+            The average of every profession, so it climbs as each one levels.
+          </p>
         </li>
       </ul>
     </section>
@@ -326,10 +335,16 @@
                   href={href(`/skills/${r.skillId}#action-${r.actionId}`)}
                   class="truncate text-sm text-ink-200 hover:underline">{r.actionName}</a
                 >
-                <span
-                  class="display shrink-0 text-sm font-bold tabular-nums"
-                  style="color: {r.category.accent}">{r.rate}</span
-                >
+                <span class="flex shrink-0 items-baseline gap-2">
+                  <span
+                    class="display text-[11px] font-bold text-gold-200 tabular-nums"
+                    title="Action XP this rig earns per item">+{r.xpPerCraft} xp</span
+                  >
+                  <span
+                    class="display text-sm font-bold tabular-nums"
+                    style="color: {r.category.accent}">{r.rate}</span
+                  >
+                </span>
               </div>
               <div
                 class="mt-0.5 flex items-baseline justify-between gap-2 text-[11px] text-ink-500"

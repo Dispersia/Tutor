@@ -90,10 +90,11 @@ export interface ActivityDay {
 }
 
 export interface Stats {
+  /** lifetime review XP (daily-goal / heat-map metric) */
   xp: number
+  /** the account level: the mean of every profession, out of 100 */
   level: number
-  intoLevel: number
-  forNext: number
+  /** how far the average profession is toward its next level (0..1) */
   progress: number
   streak: number
   dailyGoal: number

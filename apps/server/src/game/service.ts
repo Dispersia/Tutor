@@ -62,7 +62,15 @@ import {
   type MonsterDef,
 } from './combat'
 import { levelInfo } from './levels'
-import { extendRig, newRig, rigIntervalSec, rigRunSec, settleRig, type RigState } from './idle'
+import {
+  IDLE,
+  extendRig,
+  newRig,
+  rigIntervalSec,
+  rigRunSec,
+  settleRig,
+  type RigState,
+} from './idle'
 import { computeBonuses, applyYield, type Bonuses } from './modifiers'
 import {
   ACTION_BY_ID,
@@ -205,10 +213,11 @@ export function recordActivity(db: Db, bus: EventBus, userId: string): number {
 }
 
 export interface GameSummary {
+  /** lifetime review XP (the daily-goal / heat-map metric, not the level) */
   xp: number
+  /** the account level: the mean of every profession's level, out of 100 */
   level: number
-  intoLevel: number
-  forNext: number
+  /** how far the average profession is toward its next level (0..1) */
   progress: number
   streak: number
   dailyGoal: number
@@ -219,16 +228,14 @@ export interface GameSummary {
 
 export function summary(db: Db, userId: string): GameSummary {
   const s = getStats(db, userId)
-  const info = levelInfo(s.xpTotal)
   const today = todayDay()
   const daily = dailyXp(db, userId, today)
   const goal = s.dailyGoal || 50
+  const account = accountLevel(db, userId)
   return {
     xp: s.xpTotal,
-    level: info.level,
-    intoLevel: info.intoLevel,
-    forNext: info.forNext,
-    progress: info.progress,
+    level: account.level,
+    progress: account.progress,
     streak: s.streakDays,
     dailyGoal: goal,
     dailyXp: daily,
@@ -633,6 +640,8 @@ export interface IdleRigView {
   intervalSec: number
   /** expected-value bonus already baked into a run (yield + double) */
   yieldBonus: number
+  /** action XP each craft hands over while the run is live (base, before talents) */
+  xpPerCraft: number
   produces: Cost[]
   consumes: Cost[]
 }
@@ -642,6 +651,8 @@ export interface SettleReport {
   gained: Cost[]
   /** everything the runs consumed */
   spent: Cost[]
+  /** action XP the runs earned on their own this settle (actionId → XP) */
+  xp: Map<string, number>
   /** post-settle rig state per action (for building views without a second query) */
   rigs: Map<string, RigState>
 }
@@ -662,6 +673,7 @@ export function idleView(
     runSec: Math.round(rigRunSec(rig.completions)),
     intervalSec: rigIntervalSec(rig.completions, action.tier),
     yieldBonus,
+    xpPerCraft: IDLE.xpPerCraft,
     produces: action.produces ?? [],
     consumes: action.consumes ?? [],
   }
@@ -681,6 +693,9 @@ export function settleAll(db: Db, bus: EventBus, userId: string, now = Date.now(
 
   const produced: Record<string, number> = {}
   const consumed: Record<string, number> = {}
+  // Passive XP: every craft the run completed on its own levels the action, so a
+  // machine left running pays out exactly like drilling does, just by the clock.
+  const xp = new Map<string, number>()
 
   for (const action of SETTLE_ORDER) {
     const rig = rigs.get(action.id)
@@ -703,6 +718,7 @@ export function settleAll(db: Db, bus: EventBus, userId: string, now = Date.now(
     }
     for (const [item, n] of Object.entries(res.produced)) produced[item] = (produced[item] ?? 0) + n
     for (const [item, n] of Object.entries(res.consumed)) consumed[item] = (consumed[item] ?? 0) + n
+    if (res.crafted > 0) xp.set(action.id, res.crafted * IDLE.xpPerCraft)
   }
 
   for (const [item, count] of bank) {
@@ -712,8 +728,9 @@ export function settleAll(db: Db, bus: EventBus, userId: string, now = Date.now(
 
   const gained = toCosts(produced)
   const spent = toCosts(consumed)
+  for (const [actionId, amount] of xp) awardActionXp(db, bus, userId, actionId, amount)
   if (gained.length || spent.length) bus.emit('idle.settled', { userId, gained, spent })
-  return { gained, spent, rigs }
+  return { gained, spent, xp, rigs }
 }
 
 /**
@@ -727,10 +744,11 @@ export function completeAction(
   userId: string,
   actionId: string,
   now = Date.now(),
-): { gained: Cost[]; consumed: Cost[]; idle: IdleRigView | null } {
+): { gained: Cost[]; consumed: Cost[]; idle: IdleRigView | null; xp: number } {
   const report = settleAll(db, bus, userId, now)
   const action = ACTION_BY_ID.get(actionId)
-  if (!action) return { gained: report.gained, consumed: report.spent, idle: null }
+  const settledXp = [...report.xp.values()].reduce((n, v) => n + v, 0)
+  if (!action) return { gained: report.gained, consumed: report.spent, idle: null, xp: settledXp }
 
   const struckGained = grantItems(db, bus, userId, actionId, action.produces ?? [])
   const struckSpent = action.consumes ?? []
@@ -746,6 +764,7 @@ export function completeAction(
     gained: mergeCosts(report.gained, struckGained),
     consumed: mergeCosts(report.spent, struckSpent),
     idle: idleView(powered, action, now, bonus.yield(actionId) + bonus.double(actionId)),
+    xp: settledXp,
   }
 }
 
@@ -800,6 +819,22 @@ export function skillSummaries(db: Db, userId: string) {
       : 0
     return { skillId: s.id, xp, level, intoLevel: 0, forNext: 0, progress }
   })
+}
+
+/**
+ * The **account level** (docs/DESIGN.md §13): the mean of every profession's own
+ * level, so it reads out of 100 exactly like a profession does — "percent
+ * complete", 1 at the start and 100 when every action is maxed. It is *derived*,
+ * never stored: it climbs as your professions climb (both the drills and the idle
+ * rigs feed them) and **drops when a new profession or action is added**, because
+ * the average gains a denominator you have not trained yet. That is intended.
+ */
+export function accountLevel(db: Db, userId: string): { level: number; progress: number } {
+  const profs = skillSummaries(db, userId)
+  if (!profs.length) return { level: 1, progress: 0 }
+  const mean = profs.reduce((n, p) => n + p.level, 0) / profs.length
+  const progress = profs.reduce((n, p) => n + p.progress, 0) / profs.length
+  return { level: Math.min(100, Math.max(1, Math.round(mean))), progress }
 }
 
 export function inventoryView(db: Db, userId: string) {

@@ -63,15 +63,16 @@ test('combat actions are gated by forged/fletched gear', () => {
 })
 
 test('skill XP curve + level info', () => {
-  expect(skillXpForLevel(1)).toBe(10)
-  expect(skillXpForLevel(2)).toBe(11)
-  expect(skillLevelInfo(0)).toMatchObject({ level: 1, intoLevel: 0, forNext: 10 })
-  expect(skillLevelInfo(10)).toMatchObject({ level: 2, intoLevel: 0 })
-  expect(skillLevelInfo(21)).toMatchObject({ level: 3 }) // 10 + 11
-  // ~5.8k XP maxes one action, so the level-100 cap is within reach
+  expect(skillXpForLevel(1)).toBe(100)
+  expect(skillXpForLevel(2)).toBe(110)
+  expect(skillLevelInfo(0)).toMatchObject({ level: 1, intoLevel: 0, forNext: 100 })
+  expect(skillLevelInfo(100)).toMatchObject({ level: 2, intoLevel: 0 })
+  expect(skillLevelInfo(210)).toMatchObject({ level: 3 }) // 100 + 110
+  // ~58.4k XP maxes one action — 10× the drill-only curve, so a live rig's
+  // passive income doesn't blow through the cap in a single run
   let total = 0
   for (let i = 1; i < ACTION_MAX_LEVEL; i++) total += skillXpForLevel(i)
-  expect(total).toBeLessThan(6500)
+  expect(total).toBe(58_410)
 })
 
 test('action levels cap at 100 (so a profession reads out of 100)', () => {

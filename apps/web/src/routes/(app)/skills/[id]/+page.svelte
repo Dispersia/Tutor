@@ -500,6 +500,9 @@
                     <span class="display tabular-nums" style="color: {accent}"
                       >{fmtInterval(a.idle.intervalSec)}</span
                     >
+                    <span class="display text-gold-200 tabular-nums"
+                      >+{a.idle.xpPerCraft} xp / item</span
+                    >
                     {#if a.idle.active}
                       <span class="display tabular-nums" style="color: {accent}"
                         >{fmtClock(idleLeft)} left</span

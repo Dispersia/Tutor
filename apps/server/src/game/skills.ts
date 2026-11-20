@@ -5,6 +5,8 @@
  * training an action gives you "the next drill", and a correct answer awards that
  * profession's XP + materials. Gathering skills produce raw materials, artisan
  * skills consume them, and combat skills require equipment forged by the artisans.
+ * A completed drill also powers the action's **idle rig** (docs §13.5.1), which goes
+ * on earning XP and materials by the clock until its run drains out.
  */
 
 export type SkillId =
@@ -100,7 +102,8 @@ export interface ActionDef {
   name: string
   description: string
   tier: number
-  /** profession XP awarded on a correct answer (before modifiers) */
+  /** profession XP awarded on a correct answer (before modifiers); a rig also
+   *  pays `IDLE.xpPerCraft` per craft it completes on its own (§13.5.1) */
   xp: number
   /** optional card filter by deck level */
   deckLevel?: string
@@ -115,12 +118,15 @@ export interface ActionDef {
 // --- skill XP curve ----------------------------------------------------------
 
 /**
- * XP to advance one **action** level. Deliberately gentle and linear, so the
- * level-100 cap stays reachable: ~5.8k XP maxes a single action, and a whole
- * 4-action profession is ~23k.
+ * XP to advance one **action** level. Kept linear so the level-100 cap stays
+ * reachable, but scaled for the idle era: a rig left running earns XP on its own
+ * (every craft pays, docs §13.5.1), so the whole curve sits 10× higher than the
+ * drill-only days — ~58.4k XP maxes one action, and a whole 4-action profession
+ * is ~234k. A full 6-hour run of a maxed rig is worth ~10.8k XP, so capping an
+ * action is a handful of "leave it running" sessions, not one.
  */
 export function skillXpForLevel(level: number): number {
-  return 10 + (level - 1)
+  return 100 + (level - 1) * 10
 }
 
 export interface SkillLevelInfo {

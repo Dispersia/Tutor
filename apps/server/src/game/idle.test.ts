@@ -135,6 +135,18 @@ describe('settleRig', () => {
     expect(rich.produced.copper_ore).toBeGreaterThan(plain.produced.copper_ore!)
     expect(rich.produced.copper_ore).toBeCloseTo(plain.produced.copper_ore! * 2, 0)
   })
+
+  test('reports the crafts the run completed on its own (the passive-XP basis)', () => {
+    const powered = extendRig(newRig(), 0)
+    const r = settleRig(powered, ORE, new Map(), 600_000)
+    // one item per craft here, so the craft count is the item count
+    expect(r.crafted).toBe(r.produced.copper_ore!)
+    expect(r.crafted).toBeGreaterThan(0)
+
+    // a still rig, and a starved artisan, craft nothing
+    expect(settleRig(newRig(), ORE, new Map(), 10 ** 9).crafted).toBe(0)
+    expect(settleRig(extendRig(newRig(), 0), BAR, new Map(), 1_000_000).crafted).toBe(0)
+  })
 })
 
 describe('determinism', () => {
@@ -161,5 +173,18 @@ describe('determinism', () => {
     const a = replayRig([0, 5_000, 9_000], ORE, 600_000)
     const b = replayRig([9_000, 0, 5_000], ORE, 600_000)
     expect(a.produced).toEqual(b.produced)
+  })
+
+  test('the log alone also reconstructs the crafts (so passive XP replays)', () => {
+    const times = [0, 2_000, 5_000, 20_000, 61_000]
+    let live = newRig()
+    let crafted = 0
+    for (const t of times) {
+      const settled = settleRig(live, ORE, new Map(), t)
+      crafted += settled.crafted
+      live = extendRig(settled.state, t)
+    }
+    crafted += settleRig(live, ORE, new Map(), 900_000).crafted
+    expect(replayRig(times, ORE, 900_000).crafted).toBe(crafted)
   })
 })
