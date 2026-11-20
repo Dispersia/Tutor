@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <title>The guild hall · Tutor</title>
+    <link rel="stylesheet" href="assets/fonts/fonts.css" />
+    <link rel="stylesheet" href="styles/game.css" />
+    <link rel="stylesheet" href="styles/game-ui.css" />
+    <script src="assets/game.js"></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to the page</a>
+
+    <header class="topbar">
+      <a class="brand" href="index.html">
+        <svg class="brand__mark" aria-hidden="true"><use href="#i-spark" /></svg>
+        <span class="brand__word">Tutor</span>
+      </a>
+      <button class="account" type="button" data-sheet-open="account" aria-haspopup="dialog">
+        <span class="stamp" aria-hidden="true">D</span>
+        <span class="sr-only">Account, chat, bank, history and settings</span>
+      </button>
+    </header>
+
+    <nav class="rail" aria-label="Primary">
+      <a class="brand" href="index.html">
+        <svg class="brand__mark" aria-hidden="true"><use href="#i-spark" /></svg>
+        <span class="brand__word">Tutor</span>
+      </a>
+      <a class="rail__link" href="index.html" aria-current="page"
+        ><svg aria-hidden="true"><use href="#i-home" /></svg>Home</a
+      >
+      <a class="rail__link" href="skills.html"
+        ><svg aria-hidden="true"><use href="#i-skills" /></svg>Skills</a
+      >
+      <a class="rail__link" href="learn.html"
+        ><svg aria-hidden="true"><use href="#i-learn" /></svg>Learn</a
+      >
+      <div class="rail__rule"></div>
+      <button
+        class="rail__link"
+        type="button"
+        data-sheet-open="account"
+        data-sheet-section="acct-chat"
+      >
+        <svg aria-hidden="true"><use href="#i-chat" /></svg>Chat
+      </button>
+      <button
+        class="rail__link"
+        type="button"
+        data-sheet-open="account"
+        data-sheet-section="acct-bank"
+      >
+        <svg aria-hidden="true"><use href="#i-bank" /></svg>Bank
+      </button>
+      <button
+        class="rail__link"
+        type="button"
+        data-sheet-open="account"
+        data-sheet-section="acct-history"
+      >
+        <svg aria-hidden="true"><use href="#i-history" /></svg>History
+      </button>
+      <button
+        class="rail__link"
+        type="button"
+        data-sheet-open="account"
+        data-sheet-section="acct-settings"
+      >
+        <svg aria-hidden="true"><use href="#i-settings" /></svg>Settings
+      </button>
+      <div class="rail__foot">
+        <button class="account" type="button" data-sheet-open="account">
+          <span class="stamp" aria-hidden="true">D</span>
+          <span class="account__name">Dispe</span>
+        </button>
+      </div>
+    </nav>
+
+    <div class="app">
+      <nav class="tabbar" aria-label="Primary">
+        <a class="tab" href="index.html" aria-current="page"
+          ><svg aria-hidden="true"><use href="#i-home" /></svg>Home</a
+        >
+        <a class="tab" href="skills.html"
+          ><svg aria-hidden="true"><use href="#i-skills" /></svg>Skills</a
+        >
+        <a class="tab" href="learn.html"
+          ><svg aria-hidden="true"><use href="#i-learn" /></svg>Learn</a
+        >
+      </nav>
+
+      <main class="page" id="main">
+        <div class="page-head">
+          <div>
+            <h1 class="page-title">The guild hall</h1>
+            <p>Good evening, Dispe. The rigs kept working while you were away.</p>
+          </div>
+          <span class="chip chip--plain"
+            ><svg aria-hidden="true" style="width: 16px; height: 16px">
+              <use href="#i-calendar" /></svg
+            >Tuesday 19 Nov</span
+          >
+        </div>
+
+        <div class="stack">
+          <!-- Hero: identity, the earned figures, the one forward action -->
+          <section class="panel" style="--c: var(--gold)" aria-labelledby="hall-title">
+            <div class="ribbon">
+              <span class="ribbon__mark" style="--c: var(--gold)"></span>
+              <span class="ribbon__label" id="hall-title">Account</span>
+              <span class="ribbon__tag">Lv 26</span>
+            </div>
+            <div class="row">
+              <span class="medallion medallion--lg" aria-hidden="true">26</span>
+              <div class="row__main">
+                <p class="card-title">Dispe</p>
+                <p class="row__sub">Average of 23 professions · 3 of them above Lv 50</p>
+              </div>
+            </div>
+            <div class="stat-row" style="margin-top: 12px">
+              <div class="stat">
+                <span class="tile" style="--c: var(--gold)"
+                  ><svg aria-hidden="true"><use href="#i-coin" /></svg
+                ></span>
+                <div>
+                  <span class="figure">12,480</span>
+                  <span class="figure__cap">Gold</span>
+                </div>
+              </div>
+              <div class="stat">
+                <span class="tile" style="--c: var(--amber)"
+                  ><svg aria-hidden="true"><use href="#i-flame" /></svg
+                ></span>
+                <div>
+                  <span class="figure">17</span>
+                  <span class="figure__cap">Day streak</span>
+                </div>
+              </div>
+              <div class="stat">
+                <span class="tile" style="--c: var(--jade)"
+                  ><svg aria-hidden="true"><use href="#i-target" /></svg
+                ></span>
+                <div>
+                  <span class="figure"
+                    >3<span class="faint" style="font-size: 0.9rem">/5</span></span
+                  >
+                  <span class="figure__cap">Drills today</span>
+                </div>
+              </div>
+            </div>
+            <div class="btn-row" style="margin-top: 14px">
+              <a class="btn btn--primary" href="practice.html"
+                ><svg aria-hidden="true"><use href="#i-play" /></svg>Start a drill</a
+              >
+              <a class="btn btn--ghost" href="skills.html">Choose a profession</a>
+            </div>
+          </section>
+
+          <!-- Daily goal -->
+          <section class="panel panel--tint" style="--c: var(--jade)" aria-labelledby="goal-title">
+            <div class="ribbon">
+              <span class="ribbon__mark"></span>
+              <span class="ribbon__label" id="goal-title">Daily goal</span>
+              <span class="ribbon__tag">3 / 5 drills</span>
+            </div>
+            <div
+              class="bar bar--slim"
+              role="progressbar"
+              aria-valuemin="0"
+              aria-valuemax="5"
+              aria-valuenow="3"
+              aria-labelledby="goal-title"
+            >
+              <span class="bar__fill" style="width: 60%"></span>
+            </div>
+            <p class="muted" style="margin-top: 10px">
+              Two more drills today keeps the streak alive. Mining is closest to its next talent.
+            </p>
+            <div class="banner banner--success" style="margin-top: 12px">
+              <svg aria-hidden="true"><use href="#i-check" /></svg>
+              <div>
+                <p class="banner__title">Yesterday's goal met</p>
+                <p class="banner__text">Five of five drills, and the streak stands at 17 days.</p>
+              </div>
+            </div>
+            <p style="margin-top: 12px">
+              <a class="link" href="#rhythm"
+                >See the rhythm<svg aria-hidden="true"><use href="#i-arrowRight" /></svg
+              ></a>
+            </p>
+          </section>
+
+          <!-- Running rigs: the idle tell, ticking live -->
+          <section
+            class="panel panel--flush"
+            style="--c: var(--amber)"
+            aria-labelledby="rigs-title"
+          >
+            <div class="panel__body" style="padding-bottom: 4px">
+              <div class="ribbon">
+                <span class="ribbon__mark" style="--c: var(--amber)"></span>
+                <span class="ribbon__label" id="rigs-title">Running rigs</span>
+                <span class="ribbon__tag">3</span>
+              </div>
+            </div>
+            <div class="panel__body" style="padding-top: 0">
+              <div
+                class="rig"
+                style="--c: var(--jade)"
+                data-rig
+                data-rig-count="312"
+                data-rig-rate="7"
+                data-rig-run="2880000"
+                data-rig-total="5400000"
+              >
+                <span class="tile" style="--c: var(--jade)"
+                  ><svg aria-hidden="true"><use href="#i-pickaxe" /></svg
+                ></span>
+                <div class="row__main">
+                  <p class="row__title">Mine copper · Mining</p>
+                  <p class="rig__meta">
+                    <svg aria-hidden="true"><use href="#i-gear" /></svg>1 / 7s<span class="sep"
+                      >·</span
+                    ><span data-rig-clock>48m left</span>
+                  </p>
+                  <div class="bar bar--slim rig__bar">
+                    <span class="bar__fill" data-rig-bar style="width: 53%"></span>
+                  </div>
+                </div>
+                <div class="row__end">
+                  <span class="figure figure--sm" data-rig-out>312</span>
+                  <span class="figure__cap">Copper ore</span>
+                </div>
+              </div>
+              <div
+                class="rig"
+                style="--c: var(--amber)"
+                data-rig
+                data-rig-count="96"
+                data-rig-rate="12"
+                data-rig-run="4200000"
+                data-rig-total="7200000"
+              >
+                <span class="tile" style="--c: var(--amber)"
+                  ><svg aria-hidden="true"><use href="#i-anvil" /></svg
+                ></span>
+                <div class="row__main">
+                  <p class="row__title">Smelt bronze bar · Smithing</p>
+                  <p class="rig__meta">
+                    <svg aria-hidden="true"><use href="#i-gear" /></svg>1 / 12s<span class="sep"
+                      >·</span
+                    ><span data-rig-clock>1h 10m left</span>
+                  </p>
+                  <div class="bar bar--slim rig__bar">
+                    <span class="bar__fill" data-rig-bar style="width: 58%"></span>
+                  </div>
+                </div>
+                <div class="row__end">
+                  <span class="figure figure--sm" data-rig-out>96</span>
+                  <span class="figure__cap">Bronze bar</span>
+                </div>
+              </div>
+              <div
+                class="rig rig--still"
+                style="--c: var(--faint)"
+                data-rig
+                data-rig-count="188"
+                data-rig-rate="9"
+                data-rig-run="0"
+                data-rig-total="5400000"
+              >
+                <span class="tile" style="--c: var(--jade)"
+                  ><svg aria-hidden="true"><use href="#i-axe" /></svg
+                ></span>
+                <div class="row__main">
+                  <p class="row__title">Chop willow · Woodcutting</p>
+                  <p class="rig__meta">
+                    <svg aria-hidden="true"><use href="#i-gear" /></svg>1 / 9s<span class="sep"
+                      >·</span
+                    ><span data-rig-clock>still</span>
+                  </p>
+                  <div class="bar bar--slim rig__bar">
+                    <span class="bar__fill" data-rig-bar style="width: 0%"></span>
+                  </div>
+                </div>
+                <div class="row__end">
+                  <span class="figure figure--sm" data-rig-out>188</span>
+                  <span class="figure__cap">Willow logs</span>
+                </div>
+              </div>
+            </div>
+            <div class="panel__body" style="padding-top: 0">
+              <div class="banner banner--warn">
+                <svg aria-hidden="true"><use href="#i-alert" /></svg>
+                <div>
+                  <p class="banner__title">Chop willow is still</p>
+                  <p class="banner__text">
+                    Its run ended 22 minutes ago. One drill restarts it and the logs start piling up
+                    again.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div class="panel__foot">
+              <a class="link" href="profession.html"
+                >Set the next action<svg aria-hidden="true"><use href="#i-arrowRight" /></svg
+              ></a>
+            </div>
+          </section>
+
+          <div class="split split--wide">
+            <!-- Study rhythm -->
+            <section
+              class="panel panel--tint"
+              id="rhythm"
+              style="--c: var(--azure)"
+              aria-labelledby="rhythm-title"
+            >
+              <div class="ribbon">
+                <span class="ribbon__mark"></span>
+                <span class="ribbon__label" id="rhythm-title">Study rhythm</span>
+                <span class="ribbon__tag">14 weeks</span>
+              </div>
+              <div class="map" aria-hidden="true">
+                <span class="map__cell" data-lv="0"></span
+                ><span class="map__cell" data-lv="1"></span
+                ><span class="map__cell" data-lv="2"></span
+                ><span class="map__cell" data-lv="0"></span
+                ><span class="map__cell" data-lv="3"></span
+                ><span class="map__cell" data-lv="1"></span
+                ><span class="map__cell" data-lv="0"></span>
+                <span class="map__cell" data-lv="2"></span
+                ><span class="map__cell" data-lv="3"></span
+                ><span class="map__cell" data-lv="1"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="2"></span
+                ><span class="map__cell" data-lv="1"></span
+                ><span class="map__cell" data-lv="0"></span>
+                <span class="map__cell" data-lv="1"></span
+                ><span class="map__cell" data-lv="2"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="3"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="2"></span
+                ><span class="map__cell" data-lv="1"></span>
+                <span class="map__cell" data-lv="3"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="2"></span
+                ><span class="map__cell" data-lv="1"></span
+                ><span class="map__cell" data-lv="3"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="2"></span>
+                <span class="map__cell" data-lv="2"></span
+                ><span class="map__cell" data-lv="1"></span
+                ><span class="map__cell" data-lv="3"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="3"></span
+                ><span class="map__cell" data-lv="3"></span>
+                <span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="3"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="2"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="4"></span>
+                <span class="map__cell" data-lv="3"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="3"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="3"></span>
+                <span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="3"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="4"></span>
+                <span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="3"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="4"></span>
+                <span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="4"></span>
+                <span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="3"></span
+                ><span class="map__cell" data-lv="4"></span>
+                <span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="4"></span>
+                <span class="map__cell" data-lv="3"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="4"></span>
+                <span class="map__cell" data-lv="2"></span
+                ><span class="map__cell" data-lv="3"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="4"></span
+                ><span class="map__cell" data-lv="2"></span
+                ><span class="map__cell" data-lv="1"></span>
+              </div>
+              <div
+                style="
+                  display: flex;
+                  align-items: center;
+                  justify-content: space-between;
+                  gap: 12px;
+                  margin-top: 12px;
+                "
+              >
+                <span class="legend"
+                  >Less<span class="map__cell" data-lv="0"></span
+                  ><span class="map__cell" data-lv="2"></span
+                  ><span class="map__cell" data-lv="4"></span>More</span
+                >
+                <span class="faint" style="font-size: 0.9rem">Mon → Sun</span>
+              </div>
+              <div class="stat-row stat-row--three" style="margin-top: 12px">
+                <div class="stat">
+                  <div>
+                    <span class="figure">46</span>
+                    <span class="figure__cap">Drills / week</span>
+                  </div>
+                </div>
+                <div class="stat">
+                  <div>
+                    <span class="figure"
+                      >128<span class="faint" style="font-size: 0.9rem">m</span></span
+                    >
+                    <span class="figure__cap">Spoken</span>
+                  </div>
+                </div>
+                <div class="stat">
+                  <div>
+                    <span class="figure">21</span>
+                    <span class="figure__cap">Best streak</span>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- Bank -->
+            <section
+              class="panel panel--tint"
+              id="bank"
+              style="--c: var(--gold)"
+              aria-labelledby="bank-title"
+            >
+              <div class="ribbon">
+                <span class="ribbon__mark"></span>
+                <span class="ribbon__label" id="bank-title">Bank</span>
+                <span class="ribbon__tag">1,204 items</span>
+              </div>
+              <p class="muted">Everything the rigs pulled in. Copper is still filling.</p>
+              <div class="io" style="gap: 8px; margin-top: 12px">
+                <span class="chip" style="--c: var(--jade)"
+                  >Copper ore <b class="chip__n">312</b></span
+                >
+                <span class="chip" style="--c: var(--amber)"
+                  >Bronze bar <b class="chip__n">96</b></span
+                >
+                <span class="chip" style="--c: var(--amber)"
+                  >Iron bar <b class="chip__n">240</b></span
+                >
+                <span class="chip" style="--c: var(--jade)"
+                  >Tin ore <b class="chip__n">240</b></span
+                >
+                <span class="chip" style="--c: var(--jade)"
+                  >Willow logs <b class="chip__n">188</b></span
+                >
+                <span class="chip" style="--c: var(--jade)"
+                  >Oak logs <b class="chip__n">96</b></span
+                >
+                <span class="chip" style="--c: var(--amber)"
+                  >Adamant bar <b class="chip__n">32</b></span
+                >
+              </div>
+              <div class="divider"></div>
+              <div class="kv">
+                <div class="kv__row">
+                  <span class="kv__k">Copper ore, still filling</span>
+                  <span class="kv__v gold" data-bank-live>312</span>
+                </div>
+                <div class="kv__row">
+                  <span class="kv__k">Bank value at market</span>
+                  <span class="kv__v">7,860 gold</span>
+                </div>
+                <div class="kv__row">
+                  <span class="kv__k">Slots used</span>
+                  <span class="kv__v">11 / 28</span>
+                </div>
+              </div>
+              <p style="margin-top: 12px">
+                <a class="link" href="profession.html"
+                  >Spend it at the forge<svg aria-hidden="true"><use href="#i-arrowRight" /></svg
+                ></a>
+              </p>
+            </section>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <button
+      class="scrim"
+      type="button"
+      data-scrim="account"
+      hidden
+      aria-label="Close the menu"
+    ></button>
+    <div
+      class="sheet"
+      id="account"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="account-title"
+      hidden
+    >
+      <div class="sheet__head">
+        <div>
+          <p class="card-title" id="account-title">Dispe</p>
+          <p class="faint">Household of four · this device</p>
+        </div>
+        <button class="sheet__close" type="button" data-sheet-close aria-label="Close the menu">
+          <svg aria-hidden="true"><use href="#i-x" /></svg>
+        </button>
+      </div>
+
+      <div class="stack">
+        <section id="acct-chat" tabindex="-1" style="--c: var(--azure)">
+          <div class="ribbon">
+            <span class="ribbon__mark" style="--c: var(--azure)"></span
+            ><span class="ribbon__label">Chat</span>
+          </div>
+          <p class="muted">
+            Two threads with Aiko. Her last reply was four hours ago, in Japanese.
+          </p>
+          <p style="margin-top: 6px">
+            <a class="link" href="learn.html"
+              >Take it to the Scriptorium<svg aria-hidden="true"><use href="#i-arrowRight" /></svg
+            ></a>
+          </p>
+        </section>
+        <div class="divider"></div>
+        <section id="acct-bank" tabindex="-1" style="--c: var(--gold)">
+          <div class="ribbon">
+            <span class="ribbon__mark" style="--c: var(--gold)"></span
+            ><span class="ribbon__label">Bank</span><span class="ribbon__tag">1,204 items</span>
+          </div>
+          <p class="muted">
+            1,204 items across 11 slots. Copper ore is the only pile still filling.
+          </p>
+          <p style="margin-top: 6px">
+            <a class="link" href="index.html#bank"
+              >Open the ledger<svg aria-hidden="true"><use href="#i-arrowRight" /></svg
+            ></a>
+          </p>
+        </section>
+        <div class="divider"></div>
+        <section id="acct-history" tabindex="-1" style="--c: var(--violet)">
+          <div class="ribbon">
+            <span class="ribbon__mark" style="--c: var(--violet)"></span
+            ><span class="ribbon__label">History</span>
+          </div>
+          <div class="kv">
+            <div class="kv__row">
+              <span class="kv__k">Today · Mine copper</span
+              ><span class="kv__v">3 drills · 24 XP</span>
+            </div>
+            <div class="kv__row">
+              <span class="kv__k">Yesterday · Forge iron sword</span
+              ><span class="kv__v">9 drills · 162 XP</span>
+            </div>
+            <div class="kv__row">
+              <span class="kv__k">Sunday · Scriptorium</span
+              ><span class="kv__v">18 cards · Japanese</span>
+            </div>
+          </div>
+        </section>
+        <div class="divider"></div>
+        <section id="acct-settings" tabindex="-1" style="--c: var(--muted)">
+          <div class="ribbon">
+            <span class="ribbon__mark"></span><span class="ribbon__label">Settings</span>
+          </div>
+          <label class="seg" style="width: 100%">
+            <input type="checkbox" data-motion-toggle />
+            <span>Reduce motion across the forge</span>
+          </label>
+          <p class="faint" style="margin-top: 8px">
+            Fonts, drills and the speech model all run on this machine. Nothing leaves the house.
+          </p>
+        </section>
+      </div>
+    </div>
+  </body>
+</html>

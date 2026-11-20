@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <title>Talents · Tutor</title>
+    <link rel="stylesheet" href="assets/fonts/fonts.css" />
+    <link rel="stylesheet" href="styles/game.css" />
+    <link rel="stylesheet" href="styles/game-ui.css" />
+    <script src="assets/game.js"></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to the page</a>
+
+    <header class="topbar">
+      <a class="brand" href="index.html">
+        <svg class="brand__mark" aria-hidden="true"><use href="#i-spark" /></svg>
+        <span class="brand__word">Tutor</span>
+      </a>
+      <button class="account" type="button" data-sheet-open="account" aria-haspopup="dialog">
+        <span class="stamp" aria-hidden="true">D</span>
+        <span class="sr-only">Account, chat, bank, history and settings</span>
+      </button>
+    </header>
+
+    <nav class="rail" aria-label="Primary">
+      <a class="brand" href="index.html">
+        <svg class="brand__mark" aria-hidden="true"><use href="#i-spark" /></svg>
+        <span class="brand__word">Tutor</span>
+      </a>
+      <a class="rail__link" href="index.html"
+        ><svg aria-hidden="true"><use href="#i-home" /></svg>Home</a
+      >
+      <a class="rail__link" href="skills.html" aria-current="page"
+        ><svg aria-hidden="true"><use href="#i-skills" /></svg>Skills</a
+      >
+      <a class="rail__link" href="learn.html"
+        ><svg aria-hidden="true"><use href="#i-learn" /></svg>Learn</a
+      >
+      <div class="rail__rule"></div>
+      <button
+        class="rail__link"
+        type="button"
+        data-sheet-open="account"
+        data-sheet-section="acct-chat"
+      >
+        <svg aria-hidden="true"><use href="#i-chat" /></svg>Chat
+      </button>
+      <button
+        class="rail__link"
+        type="button"
+        data-sheet-open="account"
+        data-sheet-section="acct-bank"
+      >
+        <svg aria-hidden="true"><use href="#i-bank" /></svg>Bank
+      </button>
+      <button
+        class="rail__link"
+        type="button"
+        data-sheet-open="account"
+        data-sheet-section="acct-history"
+      >
+        <svg aria-hidden="true"><use href="#i-history" /></svg>History
+      </button>
+      <button
+        class="rail__link"
+        type="button"
+        data-sheet-open="account"
+        data-sheet-section="acct-settings"
+      >
+        <svg aria-hidden="true"><use href="#i-settings" /></svg>Settings
+      </button>
+      <div class="rail__foot">
+        <button class="account" type="button" data-sheet-open="account">
+          <span class="stamp" aria-hidden="true">D</span>
+          <span class="account__name">Dispe</span>
+        </button>
+      </div>
+    </nav>
+
+    <div class="app">
+      <nav class="tabbar" aria-label="Primary">
+        <a class="tab" href="index.html"
+          ><svg aria-hidden="true"><use href="#i-home" /></svg>Home</a
+        >
+        <a class="tab" href="skills.html" aria-current="page"
+          ><svg aria-hidden="true"><use href="#i-skills" /></svg>Skills</a
+        >
+        <a class="tab" href="learn.html"
+          ><svg aria-hidden="true"><use href="#i-learn" /></svg>Learn</a
+        >
+      </nav>
+
+      <main class="page" id="main">
+        <p class="breadcrumb">
+          <a href="profession.html"
+            ><svg aria-hidden="true" style="width: 15px; height: 15px">
+              <use href="#i-chevron" /></svg
+            >Mining</a
+          >
+        </p>
+
+        <div class="page-head">
+          <div style="display: flex; align-items: center; gap: 12px">
+            <span class="medallion medallion--lg" aria-hidden="true">34</span>
+            <div>
+              <h1 class="page-title">Talents</h1>
+              <p>Mining · a choice of three every ten levels, then two capstones.</p>
+            </div>
+          </div>
+          <a class="btn btn--primary" href="practice.html"
+            ><svg aria-hidden="true"><use href="#i-play" /></svg>Earn the next level</a
+          >
+        </div>
+
+        <nav class="rail-x" style="--c: var(--jade)" aria-label="Switch profession">
+          <a class="rail-item" href="talents.html" aria-current="true"
+            ><svg aria-hidden="true"><use href="#i-pickaxe" /></svg>Mining</a
+          >
+          <a class="rail-item" href="talents.html"
+            ><svg aria-hidden="true"><use href="#i-axe" /></svg>Woodcutting</a
+          >
+          <a class="rail-item" href="talents.html"
+            ><svg aria-hidden="true"><use href="#i-fish" /></svg>Fishing</a
+          >
+          <a class="rail-item" href="talents.html"
+            ><svg aria-hidden="true"><use href="#i-wheat" /></svg>Farming</a
+          >
+          <a class="rail-item" href="talents.html"
+            ><svg aria-hidden="true"><use href="#i-anvil" /></svg>Smithing</a
+          >
+          <a class="rail-item" href="talents.html"
+            ><svg aria-hidden="true"><use href="#i-pot" /></svg>Cooking</a
+          >
+          <a class="rail-item" href="talents.html"
+            ><svg aria-hidden="true"><use href="#i-flask" /></svg>Herblore</a
+          >
+          <a class="rail-item" href="talents.html"
+            ><svg aria-hidden="true"><use href="#i-fletching" /></svg>Fletching</a
+          >
+          <a class="rail-item" href="talents.html"
+            ><svg aria-hidden="true"><use href="#i-rune" /></svg>Runecraft</a
+          >
+          <a class="rail-item" href="talents.html"
+            ><svg aria-hidden="true"><use href="#i-gem" /></svg>Crafting</a
+          >
+          <a class="rail-item" href="talents.html"
+            ><svg aria-hidden="true"><use href="#i-flame" /></svg>Firemaking</a
+          >
+          <a class="rail-item" href="talents.html"
+            ><svg aria-hidden="true"><use href="#i-hammer" /></svg>Building</a
+          >
+          <a class="rail-item" href="talents.html"
+            ><svg aria-hidden="true"><use href="#i-wand" /></svg>Enchanting</a
+          >
+          <a class="rail-item" href="talents.html"
+            ><svg aria-hidden="true"><use href="#i-mask" /></svg>Thieving</a
+          >
+          <a class="rail-item" href="talents.html"
+            ><svg aria-hidden="true"><use href="#i-boot" /></svg>Agility</a
+          >
+          <a class="rail-item" href="talents.html"
+            ><svg aria-hidden="true"><use href="#i-sword" /></svg>Attack</a
+          >
+          <a class="rail-item" href="talents.html"
+            ><svg aria-hidden="true"><use href="#i-fist" /></svg>Strength</a
+          >
+          <a class="rail-item" href="talents.html"
+            ><svg aria-hidden="true"><use href="#i-shield" /></svg>Defence</a
+          >
+          <a class="rail-item" href="talents.html"
+            ><svg aria-hidden="true"><use href="#i-heart" /></svg>Constitution</a
+          >
+          <a class="rail-item" href="talents.html"
+            ><svg aria-hidden="true"><use href="#i-bow" /></svg>Ranged</a
+          >
+          <a class="rail-item" href="talents.html"
+            ><svg aria-hidden="true"><use href="#i-staff" /></svg>Magic</a
+          >
+          <a class="rail-item" href="talents.html"
+            ><svg aria-hidden="true"><use href="#i-prayer" /></svg>Prayer</a
+          >
+          <a class="rail-item" href="talents.html"
+            ><svg aria-hidden="true"><use href="#i-skull" /></svg>Slayer</a
+          >
+        </nav>
+
+        <section
+          class="panel panel--tint"
+          style="--c: var(--violet); margin-top: 14px"
+          aria-labelledby="ladder-title"
+        >
+          <div class="ribbon">
+            <span class="ribbon__mark"></span>
+            <span class="ribbon__label" id="ladder-title">The ladder</span>
+            <span class="ribbon__tag" data-talent-log>2 of 10 bound</span>
+          </div>
+
+          <ol class="ladder" data-ladder="Mining">
+            <li class="node node--done">
+              <span class="node__pin" aria-hidden="true">10</span>
+              <div class="node__card">
+                <p class="node__status">
+                  <svg aria-hidden="true" style="width: 14px; height: 14px">
+                    <use href="#i-check" /></svg
+                  >Lv 10 · bound
+                </p>
+                <p class="choice__name" style="margin-top: 6px">Prospector</p>
+                <p class="choice__desc">
+                  +15% ore yield from every drill. Bound here, and it stays bound.
+                </p>
+              </div>
+            </li>
+            <li class="node node--done">
+              <span class="node__pin" aria-hidden="true">20</span>
+              <div class="node__card">
+                <p class="node__status">
+                  <svg aria-hidden="true" style="width: 14px; height: 14px">
+                    <use href="#i-check" /></svg
+                  >Lv 20 · bound
+                </p>
+                <p class="choice__name" style="margin-top: 6px">Studious</p>
+                <p class="choice__desc">
+                  +5% XP to every profession, not only Mining. The slow compounding pick.
+                </p>
+              </div>
+            </li>
+            <li class="node node--open">
+              <span class="node__pin" aria-hidden="true">30</span>
+              <div class="node__card">
+                <p class="node__status">
+                  <svg aria-hidden="true" style="width: 14px; height: 14px">
+                    <use href="#i-spark" /></svg
+                  >Lv 30 · waiting on you
+                </p>
+                <p class="muted" style="font-size: 0.9rem; margin-top: 6px">
+                  Pick one. You can respec the open node until a second talent is bound.
+                </p>
+                <div class="choices">
+                  <button
+                    class="choice"
+                    type="button"
+                    data-choice="m30-prospector"
+                    aria-pressed="false"
+                  >
+                    <span class="choice__mark"
+                      ><svg aria-hidden="true"><use href="#i-plus" /></svg
+                    ></span>
+                    <span>
+                      <span class="choice__name">Prospector, deepened</span>
+                      <span class="choice__desc"
+                        >A further +15% ore yield. Stacks with the Lv 10 pick for +30%.</span
+                      >
+                    </span>
+                  </button>
+                  <button
+                    class="choice"
+                    type="button"
+                    data-choice="m30-studious"
+                    aria-pressed="false"
+                  >
+                    <span class="choice__mark"
+                      ><svg aria-hidden="true"><use href="#i-plus" /></svg
+                    ></span>
+                    <span>
+                      <span class="choice__name">Studious, deepened</span>
+                      <span class="choice__desc"
+                        >A further +5% XP to every profession, for +10% in total.</span
+                      >
+                    </span>
+                  </button>
+                  <button
+                    class="choice"
+                    type="button"
+                    data-choice="m30-synergy"
+                    aria-pressed="false"
+                  >
+                    <span class="choice__mark"
+                      ><svg aria-hidden="true"><use href="#i-plus" /></svg
+                    ></span>
+                    <span>
+                      <span class="choice__name">Deep seams</span>
+                      <span class="choice__desc"
+                        >Smithing gains +0.5% XP for every Mining level. Follows the level, not the
+                        pick.</span
+                      >
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </li>
+            <li class="node node--locked">
+              <span class="node__pin" aria-hidden="true">40</span>
+              <div class="node__card">
+                <p class="node__status">
+                  <svg aria-hidden="true" style="width: 14px; height: 14px">
+                    <use href="#i-lock" /></svg
+                  >Lv 40 · locked
+                </p>
+                <p class="choice__desc" style="margin-top: 6px">
+                  Prospector, deepened · Studious, deepened · Deep seams
+                </p>
+              </div>
+            </li>
+            <li class="node node--locked">
+              <span class="node__pin" aria-hidden="true">50</span>
+              <div class="node__card">
+                <p class="node__status">
+                  <svg aria-hidden="true" style="width: 14px; height: 14px">
+                    <use href="#i-lock" /></svg
+                  >Lv 50 · capstone
+                </p>
+                <p class="choice__name" style="margin-top: 6px">Guild charter</p>
+                <p class="choice__desc">
+                  +8% XP to every artisan profession. Gated on Smithing 40 — you have 41, but the
+                  level must come first.
+                </p>
+              </div>
+            </li>
+            <li class="node node--locked">
+              <span class="node__pin" aria-hidden="true">60</span>
+              <div class="node__card">
+                <p class="node__status">
+                  <svg aria-hidden="true" style="width: 14px; height: 14px">
+                    <use href="#i-lock" /></svg
+                  >Lv 60 · locked
+                </p>
+                <p class="choice__desc" style="margin-top: 6px">
+                  Prospector, deepened · Studious, deepened · Deep seams
+                </p>
+              </div>
+            </li>
+            <li class="node node--locked">
+              <span class="node__pin" aria-hidden="true">70</span>
+              <div class="node__card">
+                <p class="node__status">
+                  <svg aria-hidden="true" style="width: 14px; height: 14px">
+                    <use href="#i-lock" /></svg
+                  >Lv 70 · locked
+                </p>
+                <p class="choice__desc" style="margin-top: 6px">
+                  Prospector, deepened · Studious, deepened · Deep seams
+                </p>
+              </div>
+            </li>
+            <li class="node node--locked">
+              <span class="node__pin" aria-hidden="true">80</span>
+              <div class="node__card">
+                <p class="node__status">
+                  <svg aria-hidden="true" style="width: 14px; height: 14px">
+                    <use href="#i-lock" /></svg
+                  >Lv 80 · locked
+                </p>
+                <p class="choice__desc" style="margin-top: 6px">
+                  Prospector, deepened · Studious, deepened · Deep seams
+                </p>
+              </div>
+            </li>
+            <li class="node node--locked">
+              <span class="node__pin" aria-hidden="true">90</span>
+              <div class="node__card">
+                <p class="node__status">
+                  <svg aria-hidden="true" style="width: 14px; height: 14px">
+                    <use href="#i-lock" /></svg
+                  >Lv 90 · locked
+                </p>
+                <p class="choice__desc" style="margin-top: 6px">
+                  Prospector, deepened · Studious, deepened · Deep seams
+                </p>
+              </div>
+            </li>
+            <li class="node node--locked">
+              <span class="node__pin" aria-hidden="true">100</span>
+              <div class="node__card">
+                <p class="node__status">
+                  <svg aria-hidden="true" style="width: 14px; height: 14px">
+                    <use href="#i-lock" /></svg
+                  >Lv 100 · capstone
+                </p>
+                <p class="choice__name" style="margin-top: 6px">The Long Watch</p>
+                <p class="choice__desc">
+                  Every gathering profession yields +25%. Gated on Smithing 100, so the two trades
+                  finish together.
+                </p>
+              </div>
+            </li>
+          </ol>
+
+          <div class="divider"></div>
+          <div class="btn-row">
+            <a class="btn btn--ghost btn--sm" href="profession.html">Back to the actions</a>
+            <button class="btn btn--ghost btn--sm" type="button" data-respec>
+              Respec the open node
+            </button>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <button
+      class="scrim"
+      type="button"
+      data-scrim="account"
+      hidden
+      aria-label="Close the menu"
+    ></button>
+    <div
+      class="sheet"
+      id="account"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="account-title"
+      hidden
+    >
+      <div class="sheet__head">
+        <div>
+          <p class="card-title" id="account-title">Dispe</p>
+          <p class="faint">Household of four · this device</p>
+        </div>
+        <button class="sheet__close" type="button" data-sheet-close aria-label="Close the menu">
+          <svg aria-hidden="true"><use href="#i-x" /></svg>
+        </button>
+      </div>
+      <div class="stack">
+        <section id="acct-chat" tabindex="-1" style="--c: var(--azure)">
+          <div class="ribbon">
+            <span class="ribbon__mark" style="--c: var(--azure)"></span
+            ><span class="ribbon__label">Chat</span>
+          </div>
+          <p class="muted">
+            Two threads with Aiko. Her last reply was four hours ago, in Japanese.
+          </p>
+          <p style="margin-top: 6px">
+            <a class="link" href="learn.html"
+              >Take it to the Scriptorium<svg aria-hidden="true"><use href="#i-arrowRight" /></svg
+            ></a>
+          </p>
+        </section>
+        <div class="divider"></div>
+        <section id="acct-bank" tabindex="-1" style="--c: var(--gold)">
+          <div class="ribbon">
+            <span class="ribbon__mark" style="--c: var(--gold)"></span
+            ><span class="ribbon__label">Bank</span><span class="ribbon__tag">1,204 items</span>
+          </div>
+          <p class="muted">
+            1,204 items across 11 slots. Copper ore is the only pile still filling.
+          </p>
+          <p style="margin-top: 6px">
+            <a class="link" href="index.html#bank"
+              >Open the ledger<svg aria-hidden="true"><use href="#i-arrowRight" /></svg
+            ></a>
+          </p>
+        </section>
+        <div class="divider"></div>
+        <section id="acct-history" tabindex="-1" style="--c: var(--violet)">
+          <div class="ribbon">
+            <span class="ribbon__mark" style="--c: var(--violet)"></span
+            ><span class="ribbon__label">History</span>
+          </div>
+          <div class="kv">
+            <div class="kv__row">
+              <span class="kv__k">Today · Mine copper</span
+              ><span class="kv__v">3 drills · 24 XP</span>
+            </div>
+            <div class="kv__row">
+              <span class="kv__k">Yesterday · Forge iron sword</span
+              ><span class="kv__v">9 drills · 162 XP</span>
+            </div>
+            <div class="kv__row">
+              <span class="kv__k">Sunday · Scriptorium</span
+              ><span class="kv__v">18 cards · Japanese</span>
+            </div>
+          </div>
+        </section>
+        <div class="divider"></div>
+        <section id="acct-settings" tabindex="-1" style="--c: var(--muted)">
+          <div class="ribbon">
+            <span class="ribbon__mark"></span><span class="ribbon__label">Settings</span>
+          </div>
+          <label class="seg" style="width: 100%">
+            <input type="checkbox" data-motion-toggle />
+            <span>Reduce motion across the forge</span>
+          </label>
+          <p class="faint" style="margin-top: 8px">
+            Fonts, drills and the speech model all run on this machine. Nothing leaves the house.
+          </p>
+        </section>
+      </div>
+    </div>
+  </body>
+</html>

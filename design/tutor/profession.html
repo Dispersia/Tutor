@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <title>Mining · Tutor</title>
+    <link rel="stylesheet" href="assets/fonts/fonts.css" />
+    <link rel="stylesheet" href="styles/game.css" />
+    <link rel="stylesheet" href="styles/game-ui.css" />
+    <script src="assets/game.js"></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to the page</a>
+
+    <header class="topbar">
+      <a class="brand" href="index.html">
+        <svg class="brand__mark" aria-hidden="true"><use href="#i-spark" /></svg>
+        <span class="brand__word">Tutor</span>
+      </a>
+      <button class="account" type="button" data-sheet-open="account" aria-haspopup="dialog">
+        <span class="stamp" aria-hidden="true">D</span>
+        <span class="sr-only">Account, chat, bank, history and settings</span>
+      </button>
+    </header>
+
+    <nav class="rail" aria-label="Primary">
+      <a class="brand" href="index.html">
+        <svg class="brand__mark" aria-hidden="true"><use href="#i-spark" /></svg>
+        <span class="brand__word">Tutor</span>
+      </a>
+      <a class="rail__link" href="index.html"
+        ><svg aria-hidden="true"><use href="#i-home" /></svg>Home</a
+      >
+      <a class="rail__link" href="skills.html" aria-current="page"
+        ><svg aria-hidden="true"><use href="#i-skills" /></svg>Skills</a
+      >
+      <a class="rail__link" href="learn.html"
+        ><svg aria-hidden="true"><use href="#i-learn" /></svg>Learn</a
+      >
+      <div class="rail__rule"></div>
+      <button
+        class="rail__link"
+        type="button"
+        data-sheet-open="account"
+        data-sheet-section="acct-chat"
+      >
+        <svg aria-hidden="true"><use href="#i-chat" /></svg>Chat
+      </button>
+      <button
+        class="rail__link"
+        type="button"
+        data-sheet-open="account"
+        data-sheet-section="acct-bank"
+      >
+        <svg aria-hidden="true"><use href="#i-bank" /></svg>Bank
+      </button>
+      <button
+        class="rail__link"
+        type="button"
+        data-sheet-open="account"
+        data-sheet-section="acct-history"
+      >
+        <svg aria-hidden="true"><use href="#i-history" /></svg>History
+      </button>
+      <button
+        class="rail__link"
+        type="button"
+        data-sheet-open="account"
+        data-sheet-section="acct-settings"
+      >
+        <svg aria-hidden="true"><use href="#i-settings" /></svg>Settings
+      </button>
+      <div class="rail__foot">
+        <button class="account" type="button" data-sheet-open="account">
+          <span class="stamp" aria-hidden="true">D</span>
+          <span class="account__name">Dispe</span>
+        </button>
+      </div>
+    </nav>
+
+    <div class="app">
+      <nav class="tabbar" aria-label="Primary">
+        <a class="tab" href="index.html"
+          ><svg aria-hidden="true"><use href="#i-home" /></svg>Home</a
+        >
+        <a class="tab" href="skills.html" aria-current="page"
+          ><svg aria-hidden="true"><use href="#i-skills" /></svg>Skills</a
+        >
+        <a class="tab" href="learn.html"
+          ><svg aria-hidden="true"><use href="#i-learn" /></svg>Learn</a
+        >
+      </nav>
+
+      <main class="page" id="main">
+        <p class="breadcrumb">
+          <a href="skills.html"
+            ><svg aria-hidden="true" style="width: 15px; height: 15px">
+              <use href="#i-chevron" /></svg
+            >All professions</a
+          >
+        </p>
+
+        <div class="page-head">
+          <div style="display: flex; align-items: center; gap: 12px">
+            <span class="medallion medallion--lg" aria-hidden="true">34</span>
+            <div>
+              <h1 class="page-title">Mining</h1>
+              <p>+1% gathered per level · next level in 2,140 XP</p>
+            </div>
+          </div>
+        </div>
+
+        <nav class="rail-x" style="--c: var(--jade)" aria-label="Switch profession">
+          <a class="rail-item" href="profession.html" aria-current="true"
+            ><svg aria-hidden="true"><use href="#i-pickaxe" /></svg>Mining</a
+          >
+          <a class="rail-item" href="profession.html"
+            ><svg aria-hidden="true"><use href="#i-axe" /></svg>Woodcutting</a
+          >
+          <a class="rail-item" href="profession.html"
+            ><svg aria-hidden="true"><use href="#i-fish" /></svg>Fishing</a
+          >
+          <a class="rail-item" href="profession.html"
+            ><svg aria-hidden="true"><use href="#i-wheat" /></svg>Farming</a
+          >
+          <a class="rail-item" href="profession.html"
+            ><svg aria-hidden="true"><use href="#i-anvil" /></svg>Smithing</a
+          >
+          <a class="rail-item" href="profession.html"
+            ><svg aria-hidden="true"><use href="#i-pot" /></svg>Cooking</a
+          >
+          <a class="rail-item" href="profession.html"
+            ><svg aria-hidden="true"><use href="#i-flask" /></svg>Herblore</a
+          >
+          <a class="rail-item" href="profession.html"
+            ><svg aria-hidden="true"><use href="#i-fletching" /></svg>Fletching</a
+          >
+          <a class="rail-item" href="profession.html"
+            ><svg aria-hidden="true"><use href="#i-rune" /></svg>Runecraft</a
+          >
+          <a class="rail-item" href="profession.html"
+            ><svg aria-hidden="true"><use href="#i-gem" /></svg>Crafting</a
+          >
+          <a class="rail-item" href="profession.html"
+            ><svg aria-hidden="true"><use href="#i-flame" /></svg>Firemaking</a
+          >
+          <a class="rail-item" href="profession.html"
+            ><svg aria-hidden="true"><use href="#i-hammer" /></svg>Building</a
+          >
+          <a class="rail-item" href="profession.html"
+            ><svg aria-hidden="true"><use href="#i-wand" /></svg>Enchanting</a
+          >
+          <a class="rail-item" href="profession.html"
+            ><svg aria-hidden="true"><use href="#i-mask" /></svg>Thieving</a
+          >
+          <a class="rail-item" href="profession.html"
+            ><svg aria-hidden="true"><use href="#i-boot" /></svg>Agility</a
+          >
+          <a class="rail-item" href="profession.html"
+            ><svg aria-hidden="true"><use href="#i-sword" /></svg>Attack</a
+          >
+          <a class="rail-item" href="profession.html"
+            ><svg aria-hidden="true"><use href="#i-fist" /></svg>Strength</a
+          >
+          <a class="rail-item" href="profession.html"
+            ><svg aria-hidden="true"><use href="#i-shield" /></svg>Defence</a
+          >
+          <a class="rail-item" href="profession.html"
+            ><svg aria-hidden="true"><use href="#i-heart" /></svg>Constitution</a
+          >
+          <a class="rail-item" href="profession.html"
+            ><svg aria-hidden="true"><use href="#i-bow" /></svg>Ranged</a
+          >
+          <a class="rail-item" href="profession.html"
+            ><svg aria-hidden="true"><use href="#i-staff" /></svg>Magic</a
+          >
+          <a class="rail-item" href="profession.html"
+            ><svg aria-hidden="true"><use href="#i-prayer" /></svg>Prayer</a
+          >
+          <a class="rail-item" href="profession.html"
+            ><svg aria-hidden="true"><use href="#i-skull" /></svg>Slayer</a
+          >
+        </nav>
+
+        <div class="stack" style="margin-top: 14px">
+          <!-- The action in hand, and its live rig -->
+          <section class="panel panel--tint" style="--c: var(--jade)" aria-labelledby="run-title">
+            <div class="ribbon">
+              <span class="ribbon__mark"></span>
+              <span class="ribbon__label" id="run-title">Running now</span>
+              <span class="ribbon__tag">Tier 1 · 8 XP</span>
+            </div>
+            <div
+              class="rig"
+              style="border-top: 0; --c: var(--jade)"
+              data-rig
+              data-rig-count="312"
+              data-rig-rate="7"
+              data-rig-run="2880000"
+              data-rig-total="5400000"
+            >
+              <span class="tile"
+                ><svg aria-hidden="true"><use href="#i-pickaxe" /></svg
+              ></span>
+              <div class="row__main">
+                <p class="row__title">Mine copper</p>
+                <p class="rig__meta">
+                  <svg aria-hidden="true"><use href="#i-gear" /></svg>1 / 7s<span class="sep"
+                    >·</span
+                  ><span data-rig-clock>48m left</span>
+                </p>
+                <div class="bar bar--slim rig__bar">
+                  <span class="bar__fill" data-rig-bar style="width: 53%"></span>
+                </div>
+              </div>
+              <div class="row__end">
+                <span class="figure figure--sm" data-rig-out>312</span>
+                <span class="figure__cap">Copper ore</span>
+              </div>
+            </div>
+            <p class="muted" style="margin-top: 12px">
+              A correct drill lands a strike and adds eight minutes to the run. The rig keeps
+              pulling copper ore while you are away.
+            </p>
+            <div class="btn-row" style="margin-top: 12px">
+              <a class="btn btn--primary" href="practice.html"
+                ><svg aria-hidden="true"><use href="#i-play" /></svg>Drill Mine copper</a
+              >
+            </div>
+          </section>
+
+          <!-- Talents summary -->
+          <section
+            class="panel panel--tint"
+            style="--c: var(--violet)"
+            aria-labelledby="talents-teaser"
+          >
+            <div class="ribbon">
+              <span class="ribbon__mark"></span>
+              <span class="ribbon__label" id="talents-teaser">Talents</span>
+              <span class="ribbon__tag">2 of 10 bound</span>
+            </div>
+            <div class="kv">
+              <div class="kv__row">
+                <span class="kv__k">Prospector · bound at Lv 10</span
+                ><span class="kv__v">+15% copper yield</span>
+              </div>
+              <div class="kv__row">
+                <span class="kv__k">Studious · bound at Lv 20</span
+                ><span class="kv__v">+5% XP, all professions</span>
+              </div>
+              <div class="kv__row">
+                <span class="kv__k">Open now · Lv 30</span
+                ><span class="kv__v">3 choices waiting</span>
+              </div>
+            </div>
+            <p style="margin-top: 12px">
+              <a class="link" href="talents.html"
+                >Open the talent ladder<svg aria-hidden="true"><use href="#i-arrowRight" /></svg
+              ></a>
+            </p>
+          </section>
+
+          <!-- Actions -->
+          <section
+            class="panel panel--flush"
+            style="--c: var(--jade)"
+            aria-labelledby="actions-title"
+          >
+            <div class="panel__body" style="padding-bottom: 10px">
+              <div class="ribbon">
+                <span class="ribbon__mark" style="--c: var(--jade)"></span>
+                <span class="ribbon__label" id="actions-title">Actions</span>
+                <span class="ribbon__tag">5 · 1 locked</span>
+              </div>
+              <p class="faint" style="font-size: 0.9rem">
+                Training any action gives you the next drill. A correct answer awards that action's
+                XP and materials.
+              </p>
+            </div>
+            <div class="panel__body" style="padding-top: 0">
+              <a class="action" href="practice.html">
+                <span class="action__tier" aria-hidden="true">1</span>
+                <span class="row__main">
+                  <span class="row__title">Mine copper</span>
+                  <span class="row__sub">Mining 1 · 8 XP a drill</span>
+                  <span class="io"
+                    ><span class="chip">Copper ore<b class="chip__n">×1</b></span></span
+                  >
+                </span>
+                <svg class="listlink__chev" aria-hidden="true"><use href="#i-chevron" /></svg>
+              </a>
+              <a class="action" href="practice.html">
+                <span class="action__tier" aria-hidden="true">1</span>
+                <span class="row__main">
+                  <span class="row__title">Mine rune essence</span>
+                  <span class="row__sub">Mining 1 · 6 XP a drill</span>
+                  <span class="io"
+                    ><span class="chip">Rune essence<b class="chip__n">×1</b></span></span
+                  >
+                </span>
+                <svg class="listlink__chev" aria-hidden="true"><use href="#i-chevron" /></svg>
+              </a>
+              <a class="action" href="practice.html">
+                <span class="action__tier" aria-hidden="true">2</span>
+                <span class="row__main">
+                  <span class="row__title">Mine iron</span>
+                  <span class="row__sub">Needs Mining 5 · 12 XP a drill</span>
+                  <span class="io"
+                    ><span class="chip">Iron ore<b class="chip__n">×1</b></span></span
+                  >
+                </span>
+                <svg class="listlink__chev" aria-hidden="true"><use href="#i-chevron" /></svg>
+              </a>
+              <a class="action" href="practice.html">
+                <span class="action__tier" aria-hidden="true">3</span>
+                <span class="row__main">
+                  <span class="row__title">Mine coal</span>
+                  <span class="row__sub">Needs Mining 15 · 16 XP a drill</span>
+                  <span class="io"
+                    ><span class="chip">Coal<b class="chip__n">×1</b></span></span
+                  >
+                </span>
+                <svg class="listlink__chev" aria-hidden="true"><use href="#i-chevron" /></svg>
+              </a>
+              <div class="action action--locked">
+                <span class="action__tier" aria-hidden="true">5</span>
+                <span class="row__main">
+                  <span class="row__title">Mine adamant</span>
+                  <span class="row__sub">Needs Mining 40 · you are 6 levels short</span>
+                  <span class="io">
+                    <span class="chip chip--plain"
+                      ><svg aria-hidden="true" style="width: 14px; height: 14px">
+                        <use href="#i-lock" /></svg
+                      >Locked</span
+                    >
+                    <span class="chip chip--plain">Adamant ore ×1</span>
+                  </span>
+                </span>
+              </div>
+            </div>
+          </section>
+
+          <!-- Cross-profession shape -->
+          <section class="panel" style="--c: var(--amber)" aria-labelledby="feeds-title">
+            <div class="ribbon">
+              <span class="ribbon__mark" style="--c: var(--amber)"></span>
+              <span class="ribbon__label" id="feeds-title">Feeds Smithing</span>
+              <span class="ribbon__tag">+0.5% / level</span>
+            </div>
+            <p class="muted">
+              Every mining level feeds the Deep seams synergy. Smithing actions spend what you pull
+              out of the rock.
+            </p>
+            <div class="row" style="margin-top: 6px">
+              <span class="tile" style="--c: var(--amber)"
+                ><svg aria-hidden="true"><use href="#i-anvil" /></svg
+              ></span>
+              <div class="row__main">
+                <p class="row__title">Forge iron sword</p>
+                <p class="row__sub">Needs Smithing 10 · 18 XP · spends 20 iron bar</p>
+              </div>
+              <span class="figure figure--sm">Ready</span>
+            </div>
+            <div class="row">
+              <span class="tile" style="--c: var(--amber)"
+                ><svg aria-hidden="true"><use href="#i-anvil" /></svg
+              ></span>
+              <div class="row__main">
+                <p class="row__title">Forge adamant platebody</p>
+                <p class="row__sub">
+                  Needs Smithing 40 and Mining 35 · 44 XP · spends 38 adamant bar
+                </p>
+              </div>
+              <span class="figure figure--sm faint">1 level short</span>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <button
+      class="scrim"
+      type="button"
+      data-scrim="account"
+      hidden
+      aria-label="Close the menu"
+    ></button>
+    <div
+      class="sheet"
+      id="account"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="account-title"
+      hidden
+    >
+      <div class="sheet__head">
+        <div>
+          <p class="card-title" id="account-title">Dispe</p>
+          <p class="faint">Household of four · this device</p>
+        </div>
+        <button class="sheet__close" type="button" data-sheet-close aria-label="Close the menu">
+          <svg aria-hidden="true"><use href="#i-x" /></svg>
+        </button>
+      </div>
+      <div class="stack">
+        <section id="acct-chat" tabindex="-1" style="--c: var(--azure)">
+          <div class="ribbon">
+            <span class="ribbon__mark" style="--c: var(--azure)"></span
+            ><span class="ribbon__label">Chat</span>
+          </div>
+          <p class="muted">
+            Two threads with Aiko. Her last reply was four hours ago, in Japanese.
+          </p>
+          <p style="margin-top: 6px">
+            <a class="link" href="learn.html"
+              >Take it to the Scriptorium<svg aria-hidden="true"><use href="#i-arrowRight" /></svg
+            ></a>
+          </p>
+        </section>
+        <div class="divider"></div>
+        <section id="acct-bank" tabindex="-1" style="--c: var(--gold)">
+          <div class="ribbon">
+            <span class="ribbon__mark" style="--c: var(--gold)"></span
+            ><span class="ribbon__label">Bank</span><span class="ribbon__tag">1,204 items</span>
+          </div>
+          <p class="muted">
+            1,204 items across 11 slots. Copper ore is the only pile still filling.
+          </p>
+          <p style="margin-top: 6px">
+            <a class="link" href="index.html#bank"
+              >Open the ledger<svg aria-hidden="true"><use href="#i-arrowRight" /></svg
+            ></a>
+          </p>
+        </section>
+        <div class="divider"></div>
+        <section id="acct-history" tabindex="-1" style="--c: var(--violet)">
+          <div class="ribbon">
+            <span class="ribbon__mark" style="--c: var(--violet)"></span
+            ><span class="ribbon__label">History</span>
+          </div>
+          <div class="kv">
+            <div class="kv__row">
+              <span class="kv__k">Today · Mine copper</span
+              ><span class="kv__v">3 drills · 24 XP</span>
+            </div>
+            <div class="kv__row">
+              <span class="kv__k">Yesterday · Forge iron sword</span
+              ><span class="kv__v">9 drills · 162 XP</span>
+            </div>
+            <div class="kv__row">
+              <span class="kv__k">Sunday · Scriptorium</span
+              ><span class="kv__v">18 cards · Japanese</span>
+            </div>
+          </div>
+        </section>
+        <div class="divider"></div>
+        <section id="acct-settings" tabindex="-1" style="--c: var(--muted)">
+          <div class="ribbon">
+            <span class="ribbon__mark"></span><span class="ribbon__label">Settings</span>
+          </div>
+          <label class="seg" style="width: 100%">
+            <input type="checkbox" data-motion-toggle />
+            <span>Reduce motion across the forge</span>
+          </label>
+          <p class="faint" style="margin-top: 8px">
+            Fonts, drills and the speech model all run on this machine. Nothing leaves the house.
+          </p>
+        </section>
+      </div>
+    </div>
+  </body>
+</html>

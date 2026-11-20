@@ -1,0 +1,806 @@
+/* ==========================================================================
+   Tutor — UI set
+   Forms, sheets, the character cell, the talent ladder, and the rails.
+   Loaded after game.css.
+   ========================================================================== */
+
+/* --- 1. Forms ------------------------------------------------------------ */
+
+.field {
+  display: grid;
+  gap: 7px;
+}
+
+.field__label {
+  font: 600 var(--step-label) / 1.4 var(--font-body);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.field__hint {
+  color: var(--faint);
+  font-size: var(--step-2);
+}
+
+.input,
+.textarea,
+.select {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: var(--r-input);
+  border: 1px solid var(--border-hi);
+  background: var(--bg-deep);
+  color: var(--fg);
+  font: 400 var(--step-body) / 1.5 var(--font-body);
+}
+
+.textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.input::placeholder,
+.textarea::placeholder {
+  color: var(--faint);
+}
+
+.input:focus,
+.textarea:focus,
+.select:focus {
+  outline: 2px solid var(--ember);
+  outline-offset: 1px;
+  border-color: var(--ember);
+}
+
+.input--answer {
+  font-family: var(--font-display);
+  font-size: 1.125rem;
+  letter-spacing: 0;
+  line-height: 1.3;
+}
+
+.input[aria-invalid='true'],
+.textarea[aria-invalid='true'] {
+  border-color: var(--crimson);
+}
+
+.field__err {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--crimson);
+  font-size: var(--step-2);
+}
+
+.field__err svg {
+  width: 17px;
+  height: 17px;
+  flex: none;
+  margin-top: 1px;
+}
+
+.seg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.seg label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 13px;
+  border-radius: var(--r-btn);
+  border: 1px solid var(--border-hi);
+  background: var(--surface-2);
+  color: var(--muted);
+  font: 600 var(--step-2) / 1 var(--font-display);
+  cursor: pointer;
+}
+
+.seg input {
+  accent-color: var(--ember);
+  width: 17px;
+  height: 17px;
+}
+
+.seg label:hover {
+  color: var(--fg);
+}
+
+.seg label:has(input:checked) {
+  background: color-mix(in oklab, var(--c) 16%, var(--surface));
+  border-color: var(--c);
+  color: var(--fg);
+}
+
+/* --- 2. Character cell: the signature ------------------------------------ */
+
+.cell {
+  --cell-size: 104px;
+  position: relative;
+  display: grid;
+  place-items: center;
+  gap: 5px;
+  min-width: var(--cell-size);
+  min-height: var(--cell-size);
+  padding: 14px 16px;
+  border-radius: var(--r-card);
+  background: color-mix(in oklab, var(--c) 10%, var(--surface));
+  border: 1px solid color-mix(in oklab, var(--c) 65%, var(--border));
+  text-align: center;
+}
+
+/* Faint cross guides, 12% inset. Two hairlines, no gradient. */
+.cell::before,
+.cell::after {
+  content: '';
+  position: absolute;
+  background: color-mix(in oklab, var(--c) 40%, transparent);
+  pointer-events: none;
+}
+
+.cell::before {
+  left: 50%;
+  top: 12%;
+  bottom: 12%;
+  width: 1px;
+  transform: translateX(-50%);
+}
+
+.cell::after {
+  top: 50%;
+  left: 12%;
+  right: 12%;
+  height: 1px;
+  transform: translateY(-50%);
+}
+
+.cell__glyph {
+  position: relative;
+  font-family: var(--font-display);
+  font-size: 2rem;
+  line-height: 1.3;
+  letter-spacing: 0;
+  color: var(--fg);
+}
+
+.cell--word .cell__glyph {
+  font-size: 1.65rem;
+}
+
+.cell__reading {
+  position: relative;
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  line-height: 1.4;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+
+.cell--sm {
+  --cell-size: 76px;
+  padding: 10px 12px;
+}
+
+.cell--sm .cell__glyph {
+  font-size: 1.5rem;
+}
+
+.cell--lg {
+  --cell-size: 132px;
+}
+
+.cell--lg .cell__glyph {
+  font-size: 2.5rem;
+}
+
+.cell-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 12px;
+}
+
+/* --- 3. Profession rail -------------------------------------------------- */
+
+.rail-x {
+  display: flex;
+  gap: 8px;
+  margin: 0 calc(var(--gutter) * -1);
+  padding: 2px var(--gutter) 4px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+}
+
+.rail-x::-webkit-scrollbar {
+  display: none;
+}
+
+.rail-item {
+  flex: none;
+  scroll-snap-align: start;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  min-width: 68px;
+  min-height: 76px;
+  padding: 8px 6px;
+  border-radius: var(--r-card);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--faint);
+  font: 600 0.82rem / 1.2 var(--font-body);
+}
+
+.rail-item svg {
+  width: 22px;
+  height: 22px;
+}
+
+.rail-item:hover {
+  color: var(--fg);
+  border-color: var(--border-hi);
+}
+
+.rail-item[aria-current='true'] {
+  background: color-mix(in oklab, var(--c) 14%, var(--surface));
+  border-color: var(--c);
+  color: var(--c);
+}
+
+/* --- 4. Group heading ---------------------------------------------------- */
+
+.group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 22px 0 10px;
+}
+
+.group:first-child {
+  margin-top: 0;
+}
+
+.group__title {
+  font: 600 var(--step-label) / 1 var(--font-body);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.group__rule {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* --- 5. List links (a whole row is the target) --------------------------- */
+
+.listlink {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+
+.listlink:first-child {
+  border-top: 0;
+}
+
+.listlink:hover .row__title {
+  color: var(--c);
+}
+
+.listlink__chev {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  color: var(--faint);
+}
+
+/* --- 6. Action entry ----------------------------------------------------- */
+
+.action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: var(--r-card);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.action + .action {
+  margin-top: 10px;
+}
+
+.action--locked {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--faint);
+}
+
+.action--locked .row__title,
+.action--locked .row__sub {
+  color: var(--faint);
+}
+
+.action__tier {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: 9px;
+  border: 1px solid color-mix(in oklab, var(--c) 55%, var(--border));
+  background: color-mix(in oklab, var(--c) 12%, var(--surface));
+  color: var(--c);
+  font: 700 var(--step-2) / 1 var(--font-display);
+}
+
+.action--locked .action__tier {
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--faint);
+}
+
+.io {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.io__arrow {
+  width: 15px;
+  height: 15px;
+  align-self: center;
+  color: var(--faint);
+}
+
+/* --- 7. Talent ladder ---------------------------------------------------- */
+
+.ladder {
+  position: relative;
+  display: grid;
+  gap: 12px;
+  padding-left: 34px;
+}
+
+.ladder::before {
+  content: '';
+  position: absolute;
+  left: 15px;
+  top: 12px;
+  bottom: 12px;
+  width: 1px;
+  background: var(--border);
+}
+
+.node {
+  position: relative;
+}
+
+.node__pin {
+  position: absolute;
+  left: -34px;
+  top: 14px;
+  display: grid;
+  place-items: center;
+  width: 31px;
+  height: 31px;
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  border: 2px solid var(--border);
+  color: var(--faint);
+  font: 700 0.82rem / 1 var(--font-display);
+}
+
+.node__pin svg {
+  width: 15px;
+  height: 15px;
+}
+
+.node--done .node__pin {
+  border-color: var(--jade);
+  color: var(--jade);
+  background: color-mix(in oklab, var(--jade) 14%, var(--surface));
+}
+
+.node--open .node__pin {
+  border-color: var(--violet);
+  color: var(--violet);
+  background: color-mix(in oklab, var(--violet) 16%, var(--surface));
+}
+
+.node--locked .node__card {
+  background: var(--bg);
+}
+
+.node--locked .node__pin {
+  background: var(--bg);
+}
+
+.node__card {
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  padding: 12px;
+}
+
+.node--open .node__card {
+  border-color: color-mix(in oklab, var(--violet) 55%, var(--border));
+  background: color-mix(in oklab, var(--violet) 8%, var(--surface));
+}
+
+.node__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 600 0.82rem / 1.4 var(--font-body);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.node--done .node__status {
+  color: var(--jade);
+}
+
+.node--open .node__status {
+  color: var(--violet);
+}
+
+.choices {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  width: 100%;
+  text-align: left;
+  min-height: 44px;
+  padding: 11px;
+  border-radius: var(--r-btn);
+  border: 1px solid var(--border-hi);
+  background: var(--surface-2);
+  cursor: pointer;
+  color: var(--fg);
+}
+
+.choice:hover {
+  filter: brightness(1.06);
+}
+
+.choice[aria-pressed='true'] {
+  border-color: var(--violet);
+  background: color-mix(in oklab, var(--violet) 16%, var(--surface));
+}
+
+.choice__mark {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  margin-top: 1px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--border-hi);
+  color: var(--faint);
+}
+
+.choice[aria-pressed='true'] .choice__mark {
+  border-color: var(--violet);
+  background: var(--violet);
+  color: var(--ink);
+}
+
+.choice__mark svg {
+  width: 13px;
+  height: 13px;
+}
+
+.choice__name {
+  display: block;
+  font: 600 var(--step-body) / 1.3 var(--font-display);
+}
+
+.choice__desc {
+  display: block;
+  color: var(--muted);
+  font-size: var(--step-2);
+  margin-top: 2px;
+}
+
+.choice--taken {
+  cursor: default;
+  border-color: color-mix(in oklab, var(--jade) 45%, var(--border));
+  background: color-mix(in oklab, var(--jade) 8%, var(--surface));
+}
+
+/* --- 8. Activity map ----------------------------------------------------- */
+
+.map {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(7, 1fr);
+  gap: 4px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.map__cell {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.map__cell[data-lv='1'] {
+  background: color-mix(in oklab, var(--c) 28%, var(--surface));
+  border-color: color-mix(in oklab, var(--c) 40%, var(--border));
+}
+.map__cell[data-lv='2'] {
+  background: color-mix(in oklab, var(--c) 50%, var(--surface));
+  border-color: color-mix(in oklab, var(--c) 60%, var(--border));
+}
+.map__cell[data-lv='3'] {
+  background: color-mix(in oklab, var(--c) 74%, var(--surface));
+  border-color: var(--c);
+}
+.map__cell[data-lv='4'] {
+  background: var(--c);
+  border-color: var(--c);
+}
+
+.legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--faint);
+  font: 600 0.82rem / 1 var(--font-body);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* --- 9. Rigs ------------------------------------------------------------- */
+
+.rig {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+
+.rig:first-child {
+  border-top: 0;
+}
+
+.rig__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 5px;
+  color: var(--c);
+  font: 600 0.82rem / 1.2 var(--font-body);
+  letter-spacing: 0.06em;
+}
+
+.rig__meta svg {
+  width: 14px;
+  height: 14px;
+}
+
+.rig__meta .sep {
+  color: var(--faint);
+}
+
+.rig--still .rig__meta {
+  color: var(--faint);
+}
+
+.rig__bar {
+  margin-top: 8px;
+}
+
+/* --- 10. Decks ----------------------------------------------------------- */
+
+.deck {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: var(--r-card);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.deck-grid {
+  display: grid;
+  gap: 12px;
+}
+
+/* The wide layout: compose above, then browse the decks in two columns. */
+.builder__grid {
+  display: grid;
+  gap: 14px;
+}
+
+.deck[data-state='loading'] {
+  border-color: color-mix(in oklab, var(--c) 40%, var(--border));
+}
+
+.deck__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.deck__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  color: var(--faint);
+  font-size: var(--step-2);
+}
+
+.skeleton {
+  border-radius: 8px;
+  /* Tinted with the deck's own accent so a loading card is never invisible. */
+  background: color-mix(in oklab, var(--c) 24%, var(--surface-2));
+  border: 1px solid color-mix(in oklab, var(--c) 30%, var(--border));
+  height: 12px;
+  animation: pulse 1.4s var(--ease) infinite alternate;
+}
+
+@keyframes pulse {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* --- 11. Drill ----------------------------------------------------------- */
+
+.drill {
+  display: grid;
+  gap: 16px;
+}
+
+.drill__prompt {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  line-height: 1.35;
+  letter-spacing: -0.005em;
+}
+
+.result {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: var(--r-card);
+  border: 1px solid color-mix(in oklab, var(--jade) 50%, var(--border));
+  background: color-mix(in oklab, var(--jade) 10%, var(--surface));
+}
+
+.result__head {
+  display: flex;
+  gap: 11px;
+}
+
+.result__head svg {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  color: var(--jade);
+  margin-top: 1px;
+}
+
+.result__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.result__k {
+  color: var(--muted);
+  font-size: var(--step-2);
+}
+
+/* --- 12. Misc ------------------------------------------------------------ */
+
+.kv {
+  display: grid;
+  gap: 8px;
+}
+
+.kv__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 11px;
+  border-bottom: 1px solid var(--border);
+}
+
+.kv__k {
+  color: var(--muted);
+  font-size: var(--step-2);
+}
+
+.kv__v {
+  font: 700 var(--step-body) / 1.2 var(--font-display);
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+}
+
+.muted {
+  color: var(--muted);
+}
+.faint {
+  color: var(--faint);
+}
+.gold {
+  color: var(--gold);
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.divider {
+  height: 1px;
+  background: var(--border);
+  margin: 14px 0;
+}
+
+@media (min-width: 1280px) {
+  .split--wide,
+  .split--two {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+    align-items: start;
+  }
+
+  .split--two {
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  }
+
+  .deck-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+
+@media (min-width: 1024px) {
+  .builder__grid {
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+    gap: 22px;
+    align-items: start;
+  }
+
+  .builder__grid .textarea {
+    min-height: 118px;
+  }
+}

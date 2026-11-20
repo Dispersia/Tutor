@@ -5,3 +5,5 @@ models/
 data/
 python/.venv/
 result
+# vendored woff2 subsets + generated @font-face rules
+design/tutor/assets/fonts/

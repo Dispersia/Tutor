@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <title>The drill · Tutor</title>
+    <link rel="stylesheet" href="assets/fonts/fonts.css" />
+    <link rel="stylesheet" href="styles/game.css" />
+    <link rel="stylesheet" href="styles/game-ui.css" />
+    <script src="assets/game.js"></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to the page</a>
+
+    <header class="topbar">
+      <a class="brand" href="index.html">
+        <svg class="brand__mark" aria-hidden="true"><use href="#i-spark" /></svg>
+        <span class="brand__word">Tutor</span>
+      </a>
+      <button class="account" type="button" data-sheet-open="account" aria-haspopup="dialog">
+        <span class="stamp" aria-hidden="true">D</span>
+        <span class="sr-only">Account, chat, bank, history and settings</span>
+      </button>
+    </header>
+
+    <nav class="rail" aria-label="Primary">
+      <a class="brand" href="index.html">
+        <svg class="brand__mark" aria-hidden="true"><use href="#i-spark" /></svg>
+        <span class="brand__word">Tutor</span>
+      </a>
+      <a class="rail__link" href="index.html"
+        ><svg aria-hidden="true"><use href="#i-home" /></svg>Home</a
+      >
+      <a class="rail__link" href="skills.html" aria-current="page"
+        ><svg aria-hidden="true"><use href="#i-skills" /></svg>Skills</a
+      >
+      <a class="rail__link" href="learn.html"
+        ><svg aria-hidden="true"><use href="#i-learn" /></svg>Learn</a
+      >
+      <div class="rail__rule"></div>
+      <button
+        class="rail__link"
+        type="button"
+        data-sheet-open="account"
+        data-sheet-section="acct-chat"
+      >
+        <svg aria-hidden="true"><use href="#i-chat" /></svg>Chat
+      </button>
+      <button
+        class="rail__link"
+        type="button"
+        data-sheet-open="account"
+        data-sheet-section="acct-bank"
+      >
+        <svg aria-hidden="true"><use href="#i-bank" /></svg>Bank
+      </button>
+      <button
+        class="rail__link"
+        type="button"
+        data-sheet-open="account"
+        data-sheet-section="acct-history"
+      >
+        <svg aria-hidden="true"><use href="#i-history" /></svg>History
+      </button>
+      <button
+        class="rail__link"
+        type="button"
+        data-sheet-open="account"
+        data-sheet-section="acct-settings"
+      >
+        <svg aria-hidden="true"><use href="#i-settings" /></svg>Settings
+      </button>
+      <div class="rail__foot">
+        <button class="account" type="button" data-sheet-open="account">
+          <span class="stamp" aria-hidden="true">D</span>
+          <span class="account__name">Dispe</span>
+        </button>
+      </div>
+    </nav>
+
+    <div class="app">
+      <nav class="tabbar" aria-label="Primary">
+        <a class="tab" href="index.html"
+          ><svg aria-hidden="true"><use href="#i-home" /></svg>Home</a
+        >
+        <a class="tab" href="skills.html" aria-current="page"
+          ><svg aria-hidden="true"><use href="#i-skills" /></svg>Skills</a
+        >
+        <a class="tab" href="learn.html"
+          ><svg aria-hidden="true"><use href="#i-learn" /></svg>Learn</a
+        >
+      </nav>
+
+      <main class="page" id="main">
+        <p class="breadcrumb">
+          <a href="profession.html"
+            ><svg aria-hidden="true" style="width: 15px; height: 15px">
+              <use href="#i-chevron" /></svg
+            >Mine copper</a
+          >
+        </p>
+
+        <div class="page-head">
+          <div>
+            <h1 class="page-title">The drill</h1>
+            <p>
+              Answer, and the strike lands on the rig you left running. Mine copper · 8 XP a correct
+              card.
+            </p>
+          </div>
+          <span class="chip chip--plain"
+            ><svg aria-hidden="true" style="width: 16px; height: 16px"><use href="#i-target" /></svg
+            >3 of 5 today</span
+          >
+        </div>
+
+        <div class="split split--two">
+          <!-- The drill -->
+          <section class="panel panel--tint" style="--c: var(--jade)" aria-labelledby="drill-title">
+            <div class="ribbon">
+              <span class="ribbon__mark"></span>
+              <span class="ribbon__label" id="drill-title">Mine copper</span>
+              <span class="ribbon__tag">8 XP</span>
+            </div>
+
+            <div class="drill">
+              <div class="cell-row">
+                <span class="cell cell--lg" lang="ja">
+                  <span class="cell__glyph" lang="ja">疲れる</span>
+                  <span class="cell__reading" lang="ja">つかれる</span>
+                </span>
+                <div class="row__main" style="align-self: center">
+                  <span class="chip chip--plain">Translate</span>
+                  <p class="drill__prompt" style="margin-top: 10px">
+                    Give the meaning of the word in the cell.
+                  </p>
+                  <p class="faint" style="font-size: 0.9rem; margin-top: 6px">
+                    Japanese · card 413 · last seen 9 days ago
+                  </p>
+                </div>
+              </div>
+
+              <form data-drill data-answer="to get tired" novalidate>
+                <div class="field">
+                  <label class="field__label" for="drill-answer">Your answer</label>
+                  <input
+                    class="input input--answer"
+                    id="drill-answer"
+                    name="answer"
+                    autocomplete="off"
+                    autocapitalize="off"
+                    spellcheck="false"
+                    placeholder="the meaning, in English"
+                  />
+                  <p class="field__hint">
+                    One sense is enough. The grader reads every listed sense of the word.
+                  </p>
+                </div>
+                <div class="btn-row" style="margin-top: 14px">
+                  <button class="btn btn--primary" type="submit">
+                    <svg aria-hidden="true"><use href="#i-check" /></svg>Submit the answer
+                  </button>
+                  <a class="btn btn--ghost" href="profession.html">Leave the drill</a>
+                </div>
+              </form>
+
+              <section class="result" data-result hidden aria-live="polite">
+                <div class="result__head">
+                  <svg aria-hidden="true" data-result-icon><use href="#i-check" /></svg>
+                  <div>
+                    <p class="banner__title" data-verdict>Correct</p>
+                    <p class="banner__text" data-fsrs>Good · next in 6 days · stability 38.9d</p>
+                  </div>
+                </div>
+                <div class="divider" style="margin: 0"></div>
+                <div class="kv" data-rewards>
+                  <div class="kv__row">
+                    <span class="kv__k">Experience</span
+                    ><span class="kv__v gold">+8 XP · Mining</span>
+                  </div>
+                  <div class="kv__row">
+                    <span class="kv__k">Materials</span><span class="kv__v">+1 copper ore</span>
+                  </div>
+                  <div class="kv__row">
+                    <span class="kv__k">The rig</span><span class="kv__v">extended by 8m</span>
+                  </div>
+                </div>
+                <p class="muted" data-miss hidden>
+                  No strike this time, and the rig is unchanged. The card comes back in ten minutes.
+                </p>
+                <div class="btn-row">
+                  <a class="btn btn--ghost btn--sm" href="practice.html">Take the next card</a>
+                  <a class="link" href="learn.html"
+                    >Back to the deck<svg aria-hidden="true"><use href="#i-arrowRight" /></svg
+                  ></a>
+                </div>
+              </section>
+            </div>
+          </section>
+
+          <!-- The sitting -->
+          <div class="stack">
+            <section class="panel" style="--c: var(--azure)" aria-labelledby="sitting-title">
+              <div class="ribbon">
+                <span class="ribbon__mark" style="--c: var(--azure)"></span>
+                <span class="ribbon__label" id="sitting-title">This sitting</span>
+                <span class="ribbon__tag">4th card</span>
+              </div>
+              <div class="kv">
+                <div class="kv__row">
+                  <span class="kv__k">Drills today</span><span class="kv__v">3 / 5</span>
+                </div>
+                <div class="kv__row">
+                  <span class="kv__k">Cards right, first try</span><span class="kv__v">2 of 3</span>
+                </div>
+                <div class="kv__row">
+                  <span class="kv__k">XP earned in this sitting</span
+                  ><span class="kv__v gold">24</span>
+                </div>
+                <div class="kv__row">
+                  <span class="kv__k">Minutes left in the run</span><span class="kv__v">48</span>
+                </div>
+              </div>
+              <div
+                class="bar bar--slim"
+                style="margin-top: 12px"
+                role="progressbar"
+                aria-valuemin="0"
+                aria-valuemax="5"
+                aria-valuenow="3"
+                aria-label="Daily goal"
+              >
+                <span class="bar__fill" style="width: 60%"></span>
+              </div>
+            </section>
+
+            <section class="panel panel--tint" style="--c: var(--jade)" aria-labelledby="rig-title">
+              <div class="ribbon">
+                <span class="ribbon__mark"></span>
+                <span class="ribbon__label" id="rig-title">The rig</span>
+                <span class="ribbon__tag">1 / 7s</span>
+              </div>
+              <div
+                class="rig"
+                style="border-top: 0"
+                data-rig
+                data-rig-count="312"
+                data-rig-rate="7"
+                data-rig-run="2880000"
+                data-rig-total="5400000"
+              >
+                <span class="tile"
+                  ><svg aria-hidden="true"><use href="#i-pickaxe" /></svg
+                ></span>
+                <div class="row__main">
+                  <p class="row__title">Mining copper</p>
+                  <p class="rig__meta">
+                    <svg aria-hidden="true"><use href="#i-gear" /></svg>1 / 7s<span class="sep"
+                      >·</span
+                    ><span data-rig-clock>48m left</span
+                    ><span class="sep" data-rig-run hidden></span>
+                  </p>
+                  <div class="bar bar--slim rig__bar">
+                    <span class="bar__fill" data-rig-bar style="width: 53%"></span>
+                  </div>
+                </div>
+                <div class="row__end">
+                  <span class="figure figure--sm" data-rig-out>312</span>
+                  <span class="figure__cap">Copper ore</span>
+                </div>
+              </div>
+              <p class="muted" style="margin-top: 12px">
+                A correct answer adds eight minutes to the run and one ore to the pile. A wrong
+                answer costs nothing but the card comes back sooner.
+              </p>
+            </section>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <button
+      class="scrim"
+      type="button"
+      data-scrim="account"
+      hidden
+      aria-label="Close the menu"
+    ></button>
+    <div
+      class="sheet"
+      id="account"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="account-title"
+      hidden
+    >
+      <div class="sheet__head">
+        <div>
+          <p class="card-title" id="account-title">Dispe</p>
+          <p class="faint">Household of four · this device</p>
+        </div>
+        <button class="sheet__close" type="button" data-sheet-close aria-label="Close the menu">
+          <svg aria-hidden="true"><use href="#i-x" /></svg>
+        </button>
+      </div>
+      <div class="stack">
+        <section id="acct-chat" tabindex="-1" style="--c: var(--azure)">
+          <div class="ribbon">
+            <span class="ribbon__mark" style="--c: var(--azure)"></span
+            ><span class="ribbon__label">Chat</span>
+          </div>
+          <p class="muted">
+            Two threads with Aiko. Her last reply was four hours ago, in Japanese.
+          </p>
+          <p style="margin-top: 6px">
+            <a class="link" href="learn.html"
+              >Take it to the Scriptorium<svg aria-hidden="true"><use href="#i-arrowRight" /></svg
+            ></a>
+          </p>
+        </section>
+        <div class="divider"></div>
+        <section id="acct-bank" tabindex="-1" style="--c: var(--gold)">
+          <div class="ribbon">
+            <span class="ribbon__mark" style="--c: var(--gold)"></span
+            ><span class="ribbon__label">Bank</span><span class="ribbon__tag">1,204 items</span>
+          </div>
+          <p class="muted">
+            1,204 items across 11 slots. Copper ore is the only pile still filling.
+          </p>
+          <p style="margin-top: 6px">
+            <a class="link" href="index.html#bank"
+              >Open the ledger<svg aria-hidden="true"><use href="#i-arrowRight" /></svg
+            ></a>
+          </p>
+        </section>
+        <div class="divider"></div>
+        <section id="acct-history" tabindex="-1" style="--c: var(--violet)">
+          <div class="ribbon">
+            <span class="ribbon__mark" style="--c: var(--violet)"></span
+            ><span class="ribbon__label">History</span>
+          </div>
+          <div class="kv">
+            <div class="kv__row">
+              <span class="kv__k">Today · Mine copper</span
+              ><span class="kv__v">3 drills · 24 XP</span>
+            </div>
+            <div class="kv__row">
+              <span class="kv__k">Yesterday · Forge iron sword</span
+              ><span class="kv__v">9 drills · 162 XP</span>
+            </div>
+            <div class="kv__row">
+              <span class="kv__k">Sunday · Scriptorium</span
+              ><span class="kv__v">18 cards · Japanese</span>
+            </div>
+          </div>
+        </section>
+        <div class="divider"></div>
+        <section id="acct-settings" tabindex="-1" style="--c: var(--muted)">
+          <div class="ribbon">
+            <span class="ribbon__mark"></span><span class="ribbon__label">Settings</span>
+          </div>
+          <label class="seg" style="width: 100%">
+            <input type="checkbox" data-motion-toggle />
+            <span>Reduce motion across the forge</span>
+          </label>
+          <p class="faint" style="margin-top: 8px">
+            Fonts, drills and the speech model all run on this machine. Nothing leaves the house.
+          </p>
+        </section>
+      </div>
+    </div>
+  </body>
+</html>

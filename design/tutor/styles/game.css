@@ -1,0 +1,987 @@
+/* ==========================================================================
+   Tutor — core system
+   Tokens, reset, shell, and the shared component set.
+   Flat fills, 1px borders, one soft shadow. No gradients anywhere.
+   ========================================================================== */
+
+/* --- 1. Tokens ----------------------------------------------------------- */
+
+:root {
+  /* Ground and surfaces: neutral graphite, never warm. */
+  --bg: oklch(0.16 0.006 258);
+  --bg-deep: oklch(0.124 0.006 258);
+  --surface: oklch(0.226 0.008 258);
+  --surface-2: oklch(0.272 0.009 258);
+  --surface-3: oklch(0.32 0.009 258);
+  --border: oklch(0.34 0.01 258);
+  --border-hi: oklch(0.46 0.012 258);
+
+  /* Text */
+  --fg: oklch(0.93 0.004 258);
+  --muted: oklch(0.77 0.008 258);
+  --faint: oklch(0.68 0.008 258);
+  --ink: oklch(0.16 0.006 258);
+
+  /* Roles: one meaning per hue, everywhere. */
+  --ember: oklch(0.7 0.145 52);
+  --ember-hi: oklch(0.79 0.125 58);
+  --ember-lo: oklch(0.56 0.13 48);
+  --gold: oklch(0.8 0.105 88);
+  --gold-lo: oklch(0.66 0.08 84);
+  --jade: oklch(0.73 0.1 158);
+  --amber: oklch(0.76 0.1 68);
+  --violet: oklch(0.71 0.1 300);
+  --crimson: oklch(0.66 0.14 25);
+  --azure: oklch(0.73 0.1 245);
+
+  /* Ambient accent for the panel in hand. Overridden per component. */
+  --c: var(--border-hi);
+
+  /* Depth */
+  --shadow: 0 1px 2px oklch(0 0 0 / 0.4);
+
+  /* Focus ring: a neutral bright hairline, 9:1 on every surface. */
+  --focus: oklch(0.86 0.012 258);
+
+  /* Radii */
+  --r-panel: 16px;
+  --r-card: 12px;
+  --r-btn: 10px;
+  --r-input: 9px;
+  --r-pill: 999px;
+
+  /* Spacing */
+  --gutter: 14px;
+  --gap: 14px;
+
+  /* Type — Latin first, then the native CJK faces. Self-hosted. */
+  --serif-cjk:
+    'Songti SC', 'Songti TC', STSong, 'Noto Serif CJK SC', 'Noto Serif SC', 'Noto Serif CJK TC',
+    'Noto Serif TC', 'Yu Mincho', 'Hiragino Mincho ProN', 'Noto Serif CJK JP', 'Noto Serif JP',
+    'Nanum Myeongjo', 'Noto Serif CJK KR', 'Noto Serif KR';
+  --sans-cjk:
+    'PingFang SC', 'PingFang TC', 'Hiragino Sans', 'Yu Gothic', 'Noto Sans CJK SC', 'Noto Sans SC',
+    'Noto Sans CJK TC', 'Noto Sans TC', 'Noto Sans CJK JP', 'Noto Sans JP', 'Noto Sans CJK KR',
+    'Noto Sans KR', 'Malgun Gothic';
+
+  --font-display: 'Space Grotesk', 'Noto Serif', var(--serif-cjk), serif;
+  --font-body: 'Rubik', var(--sans-cjk), sans-serif;
+
+  /* The floor: nothing renders smaller than 0.82rem. */
+  --step-label: 0.82rem;
+  --step-2: 0.9rem;
+  --step-body: 0.95rem;
+  --step-card: 1.05rem;
+  --step-title: 1.85rem;
+
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  color-scheme: dark;
+}
+
+/* Regional faces win inside their own language: kana and Japanese kanji must
+   not take Chinese glyph shapes. `lang` rides on the language-bearing node. */
+:lang(ja) {
+  --serif-cjk:
+    'Yu Mincho', 'Hiragino Mincho ProN', 'Noto Serif CJK JP', 'Noto Serif JP', 'Noto Serif CJK SC',
+    'Noto Serif SC', 'Noto Serif CJK TC', 'Noto Serif TC', serif;
+  --sans-cjk:
+    'Hiragino Sans', 'Yu Gothic', 'Noto Sans CJK JP', 'Noto Sans JP', 'Noto Sans CJK SC',
+    'Noto Sans SC', 'Noto Sans CJK TC', 'Noto Sans TC', 'Noto Sans CJK KR', 'Noto Sans KR',
+    sans-serif;
+}
+:lang(ko) {
+  --serif-cjk:
+    'Nanum Myeongjo', 'Noto Serif CJK KR', 'Noto Serif KR', 'Noto Serif CJK SC', 'Noto Serif SC',
+    serif;
+  --sans-cjk:
+    'Malgun Gothic', 'Noto Sans CJK KR', 'Noto Sans KR', 'Noto Sans CJK SC', 'Noto Sans SC',
+    sans-serif;
+}
+:lang(zh-Hant) {
+  --serif-cjk:
+    'Songti TC', 'Songti SC', 'Noto Serif CJK TC', 'Noto Serif TC', 'Noto Serif CJK SC',
+    'Noto Serif SC', serif;
+  --sans-cjk:
+    'PingFang TC', 'PingFang SC', 'Noto Sans CJK TC', 'Noto Sans TC', 'Noto Sans CJK SC',
+    'Noto Sans SC', sans-serif;
+}
+
+/* --- 2. Reset ------------------------------------------------------------ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--fg);
+  font: 400 var(--step-body) / 1.5 var(--font-body);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+p,
+figure,
+ul,
+ol,
+dl,
+dd {
+  margin: 0;
+}
+
+ul,
+ol {
+  padding: 0;
+  list-style: none;
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  text-align: inherit;
+  cursor: pointer;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* The one true hidden: a class or component rule must never beat it. */
+[hidden] {
+  display: none !important;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--ember) 55%, transparent);
+  color: var(--fg);
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* Browser surfaces belong to the system too. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--surface-3) transparent;
+}
+
+/* --- 3. Type utilities --------------------------------------------------- */
+
+.label {
+  font: 600 var(--step-label) / 1.4 var(--font-body);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.label--faint {
+  color: var(--faint);
+}
+
+/* Earned figures: display face, tabular. */
+.num {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.page-title {
+  font: 700 var(--step-title) / 1.15 var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+.card-title {
+  font: 600 var(--step-card) / 1.25 var(--font-display);
+  letter-spacing: -0.005em;
+}
+
+/* Language-bearing text: display face, leading, zero tracking. */
+.lang {
+  font-family: var(--font-display);
+  letter-spacing: 0;
+  line-height: 1.3;
+}
+
+/* --- 4. Shell ------------------------------------------------------------ */
+
+.skip {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 60;
+  padding: 10px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-hi);
+  border-radius: var(--r-btn);
+}
+.skip:focus {
+  left: var(--gutter);
+  top: var(--gutter);
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 56px;
+  padding: 6px max(var(--gutter), env(safe-area-inset-left)) 6px
+    max(var(--gutter), env(safe-area-inset-right));
+  padding-top: max(6px, env(safe-area-inset-top));
+  background: var(--bg-deep);
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+}
+
+.brand__mark {
+  width: 26px;
+  height: 26px;
+  color: var(--ember);
+}
+
+.brand__word {
+  font: 700 1.02rem / 1 var(--font-display);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.account {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+  padding: 0 8px 0 10px;
+  border-radius: var(--r-pill);
+  border: 1px solid transparent;
+}
+
+.account__name {
+  font: 600 var(--step-2) / 1.2 var(--font-display);
+  color: var(--muted);
+}
+
+.stamp {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-btn);
+  border: 1px solid var(--border-hi);
+  background: var(--surface-2);
+  font: 700 var(--step-2) / 1 var(--font-display);
+  color: var(--fg);
+}
+
+.account[aria-expanded='true'] .stamp,
+.account[aria-current='page'] .stamp {
+  border-color: var(--ember);
+  color: var(--ember-hi);
+}
+
+.tabbar {
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: 30;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  background: var(--bg-deep);
+  border-top: 1px solid var(--border);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.tab {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  min-height: 56px;
+  padding: 9px 4px 8px;
+  color: var(--faint);
+  font: 600 0.82rem / 1 var(--font-body);
+  letter-spacing: 0.04em;
+}
+
+.tab svg {
+  width: 22px;
+  height: 22px;
+}
+
+.tab[aria-current='page'] {
+  color: var(--ember-hi);
+  background: color-mix(in oklab, var(--ember) 12%, transparent);
+}
+
+.rail {
+  display: none;
+}
+
+.page {
+  width: 100%;
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: var(--gap) max(var(--gutter), env(safe-area-inset-left)) 96px
+    max(var(--gutter), env(safe-area-inset-right));
+}
+
+.page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: var(--gap);
+}
+
+.page-head p {
+  color: var(--muted);
+  max-width: 34ch;
+}
+
+.stack {
+  display: grid;
+  gap: var(--gap);
+}
+
+.split {
+  display: grid;
+  gap: var(--gap);
+}
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  color: var(--faint);
+  font: 600 var(--step-label) / 1 var(--font-body);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.breadcrumb a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--muted);
+}
+
+/* --- 5. Panel ------------------------------------------------------------ */
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-panel);
+  box-shadow: var(--shadow);
+  padding: 14px;
+}
+
+.panel--tint {
+  background: color-mix(in oklab, var(--c) 9%, var(--surface));
+  border-color: color-mix(in oklab, var(--c) 40%, var(--border));
+}
+
+.panel--flush {
+  padding: 0;
+  overflow: hidden;
+}
+
+.panel__body {
+  padding: 14px;
+}
+
+.panel__foot {
+  padding: 12px 14px;
+  border-top: 1px solid var(--border);
+  background: color-mix(in oklab, var(--bg-deep) 55%, var(--surface));
+}
+
+/* Ribbon: rotated accent square + tracked label, optional count on the right. */
+.ribbon {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.ribbon__mark {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--c);
+  transform: rotate(45deg);
+  flex: none;
+}
+
+.ribbon__label {
+  font: 600 var(--step-label) / 1.4 var(--font-body);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--fg);
+}
+
+.ribbon__tag {
+  margin-left: auto;
+  font: 700 var(--step-2) / 1 var(--font-display);
+  font-variant-numeric: tabular-nums;
+  color: var(--c);
+}
+
+/* --- 6. Buttons ---------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 16px;
+  border-radius: var(--r-btn);
+  border: 1px solid var(--border-hi);
+  background: var(--surface-2);
+  color: var(--fg);
+  font: 600 var(--step-2) / 1 var(--font-display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    filter 0.12s var(--ease),
+    transform 0.12s var(--ease),
+    background-color 0.12s var(--ease),
+    border-color 0.12s var(--ease);
+}
+
+.btn svg {
+  width: 19px;
+  height: 19px;
+  flex: none;
+}
+
+.btn:hover {
+  filter: brightness(1.08);
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn--primary {
+  background: var(--ember);
+  border-color: var(--ember-lo);
+  color: var(--ink);
+}
+
+.btn--ghost {
+  background: transparent;
+  border-color: var(--border-hi);
+  color: var(--fg);
+}
+
+.btn--ghost:hover {
+  background: var(--surface-2);
+  filter: none;
+}
+
+.btn--quiet {
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted);
+  padding-inline: 10px;
+}
+
+.btn--quiet:hover {
+  background: var(--surface-2);
+  color: var(--fg);
+  filter: none;
+}
+
+.btn--sm {
+  min-height: 44px;
+  padding: 7px 13px;
+  font-size: 0.82rem;
+}
+
+.btn--block {
+  width: 100%;
+}
+
+/* Disabled controls go neutral, never a faded smear of their own colour. */
+.btn:disabled,
+.btn[aria-disabled='true'] {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--faint);
+  cursor: not-allowed;
+  filter: none;
+  transform: none;
+}
+
+.btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+/* A quiet text link: same affordance, different weight. */
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  color: var(--muted);
+  font: 600 var(--step-2) / 1.2 var(--font-display);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in oklab, var(--muted) 45%, transparent);
+  text-underline-offset: 4px;
+}
+
+.link:hover {
+  color: var(--fg);
+}
+
+.link svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* --- 7. Tiles, chips, medallion ----------------------------------------- */
+
+.tile {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: var(--r-card);
+  background: color-mix(in oklab, var(--c) 14%, var(--surface));
+  border: 1px solid color-mix(in oklab, var(--c) 60%, var(--border));
+  color: var(--c);
+}
+
+.tile svg {
+  width: 22px;
+  height: 22px;
+}
+
+.tile--lg {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--r-panel);
+}
+
+.tile--lg svg {
+  width: 28px;
+  height: 28px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: var(--r-pill);
+  background: color-mix(in oklab, var(--c) 14%, var(--surface));
+  border: 1px solid color-mix(in oklab, var(--c) 55%, var(--border));
+  color: var(--fg);
+  font: 600 0.82rem / 1.4 var(--font-body);
+}
+
+.chip__n {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--c);
+}
+
+.chip--plain {
+  background: var(--surface-2);
+  border-color: var(--border);
+  color: var(--muted);
+}
+
+.medallion {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  border: 2px solid var(--gold);
+  color: var(--gold);
+  font: 700 1.05rem / 1 var(--font-display);
+  font-variant-numeric: tabular-nums;
+}
+
+.medallion--lg {
+  width: 60px;
+  height: 60px;
+  font-size: 1.35rem;
+}
+
+/* --- 8. Bar -------------------------------------------------------------- */
+
+.bar {
+  display: block;
+  position: relative;
+  height: 10px;
+  border-radius: var(--r-pill);
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.bar__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 40%;
+  border-radius: var(--r-pill);
+  background: var(--c);
+  transition: width 0.4s var(--ease);
+}
+
+.bar--slim {
+  height: 8px;
+}
+
+/* --- 9. Banner ----------------------------------------------------------- */
+
+.banner {
+  display: flex;
+  gap: 11px;
+  padding: 12px 14px;
+  border-radius: var(--r-card);
+  background: color-mix(in oklab, var(--c) 12%, var(--surface));
+  border: 1px solid color-mix(in oklab, var(--c) 50%, var(--border));
+}
+
+.banner svg {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  /* Lifted toward the foreground so the glyph clears 4.5:1 on its own tint. */
+  color: color-mix(in oklab, var(--c) 78%, var(--fg));
+  margin-top: 1px;
+}
+
+.banner__title {
+  font: 600 var(--step-body) / 1.35 var(--font-display);
+  color: var(--fg);
+}
+
+.banner__text {
+  color: var(--muted);
+  font-size: var(--step-2);
+}
+
+.banner--info {
+  --c: var(--azure);
+}
+.banner--success {
+  --c: var(--jade);
+}
+.banner--warn {
+  --c: var(--amber);
+}
+.banner--error {
+  --c: var(--crimson);
+}
+
+/* --- 10. Rows and figures ------------------------------------------------ */
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+
+.row:first-child {
+  border-top: 0;
+}
+
+.row__main {
+  min-width: 0;
+  flex: 1;
+}
+
+.row__title {
+  display: block;
+  font: 600 var(--step-body) / 1.3 var(--font-display);
+  color: var(--fg);
+}
+
+.row__sub {
+  display: block;
+  color: var(--faint);
+  font-size: var(--step-label);
+  margin-top: 3px;
+}
+
+.row__end {
+  text-align: right;
+  flex: none;
+}
+
+.figure {
+  display: block;
+  font: 700 1.15rem / 1 var(--font-display);
+  font-variant-numeric: tabular-nums;
+  color: var(--gold);
+}
+
+.figure--sm {
+  font-size: var(--step-2);
+}
+
+.figure__cap {
+  display: block;
+  margin-top: 3px;
+  font: 600 0.82rem / 1.2 var(--font-body);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+/* For a row of bare figures with no tiles, three columns always fit. */
+.stat-row--three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.stat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border-radius: var(--r-card);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  min-width: 0;
+}
+
+.stat > div {
+  min-width: 0;
+}
+
+/* --- 11. Sheet ----------------------------------------------------------- */
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: oklch(0 0 0 / 0.66);
+  border: 0;
+  padding: 0;
+}
+
+.sheet {
+  position: fixed;
+  z-index: 50;
+  inset: auto 0 0 0;
+  max-height: min(88vh, 720px);
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-panel) var(--r-panel) 0 0;
+  box-shadow: var(--shadow);
+  padding: 16px max(var(--gutter), env(safe-area-inset-left))
+    calc(16px + env(safe-area-inset-bottom));
+}
+
+/* The dialog container takes focus on open; its own boundary is the indicator. */
+.sheet:focus,
+.sheet:focus-visible {
+  outline: none;
+}
+
+/* Centred dialog from the tablet breakpoint up; a bottom sheet below it. */
+@media (min-width: 720px) {
+  .sheet {
+    inset: 50% auto auto 50%;
+    transform: translate(-50%, -50%);
+    width: min(640px, calc(100vw - 48px));
+    max-height: min(84vh, 720px);
+    border-radius: var(--r-panel);
+  }
+}
+
+.sheet__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.sheet__title {
+  font: 600 1.25rem / 1.25 var(--font-display);
+}
+
+.sheet__close {
+  margin-left: auto;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-btn);
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.sheet__close:hover {
+  background: var(--surface-2);
+  color: var(--fg);
+}
+
+.sheet__close svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* --- 12. Motion ---------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+html[data-motion='reduce'] * {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --gutter: 26px;
+    --gap: 18px;
+  }
+
+  .topbar,
+  .tabbar {
+    display: none;
+  }
+
+  .rail {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 16rem;
+    padding: 20px 16px;
+    background: var(--bg-deep);
+    border-right: 1px solid var(--border);
+    overflow: auto;
+  }
+
+  .rail .brand {
+    margin-bottom: 18px;
+  }
+
+  .rail__link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 44px;
+    padding: 8px 12px;
+    border-radius: var(--r-btn);
+    color: var(--muted);
+    font: 600 var(--step-body) / 1.2 var(--font-display);
+  }
+
+  .rail__link svg {
+    width: 20px;
+    height: 20px;
+    color: var(--faint);
+  }
+
+  .rail__link:hover {
+    background: var(--surface-2);
+    color: var(--fg);
+  }
+
+  .rail__link[aria-current='page'] {
+    background: color-mix(in oklab, var(--ember) 12%, transparent);
+    color: var(--ember-hi);
+  }
+
+  .rail__link[aria-current='page'] svg {
+    color: var(--ember-hi);
+  }
+
+  .rail__rule {
+    height: 1px;
+    margin: 10px 0;
+    background: var(--border);
+  }
+
+  .rail__foot {
+    margin-top: auto;
+    display: grid;
+    gap: 10px;
+    padding-top: 16px;
+  }
+
+  .app {
+    margin-left: 16rem;
+  }
+
+  .page {
+    max-width: 52rem;
+    padding: 22px var(--gutter) 64px;
+  }
+}
