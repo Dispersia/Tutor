@@ -358,6 +358,12 @@ export function registerPractice(app: App) {
       deckId = lesson.deckId
     }
 
+    // Nothing named a deck: free practice drills the learner's active deck, the
+    // one chosen in the profile menu — so the choice applies everywhere.
+    if (!deckId && prefs.activeDeckId && getDeck(deps.db, prefs.activeDeckId, user.id)) {
+      deckId = prefs.activeDeckId
+    }
+
     // Daily budget (Anki-style limits): new cards and reviews are capped per UTC
     // day; "study more" raises today's allowance. A new card is one with no SRS
     // state yet, everything else (learning + review) draws on the review budget.

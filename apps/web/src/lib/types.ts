@@ -56,6 +56,8 @@ export interface StudyPrefs {
   learningSteps: number[]
   /** Grow the deck automatically when a word keeps lapsing. */
   autoReinforce: boolean
+  /** The deck the member studies everywhere (null = free practice across decks). */
+  activeDeckId?: string | null
 }
 
 export interface ExerciseInfo {

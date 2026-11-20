@@ -12,6 +12,7 @@
   } from '#lib/exercises'
   import { getSkills, type SkillsResponse } from '#lib/skills'
   import { session } from '#lib/session.svelte'
+  import { activeDeck, loadActiveDeck, setActiveDeck } from '#lib/activeDeck.svelte'
   import { ACCENT, accentStyle } from '#lib/theme'
   import Spinner from '#lib/components/Spinner.svelte'
   import CardEditor from '#lib/components/CardEditor.svelte'
@@ -92,8 +93,9 @@
         getSkills().catch(() => null),
         api<{ deckInstruction?: string }>('/api/settings').catch(() => null),
       ])
-      // the frequency path first — that is where you start
-      decks = c.decks.sort((a, b) => rank(a.level) - rank(b.level))
+      // the active deck leads; then the frequency path — that is where you start
+      await loadActiveDeck()
+      decks = orderDecks(c.decks)
       stats = s
       ref = sk
       // the prompt you gave on an earlier deck follows you into every new one
@@ -133,6 +135,12 @@
 
   const rank = (level: string | null) => (level === 'zhfreq' ? 0 : level === 'jafreq' ? 1 : 2)
 
+  /** The active deck first; then the frequency path before generated decks. */
+  function orderDecks(list: CurriculumDeck[]): CurriculumDeck[] {
+    const lead = (d: CurriculumDeck) => (d.deckId === activeDeck.id ? 0 : 1)
+    return list.sort((a, b) => lead(a) - lead(b) || rank(a.level) - rank(b.level))
+  }
+
   const deckAccent = (level: string | null) =>
     level === 'zhfreq' ? ACCENT.green : level === 'jafreq' ? ACCENT.level : ACCENT.arcane
 
@@ -144,8 +152,10 @@
 
   async function reload() {
     const [c, s] = await Promise.all([getCurriculum(), getSrsStats()])
-    decks = c.decks.sort((a, b) => rank(a.level) - rank(b.level))
+    decks = orderDecks(c.decks)
     stats = s
+    // A deck that was just built should reach the profile menu's picker too.
+    void loadActiveDeck()
   }
 
   /** Build a deck from the instruction (the server pulls a frequency list). */
@@ -496,7 +506,12 @@
           <section class="panel panel-accent mb-5 p-4" style={accentStyle(acc)}>
             <div class="flex items-baseline justify-between">
               <h2 class="display text-lg" style="color: {acc}">{d.name}</h2>
-              <span class="text-xs text-ink-400">{d.learned}/{d.cardCount} learned</span>
+              <div class="flex items-center gap-2">
+                {#if d.deckId === activeDeck.id}
+                  <span class="chip" style="--accent: {ACCENT.jade}">Studying</span>
+                {/if}
+                <span class="text-xs text-ink-400">{d.learned}/{d.cardCount} learned</span>
+              </div>
             </div>
             <div class="bar mt-2">
               <i style="width: {progress}%"></i>
@@ -532,6 +547,7 @@
               {#if actionId}
                 <a
                   href={practiceHref({ lesson: next.id })}
+                  onclick={() => void setActiveDeck(d.deckId)}
                   class="btn btn-primary mt-3 w-full py-3"
                 >
                   {d.learned > 0 ? 'Next' : 'Start'} · {next.newWord ?? next.title}
@@ -560,7 +576,11 @@
 
             {#if d.due > 0}
               {#if actionId}
-                <a href={practiceHref({ deck: d.deckId })} class="btn btn-ghost mt-2 w-full">
+                <a
+                  href={practiceHref({ deck: d.deckId })}
+                  onclick={() => void setActiveDeck(d.deckId)}
+                  class="btn btn-ghost mt-2 w-full"
+                >
                   Review {d.due} due
                 </a>
               {:else}
