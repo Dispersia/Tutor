@@ -61,6 +61,25 @@ async function signup(app: App, db: Db, username = 'alice') {
 
 type CardRow = { id: string; front: string; back: string }
 
+/**
+ * The correct answer for whatever drill the server picked. `pickNextExercise`
+ * randomises among the eligible exercise kinds, so the answer has to be derived
+ * from the instance rather than assumed to be the card's front/back.
+ */
+function correctAnswer(
+  instance: { exerciseId: string; data?: Record<string, unknown> },
+  card: CardRow,
+): string | string[] {
+  if (instance.exerciseId === 'translate.back_to_front') return card.front
+  // A sentence that *uses* the word (the bare word alone is not a sentence).
+  if (instance.exerciseId === 'converse') return `我${card.back}`
+  if (instance.exerciseId === 'sentence_build') {
+    const tokens = instance.data?.tokens
+    if (Array.isArray(tokens)) return tokens as string[]
+  }
+  return card.back
+}
+
 async function cardIndex(app: App, cookie: string): Promise<Map<string, CardRow>> {
   const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
     decks: { id: string; name: string }[]
@@ -122,12 +141,15 @@ test('training an action awards skill XP and materials', async () => {
 
   const next = (await (
     await app.request('/api/practice/next', auth(cookie, json({ actionId: 'mine-copper' })))
-  ).json()) as { instance: { exerciseId: string; cardId: string }; action: { skillId: string } }
+  ).json()) as {
+    instance: { exerciseId: string; cardId: string; data?: Record<string, unknown> }
+    action: { skillId: string }
+  }
   expect(next.action.skillId).toBe('mining')
 
   const cards = await cardIndex(app, cookie)
   const card = cards.get(next.instance.cardId)!
-  const answer = next.instance.exerciseId === 'translate.back_to_front' ? card.front : card.back
+  const answer = correctAnswer(next.instance, card)
 
   const graded = (await (
     await app.request(
@@ -169,7 +191,9 @@ test('training an action awards skill XP and materials', async () => {
   expect(skills.inventory.find((i) => i.itemId === 'copper_ore')?.count).toBeGreaterThanOrEqual(1)
   expect(skills.skills.find((s) => s.id === 'mining')?.xp).toBeGreaterThan(0)
   // the board carries every action's rig, so the client can tick it locally
-  const mine = skills.skills.find((s) => s.id === 'mining')!.actions.find((a) => a.id === 'mine-copper')
+  const mine = skills.skills
+    .find((s) => s.id === 'mining')!
+    .actions.find((a) => a.id === 'mine-copper')
   expect(mine?.idle).toBeTruthy()
   sqlite.close()
 })

@@ -35,6 +35,21 @@ export function similarity(a: string, b: string): number {
   return 1 - levenshtein(na, nb) / max
 }
 
+/**
+ * Splits a card's gloss into its alternative meanings.
+ *
+ * Curated and generator-written `front` values list several senses separated by
+ * `/`, `;` or `,` (e.g. “of / possessive particle / nominalizer”, “I, me”).
+ * Knowing any one of them means knowing the word, so each is a correct answer on
+ * its own.
+ */
+export function meaningAlternatives(gloss: string): string[] {
+  return gloss
+    .split(/[/;,]/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+}
+
 export interface TextGrade {
   score: number
   correct: boolean

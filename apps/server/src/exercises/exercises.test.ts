@@ -218,6 +218,34 @@ test('translate.back_to_front', async () => {
   expect((await def.grade(c, inst, 'hello')).correct).toBe(true)
 })
 
+test('translate.back_to_front accepts any listed sense of a multi-sense gloss', async () => {
+  const def = registry.get('translate.back_to_front')!
+  const c = ctx({ back: '的', front: 'of / possessive particle / nominalizer' })
+  const inst = await def.generate(c)
+  for (const answer of ['of', 'possessive particle', 'nominalizer', 'Possessive Particle']) {
+    const r = await def.grade(c, inst, answer)
+    expect(r.correct).toBe(true)
+    expect(r.score).toBe(100)
+  }
+  // an unrelated answer is still wrong
+  expect((await def.grade(c, inst, 'question particle')).correct).toBe(false)
+})
+
+test('translate.back_to_front asks the judge before rejecting a paraphrase', async () => {
+  const def = registry.get('translate.back_to_front')!
+  const c = ctx({ back: '的', front: 'of / possessive particle / nominalizer' })
+  const inst = await def.generate(c)
+
+  c.judge = async () => ({ score: 88, correct: true, feedback: 'Yes — a genitive marker.' })
+  const accepted = await def.grade(c, inst, 'genitive marker')
+  expect(accepted.correct).toBe(true)
+  expect(accepted.feedback).toContain('genitive')
+
+  c.judge = async () => ({ score: 0, correct: false, feedback: 'Not this sense.' })
+  const rejected = await def.grade(c, inst, 'water')
+  expect(rejected.correct).toBe(false)
+})
+
 test('multiple_choice generates choices incl. the answer and grades exactly', async () => {
   const def = registry.get('multiple_choice')!
   const c = ctx({}, ['再見', '謝謝', '我'])
@@ -252,8 +280,13 @@ test('converse without a judge falls back to a heuristic', async () => {
   const def = registry.get('converse')!
   const c = ctx()
   const inst = await def.generate(c)
+  // Using the word is what counts, even when the sentence is not grammatical.
   const used = await def.grade(c, inst, '你好，我是學生。')
+  expect(used.correct).toBe(true)
   expect(used.score).toBeGreaterThanOrEqual(60)
+  // A target-language sentence that never uses the word is not an attempt at it.
+  const missed = await def.grade(c, inst, '我是學生。')
+  expect(missed.correct).toBe(false)
   const english = await def.grade(c, inst, 'hello there')
   expect(english.correct).toBe(false)
 })

@@ -8,7 +8,7 @@ import {
   type ExerciseInstance,
   type GradeResult,
 } from '@tutor/core'
-import { feedbackFor, gradeText, similarity } from './grading'
+import { feedbackFor, gradeText, meaningAlternatives, similarity } from './grading'
 import { computeFeatures, deterministicWords, summarize } from '../pronunciation/features'
 import { buildSentence, canBuildSentence, SENTENCE_POS } from '../game/grammar'
 import { LEXICON } from '../seed/frequency'
@@ -132,9 +132,30 @@ const translateBackToFront: ExerciseDef<string> = {
     }
   },
   async grade(ctx, _instance, answer) {
-    const g = gradeText(ctx.card.front, [], String(answer ?? ''))
-    const correct =
-      g.score >= 70 || normalizeLoose(String(answer ?? '')) === normalizeLoose(ctx.card.front)
+    const typed = String(answer ?? '')
+    // A gloss can list several senses (“of / possessive particle / nominalizer”):
+    // knowing any one of them is knowing the word.
+    const alternatives = meaningAlternatives(ctx.card.front)
+    const g = gradeText(ctx.card.front, alternatives, typed)
+    // Deterministic grading can't know every acceptable paraphrase, so an
+    // unmatched answer goes to the LLM judge (when one is configured) before we
+    // call it wrong — see DESIGN §11.3.
+    if (g.score < 70 && typed.trim() && ctx.judge) {
+      const reading = displayReading(ctx)
+      const out = (await ctx.judge(
+        `The learner is studying ${label(ctx.card.targetLang)}. The card shows the word “${ctx.card.back}”${reading ? ` (${reading})` : ''}, whose meaning in ${label(ctx.card.sourceLang)} is given as “${ctx.card.front}” — a list of its senses separated by “/”. The learner answered with: “${typed}”. Decide whether the learner's answer is an acceptable meaning of the word. Accept any one of the listed senses or a standard synonym/paraphrase; reject answers that mean something else or are too vague.`,
+        JUDGE_SCHEMA,
+      )) as { score?: number; correct?: boolean; feedback?: string } | undefined
+      if (out && out.correct) {
+        return {
+          score: Math.max(out.score ?? 80, 80),
+          correct: true,
+          expected: ctx.card.front,
+          feedback: out.feedback,
+        }
+      }
+    }
+    const correct = g.score >= 70
     return {
       score: correct ? Math.max(g.score, 80) : g.score,
       correct,
@@ -143,10 +164,6 @@ const translateBackToFront: ExerciseDef<string> = {
     }
   },
   xp: (r) => (r.correct ? 10 + (r.score === 100 ? 5 : 0) : 1),
-}
-
-function normalizeLoose(s: string): string {
-  return s.toLowerCase().replace(/[\s.,!?]+/g, '')
 }
 
 // --- multiple choice ---------------------------------------------------------
@@ -401,7 +418,7 @@ const converse: ExerciseDef<string> = {
       }
     if (ctx.judge) {
       const out = (await ctx.judge(
-        `The learner is practising ${label(ctx.card.targetLang)}. They must write or say a full sentence that *uses* the word “${ctx.card.back}” (${ctx.card.front}); repeating the word alone is not a sentence and must score low. The learner wrote/said: “${text}”. Grade the attempt (0-100) and give one short tip.`,
+        `The learner is practising ${label(ctx.card.targetLang)}. They must write or say a full sentence that *uses* the word “${ctx.card.back}” (${ctx.card.front}). Judge only whether the word is used correctly for the sentence — its meaning fits the sentence — NOT whether the sentence is grammatical. Set correct=true whenever the learner makes a genuine attempt to use the word with its intended meaning, even if the sentence has grammar, word-order, spelling or particle mistakes; correct those mistakes briefly in the feedback instead of failing the card. Set correct=false only when the word is missing or clearly does not fit the sentence's meaning (the wrong word for that sentence). Repeating the word alone is not a sentence and must score low. The learner wrote/said: “${text}”. Grade the attempt (0-100) and give one short tip.`,
         JUDGE_SCHEMA,
       )) as { score?: number; correct?: boolean; feedback?: string } | undefined
       if (out && typeof out.score === 'number') {
@@ -415,15 +432,17 @@ const converse: ExerciseDef<string> = {
     }
     const hasTarget = /[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]/.test(text)
     const usedWord = target ? bare(text).includes(target) : false
-    const score = usedWord ? 90 : hasTarget ? 65 : 35
+    // The card is right when the word is worked into the sentence — grammar is
+    // corrected in the feedback, never a reason to fail (see the judge above).
+    const score = usedWord ? 90 : hasTarget ? 55 : 30
     return {
       score,
-      correct: score >= 60,
+      correct: usedWord,
       expected: ctx.card.back,
       feedback: usedWord
         ? 'Nice — you used the word in a sentence.'
         : hasTarget
-          ? `Good try. Can you work “${ctx.card.back}” into a full sentence?`
+          ? `Try to work “${ctx.card.back}” into your sentence.`
           : 'Try writing a sentence in the target language.',
     }
   },

@@ -1,5 +1,12 @@
 import { expect, test } from 'bun:test'
-import { feedbackFor, gradeText, levenshtein, normalize, similarity } from './grading'
+import {
+  feedbackFor,
+  gradeText,
+  levenshtein,
+  meaningAlternatives,
+  normalize,
+  similarity,
+} from './grading'
 
 test('normalize strips case, tone marks, punctuation, spaces', () => {
   expect(normalize('Nǐ hǎo!')).toBe('nihao')
@@ -27,4 +34,16 @@ test('feedbackFor only nudges when not perfect', () => {
   expect(feedbackFor(100, '你好')).toBeUndefined()
   expect(feedbackFor(85, '你好')).toContain('Almost')
   expect(feedbackFor(10, '你好')).toContain('Not quite')
+})
+
+test('meaningAlternatives splits multi-sense glosses', () => {
+  expect(meaningAlternatives('of / possessive particle / nominalizer')).toEqual([
+    'of',
+    'possessive particle',
+    'nominalizer',
+  ])
+  expect(meaningAlternatives('I, me')).toEqual(['I', 'me'])
+  expect(meaningAlternatives('to be; is')).toEqual(['to be', 'is'])
+  // a single gloss stays as-is
+  expect(meaningAlternatives('water')).toEqual(['water'])
 })
