@@ -4,6 +4,7 @@ import type { Context } from 'hono'
 import type { App, AppEnv, Deps } from '../context'
 import {
   addReview,
+  cardsGradedSince,
   getCard,
   getDeck,
   getRoles,
@@ -40,17 +41,47 @@ import { roleReasoning } from '../env'
 import { makeAssessor, type AssessFn } from '../pronunciation/assess'
 import { pinyinToZhuyin } from '../seed/zhuyin'
 
-/** Due-first card selection (spaced repetition), optionally within a lesson. */
-function pickStudyCard(
-  deps: Deps,
-  userId: string,
-  deckId?: string,
-  cardIds?: string[],
-): Card | undefined {
-  const ids = cardIds ?? listCards(deps.db, userId, deckId).map((c) => c.id)
-  if (ids.length === 0) return undefined
-  const id = selectCardId(ids, srsStateMap(deps.db, userId), Date.now())
+/**
+ * How many new words open a practice sitting before the due backlog. A session
+ * that starts on a long row of reviews feels like grinding; meeting a few new
+ * words first keeps the session about learning, then the reviews follow.
+ */
+const WARMUP_NEW_CARDS = 3
+/** A pause this long starts a new sitting (and warms up again). */
+const SITTING_GAP_MS = 30 * 60_000
+
+/**
+ * Card selection for practice: due-first spaced repetition over the deck, except
+ * that a sitting opens on a few new words before the due backlog. A card that is
+ * not due is never preferred over a new word, so a word is not re-shown
+ * back-to-back just because it is the only one the learner has met.
+ */
+function pickStudyCard(deps: Deps, userId: string, ids: string[]): Card | undefined {
+  const srs = srsStateMap(deps.db, userId)
+  const now = Date.now()
+
+  // A sitting opens with a few new words (in curriculum order), then the due
+  // backlog takes over. Reviews never lose their place: the warm-up only runs
+  // while the sitting is young, and only when a new card is available.
+  if (cardsGradedSince(deps.db, userId, now - SITTING_GAP_MS) < WARMUP_NEW_CARDS) {
+    const id = ids.find((id) => !srs.has(id))
+    if (id) return getCard(deps.db, id, userId)
+  }
+
+  // Due-first, then the next new word, then (only when nothing else is left) the
+  // soonest card.
+  const id = selectCardId(ids, srs, now)
   return id ? getCard(deps.db, id, userId) : undefined
+}
+
+/** The curriculum step a card belongs to, so the practice header can follow it. */
+function lessonOfCard(deps: Deps, userId: string, card: Card): string | undefined {
+  if (!card.deckId) return undefined
+  const deck = getDeck(deps.db, card.deckId, userId)
+  if (!deck) return undefined
+  const key = deck.level ?? deck.id
+  const lessons = buildLessons(key, stepCardsOf(listCards(deps.db, userId, deck.id)))
+  return lessons.find((l) => l.cardIds.includes(card.id))?.id
 }
 
 /**
@@ -285,6 +316,8 @@ export function registerPractice(app: App) {
       exerciseId?: string
       actionId?: string
       lessonId?: string
+      /** Drill this card specifically (a targeted drill; the budget still applies). */
+      cardId?: string
     }
     const quiet = quietState(deps.db, user.id)
     // The learner's own switches: readings visibility + exercise kinds they turned off.
@@ -316,13 +349,13 @@ export function registerPractice(app: App) {
       }
     }
 
-    // a guided-curriculum lesson restricts practice to its cards
-    let lessonIds: string[] | undefined
+    // A guided-curriculum lesson only picks the deck: the path decides the card.
+    // (Scoping to the lesson's own cards would re-show a one-word step four times
+    // in a row while its learning step waits.)
     if (body.lessonId) {
       const lesson = resolveLesson(deps, user.id, body.lessonId)
       if (!lesson) return c.json({ error: 'unknown lesson' }, 404)
       deckId = lesson.deckId
-      lessonIds = lesson.cardIds
     }
 
     // Daily budget (Anki-style limits): new cards and reviews are capped per UTC
@@ -331,15 +364,23 @@ export function registerPractice(app: App) {
     const budget = studyBudget(deps.db, user.id)
     const allowNew = budget.newUnlimited || budget.newRemaining > 0
     const allowReview = budget.reviewsUnlimited || budget.reviewsRemaining > 0
-    const baseIds = lessonIds ?? listCards(deps.db, user.id, deckId).map((c) => c.id)
     const srsForBudget = srsStateMap(deps.db, user.id)
-    const allowedIds = baseIds.filter((id) => (srsForBudget.has(id) ? allowReview : allowNew))
+    let allowedIds = listCards(deps.db, user.id, deckId)
+      .map((c) => c.id)
+      .filter((id) => (srsForBudget.has(id) ? allowReview : allowNew))
+    // A specific card can be drilled directly; it still draws on the day's budget.
+    if (body.cardId) {
+      if (!getCard(deps.db, body.cardId, user.id)) return c.json({ error: 'card not found' }, 404)
+      allowedIds = allowedIds.filter((id) => id === body.cardId)
+    }
     if (allowedIds.length === 0) {
       return c.json({ instance: null, action: null, done: true, budget })
     }
 
-    const card = pickStudyCard(deps, user.id, deckId, allowedIds)
+    const card = pickStudyCard(deps, user.id, allowedIds)
     if (!card) return c.json({ instance: null, action: null, done: true, budget })
+    // The queue moves along the path; the practice header follows the card.
+    const servedLessonId = body.lessonId ? lessonOfCard(deps, user.id, card) : undefined
 
     const learner = learnerOf(user)
     const srs = srsStateMap(deps.db, user.id)
@@ -372,7 +413,12 @@ export function registerPractice(app: App) {
     const isNewCard = !srs.has(card.id)
     if (!body.exerciseId && teachable && isNewCard && !introduced.has(card.id)) {
       const intro = registry.get(INTRODUCE_ID)
-      if (intro) return c.json({ instance: await intro.generate(ctx), action: null })
+      if (intro)
+        return c.json({
+          instance: await intro.generate(ctx),
+          action: null,
+          lessonId: servedLessonId,
+        })
     }
 
     const def = body.exerciseId
@@ -400,6 +446,7 @@ export function registerPractice(app: App) {
             consumes: action.consumes ?? [],
           }
         : null,
+      lessonId: servedLessonId,
     })
   })
 

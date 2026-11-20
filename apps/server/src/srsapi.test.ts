@@ -3,6 +3,7 @@ import { createApp } from './app'
 import type { App, Deps } from './context'
 import { openDb } from './db/client'
 import type { Db } from './db/client'
+import { upsertSrs } from './db/repo'
 import type { Role } from './env'
 import { EventBus } from './events'
 import { OpenRouter } from './llm/openrouter'
@@ -156,9 +157,9 @@ test('the daily new-card limit stops the path; "study more" resumes it', async (
     decks: { id: string; level: string }[]
   }
   const deckId = decks.decks.find((d) => d.level === 'zhfreq')!.id
-  const cards = (await (
-    await app.request(`/api/decks/${deckId}/cards`, auth(cookie))
-  ).json()) as { cards: { id: string; back: string }[] }
+  const cards = (await (await app.request(`/api/decks/${deckId}/cards`, auth(cookie))).json()) as {
+    cards: { id: string; back: string }[]
+  }
 
   // One answer each on two brand-new cards spends the whole day's budget.
   for (const card of cards.cards.slice(0, 2)) {
@@ -271,7 +272,7 @@ test('sentence_build builds and grades an n+1 sentence once words are known', as
   const built = (await (
     await app.request(
       '/api/practice/next',
-      auth(cookie, json({ lessonId: `zhfreq:${idx + 1}`, exerciseId: 'sentence_build' })),
+      auth(cookie, json({ cardId: card.id, exerciseId: 'sentence_build' })),
     )
   ).json()) as {
     instance: { exerciseId: string; cardId: string; data: { tokens: string[]; bank: string[] } }
@@ -429,5 +430,129 @@ test('a wrong answer schedules the card to come back soon', async () => {
   expect(stats.due).toBe(0)
   expect(stats.learned).toBe(0)
   expect(stats.new).toBe(stats.total - 1)
+  sqlite.close()
+})
+
+test('a sitting opens with a few new words before the due backlog', async () => {
+  const { app, db, sqlite } = makeApp()
+  const res = await app.request(
+    '/api/auth/register',
+    json({ username: 'warmup', password: 'password123' }),
+  )
+  const cookie = res.headers.getSetCookie()[0]!.split(';')[0]!
+  const { user } = (await res.json()) as { user: { id: string } }
+  seedStarterDecks(db, user.id)
+
+  const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
+    decks: { id: string; level: string }[]
+  }
+  const deckId = decks.decks.find((d) => d.level === 'zhfreq')!.id
+  const cards = (await (await app.request(`/api/decks/${deckId}/cards`, auth(cookie))).json()) as {
+    cards: { id: string; back: string }[]
+  }
+  // Put one word deep in the deck into review, due now: it is the card the
+  // due-first queue would serve immediately.
+  const due = cards.cards.at(-1)!
+  const now = Date.now()
+  upsertSrs(db, user.id, due.id, {
+    state: 'review',
+    step: 0,
+    stability: 5,
+    difficulty: 5,
+    reps: 3,
+    lapses: 0,
+    intervalDays: 3,
+    dueAt: now - 1000,
+    lastRating: 3,
+    lastReviewAt: now - 86_400_000,
+  })
+
+  // The sitting starts with three new words in a row, not the overdue review.
+  const opened: string[] = []
+  for (let i = 0; i < 3; i++) {
+    const step = (await (
+      await app.request('/api/practice/next', auth(cookie, json({ deckId })))
+    ).json()) as { instance: { exerciseId: string; cardId: string } }
+    expect(step.instance.exerciseId).toBe('introduce')
+    expect(step.instance.cardId).not.toBe(due.id)
+    opened.push(step.instance.cardId)
+    await app.request(
+      '/api/practice/grade',
+      auth(cookie, json({ exerciseId: 'introduce', cardId: step.instance.cardId, answer: 'ok' })),
+    )
+    // the same word comes back as its first graded drill (this is what gives it
+    // an SRS state; the teach step alone does not)
+    const drill = (await (
+      await app.request('/api/practice/next', auth(cookie, json({ deckId })))
+    ).json()) as { instance: { exerciseId: string; cardId: string } }
+    expect(drill.instance.cardId).toBe(step.instance.cardId)
+    await app.request(
+      '/api/practice/grade',
+      auth(
+        cookie,
+        json({ exerciseId: drill.instance.exerciseId, cardId: drill.instance.cardId, answer: '~' }),
+      ),
+    )
+  }
+  expect(new Set(opened).size).toBe(3)
+
+  // Once the sitting has had its new words, the due review comes back first.
+  const after = (await (
+    await app.request('/api/practice/next', auth(cookie, json({ deckId })))
+  ).json()) as { instance: { exerciseId: string; cardId: string } }
+  expect(after.instance.cardId).toBe(due.id)
+  expect(after.instance.exerciseId).not.toBe('introduce')
+  sqlite.close()
+})
+
+test('a one-word lesson does not re-show its word before the next step is due', async () => {
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
+  const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
+    decks: { id: string; level: string }[]
+  }
+  const deckId = decks.decks.find((d) => d.level === 'zhfreq')!.id
+  const cards = (await (await app.request(`/api/decks/${deckId}/cards`, auth(cookie))).json()) as {
+    cards: { id: string; back: string }[]
+  }
+  const first = cards.cards[0]!
+
+  // Learn the step's word: teach, then its first graded drill.
+  const taught = (await (
+    await app.request('/api/practice/next', auth(cookie, json({ lessonId: 'zhfreq:1' })))
+  ).json()) as { instance: { exerciseId: string; cardId: string } }
+  expect(taught.instance.exerciseId).toBe('introduce')
+  expect(taught.instance.cardId).toBe(first.id)
+  await app.request(
+    '/api/practice/grade',
+    auth(cookie, json({ exerciseId: 'introduce', cardId: first.id, answer: 'ok' })),
+  )
+  const drilled = (await (
+    await app.request(
+      '/api/practice/next',
+      auth(cookie, json({ lessonId: 'zhfreq:1', exerciseId: 'multiple_choice' })),
+    )
+  ).json()) as { instance: { exerciseId: string; cardId: string } }
+  expect(drilled.instance.cardId).toBe(first.id)
+  await app.request(
+    '/api/practice/grade',
+    auth(
+      cookie,
+      json({
+        exerciseId: 'multiple_choice',
+        cardId: first.id,
+        answer: first.back,
+        lessonId: 'zhfreq:1',
+      }),
+    ),
+  )
+
+  // Its next learning step is a minute out: the queue teaches the path's next
+  // word instead of showing the same word again and again.
+  const after = (await (
+    await app.request('/api/practice/next', auth(cookie, json({ lessonId: 'zhfreq:1' })))
+  ).json()) as { instance: { exerciseId: string; cardId: string } }
+  expect(after.instance.cardId).not.toBe(first.id)
+  expect(after.instance.exerciseId).toBe('introduce')
   sqlite.close()
 })

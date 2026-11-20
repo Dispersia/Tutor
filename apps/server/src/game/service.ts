@@ -1474,9 +1474,12 @@ export function checkLessonCompletion(
   if (!lesson || lesson.cardIds.length === 0) return false
   const srsMap = srsStateMap(db, userId)
   const done = lesson.cardIds.every((id) => isLearned(srsMap.get(id)))
-  if (done) {
-    completeLesson(db, userId, lessonId)
-    bus.emit('lesson.completed', { userId, lessonId })
-  }
-  return done
+  if (!done) return false
+  // Only a transition counts: reviewing a lesson that was finished days ago is
+  // not "lesson complete" again (the practice queue interleaves steps now).
+  const known = listLessonProgress(db, userId).some((p) => p.lessonId === lessonId)
+  if (known) return false
+  completeLesson(db, userId, lessonId)
+  bus.emit('lesson.completed', { userId, lessonId })
+  return true
 }

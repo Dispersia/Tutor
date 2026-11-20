@@ -1048,6 +1048,26 @@ around the memory math — steps, due dates, card selection, curriculum graduati
    dueAt + intervalDays ──► selectCardId() (overdue → new → soonest)
 ```
 
+- **A sitting opens on a few new words.** `selectCardId()` puts the due backlog
+  first, which is right in the middle of a sitting but feels like grinding at the
+  start. So practice warms up: while fewer than **3 cards have been graded in the
+  last 30 minutes** (i.e. the sitting is young), the next card is a new one in
+  curriculum order; then the due/hardest-overdue card takes over. A pause longer
+  than 30 minutes starts a new sitting, so it warms up again. The warm-up never
+  overrides the daily budget and never invents a card: with no new words left it
+  falls straight through to the review queue. Combat is unaffected — it is
+  review-only by design (`pickReviewCard`).
+- **A lesson picks the path, not a card pool.** Starting the next step of the
+  frequency path drills the **whole deck** (due → new → soonest), not just that
+  step's cards. A one-word step has nothing else in it, so a lesson-scoped queue
+  used to re-show the same word four or five times while its `1m → 10m → 60m →
+  240m` learning steps waited. Now the queue moves on to the path's next new word
+  and the learned one comes back only when its step is actually due. The practice
+  header follows the card on screen (`POST /api/practice/next` returns its
+  `lessonId`), and lesson completion fires only on the transition, not every time
+  an already-finished lesson is reviewed. `POST /api/practice/next` also takes an
+  optional `cardId` for a targeted drill; the daily budget still applies.
+
 - **Ratings are two-way**: a wrong answer is **Again**, a right answer is
   **Good** — deliberately never Hard/Easy. FSRS is best trained on that honest
   signal, and an auto-derived "Easy" used to graduate a brand-new card after a
