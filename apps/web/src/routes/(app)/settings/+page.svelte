@@ -17,7 +17,7 @@
     SpeechStatus,
     StudyPrefs,
   } from '#lib/types'
-  import { VOICE_PRESETS, setVoicePrefs } from '#lib/voices'
+  import { LANG_NAMES, setVoicePrefs } from '#lib/voices'
   import Spinner from '#lib/components/Spinner.svelte'
 
   const ROLE_KEYS: Role[] = ['conversation', 'judge', 'generator', 'translator']
@@ -50,7 +50,13 @@
     showZhuyin: true,
     showFurigana: true,
     disabledExercises: [],
+    newPerDay: 20,
+    maxReviewsPerDay: 200,
+    learningSteps: [1, 10, 60, 240],
+    autoReinforce: true,
   })
+  /** The learning steps as an editable comma list of minutes. */
+  let stepsText = $state('1, 10, 60, 240')
   let exercises = $state<ExerciseInfo[]>([])
   let speech = $state<SpeechStatus | null>(null)
   let waking = $state(false)
@@ -86,7 +92,10 @@
       voiceMode = s.voice.mode
       voices = s.voice.voices
       setVoicePrefs({ mode: voiceMode, voices })
-      if (s.study) study = s.study
+      if (s.study) {
+        study = s.study
+        stepsText = (s.study.learningSteps ?? []).join(', ')
+      }
       keyStatus = s.openrouter.key
       foodThreshold = s.foodThreshold ?? 50
       desiredRetention = s.desiredRetention ?? 90
@@ -186,11 +195,18 @@
   async function saveStudy() {
     note = ''
     try {
+      const steps = stepsText
+        .split(/[\s,]+/)
+        .map((s) => Number(s))
+        .filter((n) => Number.isFinite(n) && n > 0)
       const r = await api<{ study: StudyPrefs }>('/api/settings', {
         method: 'PUT',
-        body: JSON.stringify({ study }),
+        body: JSON.stringify({
+          study: { ...study, learningSteps: steps },
+        }),
       })
       study = r.study
+      stepsText = r.study.learningSteps.join(', ')
       note = 'Study preferences saved.'
     } catch (e) {
       error = (e as Error).message
@@ -413,7 +429,7 @@
         onclick={() => (voiceMode = 'preset')}
         class="flex-1 rounded-md border px-3 py-2 text-sm {voiceMode === 'preset'
           ? 'border-seal-400 text-seal-300'
-          : 'border-ink-600 text-ink-300'}">Preset speakers</button
+          : 'border-ink-600 text-ink-300'}">Built-in voice</button
       >
       <button
         onclick={() => (voiceMode = 'design')}
@@ -424,29 +440,25 @@
     </div>
     <p class="mt-2 text-xs text-ink-400">
       {voiceMode === 'preset'
-        ? 'Built-in Qwen3-TTS speakers (fast, lowest memory).'
-        : 'Describe a voice in the text box (e.g. "a warm, patient Mandarin teacher").'}
+        ? 'VoxCPM2 ships one voice, styled as a calm teacher. Switch to Voice design to describe your own.'
+        : 'Describe a voice in the text box (e.g. "a warm, patient Mandarin teacher"). One per language; the model invents it.'}
     </p>
-    <div class="mt-3 space-y-2">
-      {#each Object.entries(VOICE_PRESETS) as [lc, list] (lc)}
-        <label class="block">
-          <span class="mb-1 block text-xs text-ink-400"
-            >{lc.toUpperCase()}{voiceMode === 'design' ? ' · voice description' : ''}</span
-          >
-          <input
-            list={voiceMode === 'preset' ? `voices-${lc}` : undefined}
-            bind:value={voices[lc]}
-            placeholder={voiceMode === 'design'
-              ? 'a calm, professional teacher with a clear, warm voice'
-              : list[0]}
-            class="w-full rounded-md border border-ink-600 bg-ink-900 px-3 py-2 text-sm"
-          />
-          <datalist id="voices-{lc}">
-            {#each list as v (v)}<option value={v}></option>{/each}
-          </datalist>
-        </label>
-      {/each}
-    </div>
+    {#if voiceMode === 'design'}
+      <div class="mt-3 space-y-2">
+        {#each Object.keys(LANG_NAMES) as lc (lc)}
+          <label class="block">
+            <span class="mb-1 block text-xs text-ink-400"
+              >{lc.toUpperCase()} · voice description</span
+            >
+            <input
+              bind:value={voices[lc]}
+              placeholder="a calm, professional teacher with a clear, warm voice"
+              class="w-full rounded-md border border-ink-600 bg-ink-900 px-3 py-2 text-sm"
+            />
+          </label>
+        {/each}
+      </div>
+    {/if}
     <button onclick={saveVoice} class="btn btn-primary mt-3 px-3 py-2 text-sm">Save voice</button>
   </section>
 
@@ -537,6 +549,44 @@
         <input type="checkbox" bind:checked={study.showFurigana} class="h-4 w-4 accent-seal-400" />
       </label>
     </div>
+
+    <p class="mt-4 text-xs text-ink-400">Daily budget — how much you do before the goal is met.</p>
+    <div class="mt-2 grid grid-cols-2 gap-3">
+      <label class="block text-xs text-ink-400">
+        New cards / day <span class="text-ink-500">(0 = ∞)</span>
+        <input
+          type="number"
+          min="0"
+          bind:value={study.newPerDay}
+          class="mt-1 w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm"
+        />
+      </label>
+      <label class="block text-xs text-ink-400">
+        Max reviews / day <span class="text-ink-500">(0 = ∞)</span>
+        <input
+          type="number"
+          min="0"
+          bind:value={study.maxReviewsPerDay}
+          class="mt-1 w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm"
+        />
+      </label>
+    </div>
+    <label class="mt-3 block text-xs text-ink-400">
+      Learning steps (minutes, comma-separated)
+      <input
+        bind:value={stepsText}
+        placeholder="1, 10, 60, 240"
+        class="mt-1 w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm"
+      />
+    </label>
+    <p class="mt-1 text-[11px] text-ink-500">
+      A new card repeats once per step before it graduates (Anki’s default is <code>1, 10</code>).
+    </p>
+
+    <label class="mt-3 flex items-center justify-between gap-3">
+      <span class="text-sm">Add a card automatically when a word keeps lapsing</span>
+      <input type="checkbox" bind:checked={study.autoReinforce} class="h-4 w-4 accent-seal-400" />
+    </label>
 
     <p class="mt-4 text-xs text-ink-400">Exercise kinds offered when you practise.</p>
     <div class="mt-2 space-y-3">

@@ -52,28 +52,6 @@ def _shutdown() -> None:
 
 # --- helpers -----------------------------------------------------------------
 
-# short code -> Qwen language name (used by TTS/align)
-_LANGS = {
-    "zh": "Chinese",
-    "yue": "Cantonese",
-    "en": "English",
-    "ja": "Japanese",
-    "ko": "Korean",
-    "de": "German",
-    "fr": "French",
-    "es": "Spanish",
-    "it": "Italian",
-    "pt": "Portuguese",
-    "ru": "Russian",
-}
-
-
-def lang_name(code: str | None) -> str | None:
-    if not code:
-        return None
-    return _LANGS.get(code.lower(), code)
-
-
 def _is_cjk(ch: str) -> bool:
     o = ord(ch)
     return (
@@ -88,10 +66,10 @@ def _is_cjk(ch: str) -> bool:
 def expected_speech_seconds(text: str) -> float:
     """Rough duration a measured reading of `text` should take.
 
-    Qwen3-TTS occasionally fails to emit its end-of-speech token and keeps
-    "reading" filler after a short word (`これ` → “これ、うん、これ”). Extra
-    speech always pushes the clip past what the text can plausibly need, so the
-    TTS route checks this estimate and retries an over-long take.
+    A TTS model occasionally fails to emit its end-of-speech token and keeps
+    "reading" filler after a short word (`これ` → “これ、うん、これ”). Extra speech
+    always pushes the clip past what the text can plausibly need, so the TTS
+    route checks this estimate and retries an over-long take.
     """
     t = text.strip()
     if not t:
@@ -190,7 +168,13 @@ def warm() -> dict:
         with manager.inference():
             try:
                 models.tts_synthesize(
-                    manager.get("tts_preset"), "你好", voice=None, language="Chinese"
+                    manager.get("tts_preset"),
+                    "你好",
+                    voice=None,
+                    language="zh",
+                    # warm the voice-design path too: the tutor always sends an
+                    # `instruct`, so this is the branch the first real clip uses.
+                    instruct=models.DEFAULT_VOICE_INSTRUCT,
                 )
                 warmed.append("tts_preset")
             except Exception as exc:  # pragma: no cover - depends on the local models
@@ -200,9 +184,9 @@ def warm() -> dict:
                 try:
                     model = manager.get(kind)
                     if kind == "asr":
-                        models.asr_transcribe(model, str(clip), "Chinese")
+                        models.asr_transcribe(model, str(clip), "zh")
                     else:
-                        models.align_text(model, str(clip), "你好", "Chinese")
+                        models.align_text(model, str(clip), "你好", "zh")
                     warmed.append(kind)
                 except Exception as exc:  # pragma: no cover - depends on the local models
                     log.warning("warm %s failed: %s", kind, exc)
@@ -230,7 +214,7 @@ async def asr(
         with manager.inference():
             model = manager.get("asr_lite" if lite else "asr")
             t0 = time.time()
-            out = models.asr_transcribe(model, str(wav), lang_name(language), hint)
+            out = models.asr_transcribe(model, str(wav), language, hint)
             ms = (time.time() - t0) * 1000
         return {"text": out["text"], "segments": out["segments"], "lang": language, "ms": ms}
     finally:
@@ -248,7 +232,7 @@ async def align(
         wav = to_wav16k(path)
         with manager.inference():
             model = manager.get("align")
-            items = models.align_text(model, str(wav), text, lang_name(language))
+            items = models.align_text(model, str(wav), text, language)
         return {"items": items}
     finally:
         path.unlink(missing_ok=True)
@@ -259,7 +243,6 @@ async def assess(
     file: UploadFile = File(...),
     text: str = Form(...),
     language: str | None = Form(None),
-    hint: str | None = Form(None),
 ) -> dict:
     """One shot for pronunciation: transcribe the attempt + align it to `text`."""
     if not text.strip():
@@ -281,9 +264,14 @@ async def assess(
         t0 = time.time()
         with manager.inference():
             asr = manager.get("asr")
-            transcript = models.asr_transcribe(asr, str(wav), lang_name(language), hint)
+            # No `hint`/hotwords: Whisper's initial prompt leaks into a short take,
+            # so biasing it with the deck vocabulary makes the model read a course
+            # word back instead of the learner's (saying いる, hearing います).
+            # The transcript must report what was actually said; the aligner, which
+            # is given `text`, is what anchors the attempt to the expected answer.
+            transcript = models.asr_transcribe(asr, str(wav), language, reference=text)
             aligner = manager.get("align")
-            items = models.align_text(aligner, str(wav), text, lang_name(language))
+            items = models.align_text(aligner, str(wav), text, language)
         return {
             "transcript": transcript["text"],
             "items": items,
@@ -306,7 +294,7 @@ class TtsRequest(BaseModel):
 def tts(req: TtsRequest) -> Response:
     if not req.text.strip():
         raise HTTPException(status_code=400, detail="empty text")
-    kind = "tts_design" if req.mode == "design" else "tts_preset"
+    kind = "tts_preset"
     expected = expected_speech_seconds(req.text)
     # Anything this many times longer than the text can possibly take has
     # picked up filler or a repeated word; take another sample instead.
@@ -322,7 +310,7 @@ def tts(req: TtsRequest) -> Response:
                 model,
                 req.text,
                 voice=req.voice,
-                language=lang_name(req.language),
+                language=req.language,
                 instruct=req.instruct,
                 mode=req.mode,
                 max_tokens=cap,

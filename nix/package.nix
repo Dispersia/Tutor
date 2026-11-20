@@ -97,7 +97,7 @@ let
     '';
     outputHashMode = "recursive";
     outputHashAlgo = "sha256";
-    outputHash = "sha256-/EAILFIazocNJngaOo/vkoH3CgfLlp9dYYWjcNt5m7M=";
+    outputHash = "sha256-CxF8355uSl8TUESxmwje05/Q6sxlK/IlVajZkej7CcM=";
   };
 
   appFiles = pkgs.stdenvNoCC.mkDerivation {

@@ -17,8 +17,8 @@ from . import models
 from .models import Manager
 
 PHRASE = "你好，我是一个语言学习助手。"
-VOICE = "Serena"
-LANG = "Chinese"
+INSTRUCT = "A calm, professional language teacher with clear articulation."
+LANG = "zh"
 EN_PHRASE = "Hello, I am a language learning assistant."
 
 
@@ -42,14 +42,20 @@ def main() -> None:
 
     # --- warm-up calls (first inference pays compile/graph cost) ---
     with mgr.inference():
-        models.tts_synthesize(mgr.get("tts_preset"), "预热。", voice=VOICE, language=LANG)
+        models.tts_synthesize(mgr.get("tts_preset"), "预热。", language=LANG, instruct=INSTRUCT)
+    fd0, warm = tempfile.mkstemp(suffix=".wav")
+    models.write_wav(warm, *models.tts_synthesize(mgr.get("tts_preset"), "预热。", language=LANG, instruct=INSTRUCT))
+    with mgr.inference():
+        models.asr_transcribe(mgr.get("asr"), warm, LANG)
+        models.align_text(mgr.get("align"), warm, "预热", LANG)
+    Path(warm).unlink(missing_ok=True)
     print(f"warmed: rss={mb(models._rss_bytes())}  {mem(models.mlx_memory())}")
 
     # --- TTS ---
     t0 = time.time()
     with mgr.inference():
         arr, sr = models.tts_synthesize(
-            mgr.get("tts_preset"), PHRASE, voice=VOICE, language=LANG, mode="preset"
+            mgr.get("tts_preset"), PHRASE, language=LANG, instruct=INSTRUCT, mode="preset"
         )
     t_tts = time.time() - t0
     dur = len(arr) / sr
@@ -78,7 +84,7 @@ def main() -> None:
     t0 = time.time()
     with mgr.inference():
         _, _ = models.tts_synthesize(
-            mgr.get("tts_preset"), EN_PHRASE, voice="Ryan", language="English"
+            mgr.get("tts_preset"), EN_PHRASE, language="en", instruct=INSTRUCT
         )
     print(f"[TTS/EN] {time.time() - t0:5.2f}s")
 

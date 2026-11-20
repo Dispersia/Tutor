@@ -35,13 +35,11 @@ const reference = FSRS6Model.create({
 const DAY = DAY_MS
 const now = 1_000_000_000_000
 
-test('ratingFromScore maps scores to FSRS ratings', () => {
-  expect(ratingFromScore(100, true)).toBe(EASY)
-  expect(ratingFromScore(90, true)).toBe(EASY)
-  expect(ratingFromScore(80, true)).toBe(GOOD)
-  expect(ratingFromScore(65, true)).toBe(HARD)
-  expect(ratingFromScore(65, false)).toBe(AGAIN)
+test('ratingFromScore is two-way: Again when wrong, Good when right', () => {
+  expect(ratingFromScore(100, true)).toBe(GOOD)
+  expect(ratingFromScore(65, true)).toBe(GOOD)
   expect(ratingFromScore(0, false)).toBe(AGAIN)
+  expect(ratingFromScore(65, false)).toBe(AGAIN)
 })
 
 test('Anki defaults: 21 weights, decay w20, 1m/10m steps', () => {

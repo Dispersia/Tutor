@@ -1,4 +1,5 @@
 import { api } from './api'
+import type { StudyBudget } from './exercises'
 
 export interface LessonDTO {
   id: string
@@ -40,6 +41,7 @@ export interface SrsStats {
   learned: number
   due: number
   new: number
+  budget: StudyBudget
 }
 
 export const getCurriculum = () => api<CurriculumResponse>('/api/curriculum')

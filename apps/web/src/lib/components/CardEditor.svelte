@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { getDeckCards, updateDeckCard } from '#lib/exercises'
+  import { addDeckCard, getDeckCards, updateDeckCard } from '#lib/exercises'
   import type { Card, PitchContour, PitchLevel } from '#lib/types'
   import Pitch from './Pitch.svelte'
   import Word from './Word.svelte'
@@ -24,6 +24,14 @@
   let drop = $state(0)
   let syllables = $state('')
   let extra = $state('')
+
+  // "add a card" draft
+  let showAdd = $state(false)
+  let newFront = $state('')
+  let newBack = $state('')
+  let newReading = $state('')
+  let newStep = $state('')
+  let adding = $state(false)
 
   const selected = $derived(cards.find((c) => c.id === selectedId))
 
@@ -102,6 +110,35 @@
   }
 
   const pitchCount = $derived(cards.filter((c) => c.metadata?.pitch).length)
+
+  /** Adds a hand-authored card; `step` places it in an existing lesson. */
+  async function addCard() {
+    const front = newFront.trim()
+    const back = newBack.trim()
+    if (!front || !back || adding) return
+    adding = true
+    error = ''
+    try {
+      const step = Number(newStep)
+      const { card } = await addDeckCard(deck.id, {
+        front,
+        back,
+        reading: newReading.trim() || undefined,
+        step: newStep.trim() && Number.isFinite(step) ? step : undefined,
+      })
+      cards = [...cards, card]
+      select(card)
+      newFront = ''
+      newBack = ''
+      newReading = ''
+      newStep = ''
+      showAdd = false
+    } catch (e) {
+      error = (e as Error).message
+    } finally {
+      adding = false
+    }
+  }
 </script>
 
 <svelte:window
@@ -140,6 +177,50 @@
           <Spinner size={14} label="Loading cards" /> Loading cards…
         </p>
       {:else}
+        <div class="mt-4">
+          <button
+            type="button"
+            onclick={() => (showAdd = !showAdd)}
+            class="text-xs text-ink-400 underline"
+          >
+            {showAdd ? 'Cancel' : '+ Add a card'}
+          </button>
+          {#if showAdd}
+            <div class="mt-2 grid gap-2 rounded-lg border border-ink-700 p-3 sm:grid-cols-2">
+              <input
+                bind:value={newFront}
+                placeholder="front (meaning)"
+                class="rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm"
+              />
+              <input
+                bind:value={newBack}
+                placeholder="back (target text)"
+                class="rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm"
+              />
+              <input
+                bind:value={newReading}
+                placeholder="reading (optional)"
+                class="rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm"
+              />
+              <input
+                bind:value={newStep}
+                type="number"
+                min="1"
+                placeholder="step (blank = new, at the end)"
+                class="rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm"
+              />
+              <button
+                type="button"
+                onclick={addCard}
+                disabled={adding || !newFront.trim() || !newBack.trim()}
+                class="btn btn-primary py-2 text-sm disabled:opacity-60 sm:col-span-2"
+              >
+                {adding ? 'Adding…' : 'Add card'}
+              </button>
+            </div>
+          {/if}
+        </div>
+
         <div class="mt-4 grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
           <!-- card list -->
           <div class="max-h-[60vh] overflow-y-auto rounded-lg border border-ink-700">

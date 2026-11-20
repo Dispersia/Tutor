@@ -269,6 +269,11 @@
         {stats.due}
       </div>
       <div class="eyebrow">due · {stats.learned}/{stats.total} learned</div>
+      {#if stats.budget && !stats.budget.newUnlimited}
+        <div class="mt-0.5 text-[11px] text-ink-400">
+          {stats.budget.newToday}/{stats.budget.newPerDay} new today
+        </div>
+      {/if}
     </div>
   {/if}
 </div>

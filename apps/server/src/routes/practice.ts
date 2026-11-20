@@ -24,11 +24,13 @@ import {
   recordActivity,
   recordReview,
   srsStateMap,
+  studyBudget,
   summary,
 } from '../game/service'
 import { buildLessons } from '../game/curriculum'
+import { REINFORCE_LAPSES, reinforceLapsedCard } from '../deck/reinforce'
 import { quietState, setQuiet } from '../game/quiet'
-import { readStudyPrefs, showsReadings } from '../game/study'
+import { bumpDailyExtra, readStudyPrefs, showsReadings } from '../game/study'
 import { ACTION_BY_ID } from '../game/skills'
 import { selectCardId } from '../game/srs'
 import { OpenRouter } from '../llm/openrouter'
@@ -323,8 +325,21 @@ export function registerPractice(app: App) {
       lessonIds = lesson.cardIds
     }
 
-    const card = pickStudyCard(deps, user.id, deckId, lessonIds)
-    if (!card) return c.json({ error: 'no cards in this deck' }, 404)
+    // Daily budget (Anki-style limits): new cards and reviews are capped per UTC
+    // day; "study more" raises today's allowance. A new card is one with no SRS
+    // state yet, everything else (learning + review) draws on the review budget.
+    const budget = studyBudget(deps.db, user.id)
+    const allowNew = budget.newUnlimited || budget.newRemaining > 0
+    const allowReview = budget.reviewsUnlimited || budget.reviewsRemaining > 0
+    const baseIds = lessonIds ?? listCards(deps.db, user.id, deckId).map((c) => c.id)
+    const srsForBudget = srsStateMap(deps.db, user.id)
+    const allowedIds = baseIds.filter((id) => (srsForBudget.has(id) ? allowReview : allowNew))
+    if (allowedIds.length === 0) {
+      return c.json({ instance: null, action: null, done: true, budget })
+    }
+
+    const card = pickStudyCard(deps, user.id, deckId, allowedIds)
+    if (!card) return c.json({ instance: null, action: null, done: true, budget })
 
     const learner = learnerOf(user)
     const srs = srsStateMap(deps.db, user.id)
@@ -386,6 +401,19 @@ export function registerPractice(app: App) {
           }
         : null,
     })
+  })
+
+  // "Study more" (Anki's custom study): raise today's new/review allowance so a
+  // motivated learner can keep going past the daily goal.
+  app.post('/api/study/more', (c) => {
+    const deps = c.get('deps')
+    const user = c.get('user')!
+    const prefs = readStudyPrefs(deps.db, user.id)
+    bumpDailyExtra(deps.db, user.id, {
+      newExtra: prefs.newPerDay > 0 ? prefs.newPerDay : 0,
+      reviewsExtra: prefs.maxReviewsPerDay > 0 ? prefs.maxReviewsPerDay : 0,
+    })
+    return c.json({ ok: true, budget: studyBudget(deps.db, user.id) })
   })
 
   app.post('/api/practice/grade', async (c) => {
@@ -467,6 +495,15 @@ export function registerPractice(app: App) {
     })
     const skill = settleAction(deps, user.id, body.actionId, result)
     const srs = recordReview(deps.db, deps.events, user.id, card.id, result.score, result.correct)
+    // A word that keeps slipping gets an extra card woven in beside it (n+1),
+    // in the background so the learner never waits on the generator.
+    if (
+      card.payload?.template === 'vocab' &&
+      srs.lapses >= REINFORCE_LAPSES &&
+      readStudyPrefs(deps.db, user.id).autoReinforce
+    ) {
+      void reinforceLapsedCard(deps, user.id, card.id).catch(() => {})
+    }
     const lessonCompleted = body.lessonId
       ? checkLessonCompletion(deps.db, deps.events, user.id, body.lessonId)
       : false
@@ -518,17 +555,11 @@ export function registerPractice(app: App) {
 
     const audio = new Uint8Array(await file.arrayBuffer())
     const learner = learnerOf(user)
-    // Bias the ASR toward the words actually in play (this deck when we know it,
-    // else everything in the target language) so a near-miss is not replaced by
-    // an unrelated word. Capped: a short list is context, a long one is noise.
-    const vocabPool = card.deckId
-      ? listCards(deps.db, user.id, card.deckId)
-      : listCards(deps.db, user.id)
-    const hint = [...new Set([card.back, ...vocabPool.map((c) => c.back)])]
-      .filter(Boolean)
-      .slice(0, 40)
-      .join(', ')
-    const assess: AssessFn = deps.assess ?? makeAssessor(deps, card.targetLang, hint)
+    // No ASR biasing here: the deck vocabulary is deliberately kept out of the
+    // decode. Whisper would fold it into its initial prompt and read a course word
+    // back out (saying いる, hearing います), so grading stays honest and the
+    // forced aligner anchors to the expected text instead.
+    const assess: AssessFn = deps.assess ?? makeAssessor(deps, card.targetLang)
     const ctx = {
       card,
       learner,

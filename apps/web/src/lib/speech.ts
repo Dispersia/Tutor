@@ -58,7 +58,7 @@ async function fetchTts(text: string, opts: SpeakOptions, signal?: AbortSignal):
   return res.blob()
 }
 
-/** Synthesises and plays one chunk of text via the local Qwen3-TTS. */
+/** Synthesises and plays one chunk of text via the local speech gateway. */
 export async function speak(
   text: string,
   opts: SpeakOptions = {},
@@ -154,10 +154,12 @@ export function createSpeaker(opts: SpeakOptions = {}, onError?: (err: Error) =>
   }
 }
 
-/** Transcribes a recorded clip with the local Qwen3-ASR. */
+/** Transcribes a recorded clip with the local speech gateway. */
 export async function transcribe(blob: Blob, language?: string): Promise<string> {
   const fd = new FormData()
-  fd.set('file', blob, 'clip.webm')
+  // Recorder hands us a trimmed 16 kHz WAV; keep the name honest for the gateway.
+  const name = blob.type.includes('wav') ? 'clip.wav' : 'clip.webm'
+  fd.set('file', blob, name)
   if (language) fd.set('language', language)
   const res = await fetch(apiPath('/api/speech/asr'), {
     method: 'POST',

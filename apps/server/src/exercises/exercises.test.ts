@@ -73,6 +73,30 @@ test('sentence_build stays Mandarin-only without payload tokens', () => {
   expect(def.supports(ctx({ targetLang: 'es', payload: {} }).card, learner)).toBe(false)
 })
 
+test('sentence_build never shows the whole sentence as the new-word hint', async () => {
+  const def = registry.get('sentence_build')!
+  // A generated sentence card with no explicit `newWord` used to fall back to
+  // `back` — printing the answer under the tiles.
+  const bare = ctx({
+    targetLang: 'es',
+    front: 'I drink tea',
+    back: 'yo bebo té',
+    readings: {},
+    payload: { tokens: ['yo', 'bebo', 'té'], gloss: 'I drink tea' },
+  })
+  expect((await def.generate(bare)).data.newWord).toBeUndefined()
+
+  // An explicit new word is still surfaced as the hint.
+  const hinted = ctx({
+    targetLang: 'es',
+    front: 'I drink tea',
+    back: 'yo bebo té',
+    readings: {},
+    payload: { tokens: ['yo', 'bebo', 'té'], gloss: 'I drink tea', newWord: 'té' },
+  })
+  expect((await def.generate(hinted)).data.newWord).toBe('té')
+})
+
 test('grammar_cloze grades a choice card from its payload (any language)', async () => {
   const def = registry.get('grammar_cloze')!
   const c = ctx({

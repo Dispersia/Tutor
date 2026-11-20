@@ -883,6 +883,7 @@ dependencies = [
     { name = "soundfile" },
     { name = "soynlp" },
     { name = "uvicorn", extra = ["standard"] },
+    { name = "zhconv" },
 ]
 
 [package.metadata]
@@ -897,6 +898,7 @@ requires-dist = [
     { name = "soundfile", specifier = ">=0.12" },
     { name = "soynlp", specifier = ">=0.0.493" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
+    { name = "zhconv", specifier = ">=1.4.3" },
 ]
 
 [[package]]
@@ -1032,3 +1034,9 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/b2/49/eed86bfb8863093a82cbaa52c9159be1ce2374d5ace6fe1f8e8031567e7d/websockets-17.4-pp312-pypy312_pp80-win_amd64.whl", hash = "sha256:829bcaa90be8737c132d9515d6a466e8528e3b3d050d3f3466f36ea94d3beb48", size = 306838, upload-time = "2026-10-30T15:10:32.954Z" },
     { url = "https://files.pythonhosted.org/packages/eb/27/9db924cb0dbf22eade78d98fbae77790f9bf6bc729e6ab29aef9d68e4156/websockets-17.4-py3-none-any.whl", hash = "sha256:c6bd2c9781915592b209160d0f017d4c7c82ad53075e6b0c24d2a89299e7f9e9", size = 212900, upload-time = "2026-10-30T15:10:34.482Z" },
 ]
+
+[[package]]
+name = "zhconv"
+version = "1.4.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/25/47/c8ae2d5d4025e253211ff3d8c163f457db1da94976cb582337a5ab76cb87/zhconv-1.4.3.tar.gz", hash = "sha256:ad42d9057ca0605f8e41d62b67ca797f879f58193ee6840562c51459b2698c45", size = 211571, upload-time = "2021-10-31T05:59:44.096Z" }

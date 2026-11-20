@@ -7,6 +7,7 @@ import {
   addXpEvent,
   clearEncounter,
   completeLesson,
+  dailyReviewCounts,
   deckKey,
   getActionXp,
   getEncounter,
@@ -38,6 +39,7 @@ import {
 } from '../db/repo'
 import type { EventBus } from '../events'
 import { publicDeckSettings } from '../deck/settings'
+import { readDailyExtra, readStudyPrefs } from './study'
 import { pinyinToZhuyin } from '../seed/zhuyin'
 import { buildLessons } from './curriculum'
 import {
@@ -1238,7 +1240,10 @@ export function recordReview(
     prev.state === 'new' || prev.lastReviewAt == null
       ? 0
       : Math.max(0, (now - prev.lastReviewAt) / DAY_MS)
-  const { state, intervalDays, dueAt } = schedule(prev, rating, now, { desiredRetention })
+  const { state, intervalDays, dueAt } = schedule(prev, rating, now, {
+    desiredRetention,
+    learningSteps: readStudyPrefs(db, userId).learningSteps,
+  })
   upsertSrs(db, userId, cardId, {
     state: state.state,
     step: state.step,
@@ -1319,11 +1324,62 @@ export function knownWords(db: Db, userId: string): Set<string> {
   return known
 }
 
+export interface StudyBudget {
+  /** Effective limits; 0 means unlimited. */
+  newPerDay: number
+  maxReviewsPerDay: number
+  /** How much of each budget is already spent today (UTC). */
+  newToday: number
+  reviewsToday: number
+  /** What is left under the budget (the available count when unlimited). */
+  newRemaining: number
+  reviewsRemaining: number
+  newUnlimited: boolean
+  reviewsUnlimited: boolean
+}
+
+/** Start of the UTC day containing `ts`, in epoch ms (matches the streak day). */
+export function startOfUtcDay(ts: number): number {
+  const d = new Date(ts)
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
+}
+
+/**
+ * Today's study budget: how many new cards and reviews are left (docs/DESIGN.md
+ * §13.6). Anki-style daily limits bound a day's work; the learner can raise
+ * today's allowance with "study more".
+ */
+export function studyBudget(db: Db, userId: string, now: number = Date.now()): StudyBudget {
+  const prefs = readStudyPrefs(db, userId)
+  const extra = readDailyExtra(db, userId, now)
+  const { newCards, reviews } = dailyReviewCounts(db, userId, startOfUtcDay(now))
+  const ids = listCards(db, userId).map((c) => c.id)
+  const map = srsStateMap(db, userId)
+  const newPerDay = prefs.newPerDay <= 0 ? 0 : prefs.newPerDay + extra.newExtra
+  const maxReviewsPerDay =
+    prefs.maxReviewsPerDay <= 0 ? 0 : prefs.maxReviewsPerDay + extra.reviewsExtra
+  const newUnlimited = newPerDay === 0
+  const reviewsUnlimited = maxReviewsPerDay === 0
+  return {
+    newPerDay,
+    maxReviewsPerDay,
+    newToday: newCards,
+    reviewsToday: reviews,
+    newRemaining: newUnlimited ? countNew(ids, map) : Math.max(0, newPerDay - newCards),
+    reviewsRemaining: reviewsUnlimited
+      ? countDue(ids, map, now)
+      : Math.max(0, maxReviewsPerDay - reviews),
+    newUnlimited,
+    reviewsUnlimited,
+  }
+}
+
 export interface SrsStats {
   total: number
   learned: number
   due: number
   new: number
+  budget: StudyBudget
 }
 
 export function srsStats(db: Db, userId: string): SrsStats {
@@ -1335,6 +1391,7 @@ export function srsStats(db: Db, userId: string): SrsStats {
     learned: ids.filter((id) => isLearned(map.get(id))).length,
     due: countDue(ids, map, now),
     new: countNew(ids, map),
+    budget: studyBudget(db, userId, now),
   }
 }
 

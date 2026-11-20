@@ -102,9 +102,9 @@ test('practising a step stays inside it and records spaced repetition', async ()
   ).json()) as { instance: { cardId: string } }
   expect(next.instance.cardId).toBe(first.id)
 
-  // grade the step's card correctly twice → the step completes
+  // grade the step's card correctly until it graduates through its learning steps
   let last: { lessonCompleted: boolean } = { lessonCompleted: false }
-  for (let pass = 0; pass < 2; pass++) {
+  for (let pass = 0; pass < 8 && !last.lessonCompleted; pass++) {
     const res = (await (
       await app.request(
         '/api/practice/grade',
@@ -144,6 +144,59 @@ test('practising a step stays inside it and records spaced repetition', async ()
   sqlite.close()
 })
 
+test('the daily new-card limit stops the path; "study more" resumes it', async () => {
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
+  // A tiny budget keeps the test quick: 2 new cards and 2 reviews today.
+  await app.request(
+    '/api/settings',
+    auth(cookie, { ...json({ study: { newPerDay: 2, maxReviewsPerDay: 2 } }), method: 'PUT' }),
+  )
+  const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
+    decks: { id: string; level: string }[]
+  }
+  const deckId = decks.decks.find((d) => d.level === 'zhfreq')!.id
+  const cards = (await (
+    await app.request(`/api/decks/${deckId}/cards`, auth(cookie))
+  ).json()) as { cards: { id: string; back: string }[] }
+
+  // One answer each on two brand-new cards spends the whole day's budget.
+  for (const card of cards.cards.slice(0, 2)) {
+    await app.request(
+      '/api/practice/grade',
+      auth(
+        cookie,
+        json({ exerciseId: 'translate.front_to_back', cardId: card.id, answer: card.back }),
+      ),
+    )
+  }
+
+  const next = (await (
+    await app.request('/api/practice/next', auth(cookie, json({ deckId })))
+  ).json()) as {
+    instance: unknown
+    done?: boolean
+    budget?: { newRemaining: number; reviewsRemaining: number }
+  }
+  expect(next.done).toBe(true)
+  expect(next.instance).toBeNull()
+  expect(next.budget?.newRemaining).toBe(0)
+  expect(next.budget?.reviewsRemaining).toBe(0)
+
+  // "Study more" raises today's allowance, so the drill comes back.
+  const more = (await (
+    await app.request('/api/study/more', auth(cookie, { method: 'POST' }))
+  ).json()) as { budget: { newRemaining: number; reviewsRemaining: number } }
+  expect(more.budget.newRemaining).toBeGreaterThan(0)
+
+  const resumed = (await (
+    await app.request('/api/practice/next', auth(cookie, json({ deckId })))
+  ).json()) as { instance: { cardId: string } | null; done?: boolean }
+  expect(resumed.done).toBeFalsy()
+  expect(resumed.instance?.cardId).toBeTruthy()
+  sqlite.close()
+})
+
 test('the frequency path introduces one word per step (n+1)', async () => {
   const { app, db, sqlite } = makeApp()
   const cookie = await signup(app, db)
@@ -178,6 +231,11 @@ test('the frequency path introduces one word per step (n+1)', async () => {
 test('sentence_build builds and grades an n+1 sentence once words are known', async () => {
   const { app, db, sqlite } = makeApp()
   const cookie = await signup(app, db)
+  // This test wants unlimited new cards so the budget never blocks the lesson.
+  await app.request(
+    '/api/settings',
+    auth(cookie, { ...json({ study: { newPerDay: 0, maxReviewsPerDay: 0 } }), method: 'PUT' }),
+  )
   const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
     decks: { id: string; level: string }[]
   }
@@ -186,23 +244,24 @@ test('sentence_build builds and grades an n+1 sentence once words are known', as
     await app.request(`/api/decks/${freqDeck.id}/cards`, auth(cookie))
   ).json()) as { cards: { id: string; back: string }[] }
 
-  // learn the first 35 words (a correct answer with a perfect score graduates
-  // a new card straight to review, i.e. "learned")
+  // learn the first 35 words: grade each until it graduates through its steps
   for (const card of cards.cards.slice(0, 35)) {
-    const res = (await (
-      await app.request(
-        '/api/practice/grade',
-        auth(
-          cookie,
-          json({
-            exerciseId: 'translate.front_to_back',
-            cardId: card.id,
-            answer: card.back,
-          }),
-        ),
-      )
-    ).json()) as { result: { correct: boolean } }
-    expect(res.result.correct).toBe(true)
+    for (let pass = 0; pass < 5; pass++) {
+      const res = (await (
+        await app.request(
+          '/api/practice/grade',
+          auth(
+            cookie,
+            json({
+              exerciseId: 'translate.front_to_back',
+              cardId: card.id,
+              answer: card.back,
+            }),
+          ),
+        )
+      ).json()) as { result: { correct: boolean } }
+      expect(res.result.correct).toBe(true)
+    }
   }
 
   // the step for 喝 should now be able to build "我 喝 茶"

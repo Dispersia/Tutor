@@ -113,12 +113,15 @@ export function nextInterval(s: number, desiredRetention: number): number {
   return Math.max(0, Math.round(core.algorithm.next_interval(s, desiredRetention)))
 }
 
-/** Maps an exercise score to an Anki rating (Again / Hard / Good / Easy). */
-export function ratingFromScore(score: number, correct: boolean): Rating {
-  if (!correct) return AGAIN
-  if (score >= 90) return EASY
-  if (score >= 80) return GOOD
-  return HARD
+/**
+ * Maps an exercise score to an FSRS rating. We only ever use **Again** (wrong)
+ * or **Good** (right): the app auto-derives the rating, and FSRS is best trained
+ * and scheduled with the two-way signal. Hard/Easy are intentionally unused —
+ * letting a near-perfect score jump a card straight to "Easy" is what made new
+ * cards graduate (and vanish for days) after a single answer.
+ */
+export function ratingFromScore(_score: number, correct: boolean): Rating {
+  return correct ? GOOD : AGAIN
 }
 
 export const RATING_LABELS: Record<Rating, string> = {

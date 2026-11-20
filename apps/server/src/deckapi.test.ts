@@ -152,6 +152,46 @@ test('POST /api/decks builds a deck from an instruction and a pulled list', asyn
   sqlite.close()
 })
 
+test('POST /api/decks/:id/cards adds a card, optionally into a lesson', async () => {
+  const { app, sqlite } = makeApp()
+  const cookie = await signup(app)
+  const created = (await (
+    await app.request(
+      '/api/decks',
+      auth(cookie, json({ instruction: 'chinese frequency list', targetLang: 'zh', count: 3 })),
+    )
+  ).json()) as DeckBody
+
+  // With a step it joins that lesson (the n+1 group).
+  const res = await app.request(
+    `/api/decks/${created.deck.id}/cards`,
+    auth(cookie, json({ front: 'a sentence', back: '你好', type: 'phrase', step: 2 })),
+  )
+  expect(res.status).toBe(201)
+  const body = (await res.json()) as {
+    card: { id: string; payload: Record<string, unknown> }
+    step: number
+  }
+  expect(body.step).toBe(2)
+  expect(body.card.payload.step).toBe(2)
+  expect(body.card.payload.template).toBe('phrase')
+
+  const cards = (await (
+    await app.request(`/api/decks/${created.deck.id}/cards`, auth(cookie))
+  ).json()) as { cards: { id: string }[] }
+  expect(cards.cards.some((c) => c.id === body.card.id)).toBe(true)
+
+  // Without a step it appends a fresh step at the end.
+  const appended = (await (
+    await app.request(
+      `/api/decks/${created.deck.id}/cards`,
+      auth(cookie, json({ front: 'more', back: '再' })),
+    )
+  ).json()) as { step: number }
+  expect(appended.step).toBeGreaterThan(2)
+  sqlite.close()
+})
+
 test('POST /api/decks needs a planner (OpenRouter key)', async () => {
   const { app, sqlite } = makeApp({ planner: undefined })
   const cookie = await signup(app)
@@ -603,6 +643,52 @@ test('GET /api/decks exposes each deck settings', async () => {
   sqlite.close()
 })
 
+test('generated sentence/grammar cards that reach ahead of their words are dropped', async () => {
+  // The planner is only *asked* to stay n+1; the loader must enforce it. These
+  // cards reach ahead to words the deck introduces much later (the real "dono
+  // before its own card" bug).
+  const list = ['w1 100', 'w2 90', 'w3 80', 'w4 70', 'w5 60', 'w6 50'].join('\n')
+  const futureFetcher: Fetcher = async () => list
+  const aheadPlanner: Planner = async () => {
+    const cards: PlannedCard[] = [
+      { template: 'vocab', front: 'v1', back: 'w1', reading: 'r1' },
+      // uses only w1 (known) -> kept
+      { template: 'sentence', front: 's-w1', back: 'w1', payload: { tokens: ['w1'] } },
+      // uses w5 before w5's vocab card -> dropped (n+1)
+      { template: 'sentence', front: 's-w5', back: 'w5', payload: { tokens: ['w5'] } },
+      { template: 'vocab', front: 'v2', back: 'w2', reading: 'r2' },
+      { template: 'vocab', front: 'v3', back: 'w3', reading: 'r3' },
+      // grammar whose answer is still to come -> dropped
+      { template: 'grammar', front: 'g-w6', back: 'w6', payload: { answer: 'w6', rule: 'r' } },
+      // grammar built on an introduced word -> kept
+      { template: 'grammar', front: 'g-w3', back: 'w3', payload: { answer: 'w3', rule: 'r' } },
+    ]
+    return cards
+  }
+  const { app, sqlite } = makeApp({ fetcher: futureFetcher, planner: aheadPlanner })
+  const cookie = await signup(app)
+  const created = (await (
+    await app.request(
+      '/api/decks',
+      auth(cookie, json({ instruction: 'frequency list', targetLang: 'zh', count: 3 })),
+    )
+  ).json()) as DeckBody
+
+  const cards = (await (
+    await app.request(`/api/decks/${created.deck.id}/cards`, auth(cookie))
+  ).json()) as {
+    cards: { front: string; back: string; payload: Record<string, unknown> }[]
+  }
+  const fronts = cards.cards.map((c) => c.front)
+  expect(fronts).toContain('s-w1')
+  expect(fronts).toContain('g-w3')
+  expect(fronts).not.toContain('s-w5')
+  expect(fronts).not.toContain('g-w6')
+  // the kept cards still carry their n+1 step
+  expect(cards.cards.find((c) => c.front === 'g-w3')!.payload.step).toBe(3)
+  sqlite.close()
+})
+
 test('a large build chunks the planner and keeps n+1 across chunks', async () => {
   const words = Array.from({ length: PLAN_CHUNK * 2 + 0 }, (_, i) => `w${i + 1}`)
   const bigFetcher: Fetcher = async () => words.map((w, i) => `${w} ${1000 - i}`).join('\n')
@@ -648,9 +734,7 @@ test('a large build chunks the planner and keeps n+1 across chunks', async () =>
   const cards = (await (
     await app.request(`/api/decks/${created.deck.id}/cards`, auth(cookie))
   ).json()) as { cards: { payload: Record<string, unknown> }[] }
-  const steps = cards.cards
-    .filter((c) => c.payload.template === 'vocab')
-    .map((c) => c.payload.step)
+  const steps = cards.cards.filter((c) => c.payload.template === 'vocab').map((c) => c.payload.step)
   expect(steps).toEqual(words.map((_, i) => i + 1))
   sqlite.close()
 })
@@ -662,7 +746,8 @@ test('a batch that overflows the model is retried smaller, not abandoned', async
   // accept only small batches — anything wider "truncates" like a real model
   const flaky: Planner = async (req) => {
     calls.push(req)
-    if (req.count > 10) throw new Error('the model ran out of output space before its JSON was complete')
+    if (req.count > 10)
+      throw new Error('the model ran out of output space before its JSON was complete')
     return req.words.slice(0, req.count).map((w) => ({
       template: 'vocab' as const,
       front: `meaning ${w}`,
@@ -716,9 +801,7 @@ test('grow { all: true } finishes a partly-imported deck in the background', asy
     deck: { settings: Record<string, unknown> }
     cards: { back: string; payload: Record<string, unknown> }[]
   }
-  const vocab = after.cards
-    .filter((c) => c.payload.template === 'vocab')
-    .map((c) => c.back)
+  const vocab = after.cards.filter((c) => c.payload.template === 'vocab').map((c) => c.back)
   expect(vocab).toEqual(['我', '你', '喝', '茶'])
   expect(after.deck.settings.building).toBe(false)
   sqlite.close()

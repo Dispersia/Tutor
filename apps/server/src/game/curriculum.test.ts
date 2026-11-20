@@ -31,3 +31,15 @@ test('the same builder drives the Japanese path', () => {
 test('an empty deck has no lessons', () => {
   expect(buildLessons('zhfreq', [])).toEqual([])
 })
+
+test('a card inserted later still joins its lesson (grouping by step value)', () => {
+  const lessons = buildLessons('deck:1', [
+    { id: 'a', front: 'one', back: '一', step: 1 },
+    { id: 'b', front: 'two', back: '二', step: 2 },
+    // a reinforcement card appended at the end but tagged step 1
+    { id: 'c', front: 'a sentence', back: '一です', step: 1 },
+  ])
+  expect(lessons.length).toBe(2)
+  expect(lessons[0]!.cardIds).toEqual(['a', 'c'])
+  expect(lessons[1]!.cardIds).toEqual(['b'])
+})

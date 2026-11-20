@@ -152,6 +152,35 @@ test('recordReview appends an FSRS revlog row with the before/after state', () =
   sqlite.close()
 })
 
+test('a brand-new card never graduates on its first answer', () => {
+  const { db, sqlite } = openDb(':memory:')
+  const bus = new EventBus()
+  const user = createUser(db, { username: 'frank', passwordHash: 'x' })
+
+  // Every correct answer is a "Good" learning step (never "Easy"): the card
+  // takes the learning steps, then graduates. It must not graduate in one shot.
+  const first = recordReview(db, bus, user.id, 'card-1', 100, true)
+  expect(first.rating).toBe(3) // Good
+  expect(first.state).toBe('learning')
+  expect(first.intervalDays).toBe(0)
+  expect(first.dueAt).toBeLessThan(Date.now() + 11 * 60 * 1000)
+
+  let cur = first
+  let reviews = 1
+  while (cur.state !== 'review' && reviews < 10) {
+    cur = recordReview(db, bus, user.id, 'card-1', 100, true)
+    reviews++
+  }
+  expect(cur.state).toBe('review')
+  expect(cur.intervalDays).toBeGreaterThanOrEqual(1)
+  expect(reviews).toBeGreaterThan(1)
+
+  // A wrong answer is Again, even on an established card.
+  const wrong = recordReview(db, bus, user.id, 'card-1', 0, false)
+  expect(wrong.rating).toBe(1)
+  sqlite.close()
+})
+
 test('the revlog records fractional elapsed days and the review source', () => {
   const { db, sqlite } = openDb(':memory:')
   const bus = new EventBus()

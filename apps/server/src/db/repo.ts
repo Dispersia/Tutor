@@ -1,5 +1,5 @@
 import type { Card, CardMetadata, CardType } from '@tutor/core'
-import { and, asc, desc, eq, inArray, like, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, inArray, like, ne, sql } from 'drizzle-orm'
 import {
   DECK_INSTRUCTION_KEY,
   mergeDeckSettings,
@@ -948,6 +948,38 @@ export function introducedCardIds(db: Db, userId: string): Set<string> {
     .where(and(eq(reviews.userId, userId), eq(reviews.exerciseId, 'introduce')))
     .all()
   return new Set(rows.map((r) => r.cardId).filter((c): c is string => Boolean(c)))
+}
+
+/** Today's study counts for the daily new/review budget (docs/DESIGN.md §13.6). */
+export interface DailyReviewCounts {
+  /** Cards whose *first graded* review is at/after `since` — Anki's "new today". */
+  newCards: number
+  /** Graded reviews at/after `since` (the teach-only `introduce` step excluded). */
+  reviews: number
+}
+
+export function dailyReviewCounts(db: Db, userId: string, since: number): DailyReviewCounts {
+  // A card counts as "new today" when it entered learning today, i.e. its first
+  // graded review is today — reviewing an old card again today is not "new".
+  const firsts = db
+    .select({ firstAt: sql<number>`min(${reviews.createdAt})` })
+    .from(reviews)
+    .where(and(eq(reviews.userId, userId), ne(reviews.exerciseId, 'introduce')))
+    .groupBy(reviews.cardId)
+    .all()
+  const newCards = firsts.filter((r) => Number(r.firstAt) >= since).length
+  const row = db
+    .select({ n: sql<number>`count(*)` })
+    .from(reviews)
+    .where(
+      and(
+        eq(reviews.userId, userId),
+        ne(reviews.exerciseId, 'introduce'),
+        gte(reviews.createdAt, since),
+      ),
+    )
+    .get()
+  return { newCards, reviews: Number(row?.n ?? 0) }
 }
 
 // --- combat encounters (Phase 8) ---------------------------------------------

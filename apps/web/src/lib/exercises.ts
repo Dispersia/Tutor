@@ -10,6 +10,18 @@ export interface Instance {
   data: Record<string, unknown>
 }
 
+/** Today's Anki-style study budget (new cards / reviews left). */
+export interface StudyBudget {
+  newPerDay: number
+  maxReviewsPerDay: number
+  newToday: number
+  reviewsToday: number
+  newRemaining: number
+  reviewsRemaining: number
+  newUnlimited: boolean
+  reviewsUnlimited: boolean
+}
+
 export interface Grade {
   score: number
   correct: boolean
@@ -125,13 +137,10 @@ export const inspectDeck = (form: FormData) =>
  *  deck is imported and filled in the background — `building` says it is still
  *  generating cards. */
 export const importDeck = (form: FormData) =>
-  api<BuiltDeck & { words: number; fields: string[]; building?: boolean }>(
-    '/api/decks/import',
-    {
-      method: 'POST',
-      body: form,
-    },
-  )
+  api<BuiltDeck & { words: number; fields: string[]; building?: boolean }>('/api/decks/import', {
+    method: 'POST',
+    body: form,
+  })
 
 /**
  * Grow a deck organically, optionally focusing on a topic. With `all: true` the
@@ -183,6 +192,16 @@ export const updateDeckCard = (deckId: string, cardId: string, patch: CardPatch)
     method: 'PATCH',
     body: JSON.stringify(patch),
   })
+
+/** Add a card to a deck; `step` places it in that lesson (n+1 group). */
+export const addDeckCard = (
+  deckId: string,
+  body: { front: string; back: string; type?: string; reading?: string; step?: number },
+) =>
+  api<{ card: Card; step: number }>(`/api/decks/${deckId}/cards`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
 export const listExercises = () =>
   api<{ exercises: { id: string; title: string; modality: string }[] }>('/api/exercises')
 
@@ -196,10 +215,20 @@ export const nextExercise = (body: {
   actionId?: string
   lessonId?: string
 }) =>
-  api<{ instance: Instance; action: { id: string; skillId: string; xp: number } | null }>(
-    '/api/practice/next',
-    { method: 'POST', body: JSON.stringify(body) },
-  )
+  api<{
+    instance: Instance | null
+    action: { id: string; skillId: string; xp: number } | null
+    /** Set when the daily budget is spent and nothing can be served. */
+    done?: boolean
+    budget?: StudyBudget
+  }>('/api/practice/next', { method: 'POST', body: JSON.stringify(body) })
+
+/** Raises today's new/review allowance (Anki's "study more"). */
+export const studyMore = () =>
+  api<{ ok: boolean; budget: StudyBudget }>('/api/study/more', {
+    method: 'POST',
+    body: '{}',
+  })
 
 /** Turns the "can't speak or listen right now" option on (15 min) or off. */
 export const setQuiet = (enabled: boolean) =>

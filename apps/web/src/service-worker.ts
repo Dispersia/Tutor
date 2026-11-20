@@ -3,7 +3,12 @@ import { version } from '$app/env'
 import { assets, immutable } from '$app/manifest'
 
 const CACHE = `tutor-${version}`
-const ASSETS: string[] = [...immutable, ...assets].map((a) => a.path as string)
+// Silero VAD weights + the onnxruntime wasm are ~16 MB and only matter when
+// someone records, so they are cached on first use instead of on install.
+const HEAVY = /^vad\//
+const ASSETS: string[] = [...immutable, ...assets]
+  .map((a) => a.path as string)
+  .filter((p) => !HEAVY.test(p))
 const scope = self as unknown as ServiceWorkerGlobalScope
 
 scope.addEventListener('install', (event: ExtendableEvent) => {
