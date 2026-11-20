@@ -210,8 +210,13 @@
     </div>
   </header>
 
-  <div class="xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] xl:items-start xl:gap-24">
-    <div>
+  <!-- Mobile order is ledger → actions → talents: the thing you actually do comes
+       before the long-term ladder. At xl the two columns return, with the ledger
+       and its talents in the left column and actions on the right. -->
+  <div
+    class="flex flex-col xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] xl:items-start xl:gap-x-24"
+  >
+    <div class="order-1 xl:order-none xl:col-start-1 xl:row-start-1">
       <!-- Ledger ---------------------------------------------------------------->
       <section style={accentStyle(accent)}>
         <div class="border-b border-ink-700 py-3">
@@ -280,7 +285,9 @@
           <span class="text-ink-500">←</span>
         </a>
       {/each}
+    </div>
 
+    <div class="order-3 xl:order-none xl:col-start-1 xl:row-start-2">
       <!-- Talents: one rail from Lv 10 to Lv 100 --------------------------------->
       <h2 class="mt-6 text-xs font-bold tracking-widest uppercase" style="color: {ACCENT.violet}">
         Talents
@@ -391,7 +398,7 @@
         </p>
       {/if}
     </div>
-    <div>
+    <div class="order-2 xl:order-none xl:col-start-2 xl:row-start-1 xl:row-span-2">
       <!-- Actions --------------------------------------------------------------->
       <h2 class="mt-6 text-xs font-bold tracking-widest uppercase xl:mt-0" style="color: {accent}">
         Actions
