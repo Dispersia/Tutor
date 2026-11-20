@@ -4,6 +4,7 @@
   import { page } from '$app/state'
   import { api } from '#lib/api'
   import { logout, session } from '#lib/session.svelte'
+  import { activeDeck, loadActiveDeck, setActiveDeck } from '#lib/activeDeck.svelte'
   import { href, stripBase } from '#lib/paths'
   import { setVoicePrefs, type VoicePrefs } from '#lib/voices'
   import { htmlLang } from '#lib/lang'
@@ -32,6 +33,9 @@
     api<{ voice?: VoicePrefs }>('/api/settings')
       .then((s) => setVoicePrefs(s.voice))
       .catch(() => {})
+    // The deck chosen everywhere (free practice, Learn) lives in the profile
+    // menu; load it once so every screen shares the same choice.
+    void loadActiveDeck()
   })
 
   // Three destinations stay in the thumb zone on a phone; the tutor, the bank,
@@ -67,6 +71,12 @@
 
   function onKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape') open = false
+  }
+
+  /** Choosing a deck in the profile menu sets it for the whole app. */
+  function onDeckChange(e: Event) {
+    const value = (e.currentTarget as HTMLSelectElement).value
+    void setActiveDeck(value || null)
   }
 
   async function signOut() {
@@ -127,6 +137,21 @@
     </nav>
 
     <div class="border-t border-ink-700 p-3">
+      {#if activeDeck.decks.length}
+        <label class="mb-2 block px-1.5">
+          <span class="eyebrow text-ink-500">Studying</span>
+          <select
+            value={activeDeck.id ?? ''}
+            onchange={onDeckChange}
+            class="mt-1 w-full rounded-[4px] border border-ink-700 bg-ink-900 px-2 py-1.5 text-xs text-ink-200 outline-none focus:border-seal-400"
+          >
+            <option value="">All decks</option>
+            {#each activeDeck.decks as d (d.id)}
+              <option value={d.id}>{d.name}</option>
+            {/each}
+          </select>
+        </label>
+      {/if}
       <div class="flex items-center gap-2.5 px-1.5 py-1">
         <span
           class="display grid h-8 w-8 shrink-0 place-items-center rounded-[3px] border text-sm font-bold transition-colors {inAccount
@@ -186,6 +211,22 @@
               <div class="display truncate text-sm text-ink-100">{session.user?.handle}</div>
               <div class="truncate text-[11px] text-ink-400">@{session.user?.username}</div>
             </div>
+            {#if activeDeck.decks.length}
+              <div class="border-b border-ink-700 px-3 py-2.5">
+                <label class="eyebrow block text-ink-500" for="profile-deck">Studying</label>
+                <select
+                  id="profile-deck"
+                  value={activeDeck.id ?? ''}
+                  onchange={onDeckChange}
+                  class="mt-1 w-full rounded-[4px] border border-ink-700 bg-ink-900 px-2 py-1.5 text-xs text-ink-200 outline-none focus:border-seal-400"
+                >
+                  <option value="">All decks</option>
+                  {#each activeDeck.decks as d (d.id)}
+                    <option value={d.id}>{d.name}</option>
+                  {/each}
+                </select>
+              </div>
+            {/if}
             {#each account as m (m.href)}
               {@const on = active.startsWith(m.href)}
               <a

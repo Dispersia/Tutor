@@ -19,6 +19,7 @@
     type WordFeedback,
   } from '#lib/exercises'
   import { getSkills, type SkillOutcome, type SkillsResponse } from '#lib/skills'
+  import { activeDeck, loadActiveDeck, setActiveDeck } from '#lib/activeDeck.svelte'
   import { fmtClock, fmtInterval } from '#lib/idle'
   import {
     getCurriculum,
@@ -115,7 +116,10 @@
         getSrsStats().catch(() => null),
       ])
       decks = d.decks
-      deckId = deckParam ?? decks[0]?.id ?? ''
+      // Free practice opens on the deck chosen everywhere (the profile menu);
+      // an explicit `?deck=` link still wins for that visit.
+      await loadActiveDeck()
+      deckId = deckParam ?? activeDeck.id ?? decks[0]?.id ?? ''
       stats = s
       srsStats = srs
       quietUntil = s.quietUntil ?? 0
@@ -311,6 +315,8 @@
 
   function changeDeck(e: Event) {
     deckId = (e.target as HTMLSelectElement).value
+    // Picking a deck here is picking it everywhere: keep the profile choice in sync.
+    void setActiveDeck(deckId || null)
     void loadNext()
   }
 

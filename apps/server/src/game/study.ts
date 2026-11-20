@@ -28,6 +28,12 @@ export interface StudyPrefs {
   learningSteps: number[]
   /** Grow the deck automatically when a word keeps lapsing. */
   autoReinforce: boolean
+  /**
+   * The deck the learner is studying everywhere (null = every deck). Free
+   * practice and any caller that does not name a deck drill this one, so the
+   * choice made in the profile menu follows the member across the app.
+   */
+  activeDeckId: string | null
 }
 
 export const DEFAULT_STUDY_PREFS: StudyPrefs = {
@@ -40,6 +46,7 @@ export const DEFAULT_STUDY_PREFS: StudyPrefs = {
   // back a handful of times in a session instead of twice, then graduating.
   learningSteps: [1, 10, 60, 240],
   autoReinforce: true,
+  activeDeckId: null,
 }
 
 const KEYS = {
@@ -51,6 +58,7 @@ const KEYS = {
   learningSteps: 'study.learningSteps',
   extraToday: 'study.extraToday',
   autoReinforce: 'study.autoReinforce',
+  activeDeck: 'study.activeDeck',
 } as const
 
 /** Anki caps the steps at a day; anything longer is not a learning step. */
@@ -59,6 +67,12 @@ const MAX_STEP_MINUTES = 24 * 60
 function bool(raw: string | undefined, fallback: boolean): boolean {
   if (raw === undefined) return fallback
   return raw !== '0' && raw !== 'false'
+}
+
+/** A trimmed value, or null when the stored string is missing/empty. */
+function nonEmpty(raw: string | undefined): string | null {
+  const value = raw?.trim()
+  return value ? value : null
 }
 
 function int(raw: string | undefined, fallback: number, lo = 0, hi = 100_000): number {
@@ -121,6 +135,7 @@ export function readStudyPrefs(db: Db, userId: string): StudyPrefs {
       getUserSetting(db, userId, KEYS.autoReinforce),
       DEFAULT_STUDY_PREFS.autoReinforce,
     ),
+    activeDeckId: nonEmpty(getUserSetting(db, userId, KEYS.activeDeck)),
   }
 }
 
@@ -151,6 +166,9 @@ export function writeStudyPrefs(db: Db, userId: string, patch: Partial<StudyPref
   }
   if (patch.autoReinforce !== undefined) {
     setUserSetting(db, userId, KEYS.autoReinforce, patch.autoReinforce ? '1' : '0')
+  }
+  if (patch.activeDeckId !== undefined) {
+    setUserSetting(db, userId, KEYS.activeDeck, patch.activeDeckId ?? '')
   }
   return readStudyPrefs(db, userId)
 }

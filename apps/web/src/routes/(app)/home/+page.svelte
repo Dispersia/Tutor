@@ -5,6 +5,7 @@
   import { fmtClock, fmtInterval, rigGainedSince, rigSecondsLeft } from '#lib/idle'
   import { href } from '#lib/paths'
   import { session } from '#lib/session.svelte'
+  import { activeDeckOf, loadActiveDeck } from '#lib/activeDeck.svelte'
   import { ACCENT, CATEGORY, accentStyle, type CategoryStyle } from '#lib/theme'
   import { LANG_NAMES } from '#lib/voices'
 
@@ -18,6 +19,8 @@
   let now = $state(Date.now())
 
   const lang = $derived(session.user?.targetLang ?? 'zh')
+  /** The deck the member studies everywhere, shown beside the language. */
+  const deckName = $derived(activeDeckOf()?.name)
 
   const LEVEL_LABELS: Record<string, string> = {
     hsk1: 'HSK 1',
@@ -121,6 +124,7 @@
 
   onMount(() => {
     void load()
+    void loadActiveDeck()
     const timer = setInterval(() => (now = Date.now()), 250)
     return () => clearInterval(timer)
   })
@@ -144,7 +148,9 @@
 <header class="flex items-center justify-between gap-3 border-b border-ink-700 pt-4 pb-4">
   <div class="min-w-0">
     <h1 class="display truncate text-3xl text-ink-100">{session.user?.handle}</h1>
-    <p class="mt-1 text-xs text-ink-400">{LANG_NAMES[lang] ?? lang} · {levelLabel}</p>
+    <p class="mt-1 text-xs text-ink-400">
+      {LANG_NAMES[lang] ?? lang} · {levelLabel}{#if deckName} · studying {deckName}{/if}
+    </p>
   </div>
   <div class="seal h-14 w-14 shrink-0" aria-label="Level {stats?.level ?? 1}">
     <span class="text-2xl leading-none font-bold">{stats?.level ?? 1}</span>

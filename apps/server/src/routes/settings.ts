@@ -2,6 +2,7 @@ import {
   allUserSettings,
   getRoles,
   getUserSetting,
+  listDecks,
   rememberedDeckInstruction,
   setDailyGoal,
   setUserSetting,
@@ -106,6 +107,18 @@ export function registerSettings(app: App) {
       }
       if (typeof body.study.autoReinforce === 'boolean')
         patch.autoReinforce = body.study.autoReinforce
+      // The deck studied everywhere. Empty clears it (free practice across all
+      // decks); a non-empty id must be one of this member's own decks.
+      if (body.study.activeDeckId !== undefined) {
+        const wanted = typeof body.study.activeDeckId === 'string' ? body.study.activeDeckId : ''
+        if (!wanted) {
+          patch.activeDeckId = null
+        } else if (listDecks(deps.db, user.id).some((d) => d.id === wanted)) {
+          patch.activeDeckId = wanted
+        } else {
+          return c.json({ error: 'unknown deck' }, 400)
+        }
+      }
       writeStudyPrefs(deps.db, user.id, patch)
     }
 

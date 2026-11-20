@@ -485,3 +485,62 @@ test('study preferences: disabled exercise kinds are skipped', async () => {
   expect(junk.study.disabledExercises).toEqual([])
   sqlite.close()
 })
+
+test('active deck: the profile choice drives free practice', async () => {
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
+
+  const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
+    decks: { id: string; level: string }[]
+  }
+  const ja = decks.decks.find((d) => d.level === 'jafreq')!
+  const jaCards = (await (await app.request(`/api/decks/${ja.id}/cards`, auth(cookie))).json()) as {
+    cards: { id: string }[]
+  }
+  const jaIds = new Set(jaCards.cards.map((c) => c.id))
+
+  // Nothing chosen yet: free practice spans the member's decks.
+  const before = (await (await app.request('/api/settings', auth(cookie))).json()) as {
+    study: { activeDeckId: string | null }
+  }
+  expect(before.study.activeDeckId).toBeNull()
+
+  // Choosing a deck in the profile menu sets it for the account.
+  const saved = (await (
+    await app.request(
+      '/api/settings',
+      auth(cookie, { ...json({ study: { activeDeckId: ja.id } }), method: 'PUT' }),
+    )
+  ).json()) as { study: { activeDeckId: string | null } }
+  expect(saved.study.activeDeckId).toBe(ja.id)
+
+  // Free practice (no deck named) now serves a card from the chosen deck.
+  const next = (await (
+    await app.request('/api/practice/next', auth(cookie, json({})))
+  ).json()) as { instance: { cardId: string } | null }
+  expect(next.instance).toBeTruthy()
+  expect(jaIds.has(next.instance!.cardId)).toBe(true)
+
+  // GET reflects the stored choice.
+  const got = (await (await app.request('/api/settings', auth(cookie))).json()) as {
+    study: { activeDeckId: string | null }
+  }
+  expect(got.study.activeDeckId).toBe(ja.id)
+
+  // A deck that is not the member's own is rejected.
+  const bad = await app.request(
+    '/api/settings',
+    auth(cookie, { ...json({ study: { activeDeckId: 'nope' } }), method: 'PUT' }),
+  )
+  expect(bad.status).toBe(400)
+
+  // Clearing it returns to free practice across decks.
+  const cleared = (await (
+    await app.request(
+      '/api/settings',
+      auth(cookie, { ...json({ study: { activeDeckId: '' } }), method: 'PUT' }),
+    )
+  ).json()) as { study: { activeDeckId: string | null } }
+  expect(cleared.study.activeDeckId).toBeNull()
+  sqlite.close()
+})
