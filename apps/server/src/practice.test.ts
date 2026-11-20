@@ -238,6 +238,43 @@ test('practice/speak grades recorded audio via the assessor', async () => {
   sqlite.close()
 })
 
+test('practice/speak retry is graded but never counted', async () => {
+  const assess = async (_audio: Uint8Array, expected: string) => ({
+    transcript: expected,
+    items: [...expected].map((ch, i) => ({ text: ch, start: i * 0.3, end: i * 0.3 + 0.25 })),
+    duration: 0.3 * expected.length,
+  })
+  const { app, db, sqlite } = makeApp(assess)
+  const cookie = await signup(app, db)
+
+  const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
+    decks: { id: string; name: string; level: string }[]
+  }
+  const deckId = decks.decks.find((d) => d.level === 'zhfreq')!.id
+  const cards = (await (await app.request(`/api/decks/${deckId}/cards`, auth(cookie))).json()) as {
+    cards: { id: string }[]
+  }
+  const cardId = cards.cards[0]!.id
+
+  // A retry is graded like any other take (score + tips), but it must not touch
+  // XP or the SRS schedule — only the learner's first attempt counts.
+  const form = audioForm(cardId, 'speak_word')
+  form.set('retry', 'true')
+  const res = await app.request('/api/practice/speak', auth(cookie, { method: 'POST', body: form }))
+  expect(res.status).toBe(200)
+  const body = (await res.json()) as {
+    result: { correct: boolean; score: number; xp: number }
+    srs: unknown
+    stats: { xp: number }
+  }
+  expect(body.result.correct).toBe(true)
+  expect(body.result.score).toBeGreaterThan(0)
+  expect(body.result.xp).toBe(0)
+  expect(body.srs).toBeNull()
+  expect(body.stats.xp).toBe(0)
+  sqlite.close()
+})
+
 test('practice/speak rejects bad input', async () => {
   const assess = async (_a: Uint8Array, expected: string) => ({
     transcript: expected,

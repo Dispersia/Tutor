@@ -528,6 +528,10 @@ export function registerPractice(app: App) {
     const actionId = form.get('actionId') ? String(form.get('actionId')) : undefined
     const lessonId = form.get('lessonId') ? String(form.get('lessonId')) : undefined
     const latencyMs = Number(form.get('latencyMs') ?? 0)
+    // A retry is the learner re-recording the same card after a miss, to keep
+    // practising until it lands (§9.4). It is graded like any attempt but never
+    // counted: no review row, no XP, no schedule — only the first attempt counts.
+    const retry = String(form.get('retry') ?? '') === 'true'
 
     if (!(file instanceof File)) return c.json({ error: 'audio file required' }, 400)
     const card = cardId ? getCard(deps.db, cardId, user.id) : undefined
@@ -575,8 +579,9 @@ export function registerPractice(app: App) {
       const instance = await def.generate(ctx)
       const result = await def.gradeAudio(ctx, instance, audio)
       // A silent/too-short clip must not count as a wrong answer: no review, no
-      // XP, no SRS — just ask for another attempt.
-      if (result.detail?.noSpeech) {
+      // XP, no SRS — just ask for another attempt. A retry (re-recording the same
+      // card) is graded the same way but also stays out of the schedule.
+      if (result.detail?.noSpeech || retry) {
         return c.json({
           result: { ...result, xp: 0 },
           skill: null,

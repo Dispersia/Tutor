@@ -42,6 +42,16 @@
   let skill = $state<SkillOutcome | null>(null)
   let srs = $state<SrsOutcome | null>(null)
   let stats = $state<Stats | null>(null)
+  /**
+   * True once a countable attempt for this card has been recorded. After a miss
+   * on a speaking card the learner can re-record as often as they like; those
+   * retries are graded but not counted, so SRS/XP only see the first attempt.
+   */
+  let recorded = $state(false)
+  /** How many times the current card has been attempted (spoken answers). */
+  let attempt = $state(0)
+  /** True when the current result came from a recorded spoken answer. */
+  let spoke = $state(false)
   /** Spaced-repetition totals (due / new), so the header can show what is left. */
   let srsStats = $state<SrsStats | null>(null)
   let ref = $state<SkillsResponse | null>(null)
@@ -93,6 +103,8 @@
     const next = curriculum.flatMap((d) => d.lessons).find((l) => l.id === nextLessonId)
     return next?.newWord ?? next?.title ?? ''
   })
+  /** A spoken answer that missed: offer a re-record loop until it lands. */
+  const canRetry = $derived(Boolean(instance && spoke && result && !result.correct))
 
   onMount(async () => {
     try {
@@ -135,6 +147,9 @@
     instance = null
     doneToday = false
     speechWarm = 'idle'
+    recorded = false
+    attempt = 0
+    spoke = false
     try {
       const body: { actionId?: string; lessonId?: string; deckId?: string } = {}
       if (actionId) body.actionId = actionId
@@ -207,6 +222,7 @@
     const wasIntro = instance.exerciseId === 'introduce'
     busy = true
     error = ''
+    spoke = false
     try {
       const r = await gradeExercise({
         exerciseId: instance.exerciseId,
@@ -240,14 +256,18 @@
 
   async function submitAudio(blob: Blob) {
     if (!instance) return
+    const isRetry = recorded
     busy = true
     error = ''
+    spoke = true
+    attempt += 1
     try {
       const form = new FormData()
       form.set('file', blob, 'clip.webm')
       form.set('cardId', instance.cardId)
       form.set('exerciseId', instance.exerciseId)
       form.set('latencyMs', String(Date.now() - startedAt))
+      if (isRetry) form.set('retry', 'true')
       if (actionId) form.set('actionId', actionId)
       if (lessonId) form.set('lessonId', lessonId)
       const r = await gradeSpeak(form)
@@ -257,12 +277,29 @@
       lessonCompleted = Boolean(r.lessonCompleted)
       stats = r.stats
       quietUntil = r.stats.quietUntil ?? quietUntil
+      // A silent clip is not a countable attempt: the next try is still the
+      // first one, so it records as usual.
+      if (!isRetry) recorded = !r.result.detail?.noSpeech
     } catch (e) {
       error = (e as Error).message
     } finally {
       busy = false
       void refreshSrs()
     }
+  }
+
+  /**
+   * Re-record the same speaking card after a miss, without leaving the card or
+   * pulling a new one. The retry is graded like the first attempt (so the score
+   * and tips update) but the server keeps it out of the SRS schedule.
+   */
+  function retry() {
+    if (!instance) return
+    result = null
+    skill = null
+    srs = null
+    error = ''
+    startedAt = Date.now()
   }
 
   function changeDeck(e: Event) {
@@ -565,8 +602,26 @@
           {srs.stability.toFixed(1)}d · difficulty {srs.difficulty.toFixed(1)}
         </p>
       {/if}
+      {#if canRetry}
+        <p class="mt-3 text-xs text-ink-400">
+          Attempt {attempt} · say it again until it lands, or move on.
+        </p>
+      {/if}
     </div>
-    {#if lessonCompleted && nextLessonId}
+    {#if canRetry}
+      <div class="mt-4 flex flex-col gap-2">
+        <button onclick={retry} class="btn btn-primary w-full py-3">
+          <Icon name="mic" size={15} /> Try again
+        </button>
+        <button
+          onclick={nextStep}
+          disabled={advancing}
+          class="btn btn-ghost w-full py-3 disabled:opacity-60"
+        >
+          {#if advancing}<Spinner size={15} label="Loading the next card" />{:else}Next →{/if}
+        </button>
+      </div>
+    {:else if lessonCompleted && nextLessonId}
       <button
         onclick={nextStep}
         disabled={advancing}
