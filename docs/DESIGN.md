@@ -929,14 +929,16 @@ a completion. The exact same result can be **replayed from the completion log
 alone** (`gather_log`, append-only, one row per drill) — which is why the curve can
 be rebalanced later without rewriting anyone's bank.
 
-**The curves.** Two saturating exponentials, tunable in `game/idle.ts`
-(`IDLE` constants), so the first drill is slow and short and a long-lived action
-approaches a 2-second / 6-hour ceiling:
+**The curves.** The *rate* is a saturating exponential; the *run length* is a
+**straight, equally-stepped climb**. Both are tunable in `game/idle.ts` (`IDLE`
+constants): the first drill is slow and short, a long-lived action approaches a
+2-second ceiling, and **50 completions buy the full 6 hours** — every completion
+before that adds the same slice of time.
 
 ```
-intervalSeconds(c, tier) = tierFactor(tier) · (2 + 8 · 2^(−c/15))       // 10s → 2s per item
-runSeconds(c)            = 600 + (21600 − 600) · (1 − 2^(−(c−1)/60))   // 10 min → 6 h
-tierFactor(tier)         = 1 + 0.35·(tier − 1)                          // tier 1 ×1 … tier 5 ×2.4
+intervalSeconds(c, tier) = tierFactor(tier) · (2 + 8 · 2^(−c/15))   // 10s → 2s per item
+runSeconds(c)            = 600 + (21600 − 600) · min(c−1, 49)/49    // 10 min → 6 h at c=50
+tierFactor(tier)         = 1 + 0.35·(tier − 1)                      // tier 1 ×1 … tier 5 ×2.4
 ```
 
 **Tier slows the rig, not the run.** Higher-tier actions run proportionally slower
@@ -945,11 +947,18 @@ yew, blessed blades) stays *rarer* without costing you more real time — the ru
 window is about how long you can be away, and that is the same for everyone. The
 table below is tier 1; multiply the interval by `tierFactor` for deeper rigs.
 
-| completions | 1 | 10 | 30 | 60 | 100 | 300 |
+**A flurry of drills can't buy unlimited time.** Each completion extends the run,
+but the run can never be scheduled to end more than `maxRunSec` (6 h) after the
+drill that extended it — so a burst of drill completions makes the next run longer
+*up to* the 6-hour ceiling, never a day or more. `extendRig` enforces the cap when
+it stacks, and `settleRig` re-clamps on every read, so any older row written before
+the cap existed is trimmed to the ceiling the next time it settles.
+
+| completions | 1 | 10 | 30 | 50 | 100 | 300 |
 | --- | --- | --- | --- | --- | --- | --- |
-| one item every | 9.6s | 7.0s | 4.0s | 2.5s | 2.1s | 2.0s |
-| a run lasts | 10m | 45m | 1.8h | 3.1h | 4.1h | 5.8h |
-| items per run | 62 | 380 | 1.6k | 4.4k | 7.2k | 10.5k |
+| one item every | 9.6s | 7.0s | 4.0s | 2.8s | 2.1s | 2.0s |
+| a run lasts | 10m | 1.2h | 3.6h | 6h | 6h | 6h |
+| items per run | 62 | 630 | 3.3k | 7.7k | 10.4k | 10.8k |
 
 **Every action is a rig**, including the artisans. A gathering rig makes something
 from nothing; an artisan rig *transforms* — its run consumes the recipe inputs and
