@@ -106,3 +106,37 @@ test('latin phrases count syllables and differ from CJK handling', () => {
   expect(f.correct).toBe(true)
   expect(f.speechRate).toBeGreaterThan(1)
 })
+
+test('a Taiwan-accent realisation (sh → s) is not a missing word', () => {
+  const f = computeFeatures({
+    expected: '是',
+    transcript: '四', // Whisper heard the merged s-initial
+    items: [{ text: '是', start: 0.1, end: 0.5 }],
+    duration: 0.6,
+    lang: 'zh',
+  })
+  expect(f.missing).toEqual([])
+  expect(f.cer).toBe(0)
+  expect(f.correct).toBe(true)
+})
+
+test('accent tolerance is opt-in to Mandarin and still catches other words', () => {
+  // Without a language, characters are compared literally (unchanged behaviour).
+  const literal = computeFeatures({
+    expected: '是',
+    transcript: '四',
+    items: [{ text: '是', start: 0.1, end: 0.5 }],
+    duration: 0.6,
+  })
+  expect(literal.missing).toEqual(['是'])
+
+  // A genuinely different word is still missing even with tolerance on.
+  const wrong = computeFeatures({
+    expected: '是',
+    transcript: '你好',
+    items: [{ text: '是', start: 0.1, end: 0.5 }],
+    duration: 0.6,
+    lang: 'zh',
+  })
+  expect(wrong.missing).toEqual(['是'])
+})

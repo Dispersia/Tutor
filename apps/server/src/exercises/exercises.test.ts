@@ -392,6 +392,42 @@ test('speak_word.gradeAudio prefers the judge result', async () => {
   expect((r.detail?.words as { tip: string }[])[1]!.tip).toBe('tone 3')
 })
 
+test('speak_word.gradeAudio accepts a Taiwan-accent sh → s realisation', async () => {
+  const def = registry.get('speak_word')!
+  // 是 (ㄕˋ) heard as 四 (ㄙˋ): only the retroflex/alveolar initial differs.
+  const c = ctx({ back: '是', readings: { zhuyin: 'ㄕˋ' } })
+  const inst = await def.generate(c)
+  c.assess = async () => ({
+    transcript: '四',
+    items: [{ text: '是', start: 0.1, end: 0.5 }],
+    duration: 0.6,
+  })
+  const r = await def.gradeAudio!(c, inst, new Uint8Array())
+  expect(r.correct).toBe(true)
+  expect(r.detail?.missing).toEqual([])
+})
+
+test('speak_word.gradeAudio hands the judge the exact reading, not a Latin approximation', async () => {
+  const def = registry.get('speak_word')!
+  const c = ctx({ back: '是', readings: { zhuyin: 'ㄕˋ' } })
+  const inst = await def.generate(c)
+  let prompt = ''
+  c.assess = async () => ({
+    transcript: '四',
+    items: [{ text: '是', start: 0.1, end: 0.5 }],
+    duration: 0.6,
+  })
+  c.judge = async (p) => {
+    prompt = p
+    return { score: 100, correct: true, summary: 'ok', words: [{ text: '是', ok: true, tip: '' }] }
+  }
+  const r = await def.gradeAudio!(c, inst, new Uint8Array())
+  expect(prompt).toContain('ㄕˋ')
+  expect(prompt).toContain('Taiwan')
+  expect(prompt.toLowerCase()).toContain('never write pinyin')
+  expect(r.score).toBe(100)
+})
+
 test('every typing exercise names the language of its answer (keyboard hint)', async () => {
   // The client spreads this onto the input's `lang` so the platform can hint the
   // right keyboard / IME — it cannot switch it for us (docs/DESIGN.md §14.2).

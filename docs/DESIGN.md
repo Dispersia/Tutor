@@ -474,11 +474,22 @@ Features we compute deterministically (cheap, explainable):
 
 - **Text similarity:** normalized edit distance / CER against the expected text.
 - **Coverage:** which expected words are missing/extra.
+- **Accent tolerance (Mandarin):** the Chinese decks are Taiwan-standard
+  (Traditional + Zhuyin), so before comparing, each character is folded to its
+  accent-equivalent Zhuyin and the common Taiwan mergers are collapsed:
+  retroflex→alveolar (ㄓ→ㄗ, ㄔ→ㄘ, ㄕ→ㄙ, i.e. zh→z, ch→ts, sh→s), n→l (ㄋ→ㄌ),
+  f→h (ㄈ→ㄏ) and -eng/-ing→-en/-in (ㄥ→ㄣ, but not -ong/-iong). A learner whose
+  是 is heard as 四 is not marked missing; tones are kept, so a wrong tone is
+  still an error. See `pronunciation/variants.ts`.
 - **Timing anomalies:** per-word duration vs expected syllables (too fast/slow),
   long pauses (hesitation), truncation.
 - **Speech rate** (syllables/sec) vs target.
 
 Then the LLM judge turns those numbers into a 0–100 score and _human feedback_.
+The judge is given the card's own Zhuyin/kana reading to copy verbatim (it is
+unreliable at recalling it, and has produced wrong readings and Latin
+sound-alikes such as "shee"), and is told to accept the Taiwan mergers and not to
+invent a diagnosis when the transcript is an unrelated word.
 
 > **Limitation (call out in UI):** this is **word-level**, not phoneme-level GOP
 > scoring. Real tone/pronunciation precision (esp. Mandarin tones) needs a phoneme

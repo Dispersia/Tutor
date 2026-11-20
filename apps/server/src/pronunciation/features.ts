@@ -1,5 +1,6 @@
 import type { AlignItem, WordFeedback } from '@tutor/core'
 import { levenshtein, normalize } from '../exercises/grading'
+import { charSound, soundAlike } from './variants'
 
 const CJK = /[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af]/
 const PUNCT = /^[\p{P}\p{S}]$/u
@@ -24,14 +25,31 @@ export function syllableCount(token: string): number {
   return Math.max(1, runs ? runs.length : 1)
 }
 
-function multisetDiff(a: string[], b: string[]): string[] {
+function multisetDiff(a: string[], b: string[], eq: (x: string, y: string) => boolean): string[] {
   const pool = [...b]
   const out: string[] = []
   for (const x of a) {
-    const i = pool.indexOf(x)
+    const i = pool.findIndex((y) => eq(x, y))
     if (i >= 0) pool.splice(i, 1)
     else out.push(x)
   }
+  return out
+}
+
+/** Mandarin decks are Taiwan-standard, so sh/s (and friends) are not errors. */
+const accentAware = (lang: string | undefined) => lang === 'zh'
+
+/**
+ * Normalised-comparable form of a text. For Mandarin each character is folded to
+ * its accent-equivalent Zhuyin so that a Taiwan-accent rendering of 是 (heard as
+ * 四) compares equal to the expected text; other languages use the plain
+ * normalised characters.
+ */
+function foldForCompare(text: string, lang: string | undefined): string {
+  const base = normalize(text)
+  if (!accentAware(lang)) return base
+  let out = ''
+  for (const ch of base) out += charSound(ch) ?? ch
   return out
 }
 
@@ -74,20 +92,25 @@ export interface AssessInput {
   transcript: string
   items: AlignItem[]
   duration: number
+  /** Target language; enables Mandarin accent tolerance when `zh`. */
+  lang?: string
 }
 
 /** Turns the ASR + aligner output into explainable, deterministic features. */
 export function computeFeatures(input: AssessInput): AssessFeatures {
+  const tokensEqual = accentAware(input.lang) ? soundAlike : (a: string, b: string) => a === b
   const expectedTokens = tokenize(input.expected)
   const transcriptTokens = tokenize(input.transcript)
 
-  const normExpected = normalize(input.expected)
-  const normTranscript = normalize(input.transcript)
+  const normExpected = foldForCompare(input.expected, input.lang)
+  const normTranscript = foldForCompare(input.transcript, input.lang)
   const denom = Math.max(1, normExpected.length)
   const cer = Math.min(1, levenshtein(normExpected, normTranscript) / denom)
 
-  const missing = multisetDiff(expectedTokens, transcriptTokens)
-  const extra = multisetDiff(transcriptTokens, expectedTokens)
+  const missing = multisetDiff(expectedTokens, transcriptTokens, tokensEqual)
+  const extra = multisetDiff(transcriptTokens, expectedTokens, (x, y) =>
+    tokensEqual(y, x),
+  )
 
   const words: WordTiming[] = input.items.map((it) => {
     const duration = Math.max(0.01, it.end - it.start)

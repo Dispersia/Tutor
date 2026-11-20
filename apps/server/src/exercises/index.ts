@@ -51,6 +51,19 @@ const displayReading = (ctx: ExerciseContext): string => {
 const furiganaFor = (lang: string, word: string, reading: string) =>
   lang === 'ja' ? furiganaSegments(word, reading) : undefined
 
+/**
+ * The phonetic reading handed to the pronunciation judge, regardless of the
+ * learner's display preference. The judge is unreliable at recalling Zhuyin and
+ * has produced wrong readings (ㄕㄧˋ for ㄕˋ) and Latin look-alikes ("shee"), so
+ * it is given the card's own reading to copy verbatim.
+ */
+const gradingReading = (ctx: ExerciseContext): string => {
+  const r = ctx.card.readings
+  if (ctx.card.targetLang === 'zh') return r.zhuyin || (r.pinyin ? pinyinToZhuyin(r.pinyin) : '')
+  if (ctx.card.targetLang === 'ja') return r.kana || ''
+  return Object.values(r).find(Boolean) ?? ''
+}
+
 /** The target word plus the reading the learner should see (Zhuyin / furigana). */
 const wordView = (ctx: ExerciseContext) => ({
   word: ctx.card.back,
@@ -324,6 +337,7 @@ const speakWord: ExerciseDef<string> = {
       transcript: a.transcript,
       items: a.items,
       duration: a.duration,
+      lang: ctx.card.targetLang,
     })
 
     let score = f.score
@@ -333,12 +347,19 @@ const speakWord: ExerciseDef<string> = {
 
     if (ctx.judge) {
       const timings = f.words.map((w) => `${w.text}:${w.duration.toFixed(2)}s`).join(' ')
+      const reading = gradingReading(ctx)
+      const readingLine = reading ? `The correct reading is ${reading}. ` : ''
       const out = (await ctx.judge(
-        `Grade the pronunciation of ${label(ctx.card.targetLang)} text “${expected}”.
-The learner said (ASR): “${a.transcript}”.
+        `Grade the pronunciation of ${label(ctx.card.targetLang)} text “${expected}”. ${readingLine}The learner said (ASR): “${a.transcript}”.
 Missing tokens: ${f.missing.join('、') || 'none'}. Character error rate: ${f.cer.toFixed(2)}.
 Word timings: ${timings}. Long pauses: ${f.pauses.map((p) => `${p.after}+${p.seconds}s`).join(', ') || 'none'}.
-Length ${f.duration.toFixed(2)}s. Write the summary and each word tip in the learner's native language (${label(ctx.learner.nativeLang)}); only the target tokens stay in ${label(ctx.card.targetLang)}. Be encouraging; flag the specific tokens that need work.`,
+Length ${f.duration.toFixed(2)}s. Write the summary and each word tip in the learner's native language (${label(ctx.learner.nativeLang)}); only the target tokens stay in ${label(ctx.card.targetLang)}. Be encouraging; flag the specific tokens that need work.
+
+How to grade pronunciation:
+- The reading above is authoritative: when you mention it, copy it exactly (it is Zhuyin / kana). Never write pinyin, and never describe a sound with a Latin-letter look-alike such as “shee”, “sh” or “see” — those misdescribe the sound and confuse the learner.
+- The ASR transcript is only a guess and often mis-hears a short clip. The learner is practising a ${label(ctx.card.targetLang)} accent where this is standard; do not assume a syllable was wrong just because the transcript shows another word.
+- If Mandarin: this is the Taiwan standard. A learner whose ㄓ/ㄔ/ㄕ come out as ㄗ/ㄘ/ㄙ (or the reverse) is speaking a correct accent — never mark that as an error.
+- If the transcript is a different word entirely and nothing matches the expected text, say you could not hear it clearly and ask the learner to say it once more. Do not invent a detailed pronunciation diagnosis.`,
         PRON_SCHEMA,
       )) as
         | {
