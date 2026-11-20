@@ -163,6 +163,13 @@
         return
       }
       instance = r.instance
+      // A one-word step has nothing else to drill while its learning step
+      // waits, so the queue moves on to the path's next word: follow the card
+      // that is actually on screen instead of pinning the header to the first.
+      if (lessonId && r.lessonId && r.lessonId !== lessonId) {
+        lessonId = r.lessonId
+        applyLesson(lessonId)
+      }
       startedAt = Date.now()
       if (r.instance.modality === 'voice' || r.instance.modality === 'mixed') void warmSpeech()
     } catch (e) {

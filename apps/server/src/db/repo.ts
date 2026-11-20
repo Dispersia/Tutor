@@ -982,6 +982,27 @@ export function dailyReviewCounts(db: Db, userId: string, since: number): DailyR
   return { newCards, reviews: Number(row?.n ?? 0) }
 }
 
+/**
+ * How many cards the learner has *graded* at/after `since` — a card counts once,
+ * and the teach-only `introduce` step does not count (it is not a recall test).
+ * The practice queue uses this to tell "a sitting just started" (few cards, warm
+ * up with new words) from "in the middle of a review run".
+ */
+export function cardsGradedSince(db: Db, userId: string, since: number): number {
+  const row = db
+    .select({ n: sql<number>`count(distinct ${reviews.cardId})` })
+    .from(reviews)
+    .where(
+      and(
+        eq(reviews.userId, userId),
+        ne(reviews.exerciseId, 'introduce'),
+        gte(reviews.createdAt, since),
+      ),
+    )
+    .get()
+  return Number(row?.n ?? 0)
+}
+
 // --- combat encounters (Phase 8) ---------------------------------------------
 
 export function getEncounter(db: Db, userId: string) {

@@ -221,6 +221,8 @@ export const nextExercise = (body: {
     /** Set when the daily budget is spent and nothing can be served. */
     done?: boolean
     budget?: StudyBudget
+    /** The step the served card belongs to (the header follows the queue). */
+    lessonId?: string
   }>('/api/practice/next', { method: 'POST', body: JSON.stringify(body) })
 
 /** Raises today's new/review allowance (Anki's "study more"). */
