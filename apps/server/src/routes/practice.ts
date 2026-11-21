@@ -197,6 +197,9 @@ export function pickNextExercise(
   let all = registry.forCard(card, learner)
   // The first-exposure "teach" step is never part of the drill rotation.
   all = all.filter((d) => d.id !== INTRODUCE_ID)
+  // Exercises switched off product-wide (e.g. the pronunciation card) are never
+  // offered, whatever the learner's own switches say.
+  all = all.filter((d) => !d.temporarilyDisabled)
   // The learner's own switches: exercise kinds they turned off in Study settings.
   if (opts?.disabled?.size) all = all.filter((d) => !opts.disabled!.has(d.id))
   // Quiet mode ("can't speak or listen"): never offer a listen/speak card.
@@ -434,16 +437,22 @@ export function registerPractice(app: App) {
       ? registry.get(body.exerciseId)
       : pickNextExercise(deps.db, user.id, card, learner, ctx, { quiet: quiet.active, disabled })
     if (!def) return c.json({ error: noDrillMessage(disabled) }, 409)
-    // A voice card can't be forced while quiet mode is on, and a kind the learner
-    // turned off is swapped for one that is allowed.
+    // A voice card can't be forced while quiet mode is on, a kind the learner
+    // turned off is swapped for one that is allowed, and a product-wide off
+    // exercise (the pronunciation card) is never served even when forced.
     const blocked = (d: typeof def) =>
-      (quiet.active && d.modality === 'voice') || disabled.has(d.id)
+      d.temporarilyDisabled || (quiet.active && d.modality === 'voice') || disabled.has(d.id)
     const chosen = blocked(def)
       ? pickNextExercise(deps.db, user.id, card, learner, ctx, { quiet: quiet.active, disabled })
       : def
     if (!chosen) return c.json({ error: noDrillMessage(disabled) }, 409)
 
     const instance = await chosen.generate(ctx)
+    // A listening card is about to be shown: make sure its recorded audio exists
+    // (no-op when it was already recorded when the card was created).
+    if (chosen.id === 'type_listen') {
+      deps.audio?.enqueue([{ userId: user.id, text: card.back, language: card.targetLang }])
+    }
     return c.json({
       instance,
       action: action

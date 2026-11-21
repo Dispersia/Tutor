@@ -181,9 +181,13 @@
     study = { ...study, disabledExercises: [...next] }
   }
 
-  /** Turn a whole modality group on or off at once. */
+  /** Turn a whole modality group on or off at once (product-wide offs stay off). */
   function setGroup(modality: string, enabled: boolean) {
-    const ids = drillGroups.find((g) => g.modality === modality)?.items.map((i) => i.id) ?? []
+    const ids =
+      drillGroups
+        .find((g) => g.modality === modality)
+        ?.items.filter((i) => !i.disabled)
+        .map((i) => i.id) ?? []
     const next = new Set(study.disabledExercises)
     for (const id of ids) {
       if (enabled) next.delete(id)
@@ -589,7 +593,7 @@
     <p class="mt-4 text-xs text-ink-400">Exercise kinds offered when you practise.</p>
     <div class="mt-2 space-y-3">
       {#each drillGroups as group (group.modality)}
-        {@const enabledCount = group.items.filter((i) => !isDisabled(i.id)).length}
+        {@const enabledCount = group.items.filter((i) => !i.disabled && !isDisabled(i.id)).length}
         <div class="rounded-[12px] border border-ink-700 p-3">
           <div class="flex items-center justify-between">
             <span class="eyebrow text-ink-300">
@@ -606,10 +610,15 @@
           <div class="mt-2 space-y-1.5">
             {#each group.items as ex (ex.id)}
               <label class="flex min-h-11 items-center justify-between gap-3 py-1">
-                <span class="text-sm {isDisabled(ex.id) ? 'text-ink-400' : ''}">{ex.title}</span>
+                <span
+                  class="text-sm {ex.disabled || isDisabled(ex.id) ? 'text-ink-400' : ''}"
+                >
+                  {ex.title}{#if ex.disabled}<span class="text-ink-500"> · off for now</span>{/if}
+                </span>
                 <input
                   type="checkbox"
-                  checked={!isDisabled(ex.id)}
+                  checked={!ex.disabled && !isDisabled(ex.id)}
+                  disabled={ex.disabled}
                   onchange={(e) => setExercise(ex.id, e.currentTarget.checked)}
                   class="h-4 w-4 accent-seal-400"
                 />

@@ -65,6 +65,8 @@ export interface ExerciseInfo {
   title: string
   modality: string
   needsAudio?: boolean
+  /** Switched off product-wide for now; the learner cannot turn it on. */
+  disabled?: boolean
   /** The card template this exercise belongs to (vocab, spoken, …). */
   template?: TemplateKind
 }

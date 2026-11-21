@@ -130,13 +130,27 @@ const SYSTEM = `You build a language-learning deck from a real frequency list. Y
 
 The learner's instruction is the source of truth, for this batch exactly as for the first one. If it asks for grammar, include grammar cards. If it names a topic, level or register, keep that focus.
 
-Rules:
+Cards and order:
 - Cards come in frequency order: the most frequent word first.
 - Strict n+1: each "vocab" card introduces exactly ONE new word. Any "sentence" or "grammar" card may use only words already introduced (the new word plus the ones before it).
 - "vocab" cards: front = the meaning in the learner's language, back = the target word, reading = the native reading. Emit exactly one per frequency word, in the order given.
-- "sentence" cards: payload.tokens = the sentence split into target-language tokens in order; payload.gloss = its meaning; payload.distractors = 2-3 wrong tokens of the same kind. Use only known words. Add one after roughly every third vocab card, and always when the instruction asks for sentences.
-- "grammar" cards: payload.answer = the correct form, payload.prompt = the instruction, and either payload.options (a choice card) or nothing (free typing); payload.rule names the grammar point. Use only known words. Add them whenever the instruction asks for grammar.
-- "back" is the text the learner hears in the listening exercise: the word on a vocab card, the whole sentence on a sentence card. Never put the meaning, the reading or the exercise prompt in "back".
+
+Sentence cards — natural first:
+- Every sentence must be something a native speaker would actually say: grammatical, semantically sensible, short and concrete (2-6 words). A slightly less "complete" sentence that reads naturally always beats a longer sentence that does not.
+- Use only words already introduced. If no natural sentence can be made from those words, OMIT the sentence card for that step. Never invent a nonsensical, semantically odd or ungrammatical sentence just to fill the slot. "My you.", "We are him.", "Daddy is one year old? No." and "I can only open the door and love you." are exactly the failures to avoid.
+- payload.tokens = the sentence split into target-language tokens in order (tokens joined must equal back, ignoring trailing punctuation); payload.gloss = its plain translation; payload.distractors = 2-3 wrong tokens of the same kind. front = the same plain translation as payload.gloss.
+- Add a sentence after roughly every third vocab card, and always when the instruction asks for sentences — but only when it reads naturally.
+
+Grammar cards — a real fill-in-the-blank:
+- payload.prompt = a target-language sentence with the practised word replaced by a blank written as three underscores "___". The prompt is ALWAYS in the target language, never English. Example (Mandarin): "我___茶。" with answer 喝; example (Japanese): "私は___です。" with answer 学生.
+- payload.answer = the correct target-language word or form.
+- payload.options (optional) = 2-3 candidate target-language forms, one of them the answer.
+- payload.rule = a very short English label for the grammar point (e.g. "negation with 不"). payload.explanation = one short English sentence, shown after answering.
+- Use only words already introduced in the prompt sentence. Add grammar cards whenever the instruction asks for grammar.
+
+Content rules:
+- "back" is the target-language text the learner hears in the listening exercise: the word on a vocab card, the whole sentence on a sentence card. Never put the meaning, the reading or the exercise prompt in "back".
+- Never write notes, parentheticals, reasoning, alternatives or meta-commentary in any field. Do not explain your choices. front/gloss are plain translations and nothing else. This is the single most common failure: a gloss like "I have (it)." or "My you. (grammatically valid…)" is wrong — write "I have it." and omit the card if the sentence is odd.
 - Follow the deck's reading and script rules exactly.
 
 Metadata:
@@ -173,7 +187,81 @@ ${rules}
 Introduce the next ${req.count} new words from this list, in order (skip any already known):
 ${req.words.join(' ')}
 
-For each new word emit one "vocab" card. Weave in "sentence" (and, if the instruction asks for it, "grammar") cards using only words already introduced.${known}${pitch}${hintBlock}`
+For each new word emit one "vocab" card. Weave in "sentence" cards — only when the sentence is natural, otherwise omit it — and "grammar" fill-in-the-blank cards (a target-language prompt with "___") when the instruction asks for grammar. Use only words already introduced.${known}${pitch}${hintBlock}`
+}
+
+/**
+ * Phrases that only ever appear when the model leaks its own reasoning into a
+ * card ("(Grammatically valid, though semantically odd)", "Wait, 來 is not
+ * introduced yet"). A card that still contains one after cleaning is not usable.
+ */
+const META_MARKERS =
+  /\b(note:|wait,|correction|corrected|grammatically|semantically|n\+1|not introduced|introduced yet|strict n|used to test|test structure|revised|oops|as an ai|let me|i'll use|i will use|however,|actually,)/i
+
+/**
+ * Strips the model's asides from a gloss or prompt: bracketed notes that read
+ * like reasoning, and a trailing clause that starts with a meta marker. Plain
+ * optional words such as "I have (it)." survive, because the marker test fails.
+ */
+export function stripMetaCommentary(text: string): string {
+  let out = text.replace(/[（(\[][^)）\]]*[)）\]]/g, (m) => (META_MARKERS.test(m) ? ' ' : m))
+  out = out.replace(
+    /\s*(?:[.。!！?？]\s*)?(?:note|wait|correction|revised|actually|hmm|oops)\b[\s\S]*$/i,
+    '',
+  )
+  return out
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s+([.。!！?？,，、])/g, '$1')
+    .trim()
+}
+
+const bare = (s: string): string => s.replace(/[\s\p{P}\p{S}]/gu, '').toLowerCase()
+
+/** A sentence card's tokens must rebuild its `back` (ignoring spaces/punctuation). */
+function tokensMatchBack(tokens: unknown, back: string): boolean {
+  if (!Array.isArray(tokens)) return true
+  const joined = tokens.filter((t): t is string => typeof t === 'string').join('')
+  return bare(joined) === bare(back)
+}
+
+/** Cleans the free-text fields of a planned card and drops an unusable one. */
+export function sanitizePlannedCard(card: PlannedCard): PlannedCard | undefined {
+  const front = stripMetaCommentary(card.front)
+  const back = stripMetaCommentary(card.back)
+  if (!front || !back || META_MARKERS.test(front) || META_MARKERS.test(back)) return undefined
+  // A blank belongs in a grammar prompt, never in the text a learner produces.
+  if (back.includes('___')) return undefined
+
+  let payload = card.payload ? { ...card.payload } : undefined
+  if (payload) {
+    for (const key of ['gloss', 'prompt', 'rule', 'explanation']) {
+      const v = payload[key]
+      if (typeof v !== 'string') continue
+      const cleaned = stripMetaCommentary(v)
+      if (!cleaned || META_MARKERS.test(cleaned)) delete payload[key]
+      else payload[key] = cleaned
+    }
+    if (Array.isArray(payload.options)) {
+      payload.options = payload.options
+        .map((o) => (typeof o === 'string' ? stripMetaCommentary(o) : o))
+        .filter((o) => o !== '')
+    }
+    if (Array.isArray(payload.tokens)) {
+      payload.tokens = payload.tokens
+        .map((t) => (typeof t === 'string' ? t.trim() : t))
+        .filter((t) => t !== '')
+    }
+    // A sentence whose tokens no longer rebuild it is corrupt — drop it.
+    if (
+      card.template === 'sentence' &&
+      Array.isArray(payload.tokens) &&
+      payload.tokens.length >= 2 &&
+      !tokensMatchBack(payload.tokens, back)
+    ) {
+      return undefined
+    }
+  }
+  return { ...card, front, back, payload }
 }
 
 /** Normalises whatever the model returned into valid PlannedCards. */
@@ -186,7 +274,7 @@ export function normalizePlan(raw: unknown): PlannedCard[] {
     if (!card || typeof card.front !== 'string' || typeof card.back !== 'string') continue
     const template: PlanTemplate =
       card.template === 'sentence' || card.template === 'grammar' ? card.template : 'vocab'
-    out.push({
+    const cleaned = sanitizePlannedCard({
       template,
       front: card.front,
       back: card.back,
@@ -197,6 +285,7 @@ export function normalizePlan(raw: unknown): PlannedCard[] {
           : undefined,
       metadata: normalizeMetadata(card.metadata),
     })
+    if (cleaned) out.push(cleaned)
   }
   return out
 }

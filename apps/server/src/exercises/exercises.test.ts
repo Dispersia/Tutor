@@ -41,6 +41,16 @@ test('catalog lists the built-in exercises', () => {
   }
 })
 
+test('the pronunciation card is switched off product-wide for now', () => {
+  // `speak_word` is still registered (the audio route and its tests still use it)
+  // but must never be offered as a drill until its scoring is reliable.
+  expect(registry.get('speak_word')?.temporarilyDisabled).toBe(true)
+  expect(exerciseCatalog().find((e) => e.id === 'speak_word')?.disabled).toBe(true)
+  for (const other of exerciseCatalog()) {
+    if (other.id !== 'speak_word') expect(other.disabled).toBe(false)
+  }
+})
+
 test('catalog tags every exercise with its card template', () => {
   const byId = new Map(exerciseCatalog().map((e) => [e.id, e.template]))
   expect(byId.get('translate.front_to_back')).toBe('vocab')

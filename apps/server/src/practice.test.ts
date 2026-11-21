@@ -486,6 +486,31 @@ test('study preferences: disabled exercise kinds are skipped', async () => {
   sqlite.close()
 })
 
+test('the pronunciation card is never served, even when forced', async () => {
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
+
+  const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
+    decks: { id: string; level: string }[]
+  }
+  const deckId = decks.decks.find((d) => d.level === 'zhfreq')!.id
+
+  // Auto-picked drills never come up as a speaking card.
+  for (let i = 0; i < 30; i++) {
+    const r = (await (
+      await app.request('/api/practice/next', auth(cookie, json({ deckId })))
+    ).json()) as { instance?: { exerciseId: string } }
+    if (r.instance) expect(r.instance.exerciseId).not.toBe('speak_word')
+  }
+
+  // Forcing it swaps in an allowed kind instead.
+  const forced = (await (
+    await app.request('/api/practice/next', auth(cookie, json({ deckId, exerciseId: 'speak_word' })))
+  ).json()) as { instance: { exerciseId: string } }
+  expect(forced.instance.exerciseId).not.toBe('speak_word')
+  sqlite.close()
+})
+
 test('active deck: the profile choice drives free practice', async () => {
   const { app, db, sqlite } = makeApp()
   const cookie = await signup(app, db)

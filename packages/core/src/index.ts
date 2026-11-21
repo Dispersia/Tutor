@@ -138,6 +138,13 @@ export interface ExerciseDef<Answer = unknown> {
   modality: Modality
   /** true for exercises that grade recorded audio (routed via /api/practice/speak) */
   needsAudio?: boolean
+  /**
+   * Temporarily switched off product-wide (not by the learner). The drill
+   * rotation skips it and a caller that forces it is given an allowed kind
+   * instead. Used for features that are built but not reliable yet — e.g. the
+   * pronunciation card. Remove the flag to bring the exercise back.
+   */
+  temporarilyDisabled?: boolean
   /** can this exercise be generated for this card? */
   supports(card: Card, learner: Learner): boolean
   /**

@@ -281,6 +281,9 @@ const speakWord: ExerciseDef<string> = {
   title: 'Say it out loud',
   modality: 'voice',
   needsAudio: true,
+  // Off for now: the pronunciation scoring is not reliable enough to drill yet.
+  // Flip this back off (or remove the line) to bring the card back.
+  temporarilyDisabled: true,
   supports: () => true,
   async generate(ctx) {
     return {
@@ -745,6 +748,8 @@ export function exerciseCatalog() {
     title: d.title,
     modality: d.modality,
     needsAudio: Boolean(d.needsAudio),
+    /** Switched off product-wide for now; the learner cannot turn it on. */
+    disabled: Boolean(d.temporarilyDisabled),
     /** The card template this exercise belongs to (vocab, spoken, …). */
     template: templateForExercise(d.id)?.kind,
   }))
