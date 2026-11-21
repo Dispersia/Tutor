@@ -10,6 +10,7 @@
   import Icon from '#lib/components/Icon.svelte'
   import Spinner from '#lib/components/Spinner.svelte'
   import { typingAttrs } from '#lib/lang'
+  import { autoGrow } from '#lib/grow'
   import type { ChatSession, Message } from '#lib/types'
   import { speechOpts } from '#lib/voices'
 
@@ -192,13 +193,13 @@
 
 <div class="border-b border-ink-700 pt-4 pb-4 lg:mx-auto lg:max-w-3xl">
   <h1 class="display text-3xl text-ink-100">Talk to your Tutor</h1>
-  <p class="mt-1 text-xs text-ink-400">
+  <p class="sub mt-1.5">
     {lang ? lang.toUpperCase() : 'EN'} · replies are spoken
     {#if speaking}<span class="text-jade-400">· speaking…</span>{/if}
   </p>
 </div>
 
-<div class="space-y-3 pt-4 pb-28 lg:mx-auto lg:max-w-3xl">
+<div class="space-y-3 pt-4 pb-20 lg:mx-auto lg:max-w-3xl">
   {#if messages.length === 0}
     <p class="panel panel-accent p-4 text-sm text-ink-300" style={accentStyle(ACCENT.azure)}>
       Say or type something in your target language to begin. Your Tutor answers out loud and keeps
@@ -208,14 +209,14 @@
   {#each messages as m (m.id)}
     <div class={m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
       <div
-        class="max-w-[85%] rounded-lg px-4 py-2.5 text-[15px] leading-relaxed whitespace-pre-wrap {m.role ===
+        class="max-w-[85%] break-words rounded-[12px] px-4 py-2.5 text-base leading-relaxed whitespace-pre-wrap {m.role ===
         'user'
-          ? 'bg-seal-500/90 text-white'
+          ? 'bg-seal-400 text-ink-950'
           : 'border border-ink-700 bg-ink-900 text-ink-100'}"
       >
         {m.text}
         {#if m.role === 'assistant' && m.model}
-          <div class="mt-1 text-[12px] text-ink-400">{m.model}</div>
+          <div class="mt-1 text-xs text-ink-400">{m.model}</div>
         {/if}
       </div>
     </div>
@@ -231,18 +232,22 @@
 </div>
 
 {#if error}
-  <div
-    class="fixed inset-x-0 bottom-24 mx-auto max-w-md rounded-md bg-ember-950 px-3 py-2 text-center text-sm text-ember-300 lg:bottom-6"
-  >
-    {error}
+  <div class="fixed inset-x-0 bottom-24 mx-auto max-w-md px-2 lg:bottom-6">
+    <p class="banner justify-center text-center" style="--accent: {ACCENT.ember}" role="alert">
+      {error}
+    </p>
   </div>
 {/if}
 
-<div class="sticky bottom-16 z-10 mx-auto w-full max-w-2xl pb-3 lg:bottom-4 lg:max-w-3xl lg:pb-4">
-  <div class="panel panel-accent flex items-end gap-2 p-2" style={accentStyle(ACCENT.azure)}>
+<div class="sticky bottom-0 z-10 mx-auto w-full max-w-2xl pb-2 lg:bottom-4 lg:max-w-3xl lg:pb-4">
+  <div
+    class="panel panel-accent flex items-end gap-2 p-2 transition-colors focus-within:border-seal-400"
+    style={accentStyle(ACCENT.azure)}
+  >
     <textarea
       bind:value={input}
       onkeydown={onKey}
+      use:autoGrow={128}
       {...typingAttrs(lang)}
       rows="1"
       placeholder="Type…"
@@ -251,8 +256,12 @@
 
     <button
       onclick={() => (ttsOn = !ttsOn)}
-      title="Speak replies"
-      class="px-2 py-2 {ttsOn ? 'text-jade-400' : 'text-ink-500'}"
+      title={ttsOn ? 'Replies are spoken — tap to mute' : 'Replies are silent — tap to speak'}
+      aria-label="Speak replies"
+      aria-pressed={ttsOn}
+      class="grid h-11 w-11 shrink-0 place-items-center rounded-[10px] transition-colors {ttsOn
+        ? 'bg-jade-400/12 text-jade-400'
+        : 'text-ink-400 hover:bg-ink-800'}"
     >
       <Icon name={ttsOn ? 'sound' : 'mute'} size={18} />
     </button>
@@ -261,8 +270,9 @@
       <button
         onclick={toggleRecord}
         title="Hold a conversation"
-        class="rounded-[8px] px-3 py-2 {recording
-          ? 'recording bg-red-600 text-white'
+        aria-label="Hold a conversation"
+        class="grid h-11 w-11 place-items-center rounded-[10px] {recording
+          ? 'recording bg-ember-500 text-ink-950'
           : transcribing
             ? 'bg-ink-700'
             : 'bg-ink-800'}"
@@ -278,7 +288,7 @@
     <button
       onclick={send}
       disabled={busy || !input.trim()}
-      class="btn btn-primary px-4 py-2 disabled:opacity-40"
+      class="btn btn-primary px-4 py-2"
     >
       Send
     </button>

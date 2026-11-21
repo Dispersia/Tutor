@@ -8,17 +8,17 @@ default:
 gen:
     bun scripts/gen-migrations.mjs
 
-# build the packaged app for a plain `tailscale serve` at / (the setup here)
+# build the packaged app for the tailnet gateway (mounted at /tutor — the setup here)
 package:
-    nix build .#root
-
-# build the subpath variant for the tailnet gateway (mounted at /tutor)
-package-gateway:
     nix build
 
-# run the packaged app
+# build the variant that serves at / for a plain `tailscale serve` deployment
+package-root:
+    nix build .#root
+
+# run the packaged app (the /tutor gateway variant, matching `package`)
 run:
-    nix run .#root
+    nix run
 
 # install JS + Python dependencies
 setup:

@@ -44,7 +44,7 @@
     type="button"
     onclick={play}
     disabled={playing}
-    class="btn btn-ghost w-full gap-1.5 py-4 text-lg disabled:opacity-50"
+    class="btn btn-ghost w-full gap-1.5 py-4 text-lg"
   >
     {#if playing}<Spinner size={17} label="Playing audio" /> playing…{:else}<Icon
         name="sound"
@@ -55,7 +55,7 @@
   <input
     bind:value={answer}
     {...typingAttrs(answerLang)}
-    class="w-full rounded-md border border-ink-600 bg-ink-900 px-4 py-4 text-lg outline-none focus:border-seal-400"
+    class="field text-lg"
     placeholder="Type what you hear…"
   />
   <button

@@ -4,7 +4,8 @@
   import type { PitchContour } from '#lib/types'
   import { Recorder, micSupported, MIN_CLIP_MS } from '#lib/recorder'
   import { stopAudio, transcribe } from '#lib/speech'
-  import Word from '../Word.svelte'
+  import { ACCENT } from '#lib/theme'
+  import CharCell from '../CharCell.svelte'
   import Icon from '../Icon.svelte'
   import Spinner from '../Spinner.svelte'
 
@@ -88,9 +89,16 @@
   <p class="text-lg leading-snug">{instance.prompt}</p>
   {#if topic}
     <div class="flex justify-center py-2">
-      <span class="cell min-h-[5rem] min-w-[5rem] px-6 py-4"
-        ><Word word={topic} {reading} {lang} {furigana} {pitch} size="md" /></span
-      >
+      <CharCell
+        word={topic}
+        {reading}
+        {lang}
+        {furigana}
+        {pitch}
+        size="sm"
+        wordish={topic.length > 1}
+        accent={ACCENT.azure}
+      />
     </div>
   {/if}
   <textarea
@@ -98,7 +106,7 @@
     onkeydown={onKeydown}
     {...typingAttrs(answerLang)}
     rows="2"
-    class="w-full rounded-md border border-ink-600 bg-ink-900 px-4 py-3 outline-none focus:border-seal-400"
+    class="field"
     placeholder="Write or say a sentence…"
   ></textarea>
   <div class="flex gap-2">
@@ -107,7 +115,9 @@
         type="button"
         onclick={record}
         disabled={busy || working}
-        class="btn px-4 py-3 {recording ? 'recording bg-red-600 text-white' : 'btn-ghost'}"
+        class="btn px-4 py-3 {recording
+          ? 'recording border-ember-500 bg-ember-500 text-ink-950'
+          : 'btn-ghost'}"
       >
         {#if working}<Spinner
             size={16}

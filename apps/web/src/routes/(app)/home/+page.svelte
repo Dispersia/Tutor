@@ -8,6 +8,7 @@
   import { activeDeckOf, loadActiveDeck } from '#lib/activeDeck.svelte'
   import { ACCENT, CATEGORY, accentStyle, type CategoryStyle } from '#lib/theme'
   import { LANG_NAMES } from '#lib/voices'
+  import { htmlLang } from '#lib/lang'
 
   let stats = $state<Stats | null>(null)
   let error = $state('')
@@ -34,6 +35,13 @@
     return raw ?? 'Frequency 1k'
   })
   const toGoal = $derived(stats ? Math.max(0, stats.dailyGoal - stats.dailyXp) : 0)
+
+  // --- bank strip ------------------------------------------------------------
+  // The one-line tell for what the player keeps: coin, how many kinds, what is
+  // worn. The full ledger lives in Bank.
+  const inventory = $derived((skills?.inventory ?? []).filter((i) => i.count > 0))
+  const coins = $derived(inventory.find((i) => i.itemId === 'coins')?.count ?? 0)
+  const wornCount = $derived(skills?.equipment.length ?? 0)
 
   // --- activity map ----------------------------------------------------------
   // Daily XP over the last weeks, drawn as a heat map: one column per week
@@ -147,24 +155,27 @@
   }
 </script>
 
-<header class="flex items-center justify-between gap-3 border-b border-ink-700 pt-4 pb-4">
-  <div class="min-w-0">
-    <h1 class="display truncate text-3xl text-ink-100">{session.user?.handle}</h1>
-    <p class="mt-1 text-xs text-ink-400">
-      {LANG_NAMES[lang] ?? lang} · {levelLabel}{#if deckName}
-        · studying {deckName}{/if}
-    </p>
+<header class="border-b border-ink-700 pt-4 pb-4">
+  <div class="flex items-start justify-between gap-4">
+    <h1 class="display min-w-0 truncate text-3xl text-ink-100">{session.user?.handle}</h1>
+    <div class="shrink-0 text-center">
+      <div class="seal h-14 w-14" aria-label="Account level {stats?.level ?? 1}">
+        <span class="display text-xl leading-none font-bold">{stats?.level ?? 1}</span>
+      </div>
+      <p class="seal__label" aria-hidden="true">Level</p>
+    </div>
   </div>
-  <div class="seal h-14 w-14 shrink-0" aria-label="Level {stats?.level ?? 1}">
-    <span class="text-2xl leading-none font-bold">{stats?.level ?? 1}</span>
-    <span class="text-[10px] tracking-[0.16em]">LEVEL</span>
-  </div>
+  <p class="sub mt-2">
+    {LANG_NAMES[lang] ?? lang} · {levelLabel}{#if deckName} · studying <span
+        lang={htmlLang(lang)}>{deckName}</span
+      >{/if}
+  </p>
 </header>
 
 {#if error}
-  <div class="panel mt-3 flex items-center justify-between gap-3 p-3" role="alert">
-    <p class="text-xs text-brass-300">Couldn't load your progress — {error}</p>
-    <button type="button" class="btn btn-ghost px-3 py-1.5 text-xs" onclick={load}>Retry</button>
+  <div class="banner mt-3" style={accentStyle(ACCENT.brass)} role="alert">
+    <p class="banner__text flex-1">Couldn't load your progress — {error}</p>
+    <button type="button" class="btn btn-ghost px-3 py-2 text-xs" onclick={load}>Retry</button>
   </div>
 {:else}
   <!-- Desktop opens the page into a spread: the rhythm on the left, the earned
@@ -175,18 +186,16 @@
       style={accentStyle(ACCENT.jade)}
     >
       <div class="flex items-baseline justify-between gap-3">
-        <h2 class="text-xs font-bold tracking-widest uppercase" style="color: var(--accent)">
-          Activity
-        </h2>
-        <span class="text-[13px] text-ink-400">last {weeks} weeks</span>
+        <h2 class="eyebrow" style="color: var(--accent)">Activity</h2>
+        <span class="text-xs text-ink-400">last {weeks} weeks</span>
       </div>
 
       {#if days.length}
         <div class="mt-3 overflow-x-auto pb-1 xl:my-auto">
-          <div class="mx-auto w-fit">
+          <div class="heat mx-auto w-fit">
             <div
-              class="grid gap-[3px] text-[12px] leading-none text-ink-500"
-              style="grid-template-columns: repeat({weeks}, 0.75rem)"
+              class="grid gap-[3px] text-xs leading-none text-ink-400"
+              style="grid-template-columns: repeat({weeks}, var(--heat-cell))"
               aria-hidden="true"
             >
               {#each monthLabels as m, i (i)}
@@ -196,7 +205,7 @@
 
             <div
               class="mt-1 grid grid-flow-col gap-[3px]"
-              style="grid-template-columns: repeat({weeks}, 0.75rem); grid-template-rows: repeat(7, 0.75rem)"
+              style="grid-template-columns: repeat({weeks}, var(--heat-cell)); grid-template-rows: repeat(7, var(--heat-cell))"
               role="img"
               aria-label="Daily activity for the last {weeks} weeks"
             >
@@ -209,7 +218,7 @@
               {/each}
             </div>
 
-            <div class="mt-3 flex items-center justify-end gap-1.5 text-[12px] text-ink-500">
+            <div class="mt-3 flex items-center justify-end gap-1.5 text-xs text-ink-400">
               <span>Less</span>
               <span class="h-3 w-3 rounded-[2px]" style="background: {EMPTY}"></span>
               {#each [1, 2, 3, 4] as lv (lv)}
@@ -231,11 +240,11 @@
             <span class="text-sm text-ink-300">Study XP</span>
             <span class="display text-xl font-bold text-gold-200 tabular-nums"
               >{#if stats}{stats.xp}{:else}<span
-                  class="inline-block h-5 w-12 animate-pulse rounded bg-ink-700"
+                  class="inline-block h-5 w-12 animate-pulse rounded-[6px] bg-ink-700"
                 ></span>{/if}</span
             >
           </div>
-          <p class="mt-1 text-xs text-ink-500">
+          <p class="mt-1 text-xs text-ink-400">
             From graded cards and won fights — this fills your daily goal, not your account level.
           </p>
         </li>
@@ -244,7 +253,7 @@
           <span class="display text-xl font-bold text-gold-200 tabular-nums"
             >{#if stats}{stats.streak}<span class="ml-1 text-xs font-normal text-ink-400"
                 >{stats.streak === 1 ? 'day' : 'days'}</span
-              >{:else}<span class="inline-block h-5 w-12 animate-pulse rounded bg-ink-700"
+              >{:else}<span class="inline-block h-5 w-12 animate-pulse rounded-[6px] bg-ink-700"
               ></span>{/if}</span
           >
         </li>
@@ -298,7 +307,7 @@
           >
             <i style="width: {stats ? Math.min(100, stats.progress * 100) : 0}%"></i>
           </div>
-          <p class="mt-2 text-xs text-ink-500">
+          <p class="mt-2 text-xs text-ink-400">
             The average of every profession, so it climbs as each one levels.
           </p>
         </li>
@@ -314,8 +323,8 @@
     aria-label="Running rigs"
   >
     <div class="flex items-baseline justify-between gap-3">
-      <h2 class="text-xs font-bold tracking-widest uppercase" style="color: var(--accent)">Rigs</h2>
-      <span class="text-[13px] text-ink-400">
+      <h2 class="eyebrow" style="color: var(--accent)">Rigs</h2>
+      <span class="text-xs text-ink-400">
         {#if rigs.length}
           {rigs.length} running
         {:else}
@@ -337,7 +346,7 @@
                 >
                 <span class="flex shrink-0 items-baseline gap-2">
                   <span
-                    class="display text-[13px] font-bold text-gold-200 tabular-nums"
+                    class="display text-xs font-bold text-gold-200 tabular-nums"
                     title="Action XP this rig earns per item">+{r.xpPerCraft} xp</span
                   >
                   <span
@@ -346,19 +355,12 @@
                   >
                 </span>
               </div>
-              <div
-                class="mt-0.5 flex items-baseline justify-between gap-2 text-[13px] text-ink-500"
-              >
+              <div class="mt-0.5 flex items-baseline justify-between gap-2 text-xs text-ink-400">
                 <span class="truncate">{r.yields || '—'}</span>
                 <span class="shrink-0 tabular-nums">{fmtClock(r.left)} left</span>
               </div>
-              <div
-                class="mt-1 h-[3px] overflow-hidden rounded-[2px] border border-ink-700 bg-ink-800"
-              >
-                <div
-                  class="h-full rounded-[2px]"
-                  style="width: {r.runPct * 100}%; background: {r.category.accent}"
-                ></div>
+              <div class="bar mt-1.5 h-1" role="progressbar" aria-label="Rig run remaining">
+                <i style="width: {r.runPct * 100}%; background: {r.category.accent}"></i>
               </div>
             </div>
             <span
@@ -372,9 +374,33 @@
       <p class="mt-2 text-xs text-ink-400">
         No rigs running — complete a drill in <a
           href={href('/skills')}
-          class="underline hover:text-ink-200">Skills</a
+          class="link">Skills</a
         > to power one, then leave it be.
       </p>
     {/if}
   </section>
+
+  <!-- Bank strip: what the player keeps, in one ruled line. The ledger is Bank. -->
+  <a
+    href={href('/bank')}
+    class="panel panel-accent mt-4 flex min-h-11 items-center gap-3 p-3"
+    style={accentStyle(ACCENT.brass)}
+    aria-label="Bank"
+  >
+    <span class="eyebrow" style="color: var(--accent)">Bank</span>
+    <span class="display text-lg font-bold text-gold-200 tabular-nums">{coins}</span>
+    <span class="text-xs text-ink-400">coins</span>
+    <span class="ml-auto flex items-center gap-3 text-xs text-ink-400">
+      <span
+        ><span class="display text-sm font-bold text-ink-200 tabular-nums"
+          >{inventory.length}</span
+        >
+        kinds</span
+      >
+      <span
+        ><span class="display text-sm font-bold text-ink-200 tabular-nums">{wornCount}</span> worn</span
+      >
+      <span class="text-ink-400" aria-hidden="true">→</span>
+    </span>
+  </a>
 {/if}

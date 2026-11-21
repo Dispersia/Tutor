@@ -426,12 +426,12 @@
 <svelte:window onkeydown={onKeydown} />
 
 <div class="lg:mx-auto lg:max-w-2xl">
-  <div class="flex items-center justify-between border-b border-ink-700 pt-4 pb-3 mb-4">
-    <div>
-      <h1 class="display text-2xl text-ink-100">
+  <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-ink-700 pt-4 pb-4 mb-4">
+    <div class="min-w-0">
+      <h1 class="display text-3xl text-ink-100">
         {actionId ? skillName : lesson ? lesson.title : 'Free practice'}
       </h1>
-      <p class="mt-1 text-xs text-ink-400">
+      <p class="sub mt-2">
         {actionId
           ? actionName
           : lesson
@@ -439,7 +439,7 @@
             : 'Spaced repetition picks what’s due'}
       </p>
     </div>
-    <div class="flex items-center gap-2 text-xs">
+    <div class="flex flex-wrap items-center gap-2 text-xs">
       {#if skillMap.get(skill?.skillId ?? '')}
         <span class="chip" style="--accent: {ACCENT.violet}">
           {skillMap.get(skill!.skillId)!.icon}
@@ -450,7 +450,7 @@
       <button
         type="button"
         onclick={() => applyQuiet(!quietActive)}
-        class="chip cursor-pointer gap-1"
+        class="chip chip--press gap-1"
         style="--accent: {quietActive ? ACCENT.brass : ACCENT.azure}"
         title={quietActive
           ? 'Listen & speak cards return when this ends — turn it off now'
@@ -465,7 +465,7 @@
         style="--accent: {ACCENT.gold}"
         title="Study XP from graded cards and won fights — fills your daily goal"
       >
-        {stats?.xp ?? 0} study XP
+        {stats?.xp ?? 0} XP
       </span>
       {#if srsStats}
         <span
@@ -499,27 +499,26 @@
     </div>
   {/if}
 
-  {#if !focused}
-    <select
-      value={deckId}
-      onchange={changeDeck}
-      class="mb-4 w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm"
-    >
-      {#each decks as d (d.id)}
-        <option value={d.id}>{d.name} · {d.cardCount} cards</option>
-      {/each}
-    </select>
+  {#if !focused && decks.length > 1}
+    <label class="mb-4 block">
+      <span class="eyebrow mb-1.5 block text-ink-400">Deck</span>
+      <select bind:value={deckId} onchange={changeDeck} class="field">
+        {#each decks as d (d.id)}
+          <option value={d.id}>{d.name} · {d.cardCount} cards</option>
+        {/each}
+      </select>
+    </label>
+  {:else if !focused && decks.length === 1}
+    <p class="eyebrow mb-4 text-ink-400">{decks[0].name} · {decks[0].cardCount} cards</p>
   {/if}
 
   {#if loading}
-    <p class="flex items-center gap-2 text-sm text-ink-400">
+    <p class="banner flex items-center gap-2" style="--accent: {ACCENT.azure}">
       <Spinner size={14} label="Loading practice" /> Loading…
     </p>
   {:else if error}
-    <p class="rounded-lg bg-ember-950 px-3 py-2 text-sm text-ember-300">{error}</p>
-    <button onclick={loadNext} class="mt-3 rounded-md border border-ink-600 px-3 py-2 text-sm"
-      >Back</button
-    >
+    <p class="banner" style="--accent: {ACCENT.ember}" role="alert">{error}</p>
+    <button onclick={loadNext} class="btn btn-ghost mt-3 px-3 py-2 text-xs">Back</button>
   {:else if doneToday}
     <div class="panel panel-accent p-5 text-center" style="--accent: {ACCENT.jade}">
       <p class="display text-lg text-jade-300">Today’s goal reached</p>
@@ -641,7 +640,7 @@
         <button
           onclick={nextStep}
           disabled={advancing}
-          class="btn btn-ghost w-full py-3 disabled:opacity-60"
+          class="btn btn-ghost w-full py-3"
         >
           {#if advancing}<Spinner size={15} label="Loading the next card" />{:else}Next →{/if}
         </button>
@@ -650,7 +649,7 @@
       <button
         onclick={nextStep}
         disabled={advancing}
-        class="btn btn-primary mt-4 w-full py-3 disabled:opacity-60"
+        class="btn btn-primary mt-4 w-full py-3"
       >
         {#if advancing}<Spinner size={15} label="Loading the next lesson" />{:else}Next lesson →
           {nextLessonTitle ? ` ${nextLessonTitle}` : ''}{/if}
@@ -659,7 +658,7 @@
       <button
         onclick={nextStep}
         disabled={advancing}
-        class="btn btn-primary mt-4 w-full py-3 disabled:opacity-60"
+        class="btn btn-primary mt-4 w-full py-3"
       >
         {#if advancing}<Spinner size={15} label="Loading the next card" />{:else}Next →{/if}
       </button>

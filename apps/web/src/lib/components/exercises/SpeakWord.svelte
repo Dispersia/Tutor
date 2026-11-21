@@ -5,7 +5,8 @@
   import { Recorder, micSupported, MIN_CLIP_MS } from '#lib/recorder'
   import { speak, stopAudio, transcribe } from '#lib/speech'
   import { speechOpts } from '#lib/voices'
-  import Word from '../Word.svelte'
+  import { ACCENT } from '#lib/theme'
+  import CharCell from '../CharCell.svelte'
   import Icon from '../Icon.svelte'
   import Spinner from '../Spinner.svelte'
 
@@ -76,9 +77,16 @@
 <div class="space-y-4">
   <p class="text-lg leading-snug">{instance.prompt}</p>
   <div class="flex justify-center py-2">
-    <span class="cell min-h-[7rem] min-w-[7rem] px-7 py-5"
-      ><Word word={target} {reading} {lang} {furigana} {pitch} /></span
-    >
+    <CharCell
+      word={target}
+      {reading}
+      {lang}
+      {furigana}
+      {pitch}
+      size="lg"
+      wordish={target.length > 1}
+      accent={ACCENT.azure}
+    />
   </div>
 
   <div class="flex gap-2">
@@ -93,7 +101,7 @@
         onclick={record}
         disabled={busy || working}
         class="btn flex-1 gap-1.5 py-3 {recording
-          ? 'recording bg-red-600 text-white'
+          ? 'recording border-ember-500 bg-ember-500 text-ink-950'
           : 'btn-primary'}"
       >
         {#if working}<Spinner size={15} label="Transcribing your voice" cls="my-0.5" /> Transcribing…
@@ -115,9 +123,9 @@
       <input
         placeholder="No mic here — type it instead"
         {...typingAttrs(language)}
-        class="flex-1 rounded-md border border-ink-600 bg-ink-900 px-3 py-2 text-sm"
+        class="field flex-1"
       />
-      <button class="btn btn-primary px-3 py-2 text-sm" disabled={busy} data-enter-action>
+      <button class="btn btn-primary px-3 py-2 text-xs" disabled={busy} data-enter-action>
         {#if busy}<Spinner size={14} label="Checking your answer" /> Checking…{:else}Check{/if}
       </button>
     </form>

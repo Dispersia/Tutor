@@ -3,9 +3,10 @@
   import type { PitchContour } from '#lib/types'
   import { speak } from '#lib/speech'
   import { speechOpts } from '#lib/voices'
+  import { ACCENT } from '#lib/theme'
+  import CharCell from '../CharCell.svelte'
   import Icon from '../Icon.svelte'
   import Spinner from '../Spinner.svelte'
-  import Word from '../Word.svelte'
 
   let {
     instance,
@@ -55,37 +56,46 @@
 </script>
 
 <div class="space-y-4">
-  <p class="text-xs uppercase tracking-wide text-ink-400">New word</p>
+  <p class="eyebrow">New word</p>
 
-  <div class="border-y border-ink-700 py-5 text-center">
-    <Word {word} {reading} {lang} {furigana} {pitch} />
+  <div class="flex flex-col items-center gap-3 border-y border-ink-700 py-5 text-center">
+    <CharCell
+      {word}
+      {reading}
+      {lang}
+      {furigana}
+      {pitch}
+      size="lg"
+      wordish={word.length > 1}
+      accent={ACCENT.azure}
+    />
     {#if meaning}
-      <p class="mt-2 text-sm text-ink-300">{meaning}</p>
+      <p class="text-sm text-ink-300">{meaning}</p>
     {/if}
     <button
       type="button"
       onclick={play}
       disabled={playing}
-      class="btn btn-ghost mt-3 gap-1.5 px-3 py-2 text-xs disabled:opacity-50"
+      class="btn btn-ghost gap-1.5 px-3 py-2 text-xs"
     >
       {#if playing}<Spinner size={14} label="Playing audio" /> playing…{:else}<Icon
           name="sound"
           size={14}
         /> Hear it{/if}
     </button>
-    {#if err}<p class="mt-1 text-xs text-ember-300">{err}</p>{/if}
+    {#if err}<p class="text-xs text-ember-300">{err}</p>{/if}
   </div>
 
   {#if example}
-    <div class="rounded-lg border border-ink-700 px-4 py-3">
-      <p class="text-xs uppercase tracking-wide text-ink-400">In a sentence</p>
-      <p class="display mt-1 text-2xl text-ink-100">
+    <div class="panel px-4 py-3">
+      <p class="eyebrow">In a sentence</p>
+      <p class="display mt-1.5 text-2xl text-ink-100">
         {#each exampleParts as part (part.text + part.hit)}
           {#if part.hit}<span class="text-seal-300">{part.text}</span>{:else}{part.text}{/if}
         {/each}
       </p>
       {#if example.reading}
-        <p class="mt-0.5 text-sm tracking-wide text-ink-300">{example.reading}</p>
+        <p class="mt-0.5 text-sm text-ink-300">{example.reading}</p>
       {/if}
       {#if example.gloss}
         <p class="mt-1 text-xs text-ink-400">{example.gloss}</p>
@@ -98,7 +108,7 @@
     onclick={() => onsubmit('ok')}
     disabled={busy}
     data-enter-action
-    class="btn btn-primary w-full py-3 disabled:opacity-60"
+    class="btn btn-primary w-full py-3"
   >
     {#if busy}<Spinner size={15} label="Loading" /> Working…{:else}Got it{/if}
   </button>

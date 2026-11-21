@@ -73,25 +73,27 @@
   }
 </script>
 
-<div class="flex items-center justify-between border-b border-ink-700 pt-4 pb-4">
-  <div>
-    <h1 class="display text-3xl text-ink-100">Skills</h1>
-    <p class="mt-1 text-xs text-ink-400">Train a trade, gather materials, grow stronger.</p>
+<div class="border-b border-ink-700 pt-4 pb-4">
+  <div class="flex items-start justify-between gap-4">
+    <h1 class="display min-w-0 text-3xl text-ink-100">Skills</h1>
+    <div class="shrink-0 text-center">
+      <div class="seal h-14 w-14" aria-label="Average level {totalLevel}">
+        <span class="display text-xl leading-none font-bold">{totalLevel}</span>
+      </div>
+      <p class="seal__label" aria-hidden="true">Avg</p>
+    </div>
   </div>
-  <div class="seal h-14 w-14 shrink-0" aria-label="Average level {totalLevel}">
-    <span class="text-2xl leading-none font-bold">{totalLevel}</span>
-    <span class="text-[10px] tracking-[0.16em]">AVG</span>
-  </div>
+  <p class="sub mt-2">Train a trade, gather materials, grow stronger.</p>
 </div>
 
 {#if error}
-  <p class="mt-3 rounded-[8px] bg-ember-950 px-3 py-2 text-sm text-ember-300">{error}</p>
+  <p class="banner mt-3" style={accentStyle(ACCENT.ember)} role="alert">{error}</p>
 {/if}
 
 {#if pendingTalents.length}
   <a
     href={href(`/skills/${pendingTalents[0]!.id}`)}
-    class="mt-3 flex items-center gap-2 border-b border-ink-700 pb-3 text-sm"
+    class="mt-3 flex min-h-11 items-center gap-2 border-b border-ink-700 pb-3 text-sm"
     style={accentStyle(ACCENT.violet)}
   >
     <span class="h-2 w-2 shrink-0 rounded-[2px]" style="background: var(--accent)"></span>
@@ -99,23 +101,23 @@
     <span class="min-w-0 truncate text-violet-300"
       >{pendingTalents.map((s) => s.name).join(', ')}</span
     >
-    <span class="ml-auto shrink-0 text-ink-500">→</span>
+    <span class="ml-auto shrink-0 text-ink-400" aria-hidden="true">→</span>
   </a>
 {/if}
 
 <a
   href={href('/combat')}
-  class="mt-3 flex items-center gap-3 border-b border-ink-700 pb-3 text-sm"
+  class="mt-3 flex min-h-11 items-center gap-3 border-b border-ink-700 pb-3 text-sm"
   style={accentStyle(CATEGORY.combat.accent)}
 >
   <Icon name="skull" size={18} />
   <span class="flex-1 text-ink-100">Combat — fight monsters for bones, hides and gems</span>
-  <span class="text-ink-500">→</span>
+  <span class="text-ink-400" aria-hidden="true">→</span>
 </a>
 
 {#if running.length}
   <!-- The idle tell: which rigs are running and what they have made since (§13.5.1). -->
-  <div class="mt-3 flex flex-wrap items-center gap-2 border-b border-ink-700 pb-3 text-[13px]">
+  <div class="mt-3 flex flex-wrap items-center gap-2 border-b border-ink-700 pb-3 text-xs">
     <svg
       viewBox="0 0 24 24"
       fill="none"
@@ -144,7 +146,7 @@
 {/if}
 
 {#if loading}
-  <p class="mt-4 flex items-center gap-2 text-sm text-ink-400">
+  <p class="banner mt-4" style={accentStyle(ACCENT.azure)}>
     <Spinner size={14} label="Loading skills" /> Loading…
   </p>
 {:else}
@@ -152,40 +154,44 @@
     {#each groups as g (g.key)}
       {#if g.skills.length}
         <div class="mt-5 xl:break-inside-avoid">
-          <div class="mb-1 flex items-center gap-2">
+          <div class="mb-2 flex items-center gap-2">
             <span class="h-2.5 w-2.5 rounded-[2px]" style="background: {g.accent}"></span>
-            <h2 class="text-xs font-bold tracking-widest uppercase" style="color: {g.accent}">
-              {g.label}
-            </h2>
-            <span class="ml-auto text-[13px] text-ink-500">{g.skills.length}</span>
+            <h2 class="eyebrow" style="color: {g.accent}">{g.label}</h2>
+            <span class="ml-auto text-xs text-ink-400">{g.skills.length}</span>
           </div>
-          <ul>
+          <ul class="grid gap-2">
             {#each g.skills as s (s.id)}
+              {@const pending = s.talent.pendingChoice || s.talent.mastery.pending.length > 0}
               <li style={accentStyle(g.accent)}>
-                <a href={href(`/skills/${s.id}`)} class="block border-b border-ink-700 py-3">
-                  <div class="flex items-baseline justify-between gap-2">
-                    <span class="flex min-w-0 items-center gap-2">
-                      <span class="truncate text-sm font-medium text-ink-100">{s.name}</span>
-                      {#if s.talent.pendingChoice || s.talent.mastery.pending.length}
-                        <span class="chip shrink-0" style={accentStyle(ACCENT.violet)}>Talent</span>
-                      {/if}
-                    </span>
+                <a href={href(`/skills/${s.id}`)} class="panel panel-accent block p-3">
+                  <div class="flex items-start gap-3">
                     <span
-                      class="display shrink-0 text-lg font-bold tabular-nums"
-                      style="color: {g.accent}">{s.level}</span
+                      class="tile grid h-11 w-11 shrink-0 place-items-center text-xl"
+                      aria-hidden="true">{s.icon}</span
                     >
-                  </div>
-                  <div class="bar mt-1.5"><i style="width: {s.progress * 100}%"></i></div>
-                  <div class="mt-1 flex items-center gap-2 text-[13px] text-ink-500">
-                    <span class="min-w-0 truncate">{s.description}</span>
-                    <span class="shrink-0 tabular-nums" style="color: {g.accent}"
-                      >{pct(s.effect.value)}/lv</span
-                    >
-                    <span class="shrink-0 text-ink-600">·</span>
-                    <span class="flex shrink-0 items-center gap-1">
-                      <Icon name="link" size={11} />
-                      {s.talent.synergy.name}
-                    </span>
+                    <div class="min-w-0 flex-1">
+                      <div class="flex items-baseline justify-between gap-2">
+                        <span class="display truncate text-base text-ink-100">{s.name}</span>
+                        <span
+                          class="display shrink-0 text-lg font-bold tabular-nums"
+                          style="color: {g.accent}">{s.level}</span
+                        >
+                      </div>
+                      <div class="bar mt-1.5"><i style="width: {s.progress * 100}%"></i></div>
+                      <p class="mt-1.5 line-clamp-2 text-xs text-ink-400">{s.description}</p>
+                      <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-400">
+                        <span class="tabular-nums" style="color: {g.accent}"
+                          >{pct(s.effect.value)}/lv</span
+                        >
+                        <span class="flex items-center gap-1">
+                          <Icon name="link" size={12} />
+                          {s.talent.synergy.name}
+                        </span>
+                        {#if pending}
+                          <span class="chip shrink-0" style={accentStyle(ACCENT.violet)}>Talent</span>
+                        {/if}
+                      </div>
+                    </div>
                   </div>
                 </a>
               </li>
@@ -197,7 +203,7 @@
   </div>
 
   {#if data}
-    <p class="mt-6 mb-6 text-center text-[13px] text-ink-400">
+    <p class="mt-6 mb-6 text-center text-xs text-ink-400">
       Bonuses · global XP <span class="gold">+{pct(data.bonuses.globalXp)}</span> · power
       <span class="text-combat-400">+{pct(data.bonuses.damage)}</span> · drop
       <span class="text-support-400">+{pct(data.bonuses.drop)}</span>

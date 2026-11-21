@@ -1,8 +1,9 @@
 <script lang="ts">
   import type { Instance } from '#lib/exercises'
   import { typingAttrs } from '#lib/lang'
+  import { ACCENT, accentStyle } from '#lib/theme'
   import Spinner from '../Spinner.svelte'
-  import Word from '../Word.svelte'
+  import CharCell from '../CharCell.svelte'
 
   let {
     instance,
@@ -25,20 +26,24 @@
 
 <div class="space-y-4">
   {#if rule}
-    <span class="chip" style="--accent: var(--accent)">{rule}</span>
+    <span class="chip" style={accentStyle(ACCENT.violet)}>{rule}</span>
   {/if}
   <p class="text-lg leading-snug">{instance.prompt}</p>
 
   {#if options.length}
     <div class="grid gap-2">
       {#each options as option (option)}
-        <button
-          onclick={() => onsubmit(option)}
+        <CharCell
+          word={option}
+          {lang}
+          size="md"
+          wordish={option.length > 1}
+          accent={ACCENT.azure}
+          stretch
           disabled={busy}
-          class="flex flex-col items-center gap-0.5 rounded-md border border-ink-600 bg-ink-900 px-4 py-4 text-left text-lg transition-colors hover:border-seal-400 hover:bg-ink-850 disabled:opacity-50"
-        >
-          <Word word={option} {lang} size="md" />
-        </button>
+          label={option}
+          onclick={() => onsubmit(option)}
+        />
       {/each}
     </div>
   {:else}
@@ -46,7 +51,7 @@
       <input
         bind:value={answer}
         {...typingAttrs(answerLang)}
-        class="w-full rounded-md border border-ink-600 bg-ink-900 px-4 py-4 text-lg outline-none focus:border-seal-400"
+        class="field text-lg"
         placeholder="Type the correct form…"
       />
       <button

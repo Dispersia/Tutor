@@ -88,14 +88,16 @@
 
 <svelte:window onkeydown={onKeydown} />
 
-<div class="flex min-h-dvh flex-col lg:pl-60">
+<div class="flex min-h-dvh flex-col lg:pl-64">
   <!-- desktop rail: the spine of the book, all destinations in one column -->
   <aside
-    class="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex lg:w-60 lg:flex-col lg:border-r lg:border-ink-700 lg:bg-ink-950"
+    class="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex lg:w-64 lg:flex-col lg:border-r lg:border-ink-700 lg:bg-ink-950"
     aria-label="Primary"
   >
     <div class="px-5 pt-6 pb-5">
-      <a href={href('/home')} class="display text-xl leading-none text-ink-100">Tutor</a>
+      <a href={href('/home')} class="display inline-flex min-h-11 items-center text-xl leading-none text-ink-100"
+        >Tutor</a
+      >
     </div>
 
     <nav class="flex-1 overflow-y-auto px-3">
@@ -106,7 +108,7 @@
             <a
               href={href(t.href)}
               aria-current={on ? 'page' : undefined}
-              class="flex items-center gap-3 rounded-[8px] px-3 py-2 text-sm font-medium transition-colors {on
+              class="flex min-h-11 items-center gap-3 rounded-[10px] px-3 py-2 text-sm font-medium transition-colors {on
                 ? 'bg-seal-400/12 text-seal-300'
                 : 'text-ink-300 hover:bg-ink-900 hover:text-ink-100'}"
             >
@@ -124,7 +126,7 @@
             <a
               href={href(m.href)}
               aria-current={on ? 'page' : undefined}
-              class="flex items-center gap-3 rounded-[8px] px-3 py-2 text-sm font-medium transition-colors {on
+              class="flex min-h-11 items-center gap-3 rounded-[10px] px-3 py-2 text-sm font-medium transition-colors {on
                 ? 'bg-seal-400/12 text-seal-300'
                 : 'text-ink-300 hover:bg-ink-900 hover:text-ink-100'}"
             >
@@ -139,11 +141,11 @@
     <div class="border-t border-ink-700 p-3">
       {#if activeDeck.decks.length}
         <label class="mb-2 block px-1.5">
-          <span class="eyebrow text-ink-500">Studying</span>
+          <span class="eyebrow text-ink-400">Studying</span>
           <select
             value={activeDeck.id ?? ''}
             onchange={onDeckChange}
-            class="mt-1 w-full rounded-[8px] border border-ink-700 bg-ink-900 px-2 py-1.5 text-xs text-ink-200 outline-none focus:border-seal-400"
+            class="field mt-1 text-xs"
           >
             <option value="">All decks</option>
             {#each activeDeck.decks as d (d.id)}
@@ -154,7 +156,7 @@
       {/if}
       <div class="flex items-center gap-2.5 px-1.5 py-1">
         <span
-          class="display grid h-8 w-8 shrink-0 place-items-center rounded-[7px] border text-sm font-bold transition-colors {inAccount
+          class="display grid h-11 w-11 shrink-0 place-items-center rounded-[10px] border text-sm font-bold transition-colors {inAccount
             ? 'border-seal-400 text-seal-300'
             : 'border-ink-600 text-ink-200'}"
         >
@@ -162,13 +164,13 @@
         </span>
         <div class="min-w-0">
           <div class="display truncate text-sm text-ink-100">{session.user?.handle}</div>
-          <div class="truncate text-[13px] text-ink-400">@{session.user?.username}</div>
+          <div class="truncate text-xs text-ink-400">@{session.user?.username}</div>
         </div>
       </div>
       <button
         type="button"
         onclick={signOut}
-        class="mt-2 flex w-full items-center gap-3 rounded-[8px] px-3 py-2 text-left text-sm font-medium text-ember-300 transition-colors hover:bg-ember-950/60"
+        class="mt-2 flex min-h-11 w-full items-center gap-3 rounded-[10px] px-3 py-2 text-left text-sm font-medium text-ember-300 transition-colors hover:bg-ember-950/60"
       >
         <Icon name="logout" size={17} cls="text-ember-400" />
         Sign out
@@ -177,11 +179,13 @@
   </aside>
 
   <!-- title bar (phone): the app mark, and the account behind a personal stamp -->
-  <header
-    class="sticky top-0 z-20 border-b border-ink-700 bg-ink-950/90 pt-safe backdrop-blur-md lg:hidden"
-  >
+  <header class="sticky top-0 z-20 border-b border-ink-700 bg-ink-950 pt-safe lg:hidden">
     <div class="mx-auto flex w-full max-w-2xl items-center justify-between gap-3 px-4 pb-1.5">
-      <a href={href('/home')} class="display text-lg leading-none text-ink-200">Tutor</a>
+      <a
+        href={href('/home')}
+        class="display inline-flex min-h-11 items-center text-lg leading-none text-ink-200"
+        >Tutor</a
+      >
 
       <div class="relative">
         <button
@@ -190,7 +194,7 @@
           aria-haspopup="menu"
           aria-expanded={open}
           aria-label="Account menu"
-          class="display grid h-8 w-8 shrink-0 place-items-center rounded-[7px] border text-sm font-bold transition-colors {open ||
+          class="display grid h-11 w-11 shrink-0 place-items-center rounded-[10px] border text-sm font-bold transition-colors {open ||
           inAccount
             ? 'border-seal-400 text-seal-300'
             : 'border-ink-600 text-ink-200 hover:border-ink-500'}"
@@ -209,16 +213,16 @@
           <div class="rise panel absolute right-0 z-30 mt-2 w-56" role="menu">
             <div class="border-b border-ink-700 px-3 py-2.5">
               <div class="display truncate text-sm text-ink-100">{session.user?.handle}</div>
-              <div class="truncate text-[13px] text-ink-400">@{session.user?.username}</div>
+              <div class="truncate text-xs text-ink-400">@{session.user?.username}</div>
             </div>
             {#if activeDeck.decks.length}
               <div class="border-b border-ink-700 px-3 py-2.5">
-                <label class="eyebrow block text-ink-500" for="profile-deck">Studying</label>
+                <label class="eyebrow block text-ink-400" for="profile-deck">Studying</label>
                 <select
                   id="profile-deck"
                   value={activeDeck.id ?? ''}
                   onchange={onDeckChange}
-                  class="mt-1 w-full rounded-[8px] border border-ink-700 bg-ink-900 px-2 py-1.5 text-xs text-ink-200 outline-none focus:border-seal-400"
+                  class="field mt-1 text-xs"
                 >
                   <option value="">All decks</option>
                   {#each activeDeck.decks as d (d.id)}
@@ -233,7 +237,7 @@
                 href={href(m.href)}
                 role="menuitem"
                 aria-current={on ? 'page' : undefined}
-                class="flex items-center gap-3 px-3 py-2.5 text-sm transition-colors hover:bg-ink-800 {on
+                class="flex min-h-11 items-center gap-3 px-3 py-2.5 text-sm transition-colors hover:bg-ink-800 {on
                   ? 'text-seal-300'
                   : 'text-ink-200'}"
               >
@@ -245,7 +249,7 @@
               type="button"
               onclick={signOut}
               role="menuitem"
-              class="flex w-full items-center gap-3 border-t border-ink-700 px-3 py-2.5 text-left text-sm text-ember-300 transition-colors hover:bg-ink-800"
+              class="flex min-h-11 w-full items-center gap-3 border-t border-ink-700 px-3 py-2.5 text-left text-sm text-ember-300 transition-colors hover:bg-ink-800"
             >
               <Icon name="logout" size={16} cls="text-ember-400" />
               Sign out
@@ -261,7 +265,7 @@
   </main>
 
   <nav
-    class="sticky bottom-0 z-10 border-t border-ink-700 bg-ink-950/90 pb-safe backdrop-blur-md lg:hidden"
+    class="sticky bottom-0 z-10 border-t border-ink-700 bg-ink-950 pb-safe lg:hidden"
     aria-label="Primary"
   >
     <ul class="mx-auto grid max-w-2xl grid-cols-3">
@@ -271,18 +275,12 @@
           <a
             href={href(t.href)}
             aria-current={on ? 'page' : undefined}
-            class="flex justify-center py-1.5 text-[13px] font-medium transition-colors {on
-              ? 'text-seal-300'
-              : 'text-ink-400 hover:text-ink-200'}"
+            class="flex min-h-12 flex-col items-center justify-center gap-1 py-1.5 text-xs leading-none font-medium transition-colors {on
+              ? 'bg-seal-400/12 text-seal-300'
+              : 'text-ink-400 hover:bg-ink-900 hover:text-ink-200'}"
           >
-            <span
-              class="flex flex-col items-center gap-1 rounded-[8px] px-3 py-1 {on
-                ? 'bg-seal-400/12'
-                : ''}"
-            >
-              <Icon name={t.icon} size={18} cls={on ? '' : 'opacity-80'} />
-              <span>{t.label}</span>
-            </span>
+            <Icon name={t.icon} size={22} />
+            <span>{t.label}</span>
           </a>
         </li>
       {/each}

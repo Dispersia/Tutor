@@ -52,6 +52,8 @@
   const itemMap = $derived(new Map((data?.items ?? []).map((i) => [i.id, i])))
   /** Where each material is made, so a "needs" cost can link to its source action. */
   const sources = $derived(data?.sources ?? {})
+  /** The first action you can actually train — the one amber primary on the view. */
+  const firstTrainableId = $derived(skill?.actions.find((a) => a.unlocked && a.affordable)?.id)
 
   /**
    * The whole talent ladder in one rail: a choice every 10 levels, with a mastery
@@ -176,38 +178,36 @@
 </script>
 
 <div class="pt-4">
-  <button onclick={() => goto(href('/skills'))} class="text-sm text-ink-400 hover:text-ink-200">
-    ← Skills
-  </button>
+  <button onclick={() => goto(href('/skills'))} class="link link-btn text-sm">← Skills</button>
 </div>
 
 {#if error}
-  <p class="mt-3 rounded-[8px] bg-ember-950 px-3 py-2 text-sm text-ember-300">{error}</p>
+  <p class="banner mt-3" style={accentStyle(ACCENT.ember)} role="alert">{error}</p>
 {/if}
 {#if note}
-  <p class="mt-3 rounded-[8px] bg-jade-950 px-3 py-2 text-sm text-jade-300">{note}</p>
+  <p class="banner mt-3" style={accentStyle(ACCENT.jade)}>{note}</p>
 {/if}
 
 {#if loading}
   <p class="mt-4 text-sm text-ink-400">Loading…</p>
 {:else if skill}
   <!-- Header ---------------------------------------------------------------->
-  <header
-    class="mt-3 flex items-center justify-between gap-3 border-b border-ink-700 pb-4 mb-4"
-    style={accentStyle(accent)}
-  >
-    <div class="min-w-0">
-      <h1 class="display truncate text-3xl text-ink-100">{skill.name}</h1>
-      <p class="mt-1 text-xs text-ink-400">{catLabel} · {skill.description}</p>
+  <header class="mt-3 border-b border-ink-700 pb-4 mb-4" style={accentStyle(accent)}>
+    <div class="flex items-start justify-between gap-4">
+      <h1 class="display min-w-0 truncate text-3xl text-ink-100">{skill.name}</h1>
+      <div class="shrink-0 text-center">
+        <div
+          class="tile grid h-14 w-14 place-items-center"
+          aria-label="Level {skill.level} of 100, the average of {skill.actions.length} actions"
+        >
+          <span class="display text-xl leading-none font-bold" style="color: {accent}"
+            >{skill.level}</span
+          >
+        </div>
+        <p class="seal__label" aria-hidden="true">Level</p>
+      </div>
     </div>
-    <div
-      class="grid h-14 w-14 shrink-0 place-items-center rounded-[8px]"
-      style="border: 1.5px solid {accent}; background: {accent}1f; color: {accent}"
-      aria-label="Level {skill.level} of 100, the average of {skill.actions.length} actions"
-    >
-      <span class="display text-2xl leading-none font-bold">{skill.level}</span>
-      <span class="text-[10px] tracking-[0.16em]">LEVEL</span>
-    </div>
+    <p class="sub mt-2">{catLabel} · {skill.description}</p>
   </header>
 
   <!-- Mobile order is ledger → actions → talents: the thing you actually do comes
@@ -227,7 +227,7 @@
                 ? ''
                 : 's'}</span
             >
-            <span class="text-ink-500 tabular-nums">{pct(skill.progress)} avg</span>
+            <span class="text-ink-400 tabular-nums">{pct(skill.progress)} avg</span>
           </div>
           <div class="bar mt-2"><i style="width: {skill.progress * 100}%"></i></div>
         </div>
@@ -249,7 +249,7 @@
           >
             <Icon name="skull" size={17} />
             <span class="flex-1 text-ink-100">Go to combat</span>
-            <span class="text-ink-500">→</span>
+            <span class="text-ink-400">→</span>
           </a>
         {/if}
       </section>
@@ -265,9 +265,9 @@
           <Icon name="link" size={16} cls="text-violet-300" />
           <span class="min-w-0 flex-1 text-ink-300">
             Feeds <span class="text-ink-100">{skill.talent.synergy.name}</span>
-            <span class="text-ink-500">· {skill.talent.synergy.label}</span>
+            <span class="text-ink-400">· {skill.talent.synergy.label}</span>
           </span>
-          <span class="text-ink-500">→</span>
+          <span class="text-ink-400">→</span>
         </a>
       {/if}
 
@@ -280,18 +280,16 @@
           <Icon name="link" size={16} cls="text-violet-300" />
           <span class="min-w-0 flex-1 text-ink-300">
             Fed by <span class="text-ink-100">{f.name}</span>
-            <span class="text-ink-500">· {f.label}</span>
+            <span class="text-ink-400">· {f.label}</span>
           </span>
-          <span class="text-ink-500">←</span>
+          <span class="text-ink-400">←</span>
         </a>
       {/each}
     </div>
 
     <div class="order-3 xl:order-none xl:col-start-1 xl:row-start-2">
       <!-- Talents: one rail from Lv 10 to Lv 100 --------------------------------->
-      <h2 class="mt-6 text-xs font-bold tracking-widest uppercase" style="color: {ACCENT.violet}">
-        Talents
-      </h2>
+      <h2 class="mt-6 eyebrow" style="color: {ACCENT.violet}">Talents</h2>
       <p class="mt-2 border-b border-ink-700 pb-3 text-xs text-ink-400">
         A choice every 10 levels. At <span class="text-violet-300">Lv 50</span> and
         <span class="text-violet-300">Lv 100</span> a capstone also opens — each gated on a level in
@@ -300,14 +298,11 @@
 
       <ul style={accentStyle(ACCENT.violet)}>
         {#each rail as r (`${r.kind}:${r.milestone}`)}
-          <li
-            class="flex items-start gap-3 border-b border-ink-700 py-3"
-            class:opacity-55={r.state === 'locked'}
-          >
+          <li class="flex items-start gap-3 border-b border-ink-700 py-3">
             <div
-              class="grid h-9 w-9 shrink-0 place-items-center rounded-[8px] border tabular-nums {r.state ===
+              class="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] border tabular-nums {r.state ===
               'locked'
-                ? 'border-ink-700 text-ink-500'
+                ? 'border-ink-700 text-ink-400'
                 : 'border-violet-400/60 text-violet-300'}"
             >
               {#if r.kind === 'mastery'}
@@ -327,13 +322,13 @@
                 <div class="flex items-baseline justify-between gap-2">
                   <span class="display text-sm text-ink-100">{t.name}</span>
                   {#if r.kind === 'choice'}
-                    <span class="text-[13px] text-ink-500 tabular-nums">Lv {t.milestone}</span>
+                    <span class="text-xs text-ink-400 tabular-nums">Lv {t.milestone}</span>
                   {/if}
                 </div>
                 <p class="mt-0.5 text-xs text-ink-400">{t.description}</p>
                 <button
                   onclick={() => (changing = changing === t.id ? null : t.id)}
-                  class="mt-1 text-[13px] text-ink-400 underline hover:text-ink-200"
+                  class="mt-1 text-xs text-ink-400 underline hover:text-ink-200"
                 >
                   {changing === t.id ? 'Cancel' : 'Change'}
                 </button>
@@ -343,14 +338,14 @@
                       <button
                         onclick={() => pick(o.id)}
                         disabled={busy || blocked(o)}
-                        class="flex w-full items-center gap-3 border-t border-ink-700 py-2.5 text-left disabled:opacity-50"
+                        class="flex w-full items-center gap-3 border-t border-ink-700 py-2.5 text-left"
                       >
                         <span class="min-w-0 flex-1">
                           <span class="display block text-sm text-ink-200">{o.name}</span>
                           <span class="block text-xs text-ink-400">{o.description}</span>
                         </span>
                         <span
-                          class="shrink-0 text-xs {blocked(o) ? 'text-ember-300' : 'text-ink-500'}"
+                          class="shrink-0 text-xs {blocked(o) ? 'text-ember-300' : 'text-ink-400'}"
                         >
                           {blocked(o) ? unmet(o) : 'Pick'}
                         </span>
@@ -363,7 +358,7 @@
                   <button
                     onclick={() => pick(o.id)}
                     disabled={busy || blocked(o)}
-                    class="flex w-full items-center gap-3 py-2 text-left first:pt-0 disabled:opacity-50"
+                    class="flex w-full items-center gap-3 py-2 text-left first:pt-0"
                   >
                     <span class="h-2 w-2 shrink-0 rounded-[2px] bg-violet-400"></span>
                     <span class="min-w-0 flex-1">
@@ -378,7 +373,7 @@
                   </button>
                 {/each}
               {:else}
-                <p class="flex items-center gap-1.5 text-xs text-ink-500">
+                <p class="flex items-center gap-1.5 text-xs text-ink-400">
                   <Icon name="lock" size={13} />
                   Reach Lv {r.milestone}
                 </p>
@@ -389,7 +384,7 @@
       </ul>
 
       {#if !skill.talent.pendingChoice}
-        <p class="mt-2 pb-1 text-[13px] text-ink-400">
+        <p class="mt-2 pb-1 text-xs text-ink-400">
           {#if skill.talent.nextMilestone}
             Next talent choice at <span class="gold">Lv {skill.talent.nextMilestone}</span>.
           {:else}
@@ -400,27 +395,27 @@
     </div>
     <div class="order-2 xl:order-none xl:col-start-2 xl:row-start-1 xl:row-span-2">
       <!-- Actions --------------------------------------------------------------->
-      <h2 class="mt-6 text-xs font-bold tracking-widest uppercase xl:mt-0" style="color: {accent}">
-        Actions
-      </h2>
+      <h2 class="mt-6 eyebrow xl:mt-0" style="color: {accent}">Actions</h2>
       <ul>
         {#each skill.actions as a (a.id)}
+          {@const trainable = a.unlocked && a.affordable}
+          {@const isPrimary = trainable && a.id === firstTrainableId}
           <li
             id="action-{a.id}"
             class="flex items-start gap-3 border-b border-ink-700 py-3 transition-colors"
-            class:opacity-60={!a.unlocked}
             class:bg-ink-900={flash === a.id}
             style={accentStyle(accent)}
           >
             <div class="min-w-0 flex-1">
-              <div class="flex items-baseline justify-between gap-2">
+              <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                 <span class="text-sm font-medium text-ink-100">{a.name}</span>
-                <span class="display shrink-0 text-sm font-bold" style="color: {accent}"
+                <span class="chip" style={accentStyle(ACCENT.ink)}>Tier {a.tier}</span>
+                <span class="display ml-auto shrink-0 text-sm font-bold" style="color: {accent}"
                   >Lv {a.level}</span
                 >
               </div>
               <div class="bar mt-1.5"><i style="width: {a.progress * 100}%"></i></div>
-              <div class="mt-1 flex flex-wrap items-center gap-x-3 text-[13px] text-ink-500">
+              <div class="mt-1 flex flex-wrap items-center gap-x-3 text-xs text-ink-400">
                 {#if a.level >= 100}
                   <span>Max level</span>
                 {:else}
@@ -428,22 +423,23 @@
                     >{a.intoLevel} / {a.forNext} XP to Lv {a.level + 1}</span
                   >
                 {/if}
-                <span class="text-ink-600">+{a.xp} xp a drill</span>
+                <span class="text-ink-400">+{a.xp} xp a drill</span>
                 {#if a.effect.value > 0}
                   <span style="color: {accent}"
                     >+{pct(a.effect.value)} {EFFECT_LABEL[a.effect.kind]}</span
                   >
                 {/if}
               </div>
-              <div class="mt-0.5 text-[13px] text-ink-400">{a.description}</div>
+              <div class="mt-0.5 text-xs text-ink-400">{a.description}</div>
               {#if (a.consumes ?? []).length || (a.produces ?? []).length}
-                <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
+                <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
                   {#each a.consumes ?? [] as c (c.item)}
                     {@const src = sources[c.item]}
                     {#if src}
                       <a
                         href={href(`/skills/${src.skillId}#action-${src.actionId}`)}
-                        class="text-ember-300 hover:underline"
+                        class="chip"
+                        style={accentStyle(ACCENT.ember)}
                         title="Where {itemMap.get(c.item)?.name ?? c.item} comes from"
                       >
                         −{c.count}
@@ -451,7 +447,7 @@
                         {itemMap.get(c.item)?.name ?? c.item}
                       </a>
                     {:else}
-                      <span class="text-ember-300">
+                      <span class="chip" style={accentStyle(ACCENT.ember)}>
                         −{c.count}
                         {itemMap.get(c.item)?.icon ?? ''}
                         {itemMap.get(c.item)?.name ?? c.item}
@@ -459,7 +455,7 @@
                     {/if}
                   {/each}
                   {#each a.produces ?? [] as p (p.item)}
-                    <span class="text-jade-400">
+                    <span class="chip" style={accentStyle(ACCENT.jade)}>
                       +{p.count}
                       {itemMap.get(p.item)?.icon ?? ''}
                       {itemMap.get(p.item)?.name ?? p.item}
@@ -479,7 +475,7 @@
                     ? `Rig running: ${fmtInterval(a.idle.intervalSec)} per item, ${fmtClock(idleLeft)} left`
                     : 'Rig still'}
                 >
-                  <div class="flex items-center gap-2 text-[13px] text-ink-400">
+                  <div class="flex items-center gap-2 text-xs text-ink-400">
                     <svg
                       viewBox="0 0 24 24"
                       fill="none"
@@ -508,23 +504,18 @@
                         >{fmtClock(idleLeft)} left</span
                       >
                     {:else}
-                      <span class="text-ink-500">still</span>
+                      <span class="text-ink-400">still</span>
                     {/if}
                   </div>
-                  <div
-                    class="mt-1 h-[3px] overflow-hidden rounded-[2px] border border-ink-700 bg-ink-800"
-                  >
+                  <div class="bar mt-1.5 h-1" role="progressbar" aria-label="Rig run remaining">
                     {#if a.idle.active}
-                      <div
-                        class="h-full rounded-[2px]"
-                        style="width: {runPct * 100}%; background: {accent}"
-                      ></div>
+                      <i style="width: {runPct * 100}%; background: {accent}"></i>
                     {/if}
                   </div>
                 </div>
               {/if}
               {#if !a.unlocked || !a.affordable}
-                <p class="mt-1 text-[13px] text-brass-300">
+                <p class="mt-1 text-xs text-brass-300">
                   {a.unlocked ? 'needs' : 'locked —'}
                   {lockedReason(a)}
                 </p>
@@ -532,10 +523,8 @@
             </div>
             <button
               onclick={() => train(a)}
-              disabled={!a.unlocked || !a.affordable}
-              class="btn {a.unlocked && a.affordable
-                ? 'btn-primary'
-                : 'btn-ghost'} shrink-0 px-3 py-2 text-sm"
+              disabled={!trainable}
+              class="btn {isPrimary ? 'btn-primary' : 'btn-ghost'} shrink-0 px-3 py-2 text-xs"
             >
               Train
             </button>

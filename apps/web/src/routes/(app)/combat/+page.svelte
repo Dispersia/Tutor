@@ -224,44 +224,59 @@
 <svelte:window onkeydown={onKeydown} />
 
 <div class="lg:mx-auto lg:max-w-3xl">
-  <div class="flex items-center justify-between border-b border-ink-700 pt-4 pb-3 mb-4">
-    <div>
-      <h1 class="display text-3xl text-combat-400">Combat</h1>
-      <p class="mt-1 text-xs text-ink-400">
-        {encounter
-          ? 'Answer drills to strike; it hits you every exchange.'
-          : 'Pick a monster to fight.'}
-        {#if fightSkill}
-          · {fightSkillIcon} {fightSkill}
-        {/if}
-        · <Icon name="food" size={12} cls="align-[-2px]" />
-        {foodCount} food ·
-        <Icon name="potion" size={12} cls="align-[-2px]" />
-        {potionCount} potions · auto-eat under {foodThreshold}%
-      </p>
+  <div class="border-b border-ink-700 pt-4 pb-4 mb-4">
+    <div class="flex items-start justify-between gap-4">
+      <div class="min-w-0">
+        <h1 class="display text-3xl text-combat-400">Combat</h1>
+        <p class="sub mt-2">
+          {encounter
+            ? 'Answer drills to strike; it hits you every exchange.'
+            : 'Pick a monster to fight.'}
+        </p>
+      </div>
+      {#if data}
+        <div class="shrink-0 text-center">
+          <div
+            class="seal h-14 w-14"
+            style="--seal-accent: {ACCENT.ember}"
+            aria-label="Your hit points"
+          >
+            <span class="display text-lg leading-none font-bold"
+              >{encounter?.playerHp ?? data.player.hp}</span
+            >
+          </div>
+          <p class="seal__label" aria-hidden="true">HP</p>
+        </div>
+      {/if}
     </div>
     {#if data}
-      <div class="flex shrink-0 flex-col items-end gap-1 text-xs">
-        <span class="chip gap-1" style="--accent: {ACCENT.ember}"
-          ><Icon name="heart" size={12} />
-          {encounter?.playerHp ?? data.player.hp}/{encounter?.playerMaxHp ?? data.player.maxHp} HP</span
-        >
-        <span class="chip gap-1" style="--accent: var(--color-ink-500)"
-          ><Icon name="shield" size={12} />
-          {data.player.armour} ·
-          <Icon name="sword" size={12} />
-          {data.player.weaponPower}</span
-        >
+      <div class="mt-3 flex flex-wrap items-center gap-1.5">
+        {#if fightSkill}
+          <span class="chip gap-1" style="--accent: {ACCENT.ember}">
+            {fightSkillIcon} {fightSkill}
+          </span>
+        {/if}
+        <span class="chip gap-1" style="--accent: {ACCENT.gold}">
+          <Icon name="food" size={12} /> {foodCount} food
+        </span>
+        <span class="chip gap-1" style="--accent: {ACCENT.azure}">
+          <Icon name="potion" size={12} /> {potionCount} potions
+        </span>
+        <span class="chip gap-1" style="--accent: var(--color-ink-500)">
+          <Icon name="shield" size={12} /> {data.player.armour} ·
+          <Icon name="sword" size={12} /> {data.player.weaponPower}
+        </span>
+        <span class="text-xs text-ink-400">auto-eat under {foodThreshold}%</span>
       </div>
     {/if}
   </div>
 
   {#if error}
-    <p class="mb-3 rounded-lg bg-ember-950 px-3 py-2 text-sm text-ember-300">{error}</p>
+    <p class="banner mb-3" style="--accent: {ACCENT.ember}" role="alert">{error}</p>
   {/if}
 
   {#if loading}
-    <p class="flex items-center gap-2 text-sm text-ink-400">
+    <p class="banner flex items-center gap-2" style="--accent: {ACCENT.ember}">
       <Spinner size={14} label="Loading encounter" /> Loading…
     </p>
   {:else if encounter}
@@ -326,13 +341,13 @@
           </span>
         {/if}
         {#if hit.defenceXp > 0}
-          <span class="chip" style="--accent: {ACCENT.jade}">
-            🛡️ +{hit.defenceXp} Defence
+          <span class="chip gap-1" style="--accent: {ACCENT.jade}">
+            <Icon name="shield" size={12} /> +{hit.defenceXp} Defence
           </span>
         {/if}
         {#if hit.constitutionXp > 0}
-          <span class="chip" style="--accent: {ACCENT.ember}">
-            ❤️ +{hit.constitutionXp} Constitution
+          <span class="chip gap-1" style="--accent: {ACCENT.ember}">
+            <Icon name="heart" size={12} /> +{hit.constitutionXp} Constitution
           </span>
         {/if}
         {#if hit.ate}
@@ -417,11 +432,7 @@
     {/if}
     <div class="space-y-2 lg:grid lg:grid-cols-2 lg:gap-6 lg:space-y-0">
       {#each data?.monsters ?? [] as m (m.id)}
-        <div
-          class="panel panel-accent p-3"
-          class:opacity-70={!m.unlocked}
-          style={accentStyle(ACCENT.ember)}
-        >
+        <div class="panel panel-accent p-3" style={accentStyle(ACCENT.ember)}>
           <div class="flex items-center gap-3">
             <span class="text-2xl">{m.icon}</span>
             <div class="flex-1">
@@ -429,7 +440,7 @@
                 <span class="display text-sm text-ink-200">{m.name}</span>
                 <span class="text-xs text-ink-400">Lv {m.level} · {m.hp} HP</span>
               </div>
-              <div class="text-[13px] text-ink-400">
+              <div class="text-xs text-ink-400">
                 {m.description}
               </div>
               <div class="mt-1 flex flex-wrap gap-1">
@@ -445,14 +456,14 @@
             <button
               onclick={() => fight(m)}
               disabled={!m.unlocked || (data?.reviewCount ?? 0) === 0}
-              class="btn btn-accent shrink-0 px-3 py-2 text-sm"
+              class="btn btn-ghost min-h-11 shrink-0 px-3 py-2 text-xs"
               style={accentStyle(ACCENT.ember)}
             >
               Fight
             </button>
           </div>
           {#if !m.unlocked}
-            <p class="mt-1 text-[13px] text-brass-300">
+            <p class="mt-1 text-xs text-brass-300">
               locked — {m.missing
                 .map((r) => `${skillMap.get(r.skill)?.name ?? r.skill} ${r.level}`)
                 .join(', ')}

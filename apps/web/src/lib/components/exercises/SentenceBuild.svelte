@@ -45,22 +45,22 @@
     <input
       bind:value={typed}
       {...typingAttrs(answerLang)}
-      class="w-full rounded-md border border-ink-600 bg-ink-900 px-4 py-4 text-lg outline-none focus:border-seal-400"
+      class="field text-lg"
       placeholder="Type the sentence…"
     />
   {:else}
     <div
-      class="min-h-[3.5rem] rounded-md border border-dashed border-ink-600 bg-ink-950/40 px-2 py-2"
+      class="min-h-[3.5rem] rounded-[12px] border border-dashed border-ink-600 bg-ink-900 px-2 py-2"
     >
       {#if picked.length === 0}
-        <span class="text-sm text-ink-500">Tap the words in order…</span>
+        <span class="text-sm text-ink-400">Tap the words in order…</span>
       {:else}
         <div class="flex flex-wrap gap-1.5">
           {#each picked as bi, pos (pos)}
             <button
               type="button"
               onclick={() => removeAt(pos)}
-              class="flex flex-col items-center rounded-[7px] border border-seal-400/70 bg-ink-900 px-3 py-1.5"
+              class="flex min-h-11 flex-col items-center justify-center rounded-[10px] border border-seal-400 bg-ink-850 px-3 py-2"
             >
               <span class="display text-xl leading-tight">{bank[bi]}</span>
             </button>
@@ -75,11 +75,11 @@
           type="button"
           onclick={() => tap(i)}
           disabled={busy}
-          class="flex flex-col items-center rounded-[7px] border border-ink-600 bg-ink-900 px-3 py-1.5 transition disabled:opacity-50 {picked.includes(
+          class="flex min-h-11 flex-col items-center justify-center rounded-[10px] border px-3 py-2 transition-colors {picked.includes(
             i,
           )
-            ? 'opacity-30'
-            : 'hover:-translate-y-px hover:border-seal-400'}"
+            ? 'border-ink-700 bg-ink-850 text-ink-400'
+            : 'border-ink-600 bg-ink-900 hover:border-seal-400'}"
         >
           <span class="display text-xl leading-tight">{tile}</span>
         </button>
@@ -88,11 +88,11 @@
   {/if}
 
   <div class="flex items-center justify-between gap-2">
-    <button type="button" onclick={() => (typing = !typing)} class="text-xs text-ink-400 underline">
+    <button type="button" onclick={() => (typing = !typing)} class="link link-btn text-xs">
       {typing ? 'Use word tiles' : 'Type it instead'}
     </button>
     {#if newWord}
-      <span class="text-[13px] text-ink-500">new word: {newWord}</span>
+      <span class="text-xs text-ink-400">new word: {newWord}</span>
     {/if}
   </div>
 

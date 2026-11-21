@@ -28,83 +28,79 @@
 </script>
 
 <div class="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-6 pt-safe pb-safe">
-  <div class="mb-7 text-center">
-    <div class="display text-4xl text-ink-100">Tutor</div>
+  <div class="mb-6 text-center">
+    <div class="display text-4xl tracking-[-0.01em] text-ink-100">Tutor</div>
     <p class="mt-1 text-sm text-ink-400">
       {mode === 'login' ? 'Sign in to continue.' : 'Create your account.'}
     </p>
   </div>
 
-  <form onsubmit={submit} class="space-y-4">
-    <label class="block">
-      <span class="eyebrow mb-1 block">Username</span>
-      <input
-        bind:value={username}
-        autocomplete="username"
-        autocapitalize="none"
-        required
-        class="w-full rounded-md border border-ink-600 bg-ink-900 px-3 py-3 outline-none focus:border-seal-400"
-      />
-    </label>
-    <label class="block">
-      <span class="eyebrow mb-1 block">Password</span>
-      <input
-        type="password"
-        bind:value={password}
-        autocomplete={mode === 'login' ? 'current-password' : 'new-password'}
-        required
-        class="w-full rounded-md border border-ink-600 bg-ink-900 px-3 py-3 outline-none focus:border-seal-400"
-      />
-    </label>
+  <section class="panel p-5">
+    <form onsubmit={submit} class="space-y-4">
+      <label class="block">
+        <span class="eyebrow mb-1 block">Username</span>
+        <input
+          bind:value={username}
+          autocomplete="username"
+          autocapitalize="none"
+          required
+          class="field"
+        />
+      </label>
+      <label class="block">
+        <span class="eyebrow mb-1 block">Password</span>
+        <input
+          type="password"
+          bind:value={password}
+          autocomplete={mode === 'login' ? 'current-password' : 'new-password'}
+          required
+          class="field"
+        />
+      </label>
 
-    {#if mode === 'register'}
-      <div class="grid grid-cols-2 gap-3">
-        <label class="block">
-          <span class="eyebrow mb-1 block">Learning</span>
-          <select
-            bind:value={targetLang}
-            class="w-full rounded-md border border-ink-600 bg-ink-900 px-3 py-3"
-          >
-            <option value="zh">Mandarin</option>
-            <option value="ja">Japanese</option>
-            <option value="ko">Korean</option>
-            <option value="es">Spanish</option>
-          </select>
-        </label>
-        <label class="block">
-          <span class="eyebrow mb-1 block">Level</span>
-          <select
-            bind:value={level}
-            class="w-full rounded-md border border-ink-600 bg-ink-900 px-3 py-3"
-          >
-            <option value="hsk1">HSK 1</option>
-            <option value="n5">JLPT N5</option>
-            <option value="a1">A1</option>
-          </select>
-        </label>
-      </div>
-    {/if}
+      {#if mode === 'register'}
+        <div class="grid grid-cols-2 gap-3">
+          <label class="block">
+            <span class="eyebrow mb-1 block">Learning</span>
+            <select bind:value={targetLang} class="field">
+              <option value="zh">Mandarin</option>
+              <option value="ja">Japanese</option>
+              <option value="ko">Korean</option>
+              <option value="es">Spanish</option>
+            </select>
+          </label>
+          <label class="block">
+            <span class="eyebrow mb-1 block">Level</span>
+            <select bind:value={level} class="field">
+              <option value="hsk1">HSK 1</option>
+              <option value="n5">JLPT N5</option>
+              <option value="a1">A1</option>
+            </select>
+          </label>
+        </div>
+      {/if}
 
-    {#if error}
-      <p class="rounded-lg bg-ember-950 px-3 py-2 text-sm text-ember-300">{error}</p>
-    {/if}
+      {#if error}
+        <p class="banner" style="--accent: var(--color-ember-400)" role="alert">{error}</p>
+      {/if}
 
-    <button type="submit" disabled={busy} class="btn btn-primary w-full py-3">
-      {busy ? '…' : mode === 'login' ? 'Sign in' : 'Create account'}
+      <button type="submit" disabled={busy} class="btn btn-primary w-full py-3">
+        {busy ? '…' : mode === 'login' ? 'Sign in' : 'Create account'}
+      </button>
+    </form>
+
+    <button
+      onclick={() => {
+        mode = mode === 'login' ? 'register' : 'login'
+        error = ''
+      }}
+      class="link link-btn mt-4 text-sm"
+    >
+      {mode === 'login' ? 'Need an account? Sign up' : 'Have an account? Sign in'}
     </button>
-  </form>
+  </section>
 
-  <button
-    onclick={() => {
-      mode = mode === 'login' ? 'register' : 'login'
-      error = ''
-    }}
-    class="mt-4 text-sm text-ink-400 underline hover:text-ink-300"
-  >
-    {mode === 'login' ? 'Need an account? Sign up' : 'Have an account? Sign in'}
-  </button>
-
-  <p class="mt-8 text-xs leading-relaxed text-ink-500">
+  <p class="mt-6 text-xs leading-relaxed text-ink-400">
     Accounts are stored on this Mac only. Each person gets their own history, settings and
     OpenRouter key. The first account created is the admin.
   </p>

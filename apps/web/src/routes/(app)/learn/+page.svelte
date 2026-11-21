@@ -14,7 +14,9 @@
   import { session } from '#lib/session.svelte'
   import { activeDeck, loadActiveDeck, setActiveDeck } from '#lib/activeDeck.svelte'
   import { ACCENT, accentStyle } from '#lib/theme'
+  import { autoGrow } from '#lib/grow'
   import Spinner from '#lib/components/Spinner.svelte'
+  import CharCell from '#lib/components/CharCell.svelte'
   import CardEditor from '#lib/components/CardEditor.svelte'
   import DeckSettings from '#lib/components/DeckSettings.svelte'
 
@@ -268,32 +270,39 @@
   const langLabel = (code: string) => LANGUAGES.find((l) => l.code === code)?.label ?? code
 </script>
 
-<div class="flex items-center justify-between border-b border-ink-700 pt-4 pb-4 mb-4">
-  <div>
-    <h1 class="display text-3xl text-ink-100">Learn</h1>
-    <p class="mt-1 text-xs text-ink-400">One new word at a time — tap next and go.</p>
-  </div>
-  {#if stats}
-    <div class="text-right">
-      <div class="display text-2xl {stats.due > 0 ? 'text-brass-300' : 'text-ink-100'}">
-        {stats.due}
-      </div>
-      <div class="eyebrow">due · {stats.learned}/{stats.total} learned</div>
-      {#if stats.budget && !stats.budget.newUnlimited}
-        <div class="mt-0.5 text-[13px] text-ink-400">
-          {stats.budget.newToday}/{stats.budget.newPerDay} new today
+<div class="border-b border-ink-700 pt-4 pb-4 mb-4">
+  <div class="flex items-start justify-between gap-4">
+    <h1 class="display min-w-0 text-3xl text-ink-100">Learn</h1>
+    {#if stats}
+      <div class="shrink-0 text-center">
+        <div class="seal h-14 w-14" aria-label="Cards due for review">
+          <span class="display text-lg leading-none font-bold">{stats.due}</span>
         </div>
+        <p class="seal__label" aria-hidden="true">Due</p>
+      </div>
+    {/if}
+  </div>
+  <div class="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+    <p class="sub">One new word at a time — tap next and go.</p>
+    {#if stats}
+      <span class="text-xs text-ink-500">·</span>
+      <span class="text-xs text-ink-400">{stats.learned}/{stats.total} learned</span>
+      {#if stats.budget && !stats.budget.newUnlimited}
+        <span class="text-xs text-ink-500">·</span>
+        <span class="text-xs text-ink-400"
+          >{stats.budget.newToday}/{stats.budget.newPerDay} new today</span
+        >
       {/if}
-    </div>
-  {/if}
+    {/if}
+  </div>
 </div>
 
 {#if error}
-  <p class="mb-3 rounded-md bg-ember-950 px-3 py-2 text-sm text-ember-300">{error}</p>
+  <p class="banner mb-3" style="--accent: {ACCENT.ember}" role="alert">{error}</p>
 {/if}
 
 {#if loading}
-  <p class="flex items-center gap-2 text-sm text-ink-400">
+  <p class="banner flex items-center gap-2" style="--accent: {ACCENT.azure}">
     <Spinner size={14} label="Loading your path" /> Loading…
   </p>
 {:else}
@@ -306,34 +315,35 @@
           Describe what you want. It pulls a real frequency list and writes the cards — one new word
           at a time.
         </p>
-        <label class="mt-2 block text-[13px] text-ink-400">
+        <label class="mt-2 block text-xs text-ink-400">
           Language
-          <select
-            bind:value={buildLang}
-            class="mt-1 w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm"
-          >
+          <select bind:value={buildLang} class="field mt-1">
             {#each LANGUAGES as l (l.code)}<option value={l.code}>{l.label}</option>{/each}
           </select>
         </label>
-        <textarea
-          bind:value={instruction}
-          rows="2"
-          placeholder="a traditional Chinese frequency list, with grammar, using only traditional characters and zhuyin"
-          class="mt-2 w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm outline-none focus:border-seal-400"
-        ></textarea>
+        <label class="mt-2 block text-xs text-ink-400">
+          What to learn
+          <textarea
+            bind:value={instruction}
+            use:autoGrow={160}
+            rows="2"
+            placeholder="a traditional Chinese frequency list, with grammar, using only traditional characters and zhuyin"
+            class="field mt-1 resize-none"
+          ></textarea>
+        </label>
         <button
           type="button"
           onclick={build}
           disabled={building || !instruction.trim()}
-          class="btn btn-primary mt-2 w-full py-3 disabled:opacity-60"
+          class="btn btn-primary mt-2 w-full py-3"
         >
           {#if building}<Spinner size={15} label="Building the deck" /> Pulling the list &amp; writing
             cards…{:else}Build deck{/if}
         </button>
         {#if buildError}
-          <p class="mt-2 rounded-md bg-ember-950 px-3 py-2 text-xs text-ember-300">{buildError}</p>
+          <p class="banner mt-2" style="--accent: {ACCENT.ember}" role="alert">{buildError}</p>
         {/if}
-        <label class="mt-3 block cursor-pointer text-center text-[13px] text-ink-400 underline">
+        <label class="link link-btn mt-3 w-full justify-center text-xs">
           {#if importing}<Spinner size={12} label="Reading the deck" /> Reading the deck…{:else}…or
             import an Anki deck (.apkg){/if}
           <input
@@ -345,7 +355,7 @@
           />
         </label>
         {#if importError}
-          <p class="mt-2 rounded-md bg-ember-950 px-3 py-2 text-xs text-ember-300">{importError}</p>
+          <p class="banner mt-2" style="--accent: {ACCENT.ember}" role="alert">{importError}</p>
         {/if}
       </section>
 
@@ -353,7 +363,7 @@
         <section class="panel panel-accent mb-4 p-4" style="--accent: {ACCENT.violet}">
           <div class="flex items-baseline justify-between">
             <p class="eyebrow">Import {inspection.name ?? 'Anki deck'}</p>
-            <span class="text-[13px] text-ink-400">{inspection.noteCount} notes</span>
+            <span class="text-xs text-ink-400">{inspection.noteCount} notes</span>
           </div>
           <p class="mt-1 text-xs text-ink-400">
             Pick the deck's language and which field is the real word. The whole deck is imported —
@@ -361,12 +371,9 @@
             background.
           </p>
 
-          <label class="mt-3 block text-[13px] text-ink-400">
+          <label class="mt-3 block text-xs text-ink-400">
             Language
-            <select
-              bind:value={importLang}
-              class="mt-1 w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm"
-            >
+            <select bind:value={importLang} class="field mt-1">
               {#if importLang && !LANGUAGES.some((l) => l.code === importLang)}
                 <option value={importLang}>{importLang}</option>
               {/if}
@@ -374,38 +381,29 @@
             </select>
           </label>
           {#if inspection.suggestedLang}
-            <p class="mt-1 text-[13px] text-jade-400">
+            <p class="mt-1 text-xs text-jade-400">
               Detected {langLabel(inspection.suggestedLang)} from the deck.
             </p>
           {/if}
 
-          <label class="mt-3 block text-[13px] text-ink-400">
+          <label class="mt-3 block text-xs text-ink-400">
             Word field
-            <select
-              bind:value={wordField}
-              class="mt-1 w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm"
-            >
+            <select bind:value={wordField} class="field mt-1">
               {#each inspection.fields as f, i (i)}<option value={i}>{f}</option>{/each}
             </select>
           </label>
 
           <div class="mt-2 grid grid-cols-2 gap-2">
-            <label class="block text-[13px] text-ink-400">
+            <label class="block text-xs text-ink-400">
               Reading (optional)
-              <select
-                bind:value={readingField}
-                class="mt-1 w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm"
-              >
+              <select bind:value={readingField} class="field mt-1">
                 <option value={-1}>None</option>
                 {#each inspection.fields as f, i (i)}<option value={i}>{f}</option>{/each}
               </select>
             </label>
-            <label class="block text-[13px] text-ink-400">
+            <label class="block text-xs text-ink-400">
               Meaning (optional)
-              <select
-                bind:value={meaningField}
-                class="mt-1 w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm"
-              >
+              <select bind:value={meaningField} class="field mt-1">
                 <option value={-1}>None</option>
                 {#each inspection.fields as f, i (i)}<option value={i}>{f}</option>{/each}
               </select>
@@ -413,7 +411,7 @@
           </div>
 
           <div class="mt-3 overflow-x-auto">
-            <table class="w-full text-left text-[13px] text-ink-400">
+            <table class="w-full text-left text-xs text-ink-400">
               <thead>
                 <tr
                   >{#each inspection.fields as f (f)}<th class="pr-2 font-normal">{f}</th
@@ -436,7 +434,7 @@
               type="button"
               onclick={confirmImport}
               disabled={importing}
-              class="btn btn-primary flex-1 py-3 disabled:opacity-60"
+              class="btn btn-primary flex-1 py-3"
             >
               {#if importing}<Spinner size={15} label="Building the deck" /> Building…{:else}Build
                 deck
@@ -472,14 +470,10 @@
           {#if groups.length === 0}
             <p class="mt-2 text-sm text-ink-400">
               No profession is ready to train.
-              <a href={href('/skills')} class="gold">Unlock one in Skills</a>.
+              <a href={href('/skills')} class="link">Unlock one in Skills</a>.
             </p>
           {:else}
-            <select
-              value={actionId}
-              onchange={chooseProfession}
-              class="mt-2 w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm"
-            >
+            <select value={actionId} onchange={chooseProfession} class="field mt-2">
               <option value="">Choose a profession…</option>
               {#each groups as group (group.skill.id)}
                 <optgroup label="{group.skill.icon} {group.skill.name}">
@@ -504,9 +498,9 @@
           {@const next = nextLesson(d)}
           {@const progress = d.cardCount > 0 ? (d.learned / d.cardCount) * 100 : 0}
           <section class="panel panel-accent mb-5 p-4" style={accentStyle(acc)}>
-            <div class="flex items-baseline justify-between">
-              <h2 class="display text-lg" style="color: {acc}">{d.name}</h2>
-              <div class="flex items-center gap-2">
+            <div class="flex items-baseline justify-between gap-3">
+              <h2 class="display min-w-0 truncate text-lg" style="color: {acc}">{d.name}</h2>
+              <div class="flex shrink-0 items-center gap-2">
                 {#if d.deckId === activeDeck.id}
                   <span class="chip" style="--accent: {ACCENT.jade}">Studying</span>
                 {/if}
@@ -521,7 +515,7 @@
               {@const built = d.settings.cursor ?? 0}
               {@const total = d.settings.buildTotal ?? 0}
               <div class="mt-2">
-                <div class="flex items-baseline justify-between text-[13px] text-ink-400">
+                <div class="flex items-baseline justify-between text-xs text-ink-400">
                   <span class="flex items-center gap-1.5">
                     <Spinner size={12} label="Generating cards" /> Generating cards…
                   </span>
@@ -532,18 +526,30 @@
                 </div>
               </div>
             {:else if d.settings?.buildError}
-              <p class="mt-2 rounded-md bg-ember-950 px-3 py-2 text-[13px] text-ember-300">
+              <p class="banner mt-2" style="--accent: {ACCENT.ember}" role="alert">
                 Generation stopped: {d.settings.buildError}
               </p>
             {/if}
 
             {#if d.settings?.instruction}
-              <p class="mt-2 line-clamp-2 text-[13px] text-ink-500" title={d.settings.instruction}>
+              <p class="mt-2 line-clamp-2 text-xs text-ink-400" title={d.settings.instruction}>
                 Prompt · {d.settings.instruction}
               </p>
             {/if}
 
             {#if next}
+              {#if next.newWord}
+                <div class="mt-3 flex justify-center">
+                  <CharCell
+                    word={next.newWord}
+                    reading={next.reading && next.reading !== next.newWord ? next.reading : ''}
+                    lang={d.targetLang}
+                    size="sm"
+                    wordish={next.newWord.length > 1}
+                    accent={acc}
+                  />
+                </div>
+              {/if}
               {#if actionId}
                 <a
                   href={practiceHref({ lesson: next.id })}
@@ -551,9 +557,6 @@
                   class="btn btn-primary mt-3 w-full py-3"
                 >
                   {d.learned > 0 ? 'Next' : 'Start'} · {next.newWord ?? next.title}
-                  {#if next.reading && next.reading !== next.newWord}
-                    <span class="ml-1 text-xs opacity-75">{next.reading}</span>
-                  {/if}
                 </a>
               {:else}
                 <button disabled class="btn btn-ghost mt-3 w-full py-3">
@@ -566,7 +569,7 @@
                 <p class="mt-1.5 text-center text-xs text-ink-400">{next.description}</p>
               {/if}
               {#if next.cards > 1}
-                <p class="mt-1.5 text-center text-[13px] text-ink-500">
+                <p class="mt-1.5 text-center text-xs text-ink-400">
                   {next.learned}/{next.cards} in this lesson
                 </p>
               {/if}
@@ -591,7 +594,7 @@
             {/if}
 
             {#if done(d)}
-              <p class="mt-2 text-center text-[13px] text-jade-400">All words learned ✓</p>
+              <p class="mt-2 text-center text-xs text-jade-400">All words learned ✓</p>
             {/if}
 
             {#if !d.settings?.building && (d.remaining ?? 0) > 0}
@@ -599,7 +602,7 @@
                 type="button"
                 onclick={() => finish(d)}
                 disabled={Boolean(growing)}
-                class="btn btn-primary mt-3 w-full py-3 disabled:opacity-60"
+                class="btn btn-ghost mt-3 w-full py-3"
               >
                 {#if growing === d.deckId}
                   <Spinner size={13} label="Finishing the deck" /> Finishing…
@@ -613,13 +616,13 @@
               <input
                 bind:value={growTopic}
                 placeholder="grow on a topic (optional)"
-                class="min-w-0 flex-1 rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-xs outline-none focus:border-seal-400"
+                class="field min-w-0 flex-1 text-xs"
               />
               <button
                 type="button"
                 onclick={() => grow(d)}
                 disabled={Boolean(growing) || Boolean(d.settings?.building)}
-                class="btn btn-ghost px-3 py-2 text-xs disabled:opacity-60"
+                class="btn btn-ghost px-3 py-2 text-xs"
               >
                 {#if growing === d.deckId}<Spinner size={13} label="Growing the deck" /> Growing…{:else}Grow
                 {/if}
@@ -629,15 +632,11 @@
               <button
                 type="button"
                 onclick={() => (settingsDeck = d)}
-                class="text-[13px] text-ink-400 underline"
+                class="link link-btn text-xs"
               >
                 Deck settings
               </button>
-              <button
-                type="button"
-                onclick={() => (editing = d)}
-                class="text-[13px] text-ink-400 underline"
-              >
+              <button type="button" onclick={() => (editing = d)} class="link link-btn text-xs">
                 Card metadata
               </button>
             </div>
@@ -645,7 +644,7 @@
         {/each}
       {/if}
       {#if deckError}
-        <p class="mb-3 rounded-md bg-ember-950 px-3 py-2 text-sm text-ember-300">{deckError}</p>
+        <p class="banner mb-3" style="--accent: var(--color-ember-400)" role="alert">{deckError}</p>
       {/if}
     </div>
   </div>

@@ -93,23 +93,28 @@
   }}
 />
 
-<div class="fixed inset-0 z-50 overflow-y-auto bg-ink-950/80 p-2 sm:p-6">
-  <div class="relative mx-auto w-full max-w-lg">
+<div class="fixed inset-0 z-50 overflow-y-auto bg-ink-950/90 p-2 sm:p-6">
+  <div class="relative mx-auto flex min-h-full w-full max-w-lg flex-col">
     <button
       type="button"
       aria-label="Close"
       onclick={onclose}
-      class="absolute inset-0 -z-10 cursor-default"
+      class="absolute inset-0 cursor-default"
     ></button>
 
-    <section class="panel p-4 sm:p-5">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="deck-settings-title"
+      class="panel relative z-10 my-auto p-4 sm:p-5"
+    >
       <div class="flex items-baseline justify-between gap-3">
         <div class="min-w-0">
           <p class="eyebrow">Deck settings</p>
-          <h2 class="display truncate text-lg text-ink-100">{deck.name}</h2>
+          <h2 id="deck-settings-title" class="display truncate text-lg text-ink-100">{deck.name}</h2>
         </div>
         <div class="flex items-center gap-3">
-          {#if saving}<span class="text-[13px] text-ink-400">Saving…</span>{/if}
+          {#if saving}<span class="text-xs text-ink-400">Saving…</span>{/if}
           <button type="button" onclick={onclose} class="btn btn-ghost px-3 py-2 text-xs">
             Close
           </button>
@@ -117,7 +122,7 @@
       </div>
 
       <div class="mt-4 space-y-2">
-        <label class="flex items-center justify-between gap-3">
+        <label class="flex min-h-11 items-center justify-between gap-3 py-1">
           <span class="text-sm">Show readings (ruby)</span>
           <input
             type="checkbox"
@@ -131,7 +136,7 @@
         </label>
 
         {#if isJapanese}
-          <label class="flex items-center justify-between gap-3">
+          <label class="flex min-h-11 items-center justify-between gap-3 py-1">
             <span class="text-sm">Pitch accent (高低アクセント)</span>
             <input
               type="checkbox"
@@ -147,7 +152,7 @@
       </div>
 
       {#if isJapanese}
-        <p class="mt-2 text-[13px] text-ink-500">
+        <p class="mt-2 text-xs text-ink-400">
           Pitch accent is looked up in the bundled Kanjium dictionary (CC BY-SA 4.0); the generator
           fills in words the dictionary does not know. It reaches new cards only, so backfill the
           cards a deck already has.
@@ -157,7 +162,7 @@
             type="button"
             onclick={() => backfill(false)}
             disabled={backfilling}
-            class="btn btn-ghost w-full py-2 text-xs disabled:opacity-60"
+            class="btn btn-ghost w-full py-2 text-xs"
           >
             {#if backfilling}<Spinner size={13} label="Annotating pitch" /> Annotating…{:else}Backfill
               pitch for existing cards{/if}
@@ -166,16 +171,16 @@
             type="button"
             onclick={() => backfill(true)}
             disabled={backfilling}
-            class="btn btn-ghost w-full py-2 text-xs disabled:opacity-60"
+            class="btn btn-ghost w-full py-2 text-xs"
           >
             Re-annotate from dictionary (fixes wrong contours)
           </button>
         </div>
       {/if}
 
-      {#if note}<p class="mt-2 text-center text-[13px] text-jade-400">{note}</p>{/if}
+      {#if note}<p class="mt-2 text-center text-xs text-jade-400">{note}</p>{/if}
       {#if error}
-        <p class="mt-2 rounded-md bg-ember-950 px-3 py-2 text-xs text-ember-300">{error}</p>
+        <p class="banner mt-2 text-xs" style="--accent: var(--color-ember-400)" role="alert">{error}</p>
       {/if}
 
       <div class="mt-5 border-t border-ink-700 pt-4">
@@ -184,14 +189,14 @@
           type="button"
           onclick={remove}
           disabled={deleting}
-          class="btn btn-ghost mt-2 w-full py-2 text-xs text-ember-400 disabled:opacity-60"
+          class="btn btn-danger mt-2 w-full py-2 text-xs"
         >
           {#if deleting}Deleting…{:else}Delete this deck{/if}
         </button>
-        <p class="mt-1 text-[13px] text-ink-500">
+        <p class="mt-1 text-xs text-ink-400">
           Deletes the deck, its cards, reviews and history. Cannot be undone.
         </p>
       </div>
-    </section>
+    </div>
   </div>
 </div>

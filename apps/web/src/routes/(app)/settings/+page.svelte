@@ -346,14 +346,14 @@
 
 <div class="border-b border-ink-700 pt-4 pb-6 mb-4">
   <h1 class="display text-3xl text-ink-100">Settings</h1>
-  <p class="mt-1 text-xs text-ink-400">These apply to {session.user?.username} only.</p>
+  <p class="sub mt-1.5">These apply to {session.user?.username} only.</p>
 </div>
 
 {#if error}
-  <p class="mb-3 rounded-lg bg-ember-950 px-3 py-2 text-sm text-ember-300">{error}</p>
+  <p class="banner mb-3" style="--accent: {ACCENT.ember}" role="alert">{error}</p>
 {/if}
 {#if note}
-  <p class="mb-3 rounded-lg bg-jade-950 px-3 py-2 text-sm text-jade-300">{note}</p>
+  <p class="banner mb-3" style="--accent: {ACCENT.jade}">{note}</p>
 {/if}
 
 <!-- OpenRouter key ------------------------------------------------------->
@@ -371,9 +371,9 @@
         type="password"
         bind:value={keyInput}
         placeholder={keyStatus === 'user' ? 'Replace key…' : 'sk-or-…'}
-        class="flex-1 rounded-md border border-ink-600 bg-ink-900 px-3 py-2 text-sm"
+        class="field flex-1"
       />
-      <button onclick={saveKey} class="btn btn-primary px-3 py-2 text-sm">Save</button>
+      <button onclick={saveKey} class="btn btn-ghost px-3 py-2 text-xs">Save</button>
     </div>
   </section>
 
@@ -388,7 +388,7 @@
       bind:value={modelFilter}
       onchange={loadModels}
       placeholder="filter models (e.g. qwen, deepseek)"
-      class="mt-3 w-full rounded-md border border-ink-600 bg-ink-900 px-3 py-2 text-sm"
+      class="field mt-3"
     />
     {#if modelsLoading}
       <p class="mt-2 flex items-center gap-2 text-xs text-ink-400">
@@ -405,17 +405,17 @@
           <input
             list="models"
             bind:value={roles[role]}
-            class="w-full rounded-md border border-ink-600 bg-ink-900 px-3 py-2 text-sm"
+            class="field"
           />
         </label>
       {/each}
     </div>
     <div class="mt-3 flex items-center justify-between">
-      <button onclick={saveRoles} class="btn btn-primary px-3 py-2 text-sm">Save models</button>
+      <button onclick={saveRoles} class="btn btn-ghost px-3 py-2 text-xs">Save models</button>
       {#if roleDefaults}
         <button
           onclick={() => (roles = { ...roleDefaults! })}
-          class="text-xs text-ink-400 underline">reset to defaults</button
+          class="link link-btn text-xs">reset to defaults</button
         >
       {/if}
     </div>
@@ -427,15 +427,13 @@
     <div class="mt-2 flex gap-2">
       <button
         onclick={() => (voiceMode = 'preset')}
-        class="flex-1 rounded-md border px-3 py-2 text-sm {voiceMode === 'preset'
-          ? 'border-seal-400 text-seal-300'
-          : 'border-ink-600 text-ink-300'}">Built-in voice</button
+        class="btn flex-1 px-3 py-2 text-xs {voiceMode === 'preset' ? 'btn-primary' : 'btn-ghost'}"
+        >Built-in voice</button
       >
       <button
         onclick={() => (voiceMode = 'design')}
-        class="flex-1 rounded-md border px-3 py-2 text-sm {voiceMode === 'design'
-          ? 'border-seal-400 text-seal-300'
-          : 'border-ink-600 text-ink-300'}">Voice design</button
+        class="btn flex-1 px-3 py-2 text-xs {voiceMode === 'design' ? 'btn-primary' : 'btn-ghost'}"
+        >Voice design</button
       >
     </div>
     <p class="mt-2 text-xs text-ink-400">
@@ -453,13 +451,13 @@
             <input
               bind:value={voices[lc]}
               placeholder="a calm, professional teacher with a clear, warm voice"
-              class="w-full rounded-md border border-ink-600 bg-ink-900 px-3 py-2 text-sm"
+              class="field"
             />
           </label>
         {/each}
       </div>
     {/if}
-    <button onclick={saveVoice} class="btn btn-primary mt-3 px-3 py-2 text-sm">Save voice</button>
+    <button onclick={saveVoice} class="btn btn-ghost mt-3 px-3 py-2 text-xs">Save voice</button>
   </section>
 
   <!-- Speech engine -------------------------------------------------------->
@@ -505,9 +503,9 @@
         max="1000"
         step="10"
         bind:value={dailyGoal}
-        class="w-28 rounded-md border border-ink-600 bg-ink-900 px-3 py-2 text-sm"
+        class="field w-28"
       />
-      <button onclick={saveDailyGoal} class="btn btn-primary px-3 py-2 text-sm">Save</button>
+      <button onclick={saveDailyGoal} class="btn btn-ghost px-3 py-2 text-xs">Save</button>
     </div>
   </section>
 
@@ -525,10 +523,10 @@
         max="97"
         step="1"
         bind:value={desiredRetention}
-        class="w-24 rounded-md border border-ink-600 bg-ink-900 px-3 py-2 text-sm"
+        class="field w-24"
       />
       <span class="text-sm text-ink-400">%</span>
-      <button onclick={saveRetention} class="btn btn-primary px-3 py-2 text-sm">Save</button>
+      <button onclick={saveRetention} class="btn btn-ghost px-3 py-2 text-xs">Save</button>
     </div>
   </section>
 
@@ -540,11 +538,11 @@
     </p>
 
     <div class="mt-3 space-y-2">
-      <label class="flex items-center justify-between gap-3">
+      <label class="flex min-h-11 items-center justify-between gap-3 py-1">
         <span class="text-sm">Show Zhuyin under Chinese</span>
         <input type="checkbox" bind:checked={study.showZhuyin} class="h-4 w-4 accent-seal-400" />
       </label>
-      <label class="flex items-center justify-between gap-3">
+      <label class="flex min-h-11 items-center justify-between gap-3 py-1">
         <span class="text-sm">Show furigana over Japanese kanji</span>
         <input type="checkbox" bind:checked={study.showFurigana} class="h-4 w-4 accent-seal-400" />
       </label>
@@ -553,21 +551,21 @@
     <p class="mt-4 text-xs text-ink-400">Daily budget — how much you do before the goal is met.</p>
     <div class="mt-2 grid grid-cols-2 gap-3">
       <label class="block text-xs text-ink-400">
-        New cards / day <span class="text-ink-500">(0 = ∞)</span>
+        New cards / day <span class="text-ink-400">(0 = ∞)</span>
         <input
           type="number"
           min="0"
           bind:value={study.newPerDay}
-          class="mt-1 w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm"
+          class="field mt-1"
         />
       </label>
       <label class="block text-xs text-ink-400">
-        Max reviews / day <span class="text-ink-500">(0 = ∞)</span>
+        Max reviews / day <span class="text-ink-400">(0 = ∞)</span>
         <input
           type="number"
           min="0"
           bind:value={study.maxReviewsPerDay}
-          class="mt-1 w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm"
+          class="field mt-1"
         />
       </label>
     </div>
@@ -576,14 +574,14 @@
       <input
         bind:value={stepsText}
         placeholder="1, 10, 60, 240"
-        class="mt-1 w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm"
+        class="field mt-1"
       />
     </label>
-    <p class="mt-1 text-[13px] text-ink-500">
+    <p class="mt-1 text-xs text-ink-400">
       A new card repeats once per step before it graduates (Anki’s default is <code>1, 10</code>).
     </p>
 
-    <label class="mt-3 flex items-center justify-between gap-3">
+    <label class="mt-3 flex min-h-11 items-center justify-between gap-3 py-1">
       <span class="text-sm">Add a card automatically when a word keeps lapsing</span>
       <input type="checkbox" bind:checked={study.autoReinforce} class="h-4 w-4 accent-seal-400" />
     </label>
@@ -592,23 +590,23 @@
     <div class="mt-2 space-y-3">
       {#each drillGroups as group (group.modality)}
         {@const enabledCount = group.items.filter((i) => !isDisabled(i.id)).length}
-        <div class="rounded-lg border border-ink-700 p-3">
+        <div class="rounded-[12px] border border-ink-700 p-3">
           <div class="flex items-center justify-between">
-            <span class="text-xs font-semibold uppercase tracking-wide text-ink-300">
+            <span class="eyebrow text-ink-300">
               {MODALITY_LABEL[group.modality] ?? group.modality}
             </span>
             <button
               type="button"
               onclick={() => setGroup(group.modality, enabledCount === 0)}
-              class="text-xs text-ink-400 underline"
+              class="link link-btn text-xs"
             >
               {enabledCount === 0 ? 'turn all on' : 'turn all off'}
             </button>
           </div>
           <div class="mt-2 space-y-1.5">
             {#each group.items as ex (ex.id)}
-              <label class="flex items-center justify-between gap-3">
-                <span class="text-sm {isDisabled(ex.id) ? 'text-ink-500' : ''}">{ex.title}</span>
+              <label class="flex min-h-11 items-center justify-between gap-3 py-1">
+                <span class="text-sm {isDisabled(ex.id) ? 'text-ink-400' : ''}">{ex.title}</span>
                 <input
                   type="checkbox"
                   checked={!isDisabled(ex.id)}
@@ -622,7 +620,7 @@
       {/each}
     </div>
 
-    <button onclick={saveStudy} class="btn btn-primary mt-3 px-3 py-2 text-sm">
+    <button onclick={saveStudy} class="btn btn-ghost mt-3 px-3 py-2 text-xs">
       Save study options
     </button>
   </section>
@@ -641,10 +639,10 @@
         max="90"
         step="5"
         bind:value={foodThreshold}
-        class="w-24 rounded-md border border-ink-600 bg-ink-900 px-3 py-2 text-sm"
+        class="field w-24"
       />
       <span class="text-sm text-ink-400">%</span>
-      <button onclick={saveFoodThreshold} class="btn btn-primary px-3 py-2 text-sm">Save</button>
+      <button onclick={saveFoodThreshold} class="btn btn-ghost px-3 py-2 text-xs">Save</button>
     </div>
   </section>
 
@@ -656,19 +654,15 @@
       <div class="flex gap-2">
         <input
           bind:value={handle}
-          class="flex-1 rounded-md border border-ink-600 bg-ink-900 px-3 py-2 text-sm"
+          class="field flex-1"
         />
-        <button onclick={saveProfile} class="btn btn-primary px-3 py-2 text-sm">Save</button>
+        <button onclick={saveProfile} class="btn btn-ghost px-3 py-2 text-xs">Save</button>
       </div>
     </label>
     <p class="mt-3 text-xs text-ink-400">
       @{session.user?.username} · {session.user?.role}
     </p>
-    <button
-      onclick={doLogout}
-      class="mt-3 rounded-md border border-ember-800 px-3 py-2 text-sm text-ember-300"
-      >Sign out</button
-    >
+    <button onclick={doLogout} class="btn btn-danger mt-3 px-3 py-2 text-xs">Sign out</button>
   </section>
 
   <!-- Admin ---------------------------------------------------------------->
@@ -677,7 +671,7 @@
       <h2 class="display text-sm text-ink-100">Users ({users.length})</h2>
       <ul class="mt-3 space-y-2">
         {#each users as u (u.id)}
-          <li class="flex items-center justify-between rounded-md border border-ink-700 px-3 py-2">
+          <li class="flex items-center justify-between rounded-[12px] border border-ink-700 px-3 py-2">
             <div>
               <div class="text-sm">{u.handle}</div>
               <div class="text-xs text-ink-400">@{u.username} · {u.role}</div>
@@ -685,8 +679,7 @@
             {#if u.id !== session.user?.id}
               <button
                 onclick={() => removeUser(u.id)}
-                class="rounded-lg border border-ember-800 px-2 py-1 text-xs text-ember-300"
-                >Delete</button
+                class="btn btn-danger px-3 py-2 text-xs">Delete</button
               >
             {/if}
           </li>

@@ -34,18 +34,18 @@
 
 <div class="border-b border-ink-700 pt-4 pb-5 mb-4">
   <h1 class="display text-3xl text-ink-100">History</h1>
-  <p class="mt-1 text-xs text-ink-400">Everything you have practised, only visible to you.</p>
+  <p class="sub mt-1.5">Everything you have practised, only visible to you.</p>
 </div>
 
 {#if loading}
-  <p class="flex items-center gap-2 text-sm text-ink-400">
+  <p class="banner flex items-center gap-2" style={accentStyle(ACCENT.azure)}>
     <Spinner size={14} label="Loading history" /> Loading…
   </p>
 {:else if error}
-  <p class="text-sm text-ember-300">{error}</p>
+  <p class="banner" style={accentStyle(ACCENT.ember)} role="alert">{error}</p>
 {:else if sessions.length === 0}
   <p class="panel p-4 text-sm text-ink-400">
-    No conversations yet. <a class="text-jade-400 underline" href={href('/chat')}>Start one →</a>
+    No conversations yet. <a class="link" href={href('/chat')}>Start one →</a>
   </p>
 {:else}
   <ul class="space-y-2 xl:grid xl:grid-cols-2 xl:gap-6 xl:space-y-0">
@@ -56,11 +56,13 @@
           class="panel panel-accent block px-4 py-3"
           style={accentStyle(kindAccent(s.kind))}
         >
-          <div class="flex items-center justify-between">
-            <span class="display text-sm text-ink-200">{s.title ?? 'Conversation'}</span>
-            <span class="text-xs text-ink-400">{when(s.startedAt)}</span>
+          <div class="flex items-baseline justify-between gap-3">
+            <span class="display min-w-0 truncate text-base text-ink-100"
+              >{s.title ?? 'Conversation'}</span
+            >
+            <span class="shrink-0 text-xs text-ink-400">{when(s.startedAt)}</span>
           </div>
-          <div class="mt-1">
+          <div class="mt-1.5">
             <span class="chip" style={accentStyle(kindAccent(s.kind))}>
               {s.kind}{s.lang ? ` · ${s.lang.toUpperCase()}` : ''}
             </span>

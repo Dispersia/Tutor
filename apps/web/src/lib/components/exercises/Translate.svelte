@@ -2,8 +2,9 @@
   import type { Instance } from '#lib/exercises'
   import { typingAttrs } from '#lib/lang'
   import type { PitchContour } from '#lib/types'
+  import { ACCENT } from '#lib/theme'
+  import CharCell from '../CharCell.svelte'
   import Spinner from '../Spinner.svelte'
-  import Word from '../Word.svelte'
 
   let {
     instance,
@@ -30,15 +31,22 @@
   <p class="text-lg leading-snug">{instance.prompt}</p>
   {#if word}
     <div class="flex justify-center py-2">
-      <span class="cell min-h-[7rem] min-w-[7rem] px-7 py-5"
-        ><Word {word} {reading} {lang} {furigana} {pitch} /></span
-      >
+      <CharCell
+        {word}
+        {reading}
+        {lang}
+        {furigana}
+        {pitch}
+        size="lg"
+        wordish={word.length > 1}
+        accent={ACCENT.azure}
+      />
     </div>
   {/if}
   <input
     bind:value={answer}
     {...typingAttrs(answerLang)}
-    class="w-full rounded-md border border-ink-600 bg-ink-900 px-4 py-4 text-lg outline-none focus:border-seal-400"
+    class="field text-lg"
     placeholder="Type your answer…"
   />
   <button

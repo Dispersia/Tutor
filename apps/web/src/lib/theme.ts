@@ -42,6 +42,8 @@ export const ACCENT = {
   ember: 'oklch(0.66 0.14 25)',
   /** errors that need attention */
   warn: 'oklch(0.76 0.1 68)',
+  /** neutral — quiet pills and labels that are not a role (item tier, counts) */
+  ink: 'oklch(0.58 0.012 258)',
 } as const
 
 /** History kinds → accent. */

@@ -70,23 +70,25 @@
   }
 </script>
 
-<div class="flex items-center justify-between border-b border-ink-700 pt-4 pb-4">
-  <div>
-    <h1 class="display text-3xl text-ink-100">Bank</h1>
-    <p class="mt-1 text-xs text-ink-400">The gear you wear and the goods you keep.</p>
+<div class="border-b border-ink-700 pt-4 pb-4">
+  <div class="flex items-start justify-between gap-4">
+    <h1 class="display min-w-0 text-3xl text-ink-100">Bank</h1>
+    <div class="shrink-0 text-center">
+      <div class="seal h-14 w-14" aria-label="{bank.length} kinds stored">
+        <span class="display text-xl leading-none font-bold">{bank.length}</span>
+      </div>
+      <p class="seal__label" aria-hidden="true">Kinds</p>
+    </div>
   </div>
-  <div class="seal h-14 w-14 shrink-0" aria-label="{bank.length} kinds stored">
-    <span class="text-2xl leading-none font-bold">{bank.length}</span>
-    <span class="text-[10px] tracking-[0.16em]">KINDS</span>
-  </div>
+  <p class="sub mt-2">The gear you wear and the goods you keep.</p>
 </div>
 
 {#if error}
-  <p class="mt-3 rounded-[8px] bg-ember-950 px-3 py-2 text-sm text-ember-300">{error}</p>
+  <p class="banner mt-3" style={accentStyle(ACCENT.ember)} role="alert">{error}</p>
 {/if}
 
 {#if loading}
-  <p class="mt-4 flex items-center gap-2 text-sm text-ink-400">
+  <p class="banner mt-4 flex items-center gap-2" style={accentStyle(ACCENT.brass)}>
     <Spinner size={14} label="Loading your bank" /> Loading…
   </p>
 {:else}
@@ -94,10 +96,8 @@
     <!-- Equipment -->
     <section class="mt-5" style={accentStyle(ACCENT.gold)}>
       <div class="flex items-center justify-between border-b border-ink-700 pb-2">
-        <h2 class="text-xs font-bold tracking-widest uppercase" style="color: var(--accent)">
-          Equipment
-        </h2>
-        <span class="text-[13px] text-ink-500">{worn.length} worn</span>
+        <h2 class="eyebrow" style="color: var(--accent)">Equipment</h2>
+        <span class="text-xs text-ink-400">{worn.length} worn</span>
       </div>
       <div class="pt-3">
         {#if worn.length === 0}
@@ -115,7 +115,7 @@
             >
               {eq?.icon ?? ''}
               {eq?.name ?? e.itemId}
-              <span class="opacity-70">· {e.slot} ✕</span>
+              <span class="text-ink-300">· {e.slot} ✕</span>
             </button>
           {/each}
         </div>
@@ -125,10 +125,8 @@
     <!-- Bank -->
     <section class="mt-6 xl:mt-5" style={accentStyle(ACCENT.brass)}>
       <div class="flex items-center justify-between border-b border-ink-700 pb-2">
-        <h2 class="text-xs font-bold tracking-widest uppercase" style="color: var(--accent)">
-          Bank
-        </h2>
-        <span class="text-[13px] text-ink-500">{bank.length} kinds</span>
+        <h2 class="eyebrow" style="color: var(--accent)">Bank</h2>
+        <span class="text-xs text-ink-400">{bank.length} kinds</span>
       </div>
       {#if bank.length === 0}
         <p class="pt-3 text-xs text-ink-400">
@@ -139,9 +137,7 @@
           <div class="pt-3">
             <div class="flex items-center gap-2">
               <span class="h-2 w-2 rounded-[2px]" style="background: {tierAccent(g.key)}"></span>
-              <h3 class="text-[13px] font-bold tracking-widest uppercase text-ink-400">
-                {g.label}
-              </h3>
+              <h3 class="eyebrow">{g.label}</h3>
             </div>
             <div class="mt-2 flex flex-wrap gap-1.5">
               {#each g.items as b (b.itemId)}
@@ -152,16 +148,19 @@
                 <span class="chip" style={accentStyle(tierAccent(it?.tier))}>
                   {it?.icon ?? ''}
                   {it?.name ?? b.itemId}
-                  <span class="display tabular-nums opacity-70">×{b.count + delta}</span>
+                  <span class="display text-gold-300 tabular-nums">×{b.count + delta}</span>
                   {#if delta > 0}
-                    <span class="chip px-1 py-0" style={accentStyle(tierAccent(it?.tier))}
+                    <span class="display tabular-nums" style="color: var(--color-jade-300)"
                       >+{delta}</span
                     >
                   {/if}
                   {#if it?.slot}
-                    <button onclick={() => equip(b.itemId)} class="ml-1 font-semibold underline"
-                      >equip</button
+                    <button
+                      onclick={() => equip(b.itemId)}
+                      class="link ml-1 font-semibold"
                     >
+                      equip
+                    </button>
                   {/if}
                 </span>
               {/each}
