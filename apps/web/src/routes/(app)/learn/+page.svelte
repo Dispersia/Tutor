@@ -280,7 +280,7 @@
       </div>
       <div class="eyebrow">due · {stats.learned}/{stats.total} learned</div>
       {#if stats.budget && !stats.budget.newUnlimited}
-        <div class="mt-0.5 text-[11px] text-ink-400">
+        <div class="mt-0.5 text-[13px] text-ink-400">
           {stats.budget.newToday}/{stats.budget.newPerDay} new today
         </div>
       {/if}
@@ -306,7 +306,7 @@
           Describe what you want. It pulls a real frequency list and writes the cards — one new word
           at a time.
         </p>
-        <label class="mt-2 block text-[11px] text-ink-400">
+        <label class="mt-2 block text-[13px] text-ink-400">
           Language
           <select
             bind:value={buildLang}
@@ -333,7 +333,7 @@
         {#if buildError}
           <p class="mt-2 rounded-md bg-ember-950 px-3 py-2 text-xs text-ember-300">{buildError}</p>
         {/if}
-        <label class="mt-3 block cursor-pointer text-center text-[11px] text-ink-400 underline">
+        <label class="mt-3 block cursor-pointer text-center text-[13px] text-ink-400 underline">
           {#if importing}<Spinner size={12} label="Reading the deck" /> Reading the deck…{:else}…or
             import an Anki deck (.apkg){/if}
           <input
@@ -353,7 +353,7 @@
         <section class="panel panel-accent mb-4 p-4" style="--accent: {ACCENT.violet}">
           <div class="flex items-baseline justify-between">
             <p class="eyebrow">Import {inspection.name ?? 'Anki deck'}</p>
-            <span class="text-[11px] text-ink-400">{inspection.noteCount} notes</span>
+            <span class="text-[13px] text-ink-400">{inspection.noteCount} notes</span>
           </div>
           <p class="mt-1 text-xs text-ink-400">
             Pick the deck's language and which field is the real word. The whole deck is imported —
@@ -361,7 +361,7 @@
             background.
           </p>
 
-          <label class="mt-3 block text-[11px] text-ink-400">
+          <label class="mt-3 block text-[13px] text-ink-400">
             Language
             <select
               bind:value={importLang}
@@ -374,12 +374,12 @@
             </select>
           </label>
           {#if inspection.suggestedLang}
-            <p class="mt-1 text-[11px] text-jade-400">
+            <p class="mt-1 text-[13px] text-jade-400">
               Detected {langLabel(inspection.suggestedLang)} from the deck.
             </p>
           {/if}
 
-          <label class="mt-3 block text-[11px] text-ink-400">
+          <label class="mt-3 block text-[13px] text-ink-400">
             Word field
             <select
               bind:value={wordField}
@@ -390,7 +390,7 @@
           </label>
 
           <div class="mt-2 grid grid-cols-2 gap-2">
-            <label class="block text-[11px] text-ink-400">
+            <label class="block text-[13px] text-ink-400">
               Reading (optional)
               <select
                 bind:value={readingField}
@@ -400,7 +400,7 @@
                 {#each inspection.fields as f, i (i)}<option value={i}>{f}</option>{/each}
               </select>
             </label>
-            <label class="block text-[11px] text-ink-400">
+            <label class="block text-[13px] text-ink-400">
               Meaning (optional)
               <select
                 bind:value={meaningField}
@@ -413,7 +413,7 @@
           </div>
 
           <div class="mt-3 overflow-x-auto">
-            <table class="w-full text-left text-[11px] text-ink-400">
+            <table class="w-full text-left text-[13px] text-ink-400">
               <thead>
                 <tr
                   >{#each inspection.fields as f (f)}<th class="pr-2 font-normal">{f}</th
@@ -521,7 +521,7 @@
               {@const built = d.settings.cursor ?? 0}
               {@const total = d.settings.buildTotal ?? 0}
               <div class="mt-2">
-                <div class="flex items-baseline justify-between text-[11px] text-ink-400">
+                <div class="flex items-baseline justify-between text-[13px] text-ink-400">
                   <span class="flex items-center gap-1.5">
                     <Spinner size={12} label="Generating cards" /> Generating cards…
                   </span>
@@ -532,13 +532,13 @@
                 </div>
               </div>
             {:else if d.settings?.buildError}
-              <p class="mt-2 rounded-md bg-ember-950 px-3 py-2 text-[11px] text-ember-300">
+              <p class="mt-2 rounded-md bg-ember-950 px-3 py-2 text-[13px] text-ember-300">
                 Generation stopped: {d.settings.buildError}
               </p>
             {/if}
 
             {#if d.settings?.instruction}
-              <p class="mt-2 line-clamp-2 text-[11px] text-ink-500" title={d.settings.instruction}>
+              <p class="mt-2 line-clamp-2 text-[13px] text-ink-500" title={d.settings.instruction}>
                 Prompt · {d.settings.instruction}
               </p>
             {/if}
@@ -566,7 +566,7 @@
                 <p class="mt-1.5 text-center text-xs text-ink-400">{next.description}</p>
               {/if}
               {#if next.cards > 1}
-                <p class="mt-1.5 text-center text-[11px] text-ink-500">
+                <p class="mt-1.5 text-center text-[13px] text-ink-500">
                   {next.learned}/{next.cards} in this lesson
                 </p>
               {/if}
@@ -591,7 +591,7 @@
             {/if}
 
             {#if done(d)}
-              <p class="mt-2 text-center text-[11px] text-jade-400">All words learned ✓</p>
+              <p class="mt-2 text-center text-[13px] text-jade-400">All words learned ✓</p>
             {/if}
 
             {#if !d.settings?.building && (d.remaining ?? 0) > 0}
@@ -629,14 +629,14 @@
               <button
                 type="button"
                 onclick={() => (settingsDeck = d)}
-                class="text-[11px] text-ink-400 underline"
+                class="text-[13px] text-ink-400 underline"
               >
                 Deck settings
               </button>
               <button
                 type="button"
                 onclick={() => (editing = d)}
-                class="text-[11px] text-ink-400 underline"
+                class="text-[13px] text-ink-400 underline"
               >
                 Card metadata
               </button>
