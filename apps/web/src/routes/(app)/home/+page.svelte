@@ -157,7 +157,7 @@
   </div>
   <div class="seal h-14 w-14 shrink-0" aria-label="Level {stats?.level ?? 1}">
     <span class="text-2xl leading-none font-bold">{stats?.level ?? 1}</span>
-    <span class="text-[8px] tracking-[0.16em]">LEVEL</span>
+    <span class="text-[10px] tracking-[0.16em]">LEVEL</span>
   </div>
 </header>
 
@@ -178,14 +178,14 @@
         <h2 class="text-xs font-bold tracking-widest uppercase" style="color: var(--accent)">
           Activity
         </h2>
-        <span class="text-[11px] text-ink-400">last {weeks} weeks</span>
+        <span class="text-[13px] text-ink-400">last {weeks} weeks</span>
       </div>
 
       {#if days.length}
         <div class="mt-3 overflow-x-auto pb-1 xl:my-auto">
           <div class="mx-auto w-fit">
             <div
-              class="grid gap-[3px] text-[10px] leading-none text-ink-500"
+              class="grid gap-[3px] text-[12px] leading-none text-ink-500"
               style="grid-template-columns: repeat({weeks}, 0.75rem)"
               aria-hidden="true"
             >
@@ -209,7 +209,7 @@
               {/each}
             </div>
 
-            <div class="mt-3 flex items-center justify-end gap-1.5 text-[10px] text-ink-500">
+            <div class="mt-3 flex items-center justify-end gap-1.5 text-[12px] text-ink-500">
               <span>Less</span>
               <span class="h-3 w-3 rounded-[2px]" style="background: {EMPTY}"></span>
               {#each [1, 2, 3, 4] as lv (lv)}
@@ -315,7 +315,7 @@
   >
     <div class="flex items-baseline justify-between gap-3">
       <h2 class="text-xs font-bold tracking-widest uppercase" style="color: var(--accent)">Rigs</h2>
-      <span class="text-[11px] text-ink-400">
+      <span class="text-[13px] text-ink-400">
         {#if rigs.length}
           {rigs.length} running
         {:else}
@@ -337,7 +337,7 @@
                 >
                 <span class="flex shrink-0 items-baseline gap-2">
                   <span
-                    class="display text-[11px] font-bold text-gold-200 tabular-nums"
+                    class="display text-[13px] font-bold text-gold-200 tabular-nums"
                     title="Action XP this rig earns per item">+{r.xpPerCraft} xp</span
                   >
                   <span
@@ -347,7 +347,7 @@
                 </span>
               </div>
               <div
-                class="mt-0.5 flex items-baseline justify-between gap-2 text-[11px] text-ink-500"
+                class="mt-0.5 flex items-baseline justify-between gap-2 text-[13px] text-ink-500"
               >
                 <span class="truncate">{r.yields || '—'}</span>
                 <span class="shrink-0 tabular-nums">{fmtClock(r.left)} left</span>

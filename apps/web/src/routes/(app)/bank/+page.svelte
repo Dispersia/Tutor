@@ -77,12 +77,12 @@
   </div>
   <div class="seal h-14 w-14 shrink-0" aria-label="{bank.length} kinds stored">
     <span class="text-2xl leading-none font-bold">{bank.length}</span>
-    <span class="text-[8px] tracking-[0.16em]">KINDS</span>
+    <span class="text-[10px] tracking-[0.16em]">KINDS</span>
   </div>
 </div>
 
 {#if error}
-  <p class="mt-3 rounded-[4px] bg-ember-950 px-3 py-2 text-sm text-ember-300">{error}</p>
+  <p class="mt-3 rounded-[8px] bg-ember-950 px-3 py-2 text-sm text-ember-300">{error}</p>
 {/if}
 
 {#if loading}
@@ -97,7 +97,7 @@
         <h2 class="text-xs font-bold tracking-widest uppercase" style="color: var(--accent)">
           Equipment
         </h2>
-        <span class="text-[11px] text-ink-500">{worn.length} worn</span>
+        <span class="text-[13px] text-ink-500">{worn.length} worn</span>
       </div>
       <div class="pt-3">
         {#if worn.length === 0}
@@ -128,7 +128,7 @@
         <h2 class="text-xs font-bold tracking-widest uppercase" style="color: var(--accent)">
           Bank
         </h2>
-        <span class="text-[11px] text-ink-500">{bank.length} kinds</span>
+        <span class="text-[13px] text-ink-500">{bank.length} kinds</span>
       </div>
       {#if bank.length === 0}
         <p class="pt-3 text-xs text-ink-400">
@@ -139,7 +139,7 @@
           <div class="pt-3">
             <div class="flex items-center gap-2">
               <span class="h-2 w-2 rounded-[2px]" style="background: {tierAccent(g.key)}"></span>
-              <h3 class="text-[11px] font-bold tracking-widest uppercase text-ink-400">
+              <h3 class="text-[13px] font-bold tracking-widest uppercase text-ink-400">
                 {g.label}
               </h3>
             </div>

@@ -1,483 +1,665 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-15T09:56:30.000Z",
+  "generatedAt": "2026-11-19T22:10:00.000Z",
   "title": "Design System: tutor",
   "extensions": {
     "colorMeta": {
       "ink-950": {
         "role": "neutral",
-        "displayName": "Ink 950",
-        "canonical": "#090d12",
+        "displayName": "Graphite 950",
+        "canonical": "oklch(0.16 0.006 258)",
         "tonalRamp": [
-          "#090d12",
-          "#0e141b",
-          "#131b24",
-          "#1a242f",
-          "#26323f",
-          "#35434f",
-          "#586673",
-          "#8694a1",
-          "#b8c3cd",
-          "#d7dee5",
-          "#e8edf2"
+          "oklch(0.16 0.006 258)",
+          "oklch(0.196 0.007 258)",
+          "oklch(0.226 0.008 258)",
+          "oklch(0.272 0.009 258)",
+          "oklch(0.34 0.01 258)",
+          "oklch(0.45 0.012 258)",
+          "oklch(0.58 0.012 258)",
+          "oklch(0.7 0.01 258)",
+          "oklch(0.81 0.008 258)",
+          "oklch(0.9 0.005 258)",
+          "oklch(0.955 0.004 258)"
         ]
       },
       "ink-900": {
         "role": "neutral",
-        "displayName": "Ink 900",
-        "canonical": "#0e141b",
+        "displayName": "Graphite 900",
+        "canonical": "oklch(0.196 0.007 258)",
         "tonalRamp": [
-          "#090d12",
-          "#0e141b",
-          "#131b24",
-          "#1a242f",
-          "#26323f",
-          "#35434f",
-          "#586673",
-          "#8694a1",
-          "#b8c3cd",
-          "#d7dee5",
-          "#e8edf2"
+          "oklch(0.16 0.006 258)",
+          "oklch(0.196 0.007 258)",
+          "oklch(0.226 0.008 258)",
+          "oklch(0.272 0.009 258)",
+          "oklch(0.34 0.01 258)",
+          "oklch(0.45 0.012 258)",
+          "oklch(0.58 0.012 258)",
+          "oklch(0.7 0.01 258)",
+          "oklch(0.81 0.008 258)",
+          "oklch(0.9 0.005 258)",
+          "oklch(0.955 0.004 258)"
         ]
       },
       "ink-850": {
         "role": "neutral",
-        "displayName": "Ink 850",
-        "canonical": "#131b24",
+        "displayName": "Graphite 850",
+        "canonical": "oklch(0.226 0.008 258)",
         "tonalRamp": [
-          "#090d12",
-          "#0e141b",
-          "#131b24",
-          "#1a242f",
-          "#26323f",
-          "#35434f",
-          "#586673",
-          "#8694a1",
-          "#b8c3cd",
-          "#d7dee5",
-          "#e8edf2"
+          "oklch(0.16 0.006 258)",
+          "oklch(0.196 0.007 258)",
+          "oklch(0.226 0.008 258)",
+          "oklch(0.272 0.009 258)",
+          "oklch(0.34 0.01 258)",
+          "oklch(0.45 0.012 258)",
+          "oklch(0.58 0.012 258)",
+          "oklch(0.7 0.01 258)",
+          "oklch(0.81 0.008 258)",
+          "oklch(0.9 0.005 258)",
+          "oklch(0.955 0.004 258)"
         ]
       },
       "ink-800": {
         "role": "neutral",
-        "displayName": "Ink 800",
-        "canonical": "#1a242f",
+        "displayName": "Graphite 800",
+        "canonical": "oklch(0.272 0.009 258)",
         "tonalRamp": [
-          "#090d12",
-          "#0e141b",
-          "#131b24",
-          "#1a242f",
-          "#26323f",
-          "#35434f",
-          "#586673",
-          "#8694a1",
-          "#b8c3cd",
-          "#d7dee5",
-          "#e8edf2"
-        ]
-      },
-      "ink-750": {
-        "role": "neutral",
-        "displayName": "Ink 750",
-        "canonical": "#26323f",
-        "tonalRamp": [
-          "#090d12",
-          "#0e141b",
-          "#131b24",
-          "#1a242f",
-          "#26323f",
-          "#35434f",
-          "#586673",
-          "#8694a1",
-          "#b8c3cd",
-          "#d7dee5",
-          "#e8edf2"
+          "oklch(0.16 0.006 258)",
+          "oklch(0.196 0.007 258)",
+          "oklch(0.226 0.008 258)",
+          "oklch(0.272 0.009 258)",
+          "oklch(0.34 0.01 258)",
+          "oklch(0.45 0.012 258)",
+          "oklch(0.58 0.012 258)",
+          "oklch(0.7 0.01 258)",
+          "oklch(0.81 0.008 258)",
+          "oklch(0.9 0.005 258)",
+          "oklch(0.955 0.004 258)"
         ]
       },
       "ink-700": {
         "role": "neutral",
-        "displayName": "Ink 700",
-        "canonical": "#35434f",
+        "displayName": "Graphite 700",
+        "canonical": "oklch(0.34 0.01 258)",
         "tonalRamp": [
-          "#090d12",
-          "#0e141b",
-          "#131b24",
-          "#1a242f",
-          "#26323f",
-          "#35434f",
-          "#586673",
-          "#8694a1",
-          "#b8c3cd",
-          "#d7dee5",
-          "#e8edf2"
-        ]
-      },
-      "ink-650": {
-        "role": "neutral",
-        "displayName": "Ink 650",
-        "canonical": "#586673",
-        "tonalRamp": [
-          "#090d12",
-          "#0e141b",
-          "#131b24",
-          "#1a242f",
-          "#26323f",
-          "#35434f",
-          "#586673",
-          "#8694a1",
-          "#b8c3cd",
-          "#d7dee5",
-          "#e8edf2"
+          "oklch(0.16 0.006 258)",
+          "oklch(0.196 0.007 258)",
+          "oklch(0.226 0.008 258)",
+          "oklch(0.272 0.009 258)",
+          "oklch(0.34 0.01 258)",
+          "oklch(0.45 0.012 258)",
+          "oklch(0.58 0.012 258)",
+          "oklch(0.7 0.01 258)",
+          "oklch(0.81 0.008 258)",
+          "oklch(0.9 0.005 258)",
+          "oklch(0.955 0.004 258)"
         ]
       },
       "ink-600": {
         "role": "neutral",
-        "displayName": "Ink 600",
-        "canonical": "#8694a1",
+        "displayName": "Graphite 600",
+        "canonical": "oklch(0.45 0.012 258)",
         "tonalRamp": [
-          "#090d12",
-          "#0e141b",
-          "#131b24",
-          "#1a242f",
-          "#26323f",
-          "#35434f",
-          "#586673",
-          "#8694a1",
-          "#b8c3cd",
-          "#d7dee5",
-          "#e8edf2"
+          "oklch(0.16 0.006 258)",
+          "oklch(0.196 0.007 258)",
+          "oklch(0.226 0.008 258)",
+          "oklch(0.272 0.009 258)",
+          "oklch(0.34 0.01 258)",
+          "oklch(0.45 0.012 258)",
+          "oklch(0.58 0.012 258)",
+          "oklch(0.7 0.01 258)",
+          "oklch(0.81 0.008 258)",
+          "oklch(0.9 0.005 258)",
+          "oklch(0.955 0.004 258)"
         ]
       },
-      "ink-550": {
+      "ink-500": {
         "role": "neutral",
-        "displayName": "Ink 550",
-        "canonical": "#b8c3cd",
+        "displayName": "Graphite 500",
+        "canonical": "oklch(0.58 0.012 258)",
         "tonalRamp": [
-          "#090d12",
-          "#0e141b",
-          "#131b24",
-          "#1a242f",
-          "#26323f",
-          "#35434f",
-          "#586673",
-          "#8694a1",
-          "#b8c3cd",
-          "#d7dee5",
-          "#e8edf2"
+          "oklch(0.16 0.006 258)",
+          "oklch(0.196 0.007 258)",
+          "oklch(0.226 0.008 258)",
+          "oklch(0.272 0.009 258)",
+          "oklch(0.34 0.01 258)",
+          "oklch(0.45 0.012 258)",
+          "oklch(0.58 0.012 258)",
+          "oklch(0.7 0.01 258)",
+          "oklch(0.81 0.008 258)",
+          "oklch(0.9 0.005 258)",
+          "oklch(0.955 0.004 258)"
+        ]
+      },
+      "ink-400": {
+        "role": "neutral",
+        "displayName": "Graphite 400",
+        "canonical": "oklch(0.7 0.01 258)",
+        "tonalRamp": [
+          "oklch(0.16 0.006 258)",
+          "oklch(0.196 0.007 258)",
+          "oklch(0.226 0.008 258)",
+          "oklch(0.272 0.009 258)",
+          "oklch(0.34 0.01 258)",
+          "oklch(0.45 0.012 258)",
+          "oklch(0.58 0.012 258)",
+          "oklch(0.7 0.01 258)",
+          "oklch(0.81 0.008 258)",
+          "oklch(0.9 0.005 258)",
+          "oklch(0.955 0.004 258)"
+        ]
+      },
+      "ink-300": {
+        "role": "neutral",
+        "displayName": "Graphite 300",
+        "canonical": "oklch(0.81 0.008 258)",
+        "tonalRamp": [
+          "oklch(0.16 0.006 258)",
+          "oklch(0.196 0.007 258)",
+          "oklch(0.226 0.008 258)",
+          "oklch(0.272 0.009 258)",
+          "oklch(0.34 0.01 258)",
+          "oklch(0.45 0.012 258)",
+          "oklch(0.58 0.012 258)",
+          "oklch(0.7 0.01 258)",
+          "oklch(0.81 0.008 258)",
+          "oklch(0.9 0.005 258)",
+          "oklch(0.955 0.004 258)"
         ]
       },
       "ink-200": {
         "role": "neutral",
-        "displayName": "Ink 200",
-        "canonical": "#d7dee5",
+        "displayName": "Graphite 200",
+        "canonical": "oklch(0.9 0.005 258)",
         "tonalRamp": [
-          "#090d12",
-          "#0e141b",
-          "#131b24",
-          "#1a242f",
-          "#26323f",
-          "#35434f",
-          "#586673",
-          "#8694a1",
-          "#b8c3cd",
-          "#d7dee5",
-          "#e8edf2"
+          "oklch(0.16 0.006 258)",
+          "oklch(0.196 0.007 258)",
+          "oklch(0.226 0.008 258)",
+          "oklch(0.272 0.009 258)",
+          "oklch(0.34 0.01 258)",
+          "oklch(0.45 0.012 258)",
+          "oklch(0.58 0.012 258)",
+          "oklch(0.7 0.01 258)",
+          "oklch(0.81 0.008 258)",
+          "oklch(0.9 0.005 258)",
+          "oklch(0.955 0.004 258)"
         ]
       },
       "ink-100": {
         "role": "neutral",
-        "displayName": "Ink 100",
-        "canonical": "#e8edf2",
+        "displayName": "Graphite 100",
+        "canonical": "oklch(0.955 0.004 258)",
         "tonalRamp": [
-          "#090d12",
-          "#0e141b",
-          "#131b24",
-          "#1a242f",
-          "#26323f",
-          "#35434f",
-          "#586673",
-          "#8694a1",
-          "#b8c3cd",
-          "#d7dee5",
-          "#e8edf2"
+          "oklch(0.16 0.006 258)",
+          "oklch(0.196 0.007 258)",
+          "oklch(0.226 0.008 258)",
+          "oklch(0.272 0.009 258)",
+          "oklch(0.34 0.01 258)",
+          "oklch(0.45 0.012 258)",
+          "oklch(0.58 0.012 258)",
+          "oklch(0.7 0.01 258)",
+          "oklch(0.81 0.008 258)",
+          "oklch(0.9 0.005 258)",
+          "oklch(0.955 0.004 258)"
         ]
       },
       "gold-200": {
         "role": "accent",
         "displayName": "Brass Gold 200",
-        "canonical": "#f6e4b0",
+        "canonical": "oklch(0.9 0.06 88)",
         "tonalRamp": [
-          "#f6e4b0",
-          "#eac168",
-          "#d9a93c",
-          "#b9862a",
-          "#8f6620"
+          "oklch(0.300 0.039 88)",
+          "oklch(0.386 0.062 88)",
+          "oklch(0.471 0.084 88)",
+          "oklch(0.557 0.107 88)",
+          "oklch(0.643 0.091 88)",
+          "oklch(0.729 0.068 88)",
+          "oklch(0.814 0.046 88)",
+          "oklch(0.900 0.024 88)"
         ]
       },
       "gold-300": {
         "role": "accent",
         "displayName": "Brass Gold 300",
-        "canonical": "#eac168",
+        "canonical": "oklch(0.8 0.105 88)",
         "tonalRamp": [
-          "#f6e4b0",
-          "#eac168",
-          "#d9a93c",
-          "#b9862a",
-          "#8f6620"
+          "oklch(0.300 0.039 88)",
+          "oklch(0.386 0.062 88)",
+          "oklch(0.471 0.084 88)",
+          "oklch(0.557 0.107 88)",
+          "oklch(0.643 0.091 88)",
+          "oklch(0.729 0.068 88)",
+          "oklch(0.814 0.046 88)",
+          "oklch(0.900 0.024 88)"
         ]
       },
       "gold-400": {
         "role": "accent",
         "displayName": "Brass Gold 400",
-        "canonical": "#d9a93c",
+        "canonical": "oklch(0.72 0.11 86)",
         "tonalRamp": [
-          "#f6e4b0",
-          "#eac168",
-          "#d9a93c",
-          "#b9862a",
-          "#8f6620"
+          "oklch(0.300 0.039 88)",
+          "oklch(0.386 0.062 88)",
+          "oklch(0.471 0.084 88)",
+          "oklch(0.557 0.107 88)",
+          "oklch(0.643 0.091 88)",
+          "oklch(0.729 0.068 88)",
+          "oklch(0.814 0.046 88)",
+          "oklch(0.900 0.024 88)"
         ]
       },
       "gold-500": {
         "role": "accent",
         "displayName": "Brass Gold 500",
-        "canonical": "#b9862a",
+        "canonical": "oklch(0.62 0.1 84)",
         "tonalRamp": [
-          "#f6e4b0",
-          "#eac168",
-          "#d9a93c",
-          "#b9862a",
-          "#8f6620"
+          "oklch(0.300 0.039 88)",
+          "oklch(0.386 0.062 88)",
+          "oklch(0.471 0.084 88)",
+          "oklch(0.557 0.107 88)",
+          "oklch(0.643 0.091 88)",
+          "oklch(0.729 0.068 88)",
+          "oklch(0.814 0.046 88)",
+          "oklch(0.900 0.024 88)"
         ]
       },
       "gold-600": {
         "role": "accent",
         "displayName": "Brass Gold 600",
-        "canonical": "#8f6620",
+        "canonical": "oklch(0.52 0.08 82)",
         "tonalRamp": [
-          "#f6e4b0",
-          "#eac168",
-          "#d9a93c",
-          "#b9862a",
-          "#8f6620"
+          "oklch(0.300 0.039 88)",
+          "oklch(0.386 0.062 88)",
+          "oklch(0.471 0.084 88)",
+          "oklch(0.557 0.107 88)",
+          "oklch(0.643 0.091 88)",
+          "oklch(0.729 0.068 88)",
+          "oklch(0.814 0.046 88)",
+          "oklch(0.900 0.024 88)"
         ]
       },
       "seal-300": {
-        "role": "accent",
-        "displayName": "Seal Vermilion 300",
-        "canonical": "#f0735a",
+        "role": "primary",
+        "displayName": "Seal Amber 300",
+        "canonical": "oklch(0.79 0.125 58)",
         "tonalRamp": [
-          "#f0735a",
-          "#e2452b",
-          "#c63620",
-          "#a62c19"
+          "oklch(0.300 0.054 52)",
+          "oklch(0.386 0.084 52)",
+          "oklch(0.471 0.115 52)",
+          "oklch(0.557 0.145 52)",
+          "oklch(0.643 0.124 52)",
+          "oklch(0.729 0.093 52)",
+          "oklch(0.814 0.063 52)",
+          "oklch(0.900 0.032 52)"
         ]
       },
       "seal-400": {
-        "role": "accent",
-        "displayName": "Seal Vermilion 400",
-        "canonical": "#e2452b",
+        "role": "primary",
+        "displayName": "Seal Amber 400",
+        "canonical": "oklch(0.7 0.145 52)",
         "tonalRamp": [
-          "#f0735a",
-          "#e2452b",
-          "#c63620",
-          "#a62c19"
+          "oklch(0.300 0.054 52)",
+          "oklch(0.386 0.084 52)",
+          "oklch(0.471 0.115 52)",
+          "oklch(0.557 0.145 52)",
+          "oklch(0.643 0.124 52)",
+          "oklch(0.729 0.093 52)",
+          "oklch(0.814 0.063 52)",
+          "oklch(0.900 0.032 52)"
         ]
       },
       "seal-500": {
-        "role": "accent",
-        "displayName": "Seal Vermilion 500",
-        "canonical": "#c63620",
+        "role": "primary",
+        "displayName": "Seal Amber 500",
+        "canonical": "oklch(0.6 0.14 50)",
         "tonalRamp": [
-          "#f0735a",
-          "#e2452b",
-          "#c63620",
-          "#a62c19"
+          "oklch(0.300 0.054 52)",
+          "oklch(0.386 0.084 52)",
+          "oklch(0.471 0.115 52)",
+          "oklch(0.557 0.145 52)",
+          "oklch(0.643 0.124 52)",
+          "oklch(0.729 0.093 52)",
+          "oklch(0.814 0.063 52)",
+          "oklch(0.900 0.032 52)"
         ]
       },
       "seal-600": {
-        "role": "accent",
-        "displayName": "Seal Vermilion 600",
-        "canonical": "#a62c19",
+        "role": "primary",
+        "displayName": "Seal Amber 600",
+        "canonical": "oklch(0.5 0.13 48)",
         "tonalRamp": [
-          "#f0735a",
-          "#e2452b",
-          "#c63620",
-          "#a62c19"
-        ]
-      },
-      "jade-200": {
-        "role": "accent",
-        "displayName": "Jade 200",
-        "canonical": "#7bd3a9",
-        "tonalRamp": [
-          "#7bd3a9",
-          "#45c08a",
-          "#2fa274"
+          "oklch(0.300 0.054 52)",
+          "oklch(0.386 0.084 52)",
+          "oklch(0.471 0.115 52)",
+          "oklch(0.557 0.145 52)",
+          "oklch(0.643 0.124 52)",
+          "oklch(0.729 0.093 52)",
+          "oklch(0.814 0.063 52)",
+          "oklch(0.900 0.032 52)"
         ]
       },
       "jade-300": {
         "role": "accent",
         "displayName": "Jade 300",
-        "canonical": "#45c08a",
+        "canonical": "oklch(0.82 0.09 158)",
         "tonalRamp": [
-          "#7bd3a9",
-          "#45c08a",
-          "#2fa274"
+          "oklch(0.300 0.036 158)",
+          "oklch(0.386 0.056 158)",
+          "oklch(0.471 0.077 158)",
+          "oklch(0.557 0.097 158)",
+          "oklch(0.643 0.083 158)",
+          "oklch(0.729 0.062 158)",
+          "oklch(0.814 0.042 158)",
+          "oklch(0.900 0.021 158)"
         ]
       },
       "jade-400": {
         "role": "accent",
         "displayName": "Jade 400",
-        "canonical": "#2fa274",
+        "canonical": "oklch(0.73 0.1 158)",
         "tonalRamp": [
-          "#7bd3a9",
-          "#45c08a",
-          "#2fa274"
+          "oklch(0.300 0.036 158)",
+          "oklch(0.386 0.056 158)",
+          "oklch(0.471 0.077 158)",
+          "oklch(0.557 0.097 158)",
+          "oklch(0.643 0.083 158)",
+          "oklch(0.729 0.062 158)",
+          "oklch(0.814 0.042 158)",
+          "oklch(0.900 0.021 158)"
         ]
       },
-      "brass-200": {
+      "jade-500": {
         "role": "accent",
-        "displayName": "Brass Amber 200",
-        "canonical": "#efc078",
+        "displayName": "Jade 500",
+        "canonical": "oklch(0.63 0.1 156)",
         "tonalRamp": [
-          "#efc078",
-          "#e3a64a",
-          "#c4862f"
+          "oklch(0.300 0.036 158)",
+          "oklch(0.386 0.056 158)",
+          "oklch(0.471 0.077 158)",
+          "oklch(0.557 0.097 158)",
+          "oklch(0.643 0.083 158)",
+          "oklch(0.729 0.062 158)",
+          "oklch(0.814 0.042 158)",
+          "oklch(0.900 0.021 158)"
+        ]
+      },
+      "jade-950": {
+        "role": "accent",
+        "displayName": "Jade 950",
+        "canonical": "oklch(0.24 0.04 158)",
+        "tonalRamp": [
+          "oklch(0.300 0.036 158)",
+          "oklch(0.386 0.056 158)",
+          "oklch(0.471 0.077 158)",
+          "oklch(0.557 0.097 158)",
+          "oklch(0.643 0.083 158)",
+          "oklch(0.729 0.062 158)",
+          "oklch(0.814 0.042 158)",
+          "oklch(0.900 0.021 158)"
         ]
       },
       "brass-300": {
         "role": "accent",
         "displayName": "Brass Amber 300",
-        "canonical": "#e3a64a",
+        "canonical": "oklch(0.84 0.09 70)",
         "tonalRamp": [
-          "#efc078",
-          "#e3a64a",
-          "#c4862f"
+          "oklch(0.300 0.036 68)",
+          "oklch(0.386 0.056 68)",
+          "oklch(0.471 0.077 68)",
+          "oklch(0.557 0.097 68)",
+          "oklch(0.643 0.083 68)",
+          "oklch(0.729 0.062 68)",
+          "oklch(0.814 0.042 68)",
+          "oklch(0.900 0.021 68)"
         ]
       },
       "brass-400": {
         "role": "accent",
         "displayName": "Brass Amber 400",
-        "canonical": "#c4862f",
+        "canonical": "oklch(0.76 0.1 68)",
         "tonalRamp": [
-          "#efc078",
-          "#e3a64a",
-          "#c4862f"
+          "oklch(0.300 0.036 68)",
+          "oklch(0.386 0.056 68)",
+          "oklch(0.471 0.077 68)",
+          "oklch(0.557 0.097 68)",
+          "oklch(0.643 0.083 68)",
+          "oklch(0.729 0.062 68)",
+          "oklch(0.814 0.042 68)",
+          "oklch(0.900 0.021 68)"
         ]
       },
-      "violet-200": {
+      "brass-500": {
         "role": "accent",
-        "displayName": "Arcane Violet 200",
-        "canonical": "#c6aef0",
+        "displayName": "Brass Amber 500",
+        "canonical": "oklch(0.66 0.1 66)",
         "tonalRamp": [
-          "#c6aef0",
-          "#ac8be6",
-          "#8f6bcb"
+          "oklch(0.300 0.036 68)",
+          "oklch(0.386 0.056 68)",
+          "oklch(0.471 0.077 68)",
+          "oklch(0.557 0.097 68)",
+          "oklch(0.643 0.083 68)",
+          "oklch(0.729 0.062 68)",
+          "oklch(0.814 0.042 68)",
+          "oklch(0.900 0.021 68)"
+        ]
+      },
+      "brass-950": {
+        "role": "accent",
+        "displayName": "Brass Amber 950",
+        "canonical": "oklch(0.25 0.04 68)",
+        "tonalRamp": [
+          "oklch(0.300 0.036 68)",
+          "oklch(0.386 0.056 68)",
+          "oklch(0.471 0.077 68)",
+          "oklch(0.557 0.097 68)",
+          "oklch(0.643 0.083 68)",
+          "oklch(0.729 0.062 68)",
+          "oklch(0.814 0.042 68)",
+          "oklch(0.900 0.021 68)"
         ]
       },
       "violet-300": {
         "role": "accent",
         "displayName": "Arcane Violet 300",
-        "canonical": "#ac8be6",
+        "canonical": "oklch(0.8 0.09 300)",
         "tonalRamp": [
-          "#c6aef0",
-          "#ac8be6",
-          "#8f6bcb"
+          "oklch(0.300 0.036 300)",
+          "oklch(0.386 0.056 300)",
+          "oklch(0.471 0.077 300)",
+          "oklch(0.557 0.097 300)",
+          "oklch(0.643 0.083 300)",
+          "oklch(0.729 0.062 300)",
+          "oklch(0.814 0.042 300)",
+          "oklch(0.900 0.021 300)"
         ]
       },
       "violet-400": {
         "role": "accent",
         "displayName": "Arcane Violet 400",
-        "canonical": "#8f6bcb",
+        "canonical": "oklch(0.71 0.1 300)",
         "tonalRamp": [
-          "#c6aef0",
-          "#ac8be6",
-          "#8f6bcb"
+          "oklch(0.300 0.036 300)",
+          "oklch(0.386 0.056 300)",
+          "oklch(0.471 0.077 300)",
+          "oklch(0.557 0.097 300)",
+          "oklch(0.643 0.083 300)",
+          "oklch(0.729 0.062 300)",
+          "oklch(0.814 0.042 300)",
+          "oklch(0.900 0.021 300)"
         ]
       },
-      "ember-200": {
+      "violet-500": {
         "role": "accent",
-        "displayName": "Ember Red 200",
-        "canonical": "#ee8e86",
+        "displayName": "Arcane Violet 500",
+        "canonical": "oklch(0.61 0.1 300)",
         "tonalRamp": [
-          "#ee8e86",
-          "#e0655c",
-          "#c64a41"
+          "oklch(0.300 0.036 300)",
+          "oklch(0.386 0.056 300)",
+          "oklch(0.471 0.077 300)",
+          "oklch(0.557 0.097 300)",
+          "oklch(0.643 0.083 300)",
+          "oklch(0.729 0.062 300)",
+          "oklch(0.814 0.042 300)",
+          "oklch(0.900 0.021 300)"
         ]
       },
       "ember-300": {
         "role": "accent",
         "displayName": "Ember Red 300",
-        "canonical": "#e0655c",
+        "canonical": "oklch(0.8 0.11 25)",
         "tonalRamp": [
-          "#ee8e86",
-          "#e0655c",
-          "#c64a41"
+          "oklch(0.300 0.054 25)",
+          "oklch(0.386 0.084 25)",
+          "oklch(0.471 0.115 25)",
+          "oklch(0.557 0.145 25)",
+          "oklch(0.643 0.124 25)",
+          "oklch(0.729 0.093 25)",
+          "oklch(0.814 0.063 25)",
+          "oklch(0.900 0.032 25)"
         ]
       },
       "ember-400": {
         "role": "accent",
         "displayName": "Ember Red 400",
-        "canonical": "#c64a41",
+        "canonical": "oklch(0.66 0.14 25)",
         "tonalRamp": [
-          "#ee8e86",
-          "#e0655c",
-          "#c64a41"
+          "oklch(0.300 0.054 25)",
+          "oklch(0.386 0.084 25)",
+          "oklch(0.471 0.115 25)",
+          "oklch(0.557 0.145 25)",
+          "oklch(0.643 0.124 25)",
+          "oklch(0.729 0.093 25)",
+          "oklch(0.814 0.063 25)",
+          "oklch(0.900 0.032 25)"
         ]
       },
-      "azure-200": {
+      "ember-500": {
         "role": "accent",
-        "displayName": "Azure 200",
-        "canonical": "#9cc6f2",
+        "displayName": "Ember Red 500",
+        "canonical": "oklch(0.58 0.14 24)",
         "tonalRamp": [
-          "#9cc6f2",
-          "#6aa9e9",
-          "#4a8ad0"
+          "oklch(0.300 0.054 25)",
+          "oklch(0.386 0.084 25)",
+          "oklch(0.471 0.115 25)",
+          "oklch(0.557 0.145 25)",
+          "oklch(0.643 0.124 25)",
+          "oklch(0.729 0.093 25)",
+          "oklch(0.814 0.063 25)",
+          "oklch(0.900 0.032 25)"
+        ]
+      },
+      "ember-600": {
+        "role": "accent",
+        "displayName": "Ember Red 600",
+        "canonical": "oklch(0.5 0.13 23)",
+        "tonalRamp": [
+          "oklch(0.300 0.054 25)",
+          "oklch(0.386 0.084 25)",
+          "oklch(0.471 0.115 25)",
+          "oklch(0.557 0.145 25)",
+          "oklch(0.643 0.124 25)",
+          "oklch(0.729 0.093 25)",
+          "oklch(0.814 0.063 25)",
+          "oklch(0.900 0.032 25)"
+        ]
+      },
+      "ember-800": {
+        "role": "accent",
+        "displayName": "Ember Red 800",
+        "canonical": "oklch(0.32 0.08 22)",
+        "tonalRamp": [
+          "oklch(0.300 0.054 25)",
+          "oklch(0.386 0.084 25)",
+          "oklch(0.471 0.115 25)",
+          "oklch(0.557 0.145 25)",
+          "oklch(0.643 0.124 25)",
+          "oklch(0.729 0.093 25)",
+          "oklch(0.814 0.063 25)",
+          "oklch(0.900 0.032 25)"
+        ]
+      },
+      "ember-950": {
+        "role": "accent",
+        "displayName": "Ember Red 950",
+        "canonical": "oklch(0.2 0.04 22)",
+        "tonalRamp": [
+          "oklch(0.300 0.054 25)",
+          "oklch(0.386 0.084 25)",
+          "oklch(0.471 0.115 25)",
+          "oklch(0.557 0.145 25)",
+          "oklch(0.643 0.124 25)",
+          "oklch(0.729 0.093 25)",
+          "oklch(0.814 0.063 25)",
+          "oklch(0.900 0.032 25)"
         ]
       },
       "azure-300": {
         "role": "accent",
         "displayName": "Azure 300",
-        "canonical": "#6aa9e9",
+        "canonical": "oklch(0.82 0.09 245)",
         "tonalRamp": [
-          "#9cc6f2",
-          "#6aa9e9",
-          "#4a8ad0"
+          "oklch(0.300 0.036 245)",
+          "oklch(0.386 0.056 245)",
+          "oklch(0.471 0.077 245)",
+          "oklch(0.557 0.097 245)",
+          "oklch(0.643 0.083 245)",
+          "oklch(0.729 0.062 245)",
+          "oklch(0.814 0.042 245)",
+          "oklch(0.900 0.021 245)"
         ]
       },
       "azure-400": {
         "role": "accent",
         "displayName": "Azure 400",
-        "canonical": "#4a8ad0",
+        "canonical": "oklch(0.73 0.1 245)",
         "tonalRamp": [
-          "#9cc6f2",
-          "#6aa9e9",
-          "#4a8ad0"
+          "oklch(0.300 0.036 245)",
+          "oklch(0.386 0.056 245)",
+          "oklch(0.471 0.077 245)",
+          "oklch(0.557 0.097 245)",
+          "oklch(0.643 0.083 245)",
+          "oklch(0.729 0.062 245)",
+          "oklch(0.814 0.042 245)",
+          "oklch(0.900 0.021 245)"
+        ]
+      },
+      "azure-500": {
+        "role": "accent",
+        "displayName": "Azure 500",
+        "canonical": "oklch(0.63 0.1 245)",
+        "tonalRamp": [
+          "oklch(0.300 0.036 245)",
+          "oklch(0.386 0.056 245)",
+          "oklch(0.471 0.077 245)",
+          "oklch(0.557 0.097 245)",
+          "oklch(0.643 0.083 245)",
+          "oklch(0.729 0.062 245)",
+          "oklch(0.814 0.042 245)",
+          "oklch(0.900 0.021 245)"
         ]
       }
     },
     "typographyMeta": {
       "display": {
-        "displayName": "Source Serif 4",
-        "purpose": "Names, headings, characters and every earned number, with tabular figures."
+        "displayName": "Space Grotesk + CJK serif",
+        "purpose": "Names, headings, characters, button labels and every earned number, with tabular figures."
       },
       "body": {
-        "displayName": "System Sans",
-        "purpose": "All body copy, labels and controls; never serif."
+        "displayName": "Rubik + CJK sans",
+        "purpose": "All body copy, labels and controls; never the display face."
       },
       "label": {
         "displayName": "Tracked Label",
-        "purpose": "Uppercase tracked label for row and field labels."
+        "purpose": "Uppercase tracked label for row and field labels, at least 0.06em."
       }
     },
-    "shadows": [],
-    "motion": [
+    "shadows": [
       {
-        "name": "ease-standard",
-        "value": "ease",
-        "purpose": "Default easing for hover and colour transitions."
-      },
+        "name": "panel-rest",
+        "value": "0 1px 2px oklch(0 0 0 / 0.4)",
+        "purpose": "Lifts a panel off the page. The only shadow in the system."
+      }
+    ],
+    "motion": [
       {
         "name": "state-fast",
         "value": "0.12s",
@@ -497,13 +679,28 @@
         "name": "rise",
         "value": "float-up 0.25s ease both",
         "purpose": "A new entry settling into the page."
+      },
+      {
+        "name": "live-dot",
+        "value": "livedot 1.8s ease-in-out infinite",
+        "purpose": "A rig that is running."
       }
     ],
     "breakpoints": [
       {
-        "name": "column",
-        "value": "42rem",
-        "purpose": "Content max width; the app never becomes multi-column."
+        "name": "grid",
+        "value": "600px",
+        "purpose": "Profession cards go two-up."
+      },
+      {
+        "name": "rail",
+        "value": "1024px",
+        "purpose": "The bottom tabs become a left rail."
+      },
+      {
+        "name": "spread",
+        "value": "1280px",
+        "purpose": "A page may open into two columns."
       }
     ]
   },
@@ -513,64 +710,56 @@
       "kind": "button",
       "refersTo": "button-primary",
       "description": "The one action that moves the session forward.",
-      "html": "<button class=\"ds-btn ds-btn-primary\">Start practising</button>",
-      "css": ".ds-btn{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;border-radius:4px;padding:.55rem .9rem;font:600 .875rem/1 system-ui, -apple-system, 'Segoe UI', sans-serif;cursor:pointer;border:1px solid transparent;transition:filter .12s ease,transform .06s ease}.ds-btn:active{transform:translateY(1px)}.ds-btn:disabled{opacity:.4;cursor:not-allowed}.ds-btn:focus-visible{outline:2px solid #e2452b;outline-offset:2px}.ds-btn-primary{color:#fff;background:#e2452b;border-color:#a62c19}"
+      "html": "<button class=\"ds-btn ds-btn-primary\">Build deck</button>",
+      "css": ".ds-btn{display:inline-flex;align-items:center;justify-content:center;gap:.45rem;min-height:44px;border-radius:10px;padding:.6rem 1rem;font:600 .92rem/1 'Space Grotesk',system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;border:1px solid transparent;transition:filter .12s ease,transform .06s ease}.ds-btn:active{transform:translateY(1px)}.ds-btn:focus-visible{outline:2px solid oklch(0.79 0.125 58);outline-offset:2px}.ds-btn:disabled{cursor:not-allowed;background:oklch(0.226 0.008 258);border-color:oklch(0.34 0.01 258);color:oklch(0.7 0.01 258)}.ds-btn-primary{color:oklch(0.16 0.006 258);background:oklch(0.7 0.145 52);border-color:oklch(0.5 0.13 48)}.ds-btn-primary:hover{filter:brightness(1.08)}"
     },
     {
       "name": "Gold Button",
       "kind": "button",
       "refersTo": "button-gold",
       "description": "Spending, claiming, rewarding.",
-      "html": "<button class=\"ds-btn ds-btn-gold\">Save</button>",
-      "css": ".ds-btn{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;border-radius:4px;padding:.55rem .9rem;font:600 .875rem/1 system-ui, -apple-system, 'Segoe UI', sans-serif;cursor:pointer;border:1px solid transparent;transition:filter .12s ease,transform .06s ease}.ds-btn:active{transform:translateY(1px)}.ds-btn:disabled{opacity:.4;cursor:not-allowed}.ds-btn:focus-visible{outline:2px solid #e2452b;outline-offset:2px}.ds-btn-gold{color:#2a1d03;background:#d9a93c;border-color:#b9862a}"
+      "html": "<button class=\"ds-btn ds-btn-gold\">Claim</button>",
+      "css": ".ds-btn{display:inline-flex;align-items:center;justify-content:center;gap:.45rem;min-height:44px;border-radius:10px;padding:.6rem 1rem;font:600 .92rem/1 'Space Grotesk',system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;border:1px solid transparent;transition:filter .12s ease,transform .06s ease}.ds-btn:active{transform:translateY(1px)}.ds-btn:focus-visible{outline:2px solid oklch(0.79 0.125 58);outline-offset:2px}.ds-btn:disabled{cursor:not-allowed;background:oklch(0.226 0.008 258);border-color:oklch(0.34 0.01 258);color:oklch(0.7 0.01 258)}.ds-btn-gold{color:oklch(0.16 0.006 258);background:oklch(0.8 0.105 88);border-color:oklch(0.62 0.1 84)}.ds-btn-gold:hover{filter:brightness(1.08)}"
     },
     {
       "name": "Ghost Button",
       "kind": "button",
       "refersTo": "button-ghost",
-      "description": "Secondary actions.",
-      "html": "<button class=\"ds-btn ds-btn-ghost\">Hear it</button>",
-      "css": ".ds-btn{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;border-radius:4px;padding:.55rem .9rem;font:600 .875rem/1 system-ui, -apple-system, 'Segoe UI', sans-serif;cursor:pointer;border:1px solid transparent;transition:filter .12s ease,transform .06s ease}.ds-btn:active{transform:translateY(1px)}.ds-btn:disabled{opacity:.4;cursor:not-allowed}.ds-btn:focus-visible{outline:2px solid #e2452b;outline-offset:2px}.ds-btn-ghost{color:#b8c3cd;background:#1a242f;border-color:#35434f}"
+      "description": "Secondary actions beside a primary.",
+      "html": "<button class=\"ds-btn ds-btn-ghost\">Import .apkg</button>",
+      "css": ".ds-btn{display:inline-flex;align-items:center;justify-content:center;gap:.45rem;min-height:44px;border-radius:10px;padding:.6rem 1rem;font:600 .92rem/1 'Space Grotesk',system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;border:1px solid transparent;transition:filter .12s ease,transform .06s ease}.ds-btn:active{transform:translateY(1px)}.ds-btn:focus-visible{outline:2px solid oklch(0.79 0.125 58);outline-offset:2px}.ds-btn:disabled{cursor:not-allowed;background:oklch(0.226 0.008 258);border-color:oklch(0.34 0.01 258);color:oklch(0.7 0.01 258)}.ds-btn-ghost{color:oklch(0.9 0.005 258);background:transparent;border-color:oklch(0.45 0.012 258)}.ds-btn-ghost:hover{color:oklch(0.955 0.004 258);background:oklch(0.272 0.009 258);border-color:oklch(0.58 0.012 258)}"
     },
     {
       "name": "Panel",
       "kind": "card",
       "refersTo": "panel",
-      "description": "Flat surface one step above the page, with a 1px hairline.",
-      "html": "<section class=\"ds-panel\"><header class=\"ds-panel-hd\">Equipment</header><div class=\"ds-panel-bd\">\u2026</div></section>",
-      "css": ".ds-panel{border:1px solid #26323f;border-radius:5px;background:#131b24;color:#d7dee5;overflow:hidden}.ds-panel-hd{padding:.5rem .9rem;border-bottom:1px solid #26323f;background:#1a242f;font-weight:700}.ds-panel-bd{padding:1rem}"
+      "description": "Flat surface one step above the page, with a hairline and one soft shadow.",
+      "html": "<section class=\"ds-panel\"><header class=\"ds-panel-hd\">Professions</header><div class=\"ds-panel-bd\">…</div></section>",
+      "css": ".ds-panel{border:1px solid oklch(0.34 0.01 258);border-radius:14px;background:oklch(0.226 0.008 258);color:oklch(0.9 0.005 258);overflow:hidden;box-shadow:0 1px 2px oklch(0 0 0/.4)}.ds-panel-hd{padding:.6rem 1rem;border-bottom:1px solid oklch(0.34 0.01 258);background:oklch(0.272 0.009 258);font:600 1rem/1.4 'Space Grotesk',system-ui,sans-serif}.ds-panel-bd{padding:1rem}"
     },
     {
       "name": "Character Cell",
-      "kind": "card",
+      "kind": "custom",
       "refersTo": "cell",
       "description": "The signature mark: an accent-tinted ruled square holding one character.",
-      "html": "<span class=\"ds-cell\">\u4f60\u597d</span>",
-      "css": ".ds-cell{position:relative;display:grid;place-items:center;width:6rem;height:6rem;border:1px solid rgba(106,169,233,.38);border-radius:3px;background:rgba(106,169,233,.06);color:#d7dee5;font-family:'Source Serif 4', 'Songti SC', 'Noto Serif CJK SC', 'Source Han Serif SC', 'Hiragino Mincho ProN', 'Noto Serif SC', serif;font-size:2.5rem}.ds-cell::before,.ds-cell::after{content:'';position:absolute;background:rgba(106,169,233,.2)}.ds-cell::before{left:10%;right:10%;top:50%;height:1px}.ds-cell::after{top:10%;bottom:10%;left:50%;width:1px}"
+      "html": "<span class=\"ds-cell\">喝</span>",
+      "css": ".ds-cell{position:relative;display:grid;place-items:center;width:6rem;height:6rem;border:1px solid oklch(0.55 0.07 245);border-radius:12px;background:oklch(0.235 0.03 245);color:oklch(0.93 0.004 258);font-family:'Noto Serif SC','Songti SC',serif;font-size:2.4rem;line-height:1.3}.ds-cell::before,.ds-cell::after{content:'';position:absolute;background:oklch(0.62 0.06 245/.45)}.ds-cell::before{left:12%;right:12%;top:50%;height:1px}.ds-cell::after{top:12%;bottom:12%;left:50%;width:1px}"
     },
     {
       "name": "Level Seal",
       "kind": "badge",
       "refersTo": "seal",
-      "description": "A vermilion stamp holding the earned level.",
-      "html": "<span class=\"ds-seal\">1<small>LEVEL</small></span>",
-      "css": ".ds-seal{display:grid;place-items:center;width:3.5rem;height:3.5rem;border-radius:4px;border:1.5px solid rgba(226,69,43,.8);background:rgba(226,69,43,.12);color:#f0735a;font-family:'Source Serif 4', 'Songti SC', 'Noto Serif CJK SC', 'Source Han Serif SC', 'Hiragino Mincho ProN', 'Noto Serif SC', serif;font-size:1.5rem;font-weight:700}.ds-seal small{font-size:.5rem;letter-spacing:.16em}"
-    },
-    {
-      "name": "Ruled Entry",
-      "kind": "list-item",
-      "refersTo": "panel",
-      "description": "A row separated by a 1px rule, label left and earned figure right.",
-      "html": "<div class=\"ds-row\"><span>XP earned</span><b>1 240</b></div>",
-      "css": ".ds-row{display:flex;align-items:baseline;justify-content:space-between;gap:.75rem;padding:.75rem 1rem;border-top:1px solid #26323f;color:#b8c3cd}.ds-row b{font-family:'Source Serif 4', 'Songti SC', 'Noto Serif CJK SC', 'Source Han Serif SC', 'Hiragino Mincho ProN', 'Noto Serif SC', serif;font-size:1.25rem;color:#f6e4b0;font-variant-numeric:tabular-nums}"
+      "description": "A circular amber stamp holding the earned level.",
+      "html": "<span class=\"ds-seal\">12</span>",
+      "css": ".ds-seal{display:grid;place-items:center;width:3.5rem;height:3.5rem;border-radius:50%;border:2px solid oklch(0.56 0.11 50);background:oklch(0.25 0.035 52);color:oklch(0.79 0.125 58);font-family:'Space Grotesk',system-ui,sans-serif;font-size:1.4rem;font-weight:700}"
     },
     {
       "name": "Chip",
-      "kind": "badge",
+      "kind": "chip",
       "refersTo": "chip",
-      "description": "An accent-tinted label, never a toggle.",
+      "description": "An accent-tinted pill, never a toggle.",
       "html": "<span class=\"ds-chip\">+12 xp</span>",
-      "css": ".ds-chip{display:inline-flex;align-items:center;gap:.25rem;border-radius:3px;padding:.16rem .45rem;font-size:.68rem;line-height:1.3;border:1px solid rgba(106,169,233,.45);background:rgba(106,169,233,.16);color:#b3d2f5}"
+      "css": ".ds-chip{display:inline-flex;align-items:center;gap:.3rem;border-radius:999px;padding:.22rem .55rem;font-size:.82rem;line-height:1.3;border:1px solid oklch(0.5 0.06 245);background:oklch(0.245 0.03 245);color:oklch(0.84 0.06 245)}"
     },
     {
       "name": "Progress Bar",
@@ -578,7 +767,7 @@
       "refersTo": "bar",
       "description": "A recessed groove with an accent fill.",
       "html": "<div class=\"ds-bar\"><i style=\"width:42%\"></i></div>",
-      "css": ".ds-bar{position:relative;height:6px;border-radius:3px;overflow:hidden;border:1px solid #26323f;background:#1a242f}.ds-bar>i{display:block;height:100%;border-radius:2px;background:#6aa9e9;transition:width .4s ease}"
+      "css": ".ds-bar{position:relative;height:9px;border-radius:999px;overflow:hidden;border:1px solid oklch(0.34 0.01 258);background:oklch(0.196 0.007 258)}.ds-bar>i{display:block;height:100%;border-radius:999px;background:oklch(0.73 0.1 245);transition:width .4s ease}"
     },
     {
       "name": "Rank Badge",
@@ -586,67 +775,77 @@
       "refersTo": "level-badge",
       "description": "A brass numeral in a stamped cell.",
       "html": "<span class=\"ds-rank\">48</span>",
-      "css": ".ds-rank{display:inline-block;min-width:1.7rem;border-radius:3px;padding:.1rem .35rem;text-align:center;font-weight:700;font-variant-numeric:tabular-nums;color:#eac168;border:1px solid rgba(185,134,42,.6);background:rgba(0,0,0,.28)}"
+      "css": ".ds-rank{display:inline-block;min-width:1.9rem;border-radius:7px;padding:.12rem .4rem;text-align:center;font-weight:700;font-variant-numeric:tabular-nums;color:oklch(0.8 0.105 88);border:1px solid oklch(0.62 0.1 84);background:oklch(0.196 0.007 258)}"
     }
   ],
   "narrative": {
-    "northStar": "The Lexicon \u2014 a night dictionary: deep ink ground, a vermilion seal, brass figures, and a ruled character cell.",
-    "overview": "A game HUD a household uses every day, drawn as a night dictionary. The page is deep ink and the language lives in a ruled character cell \u2014 a hairline square with faint cross guides. Colour is a role: seal vermilion for the forward action and the earned rank, jade for what grows, brass gold for earned numbers, and azure/violet/brass/ember as semantic data. Flat by construction: depth is a lightness step plus a 1px hairline, never a shadow. The app is entirely dark; there is no light surface.",
+    "northStar": "Nightforge.",
+    "overview": "A game you actually want to open every day. The room is graphite — a neutral dark with the faintest cool cast, never warm brown — and the interface is flat: colour, borders and type do the work, and nothing glows. One amber carries the single action that moves the session forward. Everything the player earned is set in brass gold. The professions keep four muted category hues — jade grows, brass is the artisan, violet is support, ember is combat — and azure is the academy. Colour is a role, never a mood. The signature is the character cell: every studied glyph sits on a ruled, accent-tinted square, and the language is always set in a serif that matches its script.",
     "keyCharacteristics": [
-      "Flat deep-ink ground (#090d12 to #1a242f), no gradients, no shadows, no light surfaces",
-      "The character cell \u2014 a hairline square with faint cross guides \u2014 holds the studied character",
-      "Vermilion seal (#e2452b) for the forward action; brass gold (#eac168) for earned numbers",
-      "Ruled entries (1px rules) instead of a card grid; 3-5px radii",
-      "Mobile-first single column (max 42rem), six-tab bottom bar with drawn SVG icons"
+      "Neutral graphite ladder (ink-950 to ink-100), no warm cast, no gradients",
+      "One amber action; brass gold for earned figures; four muted category hues",
+      "Generous radii (10-14px), hairline borders, one soft shadow — flat, not skeuomorphic",
+      "Mobile-first single column with a bottom tab bar; desktop opens into a rail + wider spread",
+      "A self-hosted type system that covers Latin, CJK, kana, Hangul, Bopomofo and Cyrillic"
     ],
     "rules": [
       {
         "name": "The One Accent Rule",
         "section": "colors",
-        "body": "A surface carries exactly one accent. Set it with --accent (accentStyle(color)); tints and borders derive from it with color-mix. Two accents in one panel is a bug, not a flourish."
+        "body": "A surface carries exactly one accent, set through --accent; tints and borders derive from it with color-mix. Two accents in one panel is a bug, not a flourish."
+      },
+      {
+        "name": "The Muted Rule",
+        "section": "colors",
+        "body": "Accents are deliberately desaturated (chroma ~0.09-0.15) so the hues sit beside each other instead of shouting across the screen."
+      },
+      {
+        "name": "The Flat Rule",
+        "section": "colors",
+        "body": "No gradients, no glows, no glassmorphism. Separation comes from the surface ladder, a 1px border and one soft shadow."
       },
       {
         "name": "The Cell Holds The Word Rule",
         "section": "colors",
-        "body": "The character cell is reserved for language \u2014 the character or word under study. It is never a generic container."
-      },
-      {
-        "name": "The Flat Colour Rule",
-        "section": "colors",
-        "body": "No gradients, no glows, no shadows, no glassmorphism. The energy budget is hue, not light."
+        "body": "The character cell is reserved for language."
       },
       {
         "name": "The Serif-For-Earned Rule",
         "section": "typography",
-        "body": "If it is a number the player earned, it is set in the display serif with tabular figures. Sentences are sans."
+        "body": "If it is a number the player earned, it is set in the display face with tabular figures. Sentences are sans."
       },
       {
-        "name": "The Quiet Body Rule",
+        "name": "The Caps-Tracking Rule",
         "section": "typography",
-        "body": "Body copy is never serif and never uppercase; uppercase is reserved for the tracked label."
+        "body": "Uppercase is reserved for the tracked label and button copy, and always carries at least 0.06em of letter-spacing."
+      },
+      {
+        "name": "The CJK-Leading Rule",
+        "section": "typography",
+        "body": "CJK glyphs fill the em box, so language text takes a looser leading (>=1.3 display, >=1.5 body) and zero tracking."
       },
       {
         "name": "The Flat-By-Default Rule",
         "section": "elevation",
-        "body": "Depth is a lightness step plus a hairline. If a surface seems to float, lower its fill instead of adding a shadow."
+        "body": "If a surface seems to float, it is wrong; lower its fill instead of adding a shadow."
       }
     ],
     "dos": [
       "Assign colour through --accent per surface, so tints and borders derive from one hue.",
-      "Set earned numbers in the display serif with tabular figures, brass gold for XP, streak, rank and currency.",
-      "Keep the character cell for language only, and the seal vermilion for the one forward action.",
+      "Set earned numbers in the display face with tabular figures, brass gold when they are XP, streak, rank or currency.",
+      "Keep the character cell for language only, and Seal Amber for the one forward action.",
       "Convey depth with one lightness step plus a 1px hairline.",
       "Keep colour semantic: jade grows, brass earns, azure is the academy, violet is support, ember is combat.",
-      "Draw icons \u2014 one stroke and weight \u2014 and reserve emoji for server-provided content.",
-      "Cap decorative transitions at 0.25s; bars may animate to 0.4s."
+      "Set language text in a serif that matches its script, with CJK leading and zero tracking.",
+      "Draw icons as one stroke and weight."
     ],
     "donts": [
       "Don't add gradients, glows, coloured drop shadows, or glassmorphism.",
-      "Don't introduce a light surface; the app is one dark room.",
-      "Don't put two accents in one panel or use gold as a fill behind body text.",
-      "Don't set body copy in the serif, or uppercase anything except the tracked label.",
-      "Don't use the character cell as a generic container, or the seal vermilion for anything but the forward action and earned ranks.",
-      "Don't reintroduce a card grid where a ruled entry belongs."
+      "Don't put two accents in one panel, or use gold as a fill behind body text.",
+      "Don't set body copy in the display face, or uppercase anything without 0.06em of tracking.",
+      "Don't apply negative tracking to CJK, or Latin leading to CJK display text.",
+      "Don't use the character cell as a generic container.",
+      "Don't let a disabled control keep its accent colour."
     ]
   }
 }

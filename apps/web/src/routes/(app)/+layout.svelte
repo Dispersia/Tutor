@@ -106,7 +106,7 @@
             <a
               href={href(t.href)}
               aria-current={on ? 'page' : undefined}
-              class="flex items-center gap-3 rounded-[4px] px-3 py-2 text-sm font-medium transition-colors {on
+              class="flex items-center gap-3 rounded-[8px] px-3 py-2 text-sm font-medium transition-colors {on
                 ? 'bg-seal-400/12 text-seal-300'
                 : 'text-ink-300 hover:bg-ink-900 hover:text-ink-100'}"
             >
@@ -124,7 +124,7 @@
             <a
               href={href(m.href)}
               aria-current={on ? 'page' : undefined}
-              class="flex items-center gap-3 rounded-[4px] px-3 py-2 text-sm font-medium transition-colors {on
+              class="flex items-center gap-3 rounded-[8px] px-3 py-2 text-sm font-medium transition-colors {on
                 ? 'bg-seal-400/12 text-seal-300'
                 : 'text-ink-300 hover:bg-ink-900 hover:text-ink-100'}"
             >
@@ -143,7 +143,7 @@
           <select
             value={activeDeck.id ?? ''}
             onchange={onDeckChange}
-            class="mt-1 w-full rounded-[4px] border border-ink-700 bg-ink-900 px-2 py-1.5 text-xs text-ink-200 outline-none focus:border-seal-400"
+            class="mt-1 w-full rounded-[8px] border border-ink-700 bg-ink-900 px-2 py-1.5 text-xs text-ink-200 outline-none focus:border-seal-400"
           >
             <option value="">All decks</option>
             {#each activeDeck.decks as d (d.id)}
@@ -154,7 +154,7 @@
       {/if}
       <div class="flex items-center gap-2.5 px-1.5 py-1">
         <span
-          class="display grid h-8 w-8 shrink-0 place-items-center rounded-[3px] border text-sm font-bold transition-colors {inAccount
+          class="display grid h-8 w-8 shrink-0 place-items-center rounded-[7px] border text-sm font-bold transition-colors {inAccount
             ? 'border-seal-400 text-seal-300'
             : 'border-ink-600 text-ink-200'}"
         >
@@ -162,13 +162,13 @@
         </span>
         <div class="min-w-0">
           <div class="display truncate text-sm text-ink-100">{session.user?.handle}</div>
-          <div class="truncate text-[11px] text-ink-400">@{session.user?.username}</div>
+          <div class="truncate text-[13px] text-ink-400">@{session.user?.username}</div>
         </div>
       </div>
       <button
         type="button"
         onclick={signOut}
-        class="mt-2 flex w-full items-center gap-3 rounded-[4px] px-3 py-2 text-left text-sm font-medium text-ember-300 transition-colors hover:bg-ember-950/60"
+        class="mt-2 flex w-full items-center gap-3 rounded-[8px] px-3 py-2 text-left text-sm font-medium text-ember-300 transition-colors hover:bg-ember-950/60"
       >
         <Icon name="logout" size={17} cls="text-ember-400" />
         Sign out
@@ -190,7 +190,7 @@
           aria-haspopup="menu"
           aria-expanded={open}
           aria-label="Account menu"
-          class="display grid h-8 w-8 shrink-0 place-items-center rounded-[3px] border text-sm font-bold transition-colors {open ||
+          class="display grid h-8 w-8 shrink-0 place-items-center rounded-[7px] border text-sm font-bold transition-colors {open ||
           inAccount
             ? 'border-seal-400 text-seal-300'
             : 'border-ink-600 text-ink-200 hover:border-ink-500'}"
@@ -209,7 +209,7 @@
           <div class="rise panel absolute right-0 z-30 mt-2 w-56" role="menu">
             <div class="border-b border-ink-700 px-3 py-2.5">
               <div class="display truncate text-sm text-ink-100">{session.user?.handle}</div>
-              <div class="truncate text-[11px] text-ink-400">@{session.user?.username}</div>
+              <div class="truncate text-[13px] text-ink-400">@{session.user?.username}</div>
             </div>
             {#if activeDeck.decks.length}
               <div class="border-b border-ink-700 px-3 py-2.5">
@@ -218,7 +218,7 @@
                   id="profile-deck"
                   value={activeDeck.id ?? ''}
                   onchange={onDeckChange}
-                  class="mt-1 w-full rounded-[4px] border border-ink-700 bg-ink-900 px-2 py-1.5 text-xs text-ink-200 outline-none focus:border-seal-400"
+                  class="mt-1 w-full rounded-[8px] border border-ink-700 bg-ink-900 px-2 py-1.5 text-xs text-ink-200 outline-none focus:border-seal-400"
                 >
                   <option value="">All decks</option>
                   {#each activeDeck.decks as d (d.id)}
@@ -271,12 +271,12 @@
           <a
             href={href(t.href)}
             aria-current={on ? 'page' : undefined}
-            class="flex justify-center py-1.5 text-[11px] font-medium transition-colors {on
+            class="flex justify-center py-1.5 text-[13px] font-medium transition-colors {on
               ? 'text-seal-300'
               : 'text-ink-400 hover:text-ink-200'}"
           >
             <span
-              class="flex flex-col items-center gap-1 rounded-[4px] px-3 py-1 {on
+              class="flex flex-col items-center gap-1 rounded-[8px] px-3 py-1 {on
                 ? 'bg-seal-400/12'
                 : ''}"
             >

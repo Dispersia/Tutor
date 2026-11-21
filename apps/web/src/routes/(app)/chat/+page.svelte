@@ -215,7 +215,7 @@
       >
         {m.text}
         {#if m.role === 'assistant' && m.model}
-          <div class="mt-1 text-[10px] text-ink-400">{m.model}</div>
+          <div class="mt-1 text-[12px] text-ink-400">{m.model}</div>
         {/if}
       </div>
     </div>
@@ -261,7 +261,7 @@
       <button
         onclick={toggleRecord}
         title="Hold a conversation"
-        class="rounded-[4px] px-3 py-2 {recording
+        class="rounded-[8px] px-3 py-2 {recording
           ? 'recording bg-red-600 text-white'
           : transcribing
             ? 'bg-ink-700'

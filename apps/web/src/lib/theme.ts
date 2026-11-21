@@ -1,47 +1,47 @@
-/** Shared palette helpers for "The Lexicon" theme (apps/web/src/app.css). */
+/** Shared palette helpers for the Nightforge theme (apps/web/src/app.css). */
 
 export type SkillCategory = 'gathering' | 'artisan' | 'support' | 'combat'
 
 export interface CategoryStyle {
   label: string
-  /** hex accent (matches the CSS custom properties) */
+  /** accent colour (matches the CSS custom properties) */
   accent: string
   /** soft tint */
   tint: string
 }
 
 export const CATEGORY: Record<SkillCategory, CategoryStyle> = {
-  gathering: { label: 'Gathering', accent: '#45c08a', tint: 'rgba(69,192,138,0.14)' },
-  artisan: { label: 'Artisan', accent: '#e3a64a', tint: 'rgba(227,166,74,0.14)' },
-  support: { label: 'Support', accent: '#ac8be6', tint: 'rgba(172,139,230,0.14)' },
-  combat: { label: 'Combat', accent: '#e0655c', tint: 'rgba(224,101,92,0.14)' },
+  gathering: { label: 'Gathering', accent: 'oklch(0.73 0.1 158)', tint: 'rgba(122,196,158,0.14)' },
+  artisan: { label: 'Artisan', accent: 'oklch(0.76 0.1 68)', tint: 'rgba(200,168,104,0.14)' },
+  support: { label: 'Support', accent: 'oklch(0.71 0.1 300)', tint: 'rgba(176,148,214,0.14)' },
+  combat: { label: 'Combat', accent: 'oklch(0.66 0.14 25)', tint: 'rgba(196,116,110,0.14)' },
 }
 
 /** Named roles. Colour always means the same thing. */
 export const ACCENT = {
   /** the one action that moves forward */
-  seal: '#e2452b',
+  seal: 'oklch(0.7 0.145 52)',
   /** numbers the player earned */
-  gold: '#eac168',
-  xp: '#eac168',
+  gold: 'oklch(0.8 0.105 88)',
+  xp: 'oklch(0.8 0.105 88)',
   /** what grows: goal, health, success */
-  jade: '#45c08a',
-  green: '#45c08a',
-  health: '#45c08a',
-  player: '#45c08a',
+  jade: 'oklch(0.73 0.1 158)',
+  green: 'oklch(0.73 0.1 158)',
+  health: 'oklch(0.73 0.1 158)',
+  player: 'oklch(0.73 0.1 158)',
   /** streak, artisan, coins */
-  brass: '#e3a64a',
-  streak: '#e3a64a',
+  brass: 'oklch(0.76 0.1 68)',
+  streak: 'oklch(0.76 0.1 68)',
   /** the academy: arcane, levels, chat */
-  azure: '#6aa9e9',
-  arcane: '#6aa9e9',
-  level: '#6aa9e9',
+  azure: 'oklch(0.73 0.1 245)',
+  arcane: 'oklch(0.73 0.1 245)',
+  level: 'oklch(0.73 0.1 245)',
   /** talents and support */
-  violet: '#ac8be6',
+  violet: 'oklch(0.71 0.1 300)',
   /** damage and danger */
-  ember: '#e0655c',
+  ember: 'oklch(0.66 0.14 25)',
   /** errors that need attention */
-  warn: '#e3a64a',
+  warn: 'oklch(0.76 0.1 68)',
 } as const
 
 /** History kinds → accent. */
@@ -59,12 +59,12 @@ export const categoryAccent = (cat: string): string =>
 
 /** Item-tier colours (raw/refined/equipment/consumable/coin/other). */
 export const TIER: Record<string, string> = {
-  raw: '#8694a1',
-  refined: '#6aa9e9',
-  equipment: '#eac168',
-  consumable: '#45c08a',
-  coin: '#e3a64a',
-  other: '#8694a1',
+  raw: 'oklch(0.7 0.01 258)',
+  refined: 'oklch(0.73 0.1 245)',
+  equipment: 'oklch(0.8 0.105 88)',
+  consumable: 'oklch(0.73 0.1 158)',
+  coin: 'oklch(0.76 0.1 68)',
+  other: 'oklch(0.7 0.01 258)',
 }
 
 export const tierAccent = (tier?: string | null): string => TIER[tier ?? 'other'] ?? TIER.other!

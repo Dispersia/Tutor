@@ -429,7 +429,7 @@
                 <span class="display text-sm text-ink-200">{m.name}</span>
                 <span class="text-xs text-ink-400">Lv {m.level} · {m.hp} HP</span>
               </div>
-              <div class="text-[11px] text-ink-400">
+              <div class="text-[13px] text-ink-400">
                 {m.description}
               </div>
               <div class="mt-1 flex flex-wrap gap-1">
@@ -452,7 +452,7 @@
             </button>
           </div>
           {#if !m.unlocked}
-            <p class="mt-1 text-[11px] text-brass-300">
+            <p class="mt-1 text-[13px] text-brass-300">
               locked — {m.missing
                 .map((r) => `${skillMap.get(r.skill)?.name ?? r.skill} ${r.level}`)
                 .join(', ')}

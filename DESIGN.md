@@ -1,83 +1,74 @@
 ---
 name: tutor
-description: A local-first, game-flavoured language tutor — a night dictionary: deep ink ground, a vermilion seal for the action, brass figures for what you earned.
+description: A local-first, game-flavoured language tutor — Nightforge: a graphite ground, one warm amber action, muted category hues, and a self-hosted type system that covers every target script.
 colors:
-  ink-950: '#090d12'
-  ink-900: '#0e141b'
-  ink-850: '#131b24'
-  ink-800: '#1a242f'
-  ink-700: '#26323f'
-  ink-600: '#35434f'
-  ink-500: '#586673'
-  ink-400: '#8694a1'
-  ink-300: '#b8c3cd'
-  ink-200: '#d7dee5'
-  ink-100: '#e8edf2'
-  gold-200: '#f6e4b0'
-  gold-300: '#eac168'
-  gold-400: '#d9a93c'
-  gold-500: '#b9862a'
-  gold-600: '#8f6620'
-  seal-300: '#f0735a'
-  seal-400: '#e2452b'
-  seal-500: '#c63620'
-  seal-600: '#a62c19'
-  jade-300: '#7bd3a9'
-  jade-400: '#45c08a'
-  jade-500: '#2fa274'
-  brass-300: '#efc078'
-  brass-400: '#e3a64a'
-  brass-500: '#c4862f'
-  violet-300: '#c6aef0'
-  violet-400: '#ac8be6'
-  ember-300: '#ee8e86'
-  ember-400: '#e0655c'
-  ember-500: '#c64a41'
-  azure-300: '#9cc6f2'
-  azure-400: '#6aa9e9'
-  azure-500: '#4a8ad0'
-  on-seal: '#ffffff'
-  on-gold: '#2a1d03'
-  scrim: 'rgba(0, 0, 0, 0.28)'
+  ink-950: 'oklch(0.16 0.006 258)'
+  ink-900: 'oklch(0.196 0.007 258)'
+  ink-850: 'oklch(0.226 0.008 258)'
+  ink-800: 'oklch(0.272 0.009 258)'
+  ink-700: 'oklch(0.34 0.01 258)'
+  ink-600: 'oklch(0.45 0.012 258)'
+  ink-500: 'oklch(0.58 0.012 258)'
+  ink-400: 'oklch(0.7 0.01 258)'
+  ink-300: 'oklch(0.81 0.008 258)'
+  ink-200: 'oklch(0.9 0.005 258)'
+  ink-100: 'oklch(0.955 0.004 258)'
+  gold-200: 'oklch(0.9 0.06 88)'
+  gold-300: 'oklch(0.8 0.105 88)'
+  gold-400: 'oklch(0.72 0.11 86)'
+  gold-500: 'oklch(0.62 0.1 84)'
+  gold-600: 'oklch(0.52 0.08 82)'
+  seal-300: 'oklch(0.79 0.125 58)'
+  seal-400: 'oklch(0.7 0.145 52)'
+  seal-500: 'oklch(0.6 0.14 50)'
+  seal-600: 'oklch(0.5 0.13 48)'
+  jade-300: 'oklch(0.82 0.09 158)'
+  jade-400: 'oklch(0.73 0.1 158)'
+  jade-500: 'oklch(0.63 0.1 156)'
+  jade-950: 'oklch(0.24 0.04 158)'
+  brass-300: 'oklch(0.84 0.09 70)'
+  brass-400: 'oklch(0.76 0.1 68)'
+  brass-500: 'oklch(0.66 0.1 66)'
+  brass-950: 'oklch(0.25 0.04 68)'
+  violet-300: 'oklch(0.8 0.09 300)'
+  violet-400: 'oklch(0.71 0.1 300)'
+  violet-500: 'oklch(0.61 0.1 300)'
+  ember-300: 'oklch(0.8 0.11 25)'
+  ember-400: 'oklch(0.66 0.14 25)'
+  ember-500: 'oklch(0.58 0.14 24)'
+  ember-600: 'oklch(0.5 0.13 23)'
+  ember-800: 'oklch(0.32 0.08 22)'
+  ember-950: 'oklch(0.2 0.04 22)'
+  azure-300: 'oklch(0.82 0.09 245)'
+  azure-400: 'oklch(0.73 0.1 245)'
+  azure-500: 'oklch(0.63 0.1 245)'
 typography:
   display:
-    fontFamily: "'Source Serif 4', 'Songti SC', 'Noto Serif CJK SC', 'Source Han Serif SC', 'Hiragino Mincho ProN', 'Noto Serif SC', serif"
-    letterSpacing: '0.01em'
+    fontFamily: "'Space Grotesk', 'Songti SC', 'Songti TC', STSong, 'Noto Serif CJK SC', 'Noto Serif SC', 'Noto Serif CJK TC', 'Noto Serif TC', 'Yu Mincho', 'Hiragino Mincho ProN', 'Noto Serif CJK JP', 'Noto Serif JP', 'Nanum Myeongjo', 'Noto Serif CJK KR', 'Noto Serif KR', serif"
+    letterSpacing: '-0.01em'
   body:
-    fontFamily: 'system-ui, -apple-system, Segoe UI, sans-serif'
-    fontSize: '0.875rem'
+    fontFamily: "'Rubik', system-ui, -apple-system, 'Segoe UI', Roboto, 'PingFang SC', 'PingFang TC', 'Hiragino Sans', 'Yu Gothic', 'Noto Sans CJK SC', 'Noto Sans SC', 'Noto Sans CJK TC', 'Noto Sans TC', 'Noto Sans CJK JP', 'Noto Sans JP', 'Noto Sans CJK KR', 'Noto Sans KR', sans-serif"
+    fontSize: '1rem'
   headline:
-    fontSize: '1.5rem'
-    fontWeight: 600
+    fontSize: '1.85rem'
+    fontWeight: 700
   title:
     fontSize: '1rem'
     fontWeight: 600
   small:
-    fontSize: '0.6875rem'
-    fontWeight: 400
-  caption:
-    fontSize: '0.625rem'
-    fontWeight: 400
-  micro:
-    fontSize: '8px'
-    fontWeight: 600
-  note:
-    fontSize: '13px'
-    fontWeight: 400
-  reading:
-    fontSize: '15px'
+    fontSize: '0.92rem'
     fontWeight: 400
   label:
-    fontSize: '0.66rem'
+    fontSize: '0.82rem'
     letterSpacing: '0.16em'
     fontWeight: 600
 rounded:
-  panel: '5px'
-  button: '4px'
-  chip: '3px'
-  field: '6px'
-  cell: '3px'
-  bar: '2px'
+  panel: '14px'
+  button: '10px'
+  field: '9px'
+  tile: '12px'
+  chip: '999px'
+  bar: '999px'
 spacing:
   xs: '0.25rem'
   sm: '0.5rem'
@@ -86,307 +77,237 @@ spacing:
 components:
   button-primary:
     backgroundColor: '{colors.seal-400}'
-    textColor: '#ffffff'
+    textColor: '{colors.ink-950}'
     rounded: '{rounded.button}'
-    padding: '0.55rem 0.9rem'
-  button-gold:
-    backgroundColor: '{colors.gold-400}'
-    textColor: '#2a1d03'
-    rounded: '{rounded.button}'
-    padding: '0.55rem 0.9rem'
+    padding: '0.6rem 1rem'
   button-ghost:
-    backgroundColor: '{colors.ink-800}'
-    textColor: '{colors.ink-300}'
+    backgroundColor: 'transparent'
+    textColor: '{colors.ink-200}'
     rounded: '{rounded.button}'
-    padding: '0.55rem 0.9rem'
-  button-accent:
-    backgroundColor: '{colors.azure-400}'
-    textColor: '#08111b'
+    padding: '0.6rem 1rem'
+  button-gold:
+    backgroundColor: '{colors.gold-300}'
+    textColor: '{colors.ink-950}'
     rounded: '{rounded.button}'
-    padding: '0.55rem 0.9rem'
+    padding: '0.6rem 1rem'
   panel:
     backgroundColor: '{colors.ink-850}'
     textColor: '{colors.ink-200}'
     rounded: '{rounded.panel}'
-    padding: '0'
+    padding: '1rem'
   stat-card:
     backgroundColor: '{colors.ink-850}'
-    rounded: '{rounded.panel}'
+    rounded: '{rounded.tile}'
     padding: '0.75rem'
   level-badge:
-    backgroundColor: 'rgba(0, 0, 0, 0.28)'
+    backgroundColor: '{colors.ink-900}'
     textColor: '{colors.gold-300}'
-    rounded: '{rounded.chip}'
-    padding: '0.1rem 0.35rem'
-  seal:
-    backgroundColor: 'color-mix(in oklab, #e2452b 12%, transparent)'
-    textColor: '{colors.seal-300}'
-    rounded: '{rounded.button}'
-    padding: '0.25rem'
+    rounded: '7px'
+    padding: '0.12rem 0.4rem'
 ---
 
-# Design System: tutor
+# Design System: tutor — Nightforge
 
 ## Overview
 
-**Creative North Star: "The Lexicon"**
+**Creative North Star: "Nightforge."**
 
-A night dictionary a household actually uses every day. The page is deep ink —
-near-black with a faint blue cast — and the language lives in a **ruled character
-cell**: a square drawn with a hairline and faint cross guides, accent-tinted,
-holding the character under study. Colour is a role, never a mood: a **vermilion
-seal** marks the single action that moves the session forward and stamps the level
-you earned; **jade** is what grows; a **brass gold** figures every number the
-player earned; **azure, violet, brass and ember** are data — arcane, support,
-artisan, combat — and always mean the same thing. Nothing glows, nothing
-gradients, nothing floats, and nothing is light: the app is one dark room.
+A game you actually want to open every day. The room is **graphite** — a neutral
+dark with the faintest cool cast, never warm brown — and the interface is
+**flat**: colour, borders and type do the work, and nothing glows.
 
-This is a replacement of the earlier Melvor-flavoured system, not a refinement of
-it: the old slate ladder, ledger gold and moonlit blue are gone, and so is the
-light paper plate the first draft of this world used. What survives is the
-discipline — one accent per surface, tabular figures, ruled entries, a
-quarter-second motion budget — and the household's freedom to change the name,
-palette and theme again later.
+One **amber** carries the single action that moves the session forward. Everything
+the player earned is set in **brass gold**. The professions keep four muted
+category hues — jade grows, brass is the artisan, violet is support, ember is
+combat — and azure is the academy. Colour is a role, never a mood.
 
-**Key Characteristics:**
+The signature is the **character cell**: every studied glyph sits on a ruled,
+accent-tinted square, and the language is always set in a serif that matches its
+script.
 
-- Flat deep-ink ground (`#090d12` → `#1a242f`), no gradients, no shadows, no light surfaces
-- The **character cell** — a hairline square with faint cross guides — holds the studied character
-- One **vermilion seal** for the forward action; brass gold for earned numbers
-- Ruled entries (1px rules) instead of a card grid; 3–5px radii
-- Mobile-first single column (max 42rem), three-tab bottom bar, and a title bar with the account behind a profile stamp
-- Desktop moves both bars into a persistent **left rail** and opens pages into a wider, sometimes two-column **spread**
+**Key characteristics:**
+
+- Neutral graphite ladder (`ink-950` → `ink-100`), no warm cast, no gradients
+- One amber action; brass gold for earned figures; four muted category hues
+- Generous radii (10–14px), hairline borders, one soft shadow — flat, not skeuomorphic
+- Mobile-first single column with a bottom tab bar; desktop opens into a rail + wider spread
+- A self-hosted type system that covers Latin, CJK, kana, Hangul, Bopomofo and Cyrillic
 
 ## Colors
 
-A dark ink ladder, a gold ledger, a vermilion seal, and five saturated semantic
-accents — colour is data, not decoration.
-
 ### Primary
 
-- **Seal Vermilion** (`#e2452b`): the action colour. Primary buttons, the active
-  tab, the level stamp. It is the one thing that moves the session forward.
+- **Seal Amber** (`oklch(0.7 0.145 52)`): the action colour. Primary buttons, the
+  active tab, the level stamp. The one thing that moves the session forward.
 
 ### Secondary
 
-- **Brass Gold** (`#eac168`): the reward colour. Every number the player earned —
-  XP, streak, ranks, currency, the level figure. Never a background for body copy.
+- **Brass Gold** (`oklch(0.8 0.105 88)`): the reward colour. Every number the
+  player earned — XP, streak, ranks, currency, the level figure.
 
 ### Tertiary
 
-- **Jade** (`#45c08a`): what grows — daily goal, player health, gathering, success.
-- **Brass Amber** (`#e3a64a`): artisan, streak, coins, warnings.
-- **Azure** (`#6aa9e9`): the academy — levels, chat, the next-word entry.
-- **Violet** (`#ac8be6`): support and talents.
-- **Ember** (`#e0655c`): combat, damage, danger.
+- **Jade** (`oklch(0.73 0.1 158)`): what grows — daily goal, player health, gathering, success.
+- **Brass Amber** (`oklch(0.76 0.1 68)`): artisan, streak, coins, warnings.
+- **Azure** (`oklch(0.73 0.1 245)`): the academy — levels, chat, the next word.
+- **Violet** (`oklch(0.71 0.1 300)`): support and talents.
+- **Ember** (`oklch(0.66 0.14 25)`): combat, damage, danger.
 
 ### Neutral
 
-- **Ink** (`#090d12` → `#e8edf2`, `ink-950`…`ink-100`): the ground and the surface
-  ladder above it. Depth is one step on this ladder, never a shadow. The app is
-  entirely dark; there is no light surface.
+- **Ink** (`ink-950` → `ink-100`): the graphite ground and the surface ladder
+  above it. Depth is one step on this ladder plus a hairline border.
 
 ### Named Rules
 
-**The One Accent Rule.** A surface carries exactly one accent. Set it with
+**The One Accent Rule.** A surface carries exactly one accent, set through
 `--accent` (`accentStyle(color)`); tints and borders derive from it with
 `color-mix`. Two accents in one panel is a bug, not a flourish.
 
-**The Cell Holds The Word Rule.** The character cell is reserved for language —
-the character or word under study. It is never a generic container.
+**The Muted Rule.** Accents are deliberately desaturated (chroma ≈ 0.09–0.15) so
+the hues sit beside each other instead of shouting across the screen.
 
-**The Flat Colour Rule.** No gradients, no glows, no shadows, no glassmorphism.
-The energy budget is hue, not light.
+**The Flat Rule.** No gradients, no glows, no glassmorphism. Separation comes
+from the surface ladder, a 1px border and one soft shadow.
+
+**The Cell Holds The Word Rule.** The character cell is reserved for language.
 
 ## Typography
 
-**Display Font:** Source Serif 4, self-hosted (`src/assets/source-serif-4-latin.woff2`),
-with an explicit CJK serif stack behind it (`Songti SC`, `Noto Serif CJK SC`,
-`Source Han Serif SC`, `Hiragino Mincho ProN`).
-**Body Font:** system-ui (with -apple-system, Segoe UI, sans-serif).
+**Display:** Space Grotesk, self-hosted, with a native CJK serif behind it
+(`Songti SC`, `Noto Serif CJK SC`, … , `Noto Serif CJK KR`).
+**Body:** Rubik, self-hosted, with a native CJK sans behind it.
 
-**Character:** A book serif carries the things a player is proud of — names,
-headings, characters, and every number that matters — and the operating system's
-own sans carries everything read quickly. The serif supplies the "dictionary"; the
-sans keeps the app fast. Self-hosting the Latin keeps the lettering identical on
-every device.
+**Character.** A clean grotesque carries the things a player is proud of — names,
+headings, level numerals, button labels — and a clean sans carries everything
+read quickly. Language content is the exception: it is always set in a serif that
+matches its script, so a Japanese kanji never takes a Chinese glyph shape and
+Zhuyin finds a Traditional-Chinese face. Latin is never a system default and CJK
+is never a guess.
 
 ### Hierarchy
 
-- **Display** (400–700, inherited size, 1.05 line-height): screen titles, the
-  account handle, level numerals, every large stat. Always tabular numerals.
-- **Headline** (600, 1.25–1.5rem): section titles.
-- **Title** (500–600, 0.875–1rem): row names, exercise prompts.
-- **Body** (400, 0.875–1rem, 1.4): instructions, chat text, prompts.
-- **Label** (600, 0.66rem, 0.16em tracking, uppercase): row labels, field labels.
-  Uppercase is reserved for this label.
+- **Display** (600–700, 1.85rem+, `-0.01em`): screen titles, the account handle,
+  level numerals, every large stat. Always tabular numerals.
+- **Headline** (600, 1.1–1.5rem): section titles.
+- **Title** (500–600, 1–1.05rem): row names, exercise prompts.
+- **Body** (400, 0.92–1rem, 1.5): instructions, chat text, prompts.
+- **Label** (600, 0.82rem, `0.16em` tracking, uppercase): row labels, field labels.
 
 ### Named Rules
 
 **The Serif-For-Earned Rule.** If it is a number the player earned, it is set in
-the display serif with `font-variant-numeric: tabular-nums`. Sentences are sans.
+the display face with `font-variant-numeric: tabular-nums`. Sentences are sans.
 
-**The Quiet Body Rule.** Body copy is never serif and never uppercase.
+**The Caps-Tracking Rule.** Uppercase is reserved for the tracked label and button
+copy, and always carries at least `0.06em` of letter-spacing.
+
+**The CJK-Leading Rule.** CJK glyphs fill the em box, so language text takes a
+looser leading (≥1.3 for display, ≥1.5 for body) and **zero** tracking.
 
 ## Layout
 
 One column, mobile first. Content sits in a centered `max-width: 42rem` column
 with 1rem side padding and safe-area insets. Pages open with a header carrying a
-1px rule beneath it; the rule always keeps 1rem of air below it, so a panel or
-heading never sits on the line. Content below is **ruled entries** — rows
-separated by 1px `ink-700` rules — rather than a grid of cards. Density is high
-but never cramped: rows carry 0.75–1rem vertical padding.
+1px rule beneath it. Density is high but never cramped.
 
-From `min-width: 1024px` the column widens (`max-width: 72rem`) and a page may
-open into a **spread** — two ruled columns set side by side, like the two pages of
-an open dictionary — while a focused task (the drill, a conversation) stays in a
-centered narrower measure. Pages that spread: Home (activity map beside the earned
-figures), Learn (the deck composer beside the path), Skills (categories flowing
-into two balanced columns), Skills detail (the ledger beside the talent ladder and
-actions), Settings (panels in two columns). Lists with ragged heights use CSS
-columns so the two sides stay balanced; card lists use a plain two-column grid.
+From `min-width: 1024px` the column widens and a page may open into a spread —
+two columns set side by side (Home, Skills, Learn, Skills detail) — while a
+focused task (the drill, a conversation) stays in a narrower centered measure.
 
-Navigation is two fixed surfaces on a phone. A **title bar** at the top carries the
-app mark and, on the right, a personal **profile stamp** — a small square holding
-the member's initial — whose menu holds Chat, Bank, History, Settings and Sign out.
-Three equal tabs sit in the thumb zone at the bottom: **Home, Skills, Learn**.
-Both are safe-area padded and blurred `ink-950/90` over the content; the active
-tab, and the stamp on an account screen, read in seal vermilion on a
-`seal-400/12` pill, with drawn single-stroke SVG icons.
-
-On desktop both bars disappear and every destination moves into a persistent
-**left rail** — the dictionary's spine: the wordmark, then Home / Skills / Learn,
-a hairline rule, then Chat / Bank / History / Settings, with the member's stamp and
-Sign out pinned at the foot. The rail is flat `ink-950` behind a 1px `ink-700`
-rule and takes the same `seal-400/12` active pill as the phone tab. The page
-scrolls beside it; primary actions stay with the content rather than the rail.
+Navigation is two fixed surfaces on a phone: a **title bar** carrying the app mark
+and the account stamp, and three equal tabs in the thumb zone (**Home, Skills,
+Learn**), both safe-area padded and blurred over the content. On desktop both
+bars give way to a persistent **left rail** — the wordmark, the three
+destinations, a hairline, then Chat / Bank / History / Settings, with the member
+stamp and Sign out at the foot.
 
 ## Elevation & Depth
 
-Flat by construction. There are no drop shadows anywhere in the system. Depth is
-tonal: a panel is one step lighter than the page (`ink-850` on `ink-950`), a
-header is one step lighter than its panel, and a 1px `ink-700` border separates
-them. Bars are a recessed groove drawn with a 1px border, not a shadow.
+Flat by construction. There are no gradients and no glows. Depth is tonal: a
+panel is one step lighter than the page (`ink-850` on `ink-950`), a header is one
+step lighter than its panel (`ink-800`), and a 1px `ink-700` border separates
+them. A single soft shadow (`0 1px 2px`) lifts a panel off the page.
 
-The only translucent surfaces are the bottom navigation (`backdrop-blur`) and
-badge backgrounds (`rgba(0,0,0,0.28)`).
-
-**The Flat-By-Default Rule.** Depth is a lightness step plus a hairline. If a
-surface seems to float, it is wrong; lower its fill instead of adding a shadow.
+**The Flat-By-Default Rule.** If a surface seems to float, it is wrong; lower its
+fill instead of adding a shadow.
 
 ## Shapes
 
-Soft rectangles with a tight radius scale: 5px for panels, 4px for buttons and
-nav pills, 3px for chips, cells and rank badges, 6px for input fields. Every panel
-is bordered with 1px `ink-700`.
+Soft rectangles with a generous radius scale: **14px** for panels, **12px** for
+tiles and the character cell, **10px** for buttons, **9px** for input fields, and
+a full pill for chips and progress bars.
 
 The signature geometry is the **character cell**: a square ruled with faint cross
-guides, holding one character. It appears wherever the app shows
-the language — the next-word entry, the practice stage, the sentence tiles — and
-is the system's game tell. A secondary tell is the **seal**: a small square stamp
-with a vermilion border holding the earned level.
+guides, accent-tinted, holding one character. It appears wherever the app shows
+the language and is the system's game tell.
 
 ## Components
 
 ### Buttons
 
-- **Shape:** 4px radius, inline-flex, 0.4rem icon gap, 0.55rem × 0.9rem padding,
-  0.875rem text at weight 600.
-- **Primary:** Seal Vermilion fill, white text, 1px darker seal border. The one
-  action that moves the session forward.
-- **Gold:** Brass Gold fill, `#2a1d03` text — spending, claiming, rewarding.
-- **Ghost:** `ink-800` fill, `ink-600` border, `ink-300` text — secondary and
-  destructive-adjacent actions.
-- **Accent:** the current `--accent` fill with near-black text — context actions.
-- **Hover / Focus:** `filter: brightness(1.08)` on hover; active state translates
-  down 1px; disabled drops to 0.4 opacity. Transitions are 0.12s.
+- **Shape:** 10px radius, inline-flex, `0.45rem` icon gap, `0.6rem × 1rem`
+  padding, `0.92rem` text at weight 600, uppercase with `0.06em` tracking, and a
+  44px minimum height for touch.
+- **Primary:** Seal Amber fill, near-black text — the one action that moves forward.
+- **Gold:** Brass Gold fill — spending, claiming, rewarding.
+- **Ghost:** transparent fill, `ink-600` border, `ink-200` text.
+- **Hover:** `brightness(1.08)`; active translates down 1px.
+- **Disabled:** drops to a neutral surface with `ink-400` text — never a faded
+  smear of its own colour.
 
 ### Chips
 
-- **Style:** accent-tinted fill (`color-mix` 16% accent into `ink-900`), 1px accent
-  border at 45%, accent-tinted text at 68% toward white, 3px radius,
-  0.16rem × 0.45rem padding, 0.68rem text.
+- Pill, accent-tinted fill (`color-mix` 12% accent into `ink-850`), 1px accent
+  border at 40%, accent-tinted text at 70% toward `ink-100`, `0.82rem` text.
 
 ### Cards / Containers
 
-- **Corner Style:** 5px.
-- **Background:** `ink-850` for panels; accent-tinted `ink-850` (10% accent) for
+- **Radius:** 14px panels, 12px tiles.
+- **Background:** `ink-850` for panels; accent-tinted `ink-850` (9% accent) for
   panels that belong to a section; `ink-800` for panel headers.
-- **Shadow Strategy:** none; see Elevation & Depth.
-- **Border:** 1px `ink-700`; accent panels mix the accent 42% into the border.
-- **Internal Padding:** 0.75rem for rows and stat cards, 1rem for panels.
+- **Border:** 1px `ink-700`; accent panels mix the accent 40% into the border.
 
 ### Inputs / Fields
 
-- **Style:** `ink-900` fill, 1px `ink-600` border, 6px radius, 0.75–1rem padding;
-  drill inputs use 1.125rem text for thumb-readable answers.
-- **Focus:** border shifts to `seal-400`. No glow, no ring.
-- **Error / Disabled:** disabled buttons drop to 0.4 opacity; errors use `ember-950`
-  ground with `ember-300` text. Treat the absence of an inline error style as a gap.
-
-### Navigation
-
-- **Style:** a sticky top title bar (app mark + profile stamp) over three equal
-  seal-active tabs in a sticky bottom bar; a drawn single-stroke SVG icon above an
-  11px label; `ink-950/90` blurred background; 1px `ink-700` border.
-- **Desktop (≥1024px):** both bars give way to one fixed 15rem left rail — wordmark,
-  Home / Skills / Learn, a hairline, Chat / Bank / History / Settings, then the
-  member stamp and Sign out at the foot; flat `ink-950` behind a 1px `ink-700` rule.
-- **Default / Hover:** `ink-400` label with `ink-200` on hover.
-- **Active:** `seal-400/12` pill, `seal-300` label and icon. The profile stamp takes
-  the same seal border when its menu is open or its screen is current.
+- `ink-900` fill, 1px `ink-600` border, 9px radius, generous padding; focus
+  shifts the border to Seal Amber with a 3px amber ring.
 
 ### Signature Components
 
-- **Character cell:** an accent-tinted square (3px radius) with a 1px accent border
-  and faint cross guides at 20% accent, holding one character in the display serif.
-- **Level seal:** a 3.5rem square stamp, 1.5px vermilion border, `seal-400/12` fill,
-  serif level figure in `seal-300` with a tracked `LEVEL` label.
-- **Rank badge:** small pill, `rgba(0,0,0,0.28)` fill, 1px gold border at 60%, serif
-  gold numerals with tabular figures.
-- **Profile stamp:** a 2rem square stamp, 1px `ink-600` border, holding the member's
-  initial in the display serif; seal vermilion when its menu is open.
-- **Progress bar:** 6px tall, 3px radius, `ink-800` groove with a 1px `ink-700`
-  border, fill in the panel's accent, width transition 0.4s.
-- **Ruled entry:** a row separated by a 1px `ink-700` rule, label left and an earned
-  figure right, or a shortcut row with a drawn accent icon.
-- **Activity map:** a heat-map grid of 0.75rem squares — one column per
-  Monday-first week, one row per weekday; empty days sit in `ink-800`, active days
-  in the section accent at 28 / 50 / 72 / 100%, with a `Less → More` legend.
-- **Rig row:** the idle tell. A ruled entry under an action carrying a 4px gap
-  then, in `ink-400` micro-type, a drawn gear glyph, the live rate
-  (`1 ∕ 7s`), and the run clock (`48m left`); the whole line takes the panel accent.
-  Its progress bar is the **run**, not a level: a 2px `ink-800` groove filling in the
-  accent as the run drains. When the run is over the row reads `still` in
-  `ink-500` — never a spinner, never a glow.
-- **Live figure:** a bank count that is still accumulating is set in the display
-  serif with tabular figures and carries a small `+` delta chip in the item's tier
-  accent; it advances in place (no fade, no slide) as the client extrapolates.
+- **Character cell:** an accent-tinted square with faint cross guides, holding one
+  character in the display face — a serif that matches the glyph's script.
+- **Level seal:** a circular stamp, 2px amber border, amber-tinted fill, display
+  numeral with a tracked `LEVEL` label.
+- **Rank badge:** pill, `ink-900` fill, 1px gold border at 55%, gold numerals.
+- **Profile stamp:** a small square holding the member's initial; amber when its
+  menu is open.
+- **Progress bar:** 9px tall, pill, `ink-900` groove with a 1px `ink-700` border,
+  fill in the panel's accent.
 
 ## Do's and Don'ts
 
-### Do:
+### Do
 
 - **Do** assign colour through `--accent` per surface, so tints and borders derive
   from one hue.
-- **Do** set earned numbers in the display serif with tabular figures, brass gold
+- **Do** set earned numbers in the display face with tabular figures, brass gold
   when they are XP, streak, rank or currency.
-- **Do** keep the character cell for language only, and the seal vermilion for the one
+- **Do** keep the character cell for language only, and Seal Amber for the one
   forward action.
 - **Do** convey depth with one lightness step plus a 1px hairline.
-- **Do** keep colour semantic: jade grows, brass earns, azure is the academy, violet
-  is support, ember is combat.
-- **Do** draw icons — one stroke and weight — and reserve emoji for server-provided
-  content (item, profession and monster marks).
-- **Do** let a live idle figure advance in place with tabular figures; the run clock
-  and rate are earned numbers too, so they take the serif and the panel accent.
-- **Do** cap decorative transitions at 0.25s; bars may animate to 0.4s.
+- **Do** keep colour semantic: jade grows, brass earns, azure is the academy,
+  violet is support, ember is combat.
+- **Do** set language text in a serif that matches its script, with CJK leading
+  and zero tracking.
+- **Do** draw icons as one stroke and weight.
 
-### Don't:
+### Don't
 
 - **Don't** add gradients, glows, coloured drop shadows, or glassmorphism.
-- **Don't** put two accents in one panel or use gold as a fill behind body text.
-- **Don't** set body copy in the serif, or uppercase anything except the tracked label.
-- **Don't** use the character cell as a generic container, or the seal vermilion for anything
-  but the forward action and earned ranks.
-- **Don't** reintroduce a card grid where a ruled entry belongs.
+- **Don't** put two accents in one panel, or use gold as a fill behind body text.
+- **Don't** set body copy in the display face, or uppercase anything without
+  `0.06em` of tracking.
+- **Don't** apply negative tracking to CJK, or Latin leading to CJK display text.
+- **Don't** use the character cell as a generic container.
+- **Don't** let a disabled control keep its accent colour.
