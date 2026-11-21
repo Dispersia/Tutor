@@ -1,6 +1,7 @@
 /// <reference types="@sveltejs/kit" />
 import { version } from '$app/env'
 import { assets, immutable } from '$app/manifest'
+import { base } from '#lib/paths'
 
 const CACHE = `tutor-${version}`
 // Silero VAD weights + the onnxruntime wasm are ~16 MB and only matter when
@@ -35,7 +36,7 @@ scope.addEventListener('fetch', (event: FetchEvent) => {
   if (
     event.request.method !== 'GET' ||
     url.origin !== scope.location.origin ||
-    url.pathname.startsWith('/api/')
+    url.pathname.startsWith(`${base}/api/`)
   ) {
     return
   }
@@ -55,7 +56,7 @@ scope.addEventListener('fetch', (event: FetchEvent) => {
         .catch(() =>
           caches
             .match(event.request)
-            .then((r) => r ?? caches.match('/index.html'))
+            .then((r) => r ?? caches.match(`${base}/index.html`))
             .then((r) => r ?? Response.error()),
         ),
     )
