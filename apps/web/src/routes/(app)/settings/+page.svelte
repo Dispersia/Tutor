@@ -579,7 +579,7 @@
         class="mt-1 w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm"
       />
     </label>
-    <p class="mt-1 text-[11px] text-ink-500">
+    <p class="mt-1 text-[13px] text-ink-500">
       A new card repeats once per step before it graduates (Anki’s default is <code>1, 10</code>).
     </p>
 

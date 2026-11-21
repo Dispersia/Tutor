@@ -80,12 +80,12 @@
   </div>
   <div class="seal h-14 w-14 shrink-0" aria-label="Average level {totalLevel}">
     <span class="text-2xl leading-none font-bold">{totalLevel}</span>
-    <span class="text-[8px] tracking-[0.16em]">AVG</span>
+    <span class="text-[10px] tracking-[0.16em]">AVG</span>
   </div>
 </div>
 
 {#if error}
-  <p class="mt-3 rounded-[4px] bg-ember-950 px-3 py-2 text-sm text-ember-300">{error}</p>
+  <p class="mt-3 rounded-[8px] bg-ember-950 px-3 py-2 text-sm text-ember-300">{error}</p>
 {/if}
 
 {#if pendingTalents.length}
@@ -115,7 +115,7 @@
 
 {#if running.length}
   <!-- The idle tell: which rigs are running and what they have made since (§13.5.1). -->
-  <div class="mt-3 flex flex-wrap items-center gap-2 border-b border-ink-700 pb-3 text-[11px]">
+  <div class="mt-3 flex flex-wrap items-center gap-2 border-b border-ink-700 pb-3 text-[13px]">
     <svg
       viewBox="0 0 24 24"
       fill="none"
@@ -157,7 +157,7 @@
             <h2 class="text-xs font-bold tracking-widest uppercase" style="color: {g.accent}">
               {g.label}
             </h2>
-            <span class="ml-auto text-[11px] text-ink-500">{g.skills.length}</span>
+            <span class="ml-auto text-[13px] text-ink-500">{g.skills.length}</span>
           </div>
           <ul>
             {#each g.skills as s (s.id)}
@@ -176,7 +176,7 @@
                     >
                   </div>
                   <div class="bar mt-1.5"><i style="width: {s.progress * 100}%"></i></div>
-                  <div class="mt-1 flex items-center gap-2 text-[11px] text-ink-500">
+                  <div class="mt-1 flex items-center gap-2 text-[13px] text-ink-500">
                     <span class="min-w-0 truncate">{s.description}</span>
                     <span class="shrink-0 tabular-nums" style="color: {g.accent}"
                       >{pct(s.effect.value)}/lv</span
@@ -197,7 +197,7 @@
   </div>
 
   {#if data}
-    <p class="mt-6 mb-6 text-center text-[11px] text-ink-400">
+    <p class="mt-6 mb-6 text-center text-[13px] text-ink-400">
       Bonuses · global XP <span class="gold">+{pct(data.bonuses.globalXp)}</span> · power
       <span class="text-combat-400">+{pct(data.bonuses.damage)}</span> · drop
       <span class="text-support-400">+{pct(data.bonuses.drop)}</span>

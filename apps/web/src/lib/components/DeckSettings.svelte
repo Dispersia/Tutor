@@ -109,7 +109,7 @@
           <h2 class="display truncate text-lg text-ink-100">{deck.name}</h2>
         </div>
         <div class="flex items-center gap-3">
-          {#if saving}<span class="text-[11px] text-ink-400">Saving…</span>{/if}
+          {#if saving}<span class="text-[13px] text-ink-400">Saving…</span>{/if}
           <button type="button" onclick={onclose} class="btn btn-ghost px-3 py-2 text-xs">
             Close
           </button>
@@ -147,7 +147,7 @@
       </div>
 
       {#if isJapanese}
-        <p class="mt-2 text-[11px] text-ink-500">
+        <p class="mt-2 text-[13px] text-ink-500">
           Pitch accent is looked up in the bundled Kanjium dictionary (CC BY-SA 4.0); the generator
           fills in words the dictionary does not know. It reaches new cards only, so backfill the
           cards a deck already has.
@@ -173,7 +173,7 @@
         </div>
       {/if}
 
-      {#if note}<p class="mt-2 text-center text-[11px] text-jade-400">{note}</p>{/if}
+      {#if note}<p class="mt-2 text-center text-[13px] text-jade-400">{note}</p>{/if}
       {#if error}
         <p class="mt-2 rounded-md bg-ember-950 px-3 py-2 text-xs text-ember-300">{error}</p>
       {/if}
@@ -188,7 +188,7 @@
         >
           {#if deleting}Deleting…{:else}Delete this deck{/if}
         </button>
-        <p class="mt-1 text-[11px] text-ink-500">
+        <p class="mt-1 text-[13px] text-ink-500">
           Deletes the deck, its cards, reviews and history. Cannot be undone.
         </p>
       </div>

@@ -60,7 +60,7 @@
             <button
               type="button"
               onclick={() => removeAt(pos)}
-              class="flex flex-col items-center rounded-[3px] border border-seal-400/70 bg-ink-900 px-3 py-1.5"
+              class="flex flex-col items-center rounded-[7px] border border-seal-400/70 bg-ink-900 px-3 py-1.5"
             >
               <span class="display text-xl leading-tight">{bank[bi]}</span>
             </button>
@@ -75,7 +75,7 @@
           type="button"
           onclick={() => tap(i)}
           disabled={busy}
-          class="flex flex-col items-center rounded-[3px] border border-ink-600 bg-ink-900 px-3 py-1.5 transition disabled:opacity-50 {picked.includes(
+          class="flex flex-col items-center rounded-[7px] border border-ink-600 bg-ink-900 px-3 py-1.5 transition disabled:opacity-50 {picked.includes(
             i,
           )
             ? 'opacity-30'
@@ -92,7 +92,7 @@
       {typing ? 'Use word tiles' : 'Type it instead'}
     </button>
     {#if newWord}
-      <span class="text-[11px] text-ink-500">new word: {newWord}</span>
+      <span class="text-[13px] text-ink-500">new word: {newWord}</span>
     {/if}
   </div>
 

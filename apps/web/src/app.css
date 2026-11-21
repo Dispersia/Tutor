@@ -1,104 +1,197 @@
 @import 'tailwindcss';
 
-/* The display voice, self-hosted so the lettering is the same on every device.
-   Source Serif 4 (Latin) with an explicit CJK serif stack behind it. */
+/* ---------------------------------------------------------------------------
+   Nightforge — the tutor's game UI.
+
+   A neutral graphite ground (no warm cast), one amber action, muted category
+   hues that always mean the same thing, flat fills, generous radii, and a
+   self-hosted type system that covers every target script — Latin, CJK, kana,
+   Hangul, Bopomofo and Cyrillic — so no target language can ever render tofu.
+
+   The signature is still the character cell: every studied glyph sits on it.
+   --------------------------------------------------------------------------- */
+
+/* display: a clean grotesque for the Latin, then a native CJK serif behind it */
 @font-face {
-  font-family: 'Source Serif 4';
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url('./assets/space-grotesk-latin.woff2') format('woff2');
+}
+/* body: the UI voice */
+@font-face {
+  font-family: 'Rubik';
+  font-style: normal;
+  font-weight: 300 800;
+  font-display: swap;
+  src: url('./assets/rubik-latin.woff2') format('woff2');
+}
+
+/* language faces, self-hosted so every script renders on any machine */
+@font-face {
+  font-family: 'Noto Serif SC';
   font-style: normal;
   font-weight: 400 700;
   font-display: swap;
-  src: url('./assets/source-serif-4-latin.woff2') format('woff2');
+  src: url('./assets/noto-serif-sc-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Noto Serif TC';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('./assets/noto-serif-tc-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Noto Serif JP';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('./assets/noto-serif-jp-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Noto Serif KR';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('./assets/noto-serif-kr-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Noto Sans SC';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('./assets/noto-sans-sc-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Noto Sans TC';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('./assets/noto-sans-tc-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Noto Sans JP';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('./assets/noto-sans-jp-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Noto Sans KR';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('./assets/noto-sans-kr-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Noto Serif';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('./assets/noto-serif-cyrillic-400.woff2') format('woff2');
 }
 
-/* ---------------------------------------------------------------------------
-   tutor — "The Lexicon": a night dictionary.
-
-   A deep ink ground, one paper plate where the language lives, seal-red for the
-   action, jade for what grows, brass gold for what you earned, and a small set
-   of semantic accents that always mean the same thing. Flat, ruled, precise.
-   The signature is the character cell: every studied glyph sits on ruled paper.
-   --------------------------------------------------------------------------- */
-
 @theme {
-  /* display voice: a self-hosted book serif that also carries CJK */
+  /* display voice: clean Latin grotesque, then a native CJK serif. Ordering is
+     what keeps Japanese kanji from taking Chinese glyph shapes. */
   --font-display:
-    'Source Serif 4', 'Songti SC', 'Noto Serif CJK SC', 'Source Han Serif SC',
-    'Hiragino Mincho ProN', 'Noto Serif SC', serif;
+    'Space Grotesk', 'Songti SC', 'Songti TC', STSong, 'Noto Serif CJK SC', 'Noto Serif SC',
+    'Source Han Serif SC', 'Noto Serif CJK TC', 'Noto Serif TC', 'Source Han Serif TC', 'Yu Mincho',
+    'Hiragino Mincho ProN', 'Noto Serif CJK JP', 'Noto Serif JP', 'Nanum Myeongjo',
+    'Noto Serif CJK KR', 'Noto Serif KR', serif;
 
-  /* ink — deep blue-black ground and the surface ladder above it */
-  --color-ink-950: #090d12;
-  --color-ink-900: #0e141b;
-  --color-ink-850: #131b24;
-  --color-ink-800: #1a242f;
-  --color-ink-700: #26323f;
-  --color-ink-600: #35434f;
-  --color-ink-500: #586673;
-  --color-ink-400: #8694a1;
-  --color-ink-300: #b8c3cd;
-  --color-ink-200: #d7dee5;
-  --color-ink-100: #e8edf2;
+  /* body voice: clean Latin sans, then a native CJK sans */
+  --font-sans:
+    'Rubik', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'PingFang SC',
+    'PingFang TC', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', Meiryo,
+    'Microsoft YaHei', 'Microsoft JhengHei', 'Noto Sans CJK SC', 'Noto Sans SC', 'Source Han Sans SC',
+    'Noto Sans CJK TC', 'Noto Sans TC', 'Noto Sans CJK JP', 'Noto Sans JP', 'Noto Sans CJK KR',
+    'Noto Sans KR', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+
+  /* ink — a neutral graphite ladder, dark ground to bright text */
+  --color-ink-950: oklch(0.16 0.006 258);
+  --color-ink-900: oklch(0.196 0.007 258);
+  --color-ink-850: oklch(0.226 0.008 258);
+  --color-ink-800: oklch(0.272 0.009 258);
+  --color-ink-700: oklch(0.34 0.01 258);
+  --color-ink-600: oklch(0.45 0.012 258);
+  --color-ink-500: oklch(0.58 0.012 258);
+  --color-ink-400: oklch(0.7 0.01 258);
+  --color-ink-300: oklch(0.81 0.008 258);
+  --color-ink-200: oklch(0.9 0.005 258);
+  --color-ink-100: oklch(0.955 0.004 258);
 
   /* gold — every number the player earned */
-  --color-gold-200: #f6e4b0;
-  --color-gold-300: #eac168;
-  --color-gold-400: #d9a93c;
-  --color-gold-500: #b9862a;
-  --color-gold-600: #8f6620;
+  --color-gold-200: oklch(0.9 0.06 88);
+  --color-gold-300: oklch(0.8 0.105 88);
+  --color-gold-400: oklch(0.72 0.11 86);
+  --color-gold-500: oklch(0.62 0.1 84);
+  --color-gold-600: oklch(0.52 0.08 82);
 
-  /* seal — the vermilion action and the earned rank stamp */
-  --color-seal-300: #f0735a;
-  --color-seal-400: #e2452b;
-  --color-seal-500: #c63620;
-  --color-seal-600: #a62c19;
+  /* seal — the one action that moves the session forward (amber) */
+  --color-seal-300: oklch(0.79 0.125 58);
+  --color-seal-400: oklch(0.7 0.145 52);
+  --color-seal-500: oklch(0.6 0.14 50);
+  --color-seal-600: oklch(0.5 0.13 48);
 
-  /* semantic accents — colour as data, never decoration */
-  --color-jade-300: #7bd3a9;
-  --color-jade-400: #45c08a;
-  --color-jade-500: #2fa274;
-  --color-jade-950: #0c2018;
-  --color-brass-300: #efc078;
-  --color-brass-400: #e3a64a;
-  --color-brass-500: #c4862f;
-  --color-brass-950: #241a08;
-  --color-violet-300: #c6aef0;
-  --color-violet-400: #ac8be6;
-  --color-violet-500: #8f6bcb;
-  --color-ember-300: #ee8e86;
-  --color-ember-400: #e0655c;
-  --color-ember-500: #c64a41;
-  --color-ember-600: #a93a32;
-  --color-ember-800: #6e2620;
-  --color-ember-950: #2a0f0c;
-  --color-azure-300: #9cc6f2;
-  --color-azure-400: #6aa9e9;
-  --color-azure-500: #4a8ad0;
+  /* jade — what grows: goal, health, gathering, success */
+  --color-jade-300: oklch(0.82 0.09 158);
+  --color-jade-400: oklch(0.73 0.1 158);
+  --color-jade-500: oklch(0.63 0.1 156);
+  --color-jade-950: oklch(0.24 0.04 158);
 
-  /* profession aliases kept from the previous system */
-  --color-gather-400: #45c08a;
-  --color-artisan-400: #e3a64a;
-  --color-support-400: #ac8be6;
-  --color-combat-400: #e0655c;
-  --color-arcane-400: #6aa9e9;
+  /* brass — artisan, streak, coins */
+  --color-brass-300: oklch(0.84 0.09 70);
+  --color-brass-400: oklch(0.76 0.1 68);
+  --color-brass-500: oklch(0.66 0.1 66);
+  --color-brass-950: oklch(0.25 0.04 68);
+
+  /* violet — support and talents */
+  --color-violet-300: oklch(0.8 0.09 300);
+  --color-violet-400: oklch(0.71 0.1 300);
+  --color-violet-500: oklch(0.61 0.1 300);
+
+  /* ember — combat, damage, danger */
+  --color-ember-300: oklch(0.8 0.11 25);
+  --color-ember-400: oklch(0.66 0.14 25);
+  --color-ember-500: oklch(0.58 0.14 24);
+  --color-ember-600: oklch(0.5 0.13 23);
+  --color-ember-800: oklch(0.32 0.08 22);
+  --color-ember-950: oklch(0.2 0.04 22);
+
+  /* azure — the academy, arcane, chat */
+  --color-azure-300: oklch(0.82 0.09 245);
+  --color-azure-400: oklch(0.73 0.1 245);
+  --color-azure-500: oklch(0.63 0.1 245);
+
+  /* profession aliases */
+  --color-gather-400: oklch(0.73 0.1 158);
+  --color-artisan-400: oklch(0.76 0.1 68);
+  --color-support-400: oklch(0.71 0.1 300);
+  --color-combat-400: oklch(0.66 0.14 25);
+  --color-arcane-400: oklch(0.73 0.1 245);
 
   /* Tailwind's default families remapped onto the palette, so no utility
      anywhere in the app can render an off-system colour. */
-  --color-emerald-300: #7bd3a9;
-  --color-emerald-400: #45c08a;
-  --color-emerald-500: #2fa274;
-  --color-emerald-600: #24855e;
-  --color-emerald-950: #0c2018;
-  --color-amber-300: #efc078;
-  --color-amber-400: #e3a64a;
-  --color-amber-500: #c4862f;
-  --color-amber-950: #241a08;
-  --color-red-200: #f3b7b1;
-  --color-red-300: #ee8e86;
-  --color-red-400: #e0655c;
-  --color-red-500: #c64a41;
-  --color-red-600: #a93a32;
-  --color-red-800: #6e2620;
-  --color-red-950: #2a0f0c;
-  --color-sky-300: #9cc6f2;
+  --color-emerald-300: oklch(0.82 0.09 158);
+  --color-emerald-400: oklch(0.73 0.1 158);
+  --color-emerald-500: oklch(0.63 0.1 156);
+  --color-emerald-600: oklch(0.55 0.1 156);
+  --color-emerald-950: oklch(0.24 0.04 158);
+  --color-amber-300: oklch(0.84 0.09 70);
+  --color-amber-400: oklch(0.76 0.1 68);
+  --color-amber-500: oklch(0.66 0.1 66);
+  --color-amber-950: oklch(0.25 0.04 68);
+  --color-red-200: oklch(0.88 0.07 25);
+  --color-red-300: oklch(0.8 0.11 25);
+  --color-red-400: oklch(0.66 0.14 25);
+  --color-red-500: oklch(0.58 0.14 24);
+  --color-red-600: oklch(0.5 0.13 23);
+  --color-red-800: oklch(0.32 0.08 22);
+  --color-red-950: oklch(0.2 0.04 22);
+  --color-sky-300: oklch(0.82 0.09 245);
 }
 
 :root {
@@ -117,12 +210,8 @@ body {
   color: var(--color-ink-200);
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior-y: none;
-  font-family:
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    sans-serif;
-  /* the room: a lamp-lit study after dark — flat ink, no gradient */
+  font-family: var(--font-sans);
+  /* the room: flat graphite, no gradient */
   background: var(--color-ink-950);
 }
 
@@ -134,27 +223,28 @@ body {
 }
 
 ::selection {
-  background: color-mix(in oklab, var(--color-seal-400) 50%, transparent);
+  background: color-mix(in oklab, var(--color-seal-400) 45%, transparent);
   color: #fff;
 }
 :focus-visible {
-  outline: 2px solid color-mix(in oklab, var(--color-seal-400) 75%, transparent);
+  outline: 2px solid var(--color-seal-300);
   outline-offset: 2px;
 }
 
 @layer components {
   /* ---- surfaces ---------------------------------------------------------- */
   .panel {
-    border-radius: 5px;
+    border-radius: 14px;
     overflow: hidden;
     border: 1px solid var(--color-ink-700);
     background: var(--color-ink-850);
+    box-shadow: 0 1px 2px oklch(0 0 0 / 0.4);
   }
 
   /* a panel that belongs to a profession / section: tinted ground + accent edge */
   .panel-accent {
-    border-color: color-mix(in oklab, var(--accent) 42%, var(--color-ink-700));
-    background: color-mix(in oklab, var(--accent) 10%, var(--color-ink-850));
+    border-color: color-mix(in oklab, var(--accent) 40%, var(--color-ink-700));
+    background: color-mix(in oklab, var(--accent) 9%, var(--color-ink-850));
   }
 
   .panel-hd {
@@ -162,21 +252,21 @@ body {
     align-items: center;
     justify-content: space-between;
     gap: 0.5rem;
-    padding: 0.5rem 0.9rem;
-    border-bottom: 1px solid color-mix(in oklab, var(--accent) 30%, var(--color-ink-700));
-    background: color-mix(in oklab, var(--accent) 14%, var(--color-ink-800));
-    font-weight: 700;
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid var(--color-ink-700);
+    background: var(--color-ink-800);
+    font-weight: 600;
     color: var(--color-ink-100);
   }
 
   /* ---- typography -------------------------------------------------------- */
   .display {
     font-family: var(--font-display);
-    letter-spacing: 0.01em;
+    letter-spacing: -0.01em;
   }
 
   .eyebrow {
-    font-size: 0.66rem;
+    font-size: 0.82rem;
     letter-spacing: 0.16em;
     text-transform: uppercase;
     font-weight: 600;
@@ -192,25 +282,25 @@ body {
     position: relative;
     display: grid;
     place-items: center;
-    border: 1px solid color-mix(in oklab, var(--accent) 38%, var(--color-ink-700));
-    border-radius: 3px;
-    background: color-mix(in oklab, var(--accent) 6%, var(--color-ink-900));
+    border: 1px solid color-mix(in oklab, var(--accent) 45%, var(--color-ink-700));
+    border-radius: 12px;
+    background: color-mix(in oklab, var(--accent) 10%, var(--color-ink-850));
   }
   .cell::before,
   .cell::after {
     content: '';
     position: absolute;
-    background: color-mix(in oklab, var(--accent) 20%, transparent);
+    background: color-mix(in oklab, var(--accent) 22%, transparent);
   }
   .cell::before {
-    left: 10%;
-    right: 10%;
+    left: 12%;
+    right: 12%;
     top: 50%;
     height: 1px;
   }
   .cell::after {
-    top: 10%;
-    bottom: 10%;
+    top: 12%;
+    bottom: 12%;
     left: 50%;
     width: 1px;
   }
@@ -218,27 +308,19 @@ body {
   /* ---- tiles ------------------------------------------------------------- */
   .tile {
     position: relative;
-    overflow: hidden;
-    border-radius: 5px;
-    border: 1px solid color-mix(in oklab, var(--accent) 38%, var(--color-ink-700));
-    background: color-mix(in oklab, var(--accent) 9%, var(--color-ink-850));
+    border-radius: 12px;
+    border: 1px solid color-mix(in oklab, var(--accent) 45%, var(--color-ink-700));
+    background: color-mix(in oklab, var(--accent) 14%, var(--color-ink-850));
     transition:
       transform 0.12s ease,
       border-color 0.15s ease,
       background 0.15s ease;
   }
-  .tile::before {
-    content: '';
-    position: absolute;
-    inset: 0 0 auto 0;
-    height: 2px;
-    background: var(--accent);
-  }
   .tile:hover,
   .tile:focus-visible {
     transform: translateY(-1px);
-    border-color: color-mix(in oklab, var(--accent) 62%, var(--color-ink-700));
-    background: color-mix(in oklab, var(--accent) 15%, var(--color-ink-850));
+    border-color: color-mix(in oklab, var(--accent) 65%, var(--color-ink-700));
+    background: color-mix(in oklab, var(--accent) 20%, var(--color-ink-850));
   }
 
   /* ---- buttons ----------------------------------------------------------- */
@@ -246,28 +328,37 @@ body {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 0.4rem;
-    border-radius: 4px;
-    padding: 0.55rem 0.9rem;
-    font-size: 0.875rem;
+    gap: 0.45rem;
+    min-height: 44px;
+    border-radius: 10px;
+    padding: 0.6rem 1rem;
+    font-family: var(--font-display);
+    font-size: 0.92rem;
     font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
     line-height: 1;
     cursor: pointer;
     transition:
       filter 0.12s ease,
-      transform 0.06s ease;
+      transform 0.06s ease,
+      background 0.12s ease,
+      border-color 0.12s ease;
   }
   .btn:active {
     transform: translateY(1px);
   }
   .btn:disabled {
-    opacity: 0.4;
     cursor: not-allowed;
+    transform: none;
+    background: var(--color-ink-850);
+    border: 1px solid var(--color-ink-700);
+    color: var(--color-ink-400);
   }
   /* primary = the one action that moves the session forward */
   .btn-primary {
-    color: #fff;
-    border: 1px solid var(--color-seal-600);
+    color: var(--color-ink-950);
+    border: 1px solid color-mix(in oklab, var(--color-seal-400) 60%, black);
     background: var(--color-seal-400);
   }
   .btn-primary:hover {
@@ -275,24 +366,25 @@ body {
   }
   /* gold = spending, claiming, rewarding */
   .btn-gold {
-    color: #2a1d03;
-    border: 1px solid var(--color-gold-500);
-    background: var(--color-gold-400);
+    color: var(--color-ink-950);
+    border: 1px solid color-mix(in oklab, var(--color-gold-400) 55%, black);
+    background: var(--color-gold-300);
   }
   .btn-gold:hover {
     filter: brightness(1.08);
   }
   .btn-ghost {
-    color: var(--color-ink-300);
+    color: var(--color-ink-200);
     border: 1px solid var(--color-ink-600);
-    background: var(--color-ink-800);
+    background: transparent;
   }
   .btn-ghost:hover {
     color: var(--color-ink-100);
+    background: var(--color-ink-800);
     border-color: var(--color-ink-500);
   }
   .btn-accent {
-    color: #08111b;
+    color: var(--color-ink-950);
     border: 1px solid color-mix(in oklab, var(--accent) 65%, black);
     background: var(--accent);
   }
@@ -316,71 +408,63 @@ body {
   .chip {
     display: inline-flex;
     align-items: center;
-    gap: 0.25rem;
-    border-radius: 3px;
-    padding: 0.16rem 0.45rem;
-    font-size: 0.68rem;
+    gap: 0.3rem;
+    border-radius: 999px;
+    padding: 0.22rem 0.55rem;
+    font-size: 0.82rem;
     line-height: 1.3;
-    border: 1px solid color-mix(in oklab, var(--accent) 45%, transparent);
-    background: color-mix(in oklab, var(--accent) 16%, var(--color-ink-900));
-    color: color-mix(in oklab, var(--accent) 68%, white);
+    border: 1px solid color-mix(in oklab, var(--accent) 40%, var(--color-ink-700));
+    background: color-mix(in oklab, var(--accent) 12%, var(--color-ink-850));
+    color: color-mix(in oklab, var(--accent) 70%, var(--color-ink-100));
   }
 
   .bar {
     position: relative;
-    height: 6px;
-    border-radius: 3px;
+    height: 9px;
+    border-radius: 999px;
     overflow: hidden;
     border: 1px solid var(--color-ink-700);
-    background: var(--color-ink-800);
+    background: var(--color-ink-900);
   }
   .bar > i {
     display: block;
     height: 100%;
-    border-radius: 2px;
+    border-radius: 999px;
     background: var(--accent);
     transition: width 0.4s ease;
   }
 
   /* rank badge — brass gold numerals in a stamped cell */
   .level-badge {
-    min-width: 1.7rem;
-    border-radius: 3px;
-    padding: 0.1rem 0.35rem;
+    min-width: 1.9rem;
+    border-radius: 7px;
+    padding: 0.12rem 0.4rem;
     text-align: center;
     font-variant-numeric: tabular-nums;
     font-weight: 700;
     color: var(--color-gold-300);
-    border: 1px solid color-mix(in oklab, var(--color-gold-500) 60%, transparent);
-    background: rgba(0, 0, 0, 0.28);
+    border: 1px solid color-mix(in oklab, var(--color-gold-500) 55%, transparent);
+    background: var(--color-ink-900);
   }
 
-  /* the level seal — a vermilion stamp for what you earned */
+  /* the level seal — an amber stamp for what you earned */
   .seal {
     display: grid;
     place-items: center;
-    border-radius: 4px;
-    border: 1.5px solid color-mix(in oklab, var(--color-seal-400) 80%, transparent);
+    border-radius: 50%;
+    border: 2px solid color-mix(in oklab, var(--color-seal-400) 75%, var(--color-ink-700));
     color: var(--color-seal-300);
-    background: color-mix(in oklab, var(--color-seal-400) 12%, transparent);
+    background: color-mix(in oklab, var(--color-seal-400) 12%, var(--color-ink-850));
     font-family: var(--font-display);
     font-variant-numeric: tabular-nums;
   }
 
-  /* HUD stat: neutral panel, accent rule across the top, serif figure */
+  /* HUD stat: neutral panel with a serif figure */
   .stat-card {
     position: relative;
-    overflow: hidden;
-    border-radius: 5px;
+    border-radius: 12px;
     border: 1px solid var(--color-ink-700);
     background: var(--color-ink-850);
-  }
-  .stat-card::before {
-    content: '';
-    position: absolute;
-    inset: 0 0 auto 0;
-    height: 2px;
-    background: var(--accent);
   }
 }
 

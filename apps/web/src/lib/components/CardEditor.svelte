@@ -163,7 +163,7 @@
           <h2 class="display truncate text-lg text-ink-100">{deck.name}</h2>
         </div>
         <div class="flex items-center gap-3">
-          <span class="text-[11px] text-ink-400">
+          <span class="text-[13px] text-ink-400">
             {pitchCount}/{cards.length} annotated
           </span>
           <button type="button" onclick={onclose} class="btn btn-ghost px-3 py-2 text-xs">
@@ -235,7 +235,7 @@
               >
                 <span class="min-w-0">
                   <span class="display block truncate text-base text-ink-100">{c.back}</span>
-                  <span class="block truncate text-[11px] text-ink-400">
+                  <span class="block truncate text-[13px] text-ink-400">
                     {c.front}{readingOf(c) ? ` · ${readingOf(c)}` : ''}
                   </span>
                 </span>
@@ -261,7 +261,7 @@
 
               <p class="eyebrow mt-4">Pitch accent</p>
               <div class="mt-2 grid grid-cols-[2fr_1fr] gap-2">
-                <label class="block text-[11px] text-ink-400">
+                <label class="block text-[13px] text-ink-400">
                   Levels (H/L per mora)
                   <input
                     bind:value={levels}
@@ -271,7 +271,7 @@
                     class="mt-1 w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2 font-mono text-sm uppercase outline-none focus:border-seal-400"
                   />
                 </label>
-                <label class="block text-[11px] text-ink-400">
+                <label class="block text-[13px] text-ink-400">
                   Drop
                   <input
                     type="number"
@@ -281,7 +281,7 @@
                   />
                 </label>
               </div>
-              <label class="mt-2 block text-[11px] text-ink-400">
+              <label class="mt-2 block text-[13px] text-ink-400">
                 Mora split (optional — defaults to the reading's characters)
                 <input
                   bind:value={syllables}
@@ -290,7 +290,7 @@
                   class="mt-1 w-full rounded-md border border-ink-700 bg-ink-900 px-3 py-2 text-sm outline-none focus:border-seal-400"
                 />
               </label>
-              <p class="mt-1 text-[11px] text-ink-500">
+              <p class="mt-1 text-[13px] text-ink-500">
                 Drop counts from 1 — the mora after which the pitch falls; 0 is flat (平板).
               </p>
 
@@ -329,7 +329,7 @@
                 </button>
               </div>
               {#if savedAt}
-                <p class="mt-2 text-center text-[11px] text-jade-400">Saved ✓</p>
+                <p class="mt-2 text-center text-[13px] text-jade-400">Saved ✓</p>
               {/if}
             {:else}
               <p class="text-sm text-ink-400">This deck has no cards yet.</p>
