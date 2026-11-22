@@ -965,7 +965,7 @@ before that adds the same slice of time.
 intervalSeconds(c, tier) = tierFactor(tier) · (2 + 8 · 2^(−c/15))   // 10s → 2s per item
 runSeconds(c)            = 600 + (21600 − 600) · min(c−1, 49)/49    // 10 min → 6 h at c=50
 tierFactor(tier)         = 1 + 0.35·(tier − 1)                      // tier 1 ×1 … tier 5 ×2.4
-xpPerCraft               = 1                                        // action XP per completed craft
+xpPerCraft               = 0.5                                      // action XP per completed craft
 ```
 
 **A live run earns XP too.** A drill hands over the action's `xp`; while a run is
@@ -977,7 +977,9 @@ that is what makes "leave it running and come back" pay in levels, not only in o
 `settleAll` accrues it in the same closed-form pass as the items (a completion
 count already *is* the craft count, so nothing new is stored), and the action XP
 curve is scaled **10×** against the drill-only era to absorb the new income (see
-§13.5: ~58.4k XP to cap an action).
+§13.5: ~58.4k XP to cap an action). `xpPerCraft` is `0.5`, so a full 6-hour maxed
+run pays ~5.4k XP — enough that the machines carry most of the leveling, but capping
+an action takes ~11 such runs rather than a couple.
 
 **Tier slows the rig, not the run.** Higher-tier actions run proportionally slower
 per item (`tierFactor`) but keep the same run length, so deep content (adamant,
@@ -985,19 +987,21 @@ yew, blessed blades) stays *rarer* without costing you more real time — the ru
 window is about how long you can be away, and that is the same for everyone. The
 table below is tier 1; multiply the interval by `tierFactor` for deeper rigs.
 
-**A flurry of drills can't buy unlimited time.** Each completion extends the run,
-but the run can never be scheduled to end more than `maxRunSec` (6 h) after the
-drill that extended it — so a burst of drill completions makes the next run longer
-*up to* the 6-hour ceiling, never a day or more. `extendRig` enforces the cap when
-it stacks, and `settleRig` re-clamps on every read, so any older row written before
-the cap existed is trimmed to the ceiling the next time it settles.
+**A flurry of drills can't buy unlimited time.** A drill does not *stack* onto
+the previous end; it **re-bases** the run to `rigRunSec(completions)` from that
+drill. So a burst of completions makes the next run longer *in step with the
+count* — 10 buy ~1.2 h, the 50th buys the full 6 h, and it never exceeds
+`maxRunSec`. (`extendRig` sets the end outright, and `settleRig` re-clamps on
+every read, so any older row written before this held is trimmed on its next
+settle.) Summing a per-drill slice instead reached the 6-hour ceiling after only
+~10 rapid drills, which is why a handful of cards used to buy a full night.
 
 | completions | 1 | 10 | 30 | 50 | 100 | 300 |
 | --- | --- | --- | --- | --- | --- | --- |
 | one item every | 9.6s | 7.0s | 4.0s | 2.8s | 2.1s | 2.0s |
 | a run lasts | 10m | 1.2h | 3.6h | 6h | 6h | 6h |
 | items per run | 62 | 630 | 3.3k | 7.7k | 10.4k | 10.8k |
-| XP per run | 62 | 630 | 3.3k | 7.7k | 10.4k | 10.8k |
+| XP per run | 31 | 315 | 1.6k | 3.9k | 5.2k | 5.4k |
 
 **Every action is a rig**, including the artisans. A gathering rig makes something
 from nothing; an artisan rig *transforms* — its run consumes the recipe inputs and
@@ -1035,8 +1039,8 @@ of study.
 
 The budget is legible, not vibes: an action needs `⌈58410 / xp⌉` drills to reach 100
 *if you only drill* — but a live rig also pays `xpPerCraft` per item, so the levels
-come from the machines too (a full 6-hour run of a maxed rig is ~10.8k XP, about a
-fifth of a cap). Material costs are chosen so the **scarcest raw material** it
+come from the machines too (a full 6-hour run of a maxed rig is ~5.4k XP, about a
+tenth of a cap). Material costs are chosen so the **scarcest raw material** it
 consumes works out to the tier's target. Refinement is deliberately the *cheap,
 fast* feeder layer (a bar costs 2 ore); the **goal** actions carry the time.
 
@@ -1055,8 +1059,8 @@ fast* feeder layer (a bar costs 2 ore); the **goal** actions carry the time.
 | forge an adamant platebody | 5 | 133 | 3 bars | **38 bars** | 24h |
 
 (The `drills` column is the **drill-only** count at the 10× curve — a live rig pays
-`xpPerCraft` per item it makes, so in practice the machines do most of the leveling
-and you only drill to keep them alive.)
+`xpPerCraft` per item it makes, so in practice the machines still do most of the
+leveling and you only drill to keep them alive.)
 
 Because metal bars each want coal, **coal becomes the deep-game bottleneck** for
 armour — thematically right for a forge, and it gives `Mine coal` a reason to exist.

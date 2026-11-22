@@ -41,9 +41,12 @@ export const IDLE = {
    * Action XP the rig earns for **every craft it completes on its own** (before
    * talent bonuses). A drill hands over `action.xp`; a live run hands this per
    * item, so a machine left running levels the profession the same way drilling
-   * does — just by the clock. See docs/DESIGN.md §13.5.1.
+   * does — just by the clock. Halved from `1` so a full 6 h maxed run is ~5.4k
+   * XP (about a tenth of a cap) instead of ~10.8k (a fifth): the machines still
+   * do most of the leveling, but capping an action now takes ~11 runs, not ~5.
+   * See docs/DESIGN.md §13.5.1.
    */
-  xpPerCraft: 1,
+  xpPerCraft: 0.5,
 } as const
 
 const clamp = (n: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, n))
@@ -232,21 +235,24 @@ function emitProduced(
 }
 
 /**
- * Power the rig: bump the completion count and extend the run. Call *after*
+ * Power the rig: bump the completion count and re-base the run. Call *after*
  * `settleRig(now)` so the old rate is paid up to the instant of the drill.
+ *
+ * The run length is a **function of the completion count** (`rigRunSec`), not a
+ * sum of per-drill slices: a drill sets the run to end `rigRunSec(completions)`
+ * from now, so 10 completions buy ~1.2 h and the 50th buys the full 6 h (the
+ * ceiling). Stacking `+ rigRunSec` onto the previous end reached the 6 h cap
+ * after ~10 rapid drills — far too fast — so the run is *re-based*, never
+ * accumulated. The clamp is belt-and-braces: `rigRunSec` already tops out at
+ * `maxRunSec`, and `settleRig` re-clamps on every read.
  */
 export function extendRig(state: RigState, now: number): RigState {
   const completions = state.completions + 1
-  const base = Math.max(state.runEndsAt, now)
-  const extended = base + Math.round(rigRunSec(completions) * 1000)
-  // A drill makes the next run longer, but a run can never be scheduled to end
-  // more than `maxRunSec` (6 h) from the drill that extended it. Otherwise a
-  // flurry of drills stacks run on run and the rig mines for a day or more.
-  const cap = now + IDLE.maxRunSec * 1000
+  const runEndsAt = now + Math.round(rigRunSec(completions) * 1000)
   return {
     ...state,
     completions,
-    runEndsAt: Math.min(extended, cap),
+    runEndsAt: Math.min(runEndsAt, now + IDLE.maxRunSec * 1000),
     settledAt: now,
   }
 }

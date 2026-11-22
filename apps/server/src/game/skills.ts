@@ -122,8 +122,8 @@ export interface ActionDef {
  * reachable, but scaled for the idle era: a rig left running earns XP on its own
  * (every craft pays, docs §13.5.1), so the whole curve sits 10× higher than the
  * drill-only days — ~58.4k XP maxes one action, and a whole 4-action profession
- * is ~234k. A full 6-hour run of a maxed rig is worth ~10.8k XP, so capping an
- * action is a handful of "leave it running" sessions, not one.
+ * is ~234k. A full 6-hour run of a maxed rig is worth ~5.4k XP, so capping an
+ * action is ~11 "leave it running" sessions, not one.
  */
 export function skillXpForLevel(level: number): number {
   return 100 + (level - 1) * 10

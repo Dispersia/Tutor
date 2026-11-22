@@ -341,6 +341,41 @@ test('a new card is taught before it is quizzed', async () => {
   sqlite.close()
 })
 
+test('the first-exposure teach step never powers an idle rig', async () => {
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
+  const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
+    decks: { id: string; level: string }[]
+  }
+  const freqDeck = decks.decks.find((d) => d.level === 'zhfreq')!
+  const cards = (await (
+    await app.request(`/api/decks/${freqDeck.id}/cards`, auth(cookie))
+  ).json()) as { cards: { id: string; back: string }[] }
+  const first = cards.cards[0]!
+
+  const taught = (await (
+    await app.request('/api/practice/next', auth(cookie, json({ deckId: freqDeck.id })))
+  ).json()) as { instance: { exerciseId: string; cardId: string } }
+  expect(taught.instance.exerciseId).toBe('introduce')
+
+  // Grade the "Meet a new word" step while drilling an action. It is a prelude,
+  // not a drill: it must not power that action's rig (no completion, no run).
+  await app.request(
+    '/api/practice/grade',
+    auth(
+      cookie,
+      json({ exerciseId: 'introduce', cardId: first.id, answer: 'ok', actionId: 'mine-copper' }),
+    ),
+  )
+
+  const skills = (await (await app.request('/api/skills', auth(cookie))).json()) as {
+    skills: { actions: { id: string; idle: { completions: number } | null }[] }[]
+  }
+  const copper = skills.skills.flatMap((s) => s.actions).find((a) => a.id === 'mine-copper')!
+  expect(copper.idle).toBeNull()
+  sqlite.close()
+})
+
 test('teach steps include an n+1 example built from words already met', async () => {
   const { app, db, sqlite } = makeApp()
   const cookie = await signup(app, db)

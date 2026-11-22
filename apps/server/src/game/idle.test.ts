@@ -102,15 +102,25 @@ describe('settleRig', () => {
     expect(ten.runEndsAt).toBeGreaterThan(one.runEndsAt)
   })
 
-  test('a flurry of drills never schedules a run past 6 h from now', () => {
-    // Same instant, many drills: each would otherwise stack onto the last.
+  test('the run is re-based on the count, never stacked', () => {
+    // 50 drills at the same instant reach the 6 h ceiling exactly — no more.
     let rig = newRig()
     for (let i = 0; i < 50; i++) rig = extendRig(rig, 1_000)
     expect(rig.runEndsAt).toBe(1_000 + IDLE.maxRunSec * 1000)
+    const past = extendRig(rig, 1_000)
+    expect(past.runEndsAt).toBe(1_000 + IDLE.maxRunSec * 1000)
 
-    // Even drilling with a run already far out, the cap holds.
-    const far = extendRig({ ...newRig(), runEndsAt: 1_000 + IDLE.maxRunSec * 1000 }, 1_000)
-    expect(far.runEndsAt).toBe(1_000 + IDLE.maxRunSec * 1000)
+    // 10 completions buy ~1.2 h, not the ceiling: the old sum hit 6 h here.
+    let ten = newRig()
+    for (let i = 0; i < 10; i++) ten = extendRig(ten, 1_000)
+    expect(ten.runEndsAt).toBe(1_000 + Math.round(rigRunSec(10) * 1000))
+    expect(ten.runEndsAt).toBeLessThan(1_000 + IDLE.maxRunSec * 1000)
+
+    // Two quick drills = one `rigRunSec(2)` run from the last drill, not
+    // `rigRunSec(1) + rigRunSec(2)`.
+    let two = extendRig(newRig(), 1_000)
+    two = extendRig(two, 2_000)
+    expect(two.runEndsAt).toBe(2_000 + Math.round(rigRunSec(2) * 1000))
   })
 
   test('an artisan consumes stock and is clamped by the bank', () => {
