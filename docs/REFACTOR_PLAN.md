@@ -1,12 +1,14 @@
 # Tutor — decomposition & architecture plan
 
-> Status: **phases 0–13 landed.** A second pass (Phases 9–13) split the two mega
+> Status: **phases 0–14 landed.** A second pass (Phases 9–13) split the two mega
 > routes, the grammar tables, the schema and the web skills client, lowered the
-> function budget to 20 lines, and fixed the action-level map rebuild. Phases 14
-> (the function burn-down) and 15 (web shells, route validation) are open — see
-> §8.2. Goal: no mega files, no mega structs, no mega methods. Small files, small
-> pure functions, like‑with‑like, modern practices. §8 records each phase; §8.1 is
-> the re-audit that opened the second pass.
+> function budget to 20 lines, and fixed the action-level map rebuild. Phase 14
+> then worked the function burn-down to zero — the exemption list is gone and
+> every function fits. Phase 15 (the web shells, route validation and the last
+> wide signatures) is open — see §8.2. Goal: no mega files, no mega structs, no
+> mega methods. Small files, small pure functions, like‑with‑like, modern
+> practices. §8 records each phase; §8.1 is the re-audit that opened the second
+> pass.
 
 ---
 
@@ -486,36 +488,18 @@ were already over twenty lines before the bar moved are listed in
 `eslint.function-baseline.js` — a burn-down list that only ever shrinks (127
 files holding 255 long functions when the bar moved).
 
-**Phase 14 — the function burn-down (in progress).**
-Work the `eslint.function-baseline.js` list to zero, worst first. The five mega
-route modules (`skills`, `settings`, `chat`, `auth`, `push`) are folders of small
-handlers. The FSRS scheduler (`game/srs.ts:schedule`, 162 lines) split into
-`newCard`/`sameDay`/`lapse`/`reviewPass`/`graduate`/`stayStep`; the combat
-resolver and the player's combat maths split the same way; the audio service's
-112-line `createAudioService` became a store plus free functions; the exercise
-grader `speakWord` and the deck builder (`createDeckForBuild`/`fillDeck`) split
-into planning and persistence steps; `services/{srs,board,talents,idle}`,
-`game/idle.ts:settleRig`, `db/repo/encounters.ts` and the web `lib/api.ts`
-followed. Tests got their own, larger ceiling (**60** lines: a case is
-arrange/act/assert, read as one unit) instead of the production 20, and the
-long ones were split or given `getJson`/`postJson` helpers. The settle pass and
-drill (`services/idle.ts`), the n+1 reinforcement, the OpenRouter client, the web
-chat streamer and the sentence-builder exercise followed, then the pronunciation
-feature maths, the web speech client, the deck growth planner and the gear
-service, then the converse grader, `game/study.ts`, gear sets, the push client
-and the deck-delete query, then the Anki parser, `persistCards`, `startDeckBuild`,
-`createApp` and the bonus aggregation, then the card/review/gear/push/xp/srs/
-talent repositories, the curriculum view and the talent option builders, then the
-service worker, the rig-alert scan, `buildDeps`, the essence family and the
-furigana splitter, then the band board, the deck plan prompt/sanitiser, the model
-catalogue route and the pinyin-to-Zhuyin converter. That took the list from 127
-files / 255 functions to **30 files / 44 functions**. The biggest left are
-exercise graders, the web VAD/audio helpers and two Svelte components, all under
-40 lines, then the VAD trimmer, the SpeakWord/Converse recorders and the card
-editor, then the web client helpers (rig alerts, push, audio, recorder,
-skill/inventory views), the metadata parser and the curriculum builder. That took
-the list from 127 files / 255 functions to **17 files / 25 functions**. The list
-shrinks; it never grows, and new code is held to 20 from day one.
+**Phase 14 — the function burn-down (done).**
+`eslint.function-baseline.js` is deleted: every file is inside the budget with no
+exemption list. It started at 127 files / 255 functions over the (then new)
+20-line ceiling and was worked to zero, worst first. The mega routes became
+folders of small handlers; the FSRS scheduler, combat resolver, audio service,
+deck builder, idle engine and gear service split into pure steps; the game,
+repo, deck, anki, seed, speech, llm and web modules each followed. Tests got
+their own 60-line ceiling (a case is arrange/act/assert) and the long ones split
+or gained `getJson`/`postJson` helpers. `max-lines-per-function` is now 20 for
+production code and 60 for tests, enforced everywhere, with the only remaining
+relaxations being `legacyBig` (the web route shells) and `wideSignatures` (five
+services' parameter counts, Phase 15).
 
 **Phase 15 — the web shells & route validation (open).**
 The remaining `+page.svelte` files over ~250 lines (`practice`, `settings`,

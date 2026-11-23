@@ -87,12 +87,20 @@ export async function backfillDeckPitch(
   const cards = listCards(db, userId, deckId)
   const targets = pitchTargets(cards, opts)
   if (targets.length === 0) return { updated: 0, total: cards.length }
-  const contours = await fetcher(
-    targets.map((card) => ({
-      word: card.back,
-      reading: card.readings.kana ?? card.readings.zhuyin ?? '',
-    })),
-  )
+  const contours = await fetcher(targets.map(pitchRequest))
+  return { updated: applyContours(db, userId, targets, contours), total: cards.length }
+}
+
+function pitchRequest(card: ReturnType<typeof listCards>[number]) {
+  return { word: card.back, reading: card.readings.kana ?? card.readings.zhuyin ?? '' }
+}
+
+function applyContours(
+  db: Db,
+  userId: string,
+  targets: ReturnType<typeof listCards>,
+  contours: Map<string, PitchContour>,
+): number {
   let updated = 0
   for (const card of targets) {
     const contour = contours.get(card.back)
@@ -100,7 +108,7 @@ export async function backfillDeckPitch(
     updateCard(db, card.id, userId, { metadata: { ...card.metadata, pitch: contour } })
     updated++
   }
-  return { updated, total: cards.length }
+  return updated
 }
 
 const PITCH_SCHEMA = {
@@ -165,25 +173,45 @@ export function llmPitchFetcher(
   targetLang: string,
 ): PitchFetcher {
   return async (words) => {
-    const out = new Map<string, PitchContour>()
-    if (words.length === 0) return out
-    const { json } = await or.chatJSON<{
-      entries?: { word?: unknown; levels?: unknown; syllables?: unknown; drop?: unknown }[]
-    }>({
-      model,
-      schema: PITCH_SCHEMA,
-      schemaName: 'pitch',
-      reasoning,
-      messages: [
-        { role: 'system', content: systemFor(targetLang) },
-        { role: 'user', content: pitchPrompt(words) },
-      ],
-    })
-    for (const entry of json.entries ?? []) {
-      if (typeof entry?.word !== 'string') continue
-      const contour = parsePitchContour(entry)
-      if (contour) out.set(entry.word, contour)
-    }
-    return out
+    if (words.length === 0) return new Map()
+    const json = await requestContours(or, { model, reasoning, targetLang }, words)
+    return contoursFrom(json.entries ?? [])
   }
+}
+
+interface PitchEntry {
+  word?: unknown
+  levels?: unknown
+  syllables?: unknown
+  drop?: unknown
+}
+
+interface PitchReq {
+  model: string
+  reasoning: ReasoningEffort
+  targetLang: string
+}
+
+async function requestContours(or: OpenRouter, req: PitchReq, words: PitchWord[]) {
+  const { json } = await or.chatJSON<{ entries?: PitchEntry[] }>({
+    model: req.model,
+    schema: PITCH_SCHEMA,
+    schemaName: 'pitch',
+    reasoning: req.reasoning,
+    messages: [
+      { role: 'system', content: systemFor(req.targetLang) },
+      { role: 'user', content: pitchPrompt(words) },
+    ],
+  })
+  return json
+}
+
+function contoursFrom(entries: PitchEntry[]): Map<string, PitchContour> {
+  const out = new Map<string, PitchContour>()
+  for (const entry of entries) {
+    if (typeof entry?.word !== 'string') continue
+    const contour = parsePitchContour(entry)
+    if (contour) out.set(entry.word, contour)
+  }
+  return out
 }

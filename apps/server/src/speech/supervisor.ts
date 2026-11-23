@@ -24,6 +24,22 @@ export interface SupervisorConfig {
   spawn?: (cmd: string[], opts: Record<string, unknown>) => SubprocessLike
 }
 
+/** The environment the gateway child needs, from the supervisor's config. */
+function gatewayEnv(
+  cfg: { port: number; idleTimeoutMs: number; modelsDir: string },
+  base: NodeJS.ProcessEnv,
+): Record<string, string> {
+  return {
+    ...base,
+    TUTOR_SPEECH_PORT: String(cfg.port),
+    TUTOR_SPEECH_IDLE_TIMEOUT: String(Math.round(cfg.idleTimeoutMs / 1000)),
+    // the supervisor owns the process lifetime; child only unloads models
+    TUTOR_SPEECH_EXIT_ON_IDLE: 'false',
+    TUTOR_MODELS_DIR: cfg.modelsDir,
+    HF_HOME: cfg.modelsDir,
+  }
+}
+
 interface SubprocessLike {
   pid: number
   exitCode: number | null
@@ -103,15 +119,7 @@ export class SpeechSupervisor {
       stdin: 'ignore',
       stdout: 'inherit',
       stderr: 'inherit',
-      env: {
-        ...process.env,
-        TUTOR_SPEECH_PORT: String(this.cfg.port),
-        TUTOR_SPEECH_IDLE_TIMEOUT: String(Math.round(this.cfg.idleTimeoutMs / 1000)),
-        // the supervisor owns the process lifetime; child only unloads models
-        TUTOR_SPEECH_EXIT_ON_IDLE: 'false',
-        TUTOR_MODELS_DIR: this.cfg.modelsDir,
-        HF_HOME: this.cfg.modelsDir,
-      },
+      env: gatewayEnv(this.cfg, process.env),
     })
     this.touch()
     await this.#waitHealthy()

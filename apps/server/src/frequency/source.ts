@@ -35,23 +35,23 @@ export function frequencySourceFor(
   targetLang: string,
   variant?: CharacterVariant,
 ): FrequencySource | undefined {
-  if (targetLang === 'zh') {
-    const code = variant === 'simplified' ? 'zh_cn' : 'zh_tw'
-    return {
-      lang: 'zh',
-      url: `${BASE}/${code}/${code}_50k.txt`,
-      label: `${code} (${code === 'zh_tw' ? 'Traditional' : 'Simplified'})`,
-    }
-  }
+  if (targetLang === 'zh') return chineseSource(variant)
   // Japanese ships a single `ja_full.txt`.
-  if (targetLang === 'ja') {
-    return { lang: 'ja', url: `${BASE}/ja/ja_full.txt`, label: 'ja' }
-  }
+  if (targetLang === 'ja') return { lang: 'ja', url: `${BASE}/ja/ja_full.txt`, label: 'ja' }
   if (!/^[a-z]{2}(_[a-z]{2})?$/.test(targetLang)) return undefined
   return {
     lang: targetLang,
     url: `${BASE}/${targetLang}/${targetLang}_50k.txt`,
     label: targetLang,
+  }
+}
+
+function chineseSource(variant?: CharacterVariant): FrequencySource {
+  const code = variant === 'simplified' ? 'zh_cn' : 'zh_tw'
+  return {
+    lang: 'zh',
+    url: `${BASE}/${code}/${code}_50k.txt`,
+    label: `${code} (${code === 'zh_tw' ? 'Traditional' : 'Simplified'})`,
   }
 }
 

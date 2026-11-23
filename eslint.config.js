@@ -2,7 +2,6 @@ import js from '@eslint/js'
 import globals from 'globals'
 import svelte from 'eslint-plugin-svelte'
 import tseslint from 'typescript-eslint'
-import { longFunctions } from './eslint.function-baseline.js'
 
 /**
  * Lint + size-budget guardrails (docs/REFACTOR_PLAN.md, Phase 0).
@@ -10,9 +9,8 @@ import { longFunctions } from './eslint.function-baseline.js'
  * The size budget is the mechanical half of the decomposition: no file over
  * `MAX_LINES`, **no function over `MAX_FN_LINES`** (small by default — if a
  * function needs more than twenty lines it is doing more than one thing), no
- * signature over `MAX_PARAMS`. New code is held to the budget from day one. The
- * functions still being split are listed in `eslint.function-baseline.js` with
- * the function ceiling off — **that list only ever shrinks**.
+ * signature over `MAX_PARAMS`. Every file is now inside the budget with no
+ * exemption list (docs/REFACTOR_PLAN.md, phases 0–14).
  *
  * Errors fail `bun run lint`; warnings are advisory (they name existing rough
  * edges that the phase plan works through).
@@ -32,13 +30,6 @@ const sizeRules = {
 
 /** Mega files awaiting decomposition: the size ceiling is off here, nothing else. */
 const legacyBig = ['apps/web/src/routes/**/*.svelte', 'scripts/sweep-cards.ts']
-
-/**
- * Files whose own length is fine but which still hold one oversized function or
- * signature. Only the function ceiling is off here, so the file budget still
- * applies. Remove each entry once its function is split.
- */
-const legacyFunctions = longFunctions
 
 /** Wide signatures that predate the budget; fold these into options objects as
  * they are touched. Only `max-params` is relaxed for these files. */
@@ -119,12 +110,6 @@ export default tseslint.config(
   {
     files: legacyBig,
     rules: { 'max-lines': 'off', 'max-lines-per-function': 'off', 'max-params': 'off' },
-  },
-
-  // Files with one oversized function left: keep the file ceiling, drop the rest.
-  {
-    files: legacyFunctions,
-    rules: { 'max-lines-per-function': 'off' },
   },
 
   // Files whose wide signatures predate the budget; fold these into options

@@ -148,29 +148,38 @@ function rowsOf(notes: AnkiNote[]): string[][] {
  * scripts are ambiguous, so they return undefined and the caller decides.
  */
 export function detectLanguage(deck: AnkiDeck): string | undefined {
-  let kana = 0
-  let han = 0
-  let hangul = 0
-  let cyrillic = 0
-  let arabic = 0
-  for (const note of dominantNotes(deck).slice(0, 200)) {
-    for (const field of note.fields) {
-      for (const ch of cleanField(field)) {
-        const c = ch.codePointAt(0)!
-        if (c >= 0x3040 && c <= 0x30ff) kana++
-        else if (c >= 0x4e00 && c <= 0x9fff) han++
-        else if (c >= 0xac00 && c <= 0xd7af) hangul++
-        else if (c >= 0x0400 && c <= 0x04ff) cyrillic++
-        else if (c >= 0x0600 && c <= 0x06ff) arabic++
-      }
-    }
-  }
-  if (kana > 0) return 'ja'
-  if (hangul > 0) return 'ko'
-  if (han > 0) return 'zh'
-  if (cyrillic > 0) return 'ru'
-  if (arabic > 0) return 'ar'
+  const counts = scriptCounts(dominantNotes(deck).slice(0, 200))
+  if (counts.kana > 0) return 'ja'
+  if (counts.hangul > 0) return 'ko'
+  if (counts.han > 0) return 'zh'
+  if (counts.cyrillic > 0) return 'ru'
+  if (counts.arabic > 0) return 'ar'
   return undefined
+}
+
+interface ScriptCounts {
+  kana: number
+  han: number
+  hangul: number
+  cyrillic: number
+  arabic: number
+}
+
+function scriptCounts(notes: AnkiNote[]): ScriptCounts {
+  const counts: ScriptCounts = { kana: 0, han: 0, hangul: 0, cyrillic: 0, arabic: 0 }
+  for (const note of notes) for (const field of note.fields) countField(field, counts)
+  return counts
+}
+
+function countField(field: string, counts: ScriptCounts): void {
+  for (const ch of cleanField(field)) {
+    const c = ch.codePointAt(0)!
+    if (c >= 0x3040 && c <= 0x30ff) counts.kana++
+    else if (c >= 0x4e00 && c <= 0x9fff) counts.han++
+    else if (c >= 0xac00 && c <= 0xd7af) counts.hangul++
+    else if (c >= 0x0400 && c <= 0x04ff) counts.cyrillic++
+    else if (c >= 0x0600 && c <= 0x06ff) counts.arabic++
+  }
 }
 
 /** Best-guess field indices (used only to pre-select the pickers). */
@@ -214,24 +223,53 @@ export function wordsFromAnki(
   const notes = dominantNotes(deck)
   const fields = modelFields(deck, notes)
   const rows = rowsOf(notes)
-  const wordField = opts.wordField ?? pickWordField(fields, rows, targetLang)
-  const readingField = opts.readingField ?? fields.findIndex((f) => READING_FIELD.test(f))
-  const meaningField = opts.meaningField ?? fields.findIndex((f) => MEANING_FIELD.test(f))
+  const idx = fieldIndices(fields, rows, targetLang, opts)
+  return extractWords(rows, fields, idx, opts.limit ?? 5000)
+}
 
-  const words: string[] = []
-  const readings: Record<string, string> = {}
-  const meanings: Record<string, string> = {}
-  const seen = new Set<string>()
-  const limit = opts.limit ?? 5000
+interface WordFields {
+  wordField: number
+  readingField: number
+  meaningField: number
+}
 
-  for (const row of rows) {
-    const word = row[wordField] ?? ''
-    if (!word || seen.has(word)) continue
-    seen.add(word)
-    words.push(word)
-    if (readingField >= 0 && row[readingField]) readings[word] = row[readingField]!
-    if (meaningField >= 0 && row[meaningField]) meanings[word] = row[meaningField]!.slice(0, 200)
-    if (words.length >= limit) break
+function fieldIndices(
+  fields: string[],
+  rows: string[][],
+  targetLang: string,
+  opts: WordFieldOptions,
+): WordFields {
+  return {
+    wordField: opts.wordField ?? pickWordField(fields, rows, targetLang),
+    readingField: opts.readingField ?? fields.findIndex((f) => READING_FIELD.test(f)),
+    meaningField: opts.meaningField ?? fields.findIndex((f) => MEANING_FIELD.test(f)),
   }
-  return { words, readings, meanings, fields, wordField, readingField, meaningField }
+}
+
+function extractWords(
+  rows: string[][],
+  fields: string[],
+  idx: WordFields,
+  limit: number,
+): AnkiWordList {
+  const out: AnkiWordList = { words: [], readings: {}, meanings: {}, fields, ...idx }
+  const seen = new Set<string>()
+  for (const row of rows) {
+    if (!addWord(out, seen, row, idx)) continue
+    if (out.words.length >= limit) break
+  }
+  return out
+}
+
+/** Adds one row's word (and its reading/meaning); false when it is a duplicate. */
+function addWord(out: AnkiWordList, seen: Set<string>, row: string[], idx: WordFields): boolean {
+  const word = row[idx.wordField] ?? ''
+  if (!word || seen.has(word)) return false
+  seen.add(word)
+  out.words.push(word)
+  if (idx.readingField >= 0 && row[idx.readingField]) out.readings[word] = row[idx.readingField]!
+  if (idx.meaningField >= 0 && row[idx.meaningField]) {
+    out.meanings[word] = row[idx.meaningField]!.slice(0, 200)
+  }
+  return true
 }

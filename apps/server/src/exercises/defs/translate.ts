@@ -1,6 +1,6 @@
 /** Translation drills in both directions. */
 
-import type { ExerciseDef } from '@tutor/core'
+import type { ExerciseContext, ExerciseDef, GradeResult } from '@tutor/core'
 import { feedbackFor, gradeText, meaningAlternatives } from '../grading'
 import { JUDGE_SCHEMA } from '../schemas'
 import { displayReading, label, readingsOf, wordView } from '../shared'
@@ -63,19 +63,8 @@ export const translateBackToFront: ExerciseDef<string> = {
     // unmatched answer goes to the LLM judge (when one is configured) before we
     // call it wrong — see DESIGN §11.3.
     if (g.score < 70 && typed.trim() && ctx.judge) {
-      const reading = displayReading(ctx)
-      const out = (await ctx.judge(
-        `The learner is studying ${label(ctx.card.targetLang)}. The card shows the word “${ctx.card.back}”${reading ? ` (${reading})` : ''}, whose meaning in ${label(ctx.card.sourceLang)} is given as “${ctx.card.front}” — a list of its senses separated by “/”. The learner answered with: “${typed}”. Decide whether the learner's answer is an acceptable meaning of the word. Accept any one of the listed senses or a standard synonym/paraphrase; reject answers that mean something else or are too vague. Give the feedback in the learner's native language (${label(ctx.card.sourceLang)}), not in ${label(ctx.card.targetLang)}.`,
-        JUDGE_SCHEMA,
-      )) as { score?: number; correct?: boolean; feedback?: string } | undefined
-      if (out && out.correct) {
-        return {
-          score: Math.max(out.score ?? 80, 80),
-          correct: true,
-          expected: ctx.card.front,
-          feedback: out.feedback,
-        }
-      }
+      const judged = await judgeMeaning(ctx, typed)
+      if (judged) return judged
     }
     const correct = g.score >= 70
     return {
@@ -86,6 +75,32 @@ export const translateBackToFront: ExerciseDef<string> = {
     }
   },
   xp: (r) => (r.correct ? 10 + (r.score === 100 ? 5 : 0) : 1),
+}
+
+interface JudgeOut {
+  score?: number
+  correct?: boolean
+  feedback?: string
+}
+
+/** The judge's verdict when it accepted the answer, else undefined. */
+async function judgeMeaning(
+  ctx: ExerciseContext,
+  typed: string,
+): Promise<GradeResult | undefined> {
+  const out = (await ctx.judge!(meaningPrompt(ctx, typed), JUDGE_SCHEMA)) as JudgeOut | undefined
+  if (!out?.correct) return undefined
+  return {
+    score: Math.max(out.score ?? 80, 80),
+    correct: true,
+    expected: ctx.card.front,
+    feedback: out.feedback,
+  }
+}
+
+function meaningPrompt(ctx: ExerciseContext, typed: string): string {
+  const reading = displayReading(ctx)
+  return `The learner is studying ${label(ctx.card.targetLang)}. The card shows the word “${ctx.card.back}”${reading ? ` (${reading})` : ''}, whose meaning in ${label(ctx.card.sourceLang)} is given as “${ctx.card.front}” — a list of its senses separated by “/”. The learner answered with: “${typed}”. Decide whether the learner's answer is an acceptable meaning of the word. Accept any one of the listed senses or a standard synonym/paraphrase; reject answers that mean something else or are too vague. Give the feedback in the learner's native language (${label(ctx.card.sourceLang)}), not in ${label(ctx.card.targetLang)}.`
 }
 
 // --- multiple choice ---------------------------------------------------------

@@ -23,9 +23,8 @@ process.env.TUTOR_DATA_DIR ||= join(homedir(), '.local/share/tutor')
 
 const { env } = await import('../apps/server/src/env')
 const { buildDeps } = await import('../apps/server/src/bootstrap')
-const { getRoles, listCards, listDecks, listUsers, updateCard } = await import(
-  '../apps/server/src/db/repo'
-)
+const { getRoles, listCards, listDecks, listUsers, updateCard } =
+  await import('../apps/server/src/db/repo')
 const { META_MARKERS, stripMetaCommentary } = await import('../apps/server/src/deck/plan')
 const { mandarinSentenceZhuyin } = await import('../apps/server/src/deck/mandarin')
 const { pinyinToZhuyin } = await import('../apps/server/src/seed/zhuyin')
@@ -51,44 +50,55 @@ function looksLiteral(english: string): boolean {
   return /-(?:[a-z]{2,})|\b(?:classifier|particle|how-many|to-sleep)\b/i.test(english)
 }
 
-function repairCardText(card: ReturnType<typeof listCards>[number]): {
+interface RepairPatch {
   front?: string
   readings?: Record<string, string>
   payload?: Record<string, unknown>
-} {
-  const patch: {
-    front?: string
-    readings?: Record<string, string>
-    payload?: Record<string, unknown>
-  } = {}
+}
 
-  if (looksPinyin(card.readings.zhuyin)) {
-    patch.readings = { ...card.readings, zhuyin: pinyinToZhuyin(card.readings.zhuyin!) }
-  } else if (card.targetLang === 'zh' && !card.readings.zhuyin && !card.readings.pinyin) {
-    // Fill a missing Zhuyin reading from the Taiwan dictionary.
-    const zhuyin = mandarinSentenceZhuyin(card.back)
-    if (zhuyin) patch.readings = { ...card.readings, zhuyin }
-  }
-
+function repairCardText(card: ReturnType<typeof listCards>[number]): RepairPatch {
+  const patch: RepairPatch = {}
+  const readings = repairReadings(card)
+  if (readings) patch.readings = readings
   const front = stripMetaCommentary(card.front)
   if (front !== card.front) patch.front = front
+  const payload = cleanTextFields(card.payload ?? {})
+  if (payload) patch.payload = payload
+  return patch
+}
 
-  const payload = { ...(card.payload ?? {}) }
-  let payloadChanged = false
+/** Fixes a pinyin-as-Zhuyin reading, or fills a missing one. */
+function repairReadings(
+  card: ReturnType<typeof listCards>[number],
+): Record<string, string> | undefined {
+  if (looksPinyin(card.readings.zhuyin)) {
+    return { ...card.readings, zhuyin: pinyinToZhuyin(card.readings.zhuyin!) }
+  }
+  if (card.targetLang === 'zh' && !card.readings.zhuyin && !card.readings.pinyin) {
+    // Fill a missing Zhuyin reading from the Taiwan dictionary.
+    const zhuyin = mandarinSentenceZhuyin(card.back)
+    if (zhuyin) return { ...card.readings, zhuyin }
+  }
+  return undefined
+}
+
+/** Strips meta commentary from the payload text fields, or undefined when clean. */
+function cleanTextFields(current: Record<string, unknown>): Record<string, unknown> | undefined {
+  const payload = { ...current }
+  let changed = false
   for (const key of TEXT_FIELDS) {
     const v = payload[key]
     if (typeof v !== 'string') continue
     const cleaned = stripMetaCommentary(v)
     if (!cleaned || cleaned.length > 200 || META_MARKERS.test(cleaned)) {
       delete payload[key]
-      payloadChanged = true
+      changed = true
     } else if (cleaned !== v) {
       payload[key] = cleaned
-      payloadChanged = true
+      changed = true
     }
   }
-  if (payloadChanged) patch.payload = payload
-  return patch
+  return changed ? payload : undefined
 }
 
 /** Sentence cards whose English needs a real translation pass. */

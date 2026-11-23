@@ -41,27 +41,39 @@ function buildIndex(): AccentIndex {
   const word: WordIndex = new Map()
   const reading: ReadingIndex = new Map()
   for (const line of accentsTxt.split('\n')) {
-    if (!line) continue
-    const tab = line.indexOf('\t')
-    if (tab < 0) continue
-    const head = line.slice(0, tab)
-    const rest = line.slice(tab + 1)
-    const tab2 = rest.indexOf('\t')
-    if (tab2 < 0) continue
-    const kana = rest.slice(0, tab2)
-    const accents = rest
-      .slice(tab2 + 1)
-      .split(',')
-      .map((n) => Number(n))
-      .filter((n) => Number.isInteger(n) && n >= 0)
-    if (!head || accents.length === 0) continue
-
-    let byReading = word.get(head)
-    if (!byReading) word.set(head, (byReading = new Map()))
-    push(byReading, kana || '', accents)
-    if (kana) push(reading, kana, accents)
+    const row = parseLine(line)
+    if (!row) continue
+    let byReading = word.get(row.head)
+    if (!byReading) word.set(row.head, (byReading = new Map()))
+    push(byReading, row.kana, row.accents)
+    if (row.kana) push(reading, row.kana, row.accents)
   }
   return { word, reading }
+}
+
+interface DictRow {
+  head: string
+  kana: string
+  accents: number[]
+}
+
+/** One `head<TAB>kana<TAB>accents` dictionary line, or undefined. */
+function parseLine(line: string): DictRow | undefined {
+  if (!line) return undefined
+  const tab = line.indexOf('\t')
+  if (tab < 0) return undefined
+  const head = line.slice(0, tab)
+  const rest = line.slice(tab + 1)
+  const tab2 = rest.indexOf('\t')
+  if (tab2 < 0) return undefined
+  const kana = rest.slice(0, tab2)
+  const accents = rest
+    .slice(tab2 + 1)
+    .split(',')
+    .map(Number)
+    .filter((n) => Number.isInteger(n) && n >= 0)
+  if (!head || accents.length === 0) return undefined
+  return { head, kana, accents }
 }
 
 function index(): AccentIndex {
@@ -84,24 +96,36 @@ export function accentFor(word: string, reading: string): number | undefined {
   const i = index()
   const byReading = i.word.get(word)
   if (byReading) {
-    if (reading) {
-      const exact = byReading.get(reading)
-      if (exact?.[0] !== undefined) return exact[0]
-    }
-    const kanaOnly = byReading.get('')
-    if (kanaOnly?.[0] !== undefined) return kanaOnly[0]
-    if (!isKanaWord(word) && byReading.size === 1) {
-      const only = [...byReading.values()][0]
-      if (only?.[0] !== undefined) return only[0]
-    }
+    const fromWord = wordAccent(byReading, reading, word)
+    if (fromWord !== undefined) return fromWord
   }
-  if (!isKanaWord(word) && reading) {
-    const byKana = i.reading.get(reading)
-    // Only trust a reading that names a single accent; homophones differ (はし).
-    const distinct = byKana ? [...new Set(byKana)] : []
-    if (distinct.length === 1) return distinct[0]
+  if (!isKanaWord(word) && reading) return singleReadingAccent(i.reading.get(reading))
+  return undefined
+}
+
+/** The accent from the word's own readings: exact, kana-only, then the sole one. */
+function wordAccent(
+  byReading: Map<string, number[]>,
+  reading: string,
+  word: string,
+): number | undefined {
+  if (reading) {
+    const exact = byReading.get(reading)
+    if (exact?.[0] !== undefined) return exact[0]
+  }
+  const kanaOnly = byReading.get('')
+  if (kanaOnly?.[0] !== undefined) return kanaOnly[0]
+  if (!isKanaWord(word) && byReading.size === 1) {
+    const only = [...byReading.values()][0]
+    if (only?.[0] !== undefined) return only[0]
   }
   return undefined
+}
+
+/** Only trust a reading that names a single accent; homophones differ (はし). */
+function singleReadingAccent(byKana: number[] | undefined): number | undefined {
+  const distinct = byKana ? [...new Set(byKana)] : []
+  return distinct.length === 1 ? distinct[0] : undefined
 }
 
 /** Small kana that bind to the preceding mora (ゅ in きゅ, etc.). */

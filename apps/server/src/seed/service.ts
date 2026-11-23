@@ -1,3 +1,4 @@
+import type { Card } from '@tutor/core'
 import type { Db } from '../db/client'
 import {
   addCard,
@@ -50,34 +51,41 @@ interface FrequencyDeck {
 }
 
 function starterDecks(): FrequencyDeck[] {
-  return [
-    {
-      level: FREQUENCY_LEVEL,
-      name: 'Mandarin · Frequency',
-      targetLang: 'zh',
-      description: 'The most common Mandarin words, one step at a time',
-      content: FREQUENCY.map((w) => ({
-        front: w.en,
-        back: w.word,
-        readings: readingsFor('zh', w.pinyin),
-        tags: [FREQUENCY_LEVEL, w.pos],
-        payload: { pos: w.pos },
-      })),
-    },
-    {
-      level: JAPANESE_FREQUENCY_LEVEL,
-      name: 'Japanese · Frequency',
-      targetLang: 'ja',
-      description: 'The most common Japanese words, one step at a time',
-      content: FREQUENCY_JA.map((w) => ({
-        front: w.en,
-        back: w.word,
-        readings: readingsFor('ja', w.romaji, w.kana),
-        tags: [JAPANESE_FREQUENCY_LEVEL, w.pos],
-        payload: { pos: w.pos },
-      })),
-    },
-  ]
+  return [mandarinDeck(), japaneseDeck()]
+}
+
+function mandarinDeck(): FrequencyDeck {
+  return {
+    level: FREQUENCY_LEVEL,
+    name: 'Mandarin · Frequency',
+    targetLang: 'zh',
+    description: 'The most common Mandarin words, one step at a time',
+    content: FREQUENCY.map((w) =>
+      seedCard(FREQUENCY_LEVEL, w.en, w.word, readingsFor('zh', w.pinyin), w.pos),
+    ),
+  }
+}
+
+function japaneseDeck(): FrequencyDeck {
+  return {
+    level: JAPANESE_FREQUENCY_LEVEL,
+    name: 'Japanese · Frequency',
+    targetLang: 'ja',
+    description: 'The most common Japanese words, one step at a time',
+    content: FREQUENCY_JA.map((w) =>
+      seedCard(JAPANESE_FREQUENCY_LEVEL, w.en, w.word, readingsFor('ja', w.romaji, w.kana), w.pos),
+    ),
+  }
+}
+
+function seedCard(
+  level: string,
+  front: string,
+  back: string,
+  readings: Record<string, string>,
+  pos: string,
+): SeedContent {
+  return { front, back, readings, tags: [level, pos], payload: { pos } }
 }
 
 /**
@@ -142,19 +150,34 @@ function reconcileCards(
   seed: readonly SeedContent[],
 ): void {
   const existing = listCards(db, userId, deckId)
-  seed.forEach((c, i) => {
-    const card = existing[i]
-    if (!card) {
-      addCard(db, userId, { deckId, sourceLang: 'en', targetLang, ...c, origin: 'curated' })
-      return
-    }
-    if (
-      card.front !== c.front ||
-      card.back !== c.back ||
-      !sameReadings(card.readings, c.readings)
-    ) {
-      updateCard(db, card.id, userId, { front: c.front, back: c.back, readings: c.readings })
-    }
+  const ctx: ReconcileCtx = { db, userId, deckId, targetLang }
+  seed.forEach((c, i) => reconcileCard(ctx, existing[i], c))
+}
+
+interface ReconcileCtx {
+  db: Db
+  userId: string
+  deckId: string
+  targetLang: string
+}
+
+function reconcileCard(ctx: ReconcileCtx, card: Card | undefined, seed: SeedContent): void {
+  if (!card) {
+    addCard(ctx.db, ctx.userId, {
+      deckId: ctx.deckId,
+      sourceLang: 'en',
+      targetLang: ctx.targetLang,
+      ...seed,
+      origin: 'curated',
+    })
+    return
+  }
+  const same = card.front === seed.front && card.back === seed.back
+  if (same && sameReadings(card.readings, seed.readings)) return
+  updateCard(ctx.db, card.id, ctx.userId, {
+    front: seed.front,
+    back: seed.back,
+    readings: seed.readings,
   })
 }
 

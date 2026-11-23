@@ -23,16 +23,21 @@ export function exampleFor(
   if (!canBuildSentence(entry, known)) return undefined
   const build = buildSentence(entry, known, seededRandom(hashSeed(ctx.card.id)))
   if (!build) return undefined
+  return {
+    text: build.tokens.join(''),
+    reading: readingsShown(ctx) ? tokensZhuyin(build.tokens) : '',
+    gloss: build.gloss,
+    target: build.target,
+  }
+}
+
+/** The space-joined Zhuyin of a token run (unknown tokens dropped). */
+function tokensZhuyin(tokens: string[]): string {
   const zhuyinOf = (t: string) => {
     const e = LEXICON.get(t)
     return e ? pinyinToZhuyin(e.pinyin) : ''
   }
-  return {
-    text: build.tokens.join(''),
-    reading: readingsShown(ctx) ? build.tokens.map(zhuyinOf).filter(Boolean).join(' ') : '',
-    gloss: build.gloss,
-    target: build.target,
-  }
+  return tokens.map(zhuyinOf).filter(Boolean).join(' ')
 }
 
 /**

@@ -25,28 +25,34 @@ export function parseInstruction(
   const s = instruction.toLowerCase()
   const isChinese = targetLang === 'zh' || targetLang === 'yue'
   const isJapanese = targetLang === 'ja'
-
-  // The deck's language wins over wording borrowed from another deck's prompt:
-  // a remembered Chinese prompt must never force Zhuyin on a Japanese deck.
-  let variant: CharacterVariant | undefined
-  if (isChinese) {
-    if (/traditional|繁體|繁体|zh_tw/.test(s)) variant = 'traditional'
-    else if (/simplified|简体|簡體|zh_cn/.test(s)) variant = 'simplified'
-    else if (targetLang === 'zh') variant = 'traditional' // the app's default
+  return {
+    // The deck's language wins over wording borrowed from another deck's prompt:
+    // a remembered Chinese prompt must never force Zhuyin on a Japanese deck.
+    variant: variantOf(s, targetLang, isChinese),
+    readingScript: readingScriptOf(s, isChinese, isJapanese),
+    // Pitch-accent metadata is language-specific but opt-in: only ask the
+    // generator when the instruction does.
+    pitchAccent: /pitch|accent|アクセント|音調|音调|高低|聲調|声调|tone contour|tones?/.test(s),
   }
+}
 
-  let readingScript: string | undefined
+function variantOf(
+  s: string,
+  targetLang: string,
+  isChinese: boolean,
+): CharacterVariant | undefined {
+  if (!isChinese) return undefined
+  if (/traditional|繁體|繁体|zh_tw/.test(s)) return 'traditional'
+  if (/simplified|简体|簡體|zh_cn/.test(s)) return 'simplified'
+  return targetLang === 'zh' ? 'traditional' : undefined // the app's default
+}
+
+function readingScriptOf(s: string, isChinese: boolean, isJapanese: boolean): string | undefined {
   if (isChinese) {
-    if (/zhuyin|注音|bopomofo|ㄅㄆㄇ/.test(s)) readingScript = 'zhuyin'
-    else if (/pinyin|拼音/.test(s)) readingScript = 'pinyin'
-    else readingScript = 'zhuyin'
-  } else if (isJapanese) {
-    readingScript = /romaji|rōmaji/.test(s) ? 'romaji' : 'kana'
+    if (/zhuyin|注音|bopomofo|ㄅㄆㄇ/.test(s)) return 'zhuyin'
+    if (/pinyin|拼音/.test(s)) return 'pinyin'
+    return 'zhuyin'
   }
-
-  // Pitch-accent metadata is language-specific but opt-in: only ask the
-  // generator when the instruction does (Japanese pitch accent, tone contours).
-  const pitchAccent = /pitch|accent|アクセント|音調|音调|高低|聲調|声调|tone contour|tones?/.test(s)
-
-  return { variant, readingScript, pitchAccent }
+  if (isJapanese) return /romaji|rōmaji/.test(s) ? 'romaji' : 'kana'
+  return undefined
 }

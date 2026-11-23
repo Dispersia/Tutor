@@ -36,30 +36,34 @@ const TAIL_TONES = ['ˊ', 'ˇ', 'ˋ'] // 1st tone carries no mark
 
 /** Folds one Zhuyin syllable's initial and final to their Taiwan variants. */
 function foldSyllable(syllable: string): string {
+  const { lead, body, tail } = splitTones(syllable)
+  return lead + foldBody(body) + tail
+}
+
+/** Splits a syllable into its neutral-tone lead, body and tone-mark tail. */
+function splitTones(syllable: string): { lead: string; body: string; tail: string } {
   let lead = ''
   let body = syllable
   if (body.startsWith(LEAD_TONE)) {
     lead = LEAD_TONE
     body = body.slice(1)
   }
-  let tail = ''
   const last = body.slice(-1)
-  if (TAIL_TONES.includes(last)) {
-    tail = last
-    body = body.slice(0, -1)
-  }
+  if (!TAIL_TONES.includes(last)) return { lead, body, tail: '' }
+  return { lead, body: body.slice(0, -1), tail: last }
+}
 
+/** Merges the syllable's initial and its -eng/-ing final where Taiwan does. */
+function foldBody(body: string): string {
   const head = body[0]
   const merged = head ? MERGED_INITIALS[head] : undefined
   if (merged) body = merged + body.slice(1)
-
   // -eng/-ing merge with -en/-in, but -ong/-iong do not merge with -un.
   if (body.endsWith('ㄥ')) {
     const stem = body.slice(0, -1)
     if (!stem.endsWith('ㄨ') && !stem.endsWith('ㄩ')) body = stem + 'ㄣ'
   }
-
-  return lead + body + tail
+  return body
 }
 
 /** Folds every syllable of a Zhuyin reading to its accent-equivalent form. */

@@ -171,20 +171,26 @@ export function applySetBonuses(
   power: number,
   sets: ActiveSetBonus[],
 ): { stats: GearStats; armour: number; power: number } {
-  let nextStats = stats
-  let nextArmour = armour
-  let nextPower = power
-  for (const set of sets) {
-    for (const tier of set.active) {
-      if (tier.stats) nextStats = addStats(nextStats, tier.stats)
-      if (tier.armourPct) nextArmour *= 1 + tier.armourPct
-      if (tier.powerPct) nextPower *= 1 + tier.powerPct
-    }
-  }
+  let totals = { stats, armour, power }
+  for (const set of sets) for (const tier of set.active) totals = applyTier(totals, tier)
   return {
-    stats: nextStats,
-    armour: Math.round(nextArmour),
-    power: Math.round(nextPower),
+    stats: totals.stats,
+    armour: Math.round(totals.armour),
+    power: Math.round(totals.power),
+  }
+}
+
+type SetTier = ActiveSetBonus['active'][number]
+
+/** One active tier: added stats, and percentage armour/power multipliers. */
+function applyTier(
+  totals: { stats: GearStats; armour: number; power: number },
+  tier: SetTier,
+): { stats: GearStats; armour: number; power: number } {
+  return {
+    stats: tier.stats ? addStats(totals.stats, tier.stats) : totals.stats,
+    armour: tier.armourPct ? totals.armour * (1 + tier.armourPct) : totals.armour,
+    power: tier.powerPct ? totals.power * (1 + tier.powerPct) : totals.power,
   }
 }
 
@@ -277,27 +283,59 @@ export function rollGearStats(item: ItemDef, rand: () => number = Math.random): 
   const quality = rollQuality(rand)
   const mult = QUALITY_MULTIPLIER[quality]
   const level = Math.max(1, item.itemLevel ?? 1)
+  const stats = addAffixes({
+    stats: scaledBase(item, mult),
+    count: affixCount(quality),
+    pool: affixPool(item),
+    level,
+    mult,
+    rand,
+  })
+  return {
+    stats,
+    quality,
+    armour: scaled(item.armour ?? 0, mult),
+    power: scaled(item.power ?? 0, mult),
+  }
+}
+
+const scaled = (value: number, mult: number): number => Math.max(0, Math.round(value * mult))
+
+/** The item's base stats, scaled by quality (never below 1). */
+function scaledBase(item: ItemDef, mult: number): GearStats {
   const base = item.stats ?? {}
   let stats = EMPTY_STATS
   for (const id of STAT_IDS) {
     const value = base[id] ?? 0
     if (value) stats = { ...stats, [id]: Math.max(1, Math.round(value * mult)) }
   }
+  return stats
+}
 
-  const affixes = quality === 'epic' ? 3 : quality === 'rare' ? 2 : quality === 'uncommon' ? 2 : 1
-  const pool = affixPool(item)
-  for (let i = 0; i < affixes; i++) {
-    const id = pool[Math.floor(rand() * pool.length)]!
-    const amount = Math.max(1, Math.round((1 + level * 0.8) * mult * (0.7 + rand() * 0.6)))
+const affixCount = (quality: GearQuality): number =>
+  quality === 'epic' ? 3 : quality === 'rare' || quality === 'uncommon' ? 2 : 1
+
+interface AffixReq {
+  stats: GearStats
+  count: number
+  pool: (keyof GearStats)[]
+  level: number
+  mult: number
+  rand: () => number
+}
+
+/** Adds the rolled affixes from the piece's stat pool. */
+function addAffixes(req: AffixReq): GearStats {
+  let stats = req.stats
+  for (let i = 0; i < req.count; i++) {
+    const id = req.pool[Math.floor(req.rand() * req.pool.length)]!
+    const amount = Math.max(
+      1,
+      Math.round((1 + req.level * 0.8) * req.mult * (0.7 + req.rand() * 0.6)),
+    )
     stats = { ...stats, [id]: stats[id] + amount }
   }
-
-  return {
-    stats,
-    quality,
-    armour: Math.max(0, Math.round((item.armour ?? 0) * mult)),
-    power: Math.max(0, Math.round((item.power ?? 0) * mult)),
-  }
+  return stats
 }
 
 export function emptyStats(): GearStats {

@@ -28,30 +28,45 @@ export async function unzip(bytes: Uint8Array): Promise<Map<string, Uint8Array>>
   const count = view.getUint16(eocd + 10, true)
   let ptr = view.getUint32(eocd + 16, true)
 
-  const decoder = new TextDecoder()
+  const ctx: EntryCtx = { view, decoder: new TextDecoder(), bytes }
   const out = new Map<string, Uint8Array>()
-
   for (let i = 0; i < count; i++) {
     if (view.getUint32(ptr, true) !== CEN_SIG) break
-    const method = view.getUint16(ptr + 10, true)
-    const compSize = view.getUint32(ptr + 20, true)
-    const nameLen = view.getUint16(ptr + 28, true)
-    const extraLen = view.getUint16(ptr + 30, true)
-    const commentLen = view.getUint16(ptr + 32, true)
-    const localOffset = view.getUint32(ptr + 42, true)
-    const name = decoder.decode(bytes.subarray(ptr + 46, ptr + 46 + nameLen))
-
-    // the local header repeats the name/extra lengths and may differ from the
-    // central directory's, so the data offset must be read from it
-    const lNameLen = view.getUint16(localOffset + 26, true)
-    const lExtraLen = view.getUint16(localOffset + 28, true)
-    const start = localOffset + 30 + lNameLen + lExtraLen
-    const raw = bytes.subarray(start, start + compSize)
-
-    if (!name.endsWith('/')) {
-      out.set(name, method === 0 ? raw.slice() : await inflateRaw(raw))
-    }
-    ptr += 46 + nameLen + extraLen + commentLen
+    const entry = await readEntry(ptr, ctx)
+    if (entry.data) out.set(entry.name, entry.data)
+    ptr = entry.next
   }
   return out
+}
+
+interface EntryCtx {
+  view: DataView
+  decoder: TextDecoder
+  bytes: Uint8Array
+}
+
+interface ZipEntry {
+  name: string
+  /** undefined for a directory entry (nothing to read) */
+  data: Uint8Array | undefined
+  next: number
+}
+
+/** One central-directory entry: its name, data and the next entry's offset. */
+async function readEntry(ptr: number, ctx: EntryCtx): Promise<ZipEntry> {
+  const { view, decoder, bytes } = ctx
+  const method = view.getUint16(ptr + 10, true)
+  const compSize = view.getUint32(ptr + 20, true)
+  const nameLen = view.getUint16(ptr + 28, true)
+  const extraLen = view.getUint16(ptr + 30, true)
+  const commentLen = view.getUint16(ptr + 32, true)
+  const localOffset = view.getUint32(ptr + 42, true)
+  const name = decoder.decode(bytes.subarray(ptr + 46, ptr + 46 + nameLen))
+  // the local header repeats the name/extra lengths and may differ from the
+  // central directory's, so the data offset must be read from it
+  const start =
+    localOffset + 30 + view.getUint16(localOffset + 26, true) + view.getUint16(localOffset + 28, true)
+  const raw = bytes.subarray(start, start + compSize)
+  const data = name.endsWith('/') ? undefined : method === 0 ? raw.slice() : await inflateRaw(raw)
+  return { name, data, next: ptr + 46 + nameLen + extraLen + commentLen }
 }

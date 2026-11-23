@@ -19,20 +19,42 @@ export function grantItems(
 ): Cost[] {
   const bonus = aggregateBonuses(db, userId)
   const granted: Cost[] = []
-  for (const c of costs) {
-    const count = applyYield(c.count, bonus.yield(actionId), bonus.double(actionId), rand)
-    if (count <= 0) continue
-    addItems(db, userId, c.item, count)
-    recordGearCrafts(db, userId, c.item, count, rand)
-    granted.push({ item: c.item, count })
-    bus.emit('item.gained', {
-      userId,
-      itemId: c.item,
-      count,
-      total: getItemCount(db, userId, c.item),
-    })
+  for (const cost of costs) {
+    const got = grantOne({ db, bus, userId, cost, bonus, actionId, rand })
+    if (got) granted.push(got)
   }
   return granted
+}
+
+interface GrantReq {
+  db: Db
+  bus: EventBus
+  userId: string
+  cost: Cost
+  bonus: ReturnType<typeof aggregateBonuses>
+  actionId: string
+  rand: () => number
+}
+
+/** Grants one cost, returning what was actually credited (or nothing). */
+function grantOne(req: GrantReq): Cost | undefined {
+  const { db, bus, userId, cost } = req
+  const count = applyYield(
+    cost.count,
+    req.bonus.yield(req.actionId),
+    req.bonus.double(req.actionId),
+    req.rand,
+  )
+  if (count <= 0) return undefined
+  addItems(db, userId, cost.item, count)
+  recordGearCrafts(db, userId, cost.item, count, req.rand)
+  bus.emit('item.gained', {
+    userId,
+    itemId: cost.item,
+    count,
+    total: getItemCount(db, userId, cost.item),
+  })
+  return { item: cost.item, count }
 }
 
 export function consumeItems(db: Db, bus: EventBus, userId: string, costs: Cost[]): void {
