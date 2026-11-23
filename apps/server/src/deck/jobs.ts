@@ -12,6 +12,11 @@ import type { DeckContext } from './context'
  */
 const builds = new Map<string, Promise<void>>()
 
+/** True while a background build is filling this deck. */
+export function isDeckBuilding(deckId: string): boolean {
+  return builds.has(deckId)
+}
+
 /** Waits for a deck's background build, resolving at once when none is running. */
 export function awaitDeckBuild(deckId: string): Promise<void> {
   return builds.get(deckId) ?? Promise.resolve()

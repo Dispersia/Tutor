@@ -137,7 +137,7 @@ async function startImport(req: ImportReq) {
   const { deps, user, parsed, list } = req
   // A full import is many LLM calls, well past Bun's request idle timeout. The UI
   // watches `settings.building` + the growth cursor.
-  updateDeckSettings(deps.db, user.id, setup.created.deckId, {
+  updateDeckSettings(deps.db, setup.created.deckId, user.id, {
     building: true,
     buildTotal: setup.count,
     cursor: 0,

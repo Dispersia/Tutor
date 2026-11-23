@@ -82,12 +82,3 @@ export function mergeDeckSettings(
   }
   return next
 }
-
-/**
- * Whether native readings (ruby) should be shown for a deck. A deck-level
- * override wins over the learner's global study preference; with neither set the
- * caller's fallback applies.
- */
-export function deckShowsReadings(settings: DeckSettings): boolean | undefined {
-  return settings.showReadings
-}

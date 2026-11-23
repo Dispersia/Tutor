@@ -124,13 +124,6 @@ export function ratingFromScore(_score: number, correct: boolean): Rating {
   return correct ? GOOD : AGAIN
 }
 
-export const RATING_LABELS: Record<Rating, string> = {
-  1: 'Again',
-  2: 'Hard',
-  3: 'Good',
-  4: 'Easy',
-}
-
 export interface ScheduleOptions {
   desiredRetention?: number
   maxIntervalDays?: number
@@ -233,11 +226,23 @@ function sameDay(prev: FsrsState, ctx: SchedCtx): ScheduleResult {
     lastReviewAt: ctx.now,
     lastRating: ctx.rating,
   }
-  if (!inSteps(prev)) return keepInterval(base, prev, ctx)
+  if (!inSteps(prev)) return sameDayReview(base, prev, ctx)
   const steps = stepsFor(prev, ctx)
   const step = ctx.rating === GOOD || ctx.rating === EASY ? prev.step + 1 : prev.step
   if (step >= steps.length || ctx.rating === EASY) return graduate(base, stability, ctx)
   return stayStep(base, steps, step, ctx)
+}
+
+/**
+ * A review card answered inside a day of its last review. Ahead of its due date
+ * the interval stands. Once it **is** due it must be rescheduled: an early review
+ * (combat drills ahead of the schedule) moves `lastReviewAt` but not `dueAt`, so
+ * keeping the interval here left the card due however often it was answered.
+ */
+function sameDayReview(base: FsrsState, prev: FsrsState, ctx: SchedCtx): ScheduleResult {
+  if (prev.dueAt > ctx.now) return keepInterval(base, prev, ctx)
+  if (ctx.rating !== AGAIN) return graduate(base, base.stability, ctx)
+  return stayStep({ ...base, state: 'relearning' }, ctx.relearningSteps, 0, ctx)
 }
 
 /** A review card answered again the same day just keeps its interval. */
@@ -320,8 +325,10 @@ export function isLearned(state: FsrsState | undefined): boolean {
 }
 
 /**
- * Picks the card to study next: overdue first, then new, then the soonest due —
- * including a card that is not due yet. Callers that must always have something
+ * Picks the card to study next: overdue first, then new, then the card that has
+ * waited longest since its last review — including one that is not due yet (an
+ * early review does not move a due date, so "soonest due" would hand back the
+ * same card for every hit of a fight). Callers that must always have something
  * to show (combat wants a card for every hit) use this; practice uses
  * `selectStudyCardId`, which never reaches past a review card's due date.
  * `cardIds` is in syllabus order; `srs` maps card id -> state.
@@ -339,8 +346,13 @@ export function selectCardId(
   if (due.length) return due.sort((a, b) => (srs.get(a)!.dueAt ?? 0) - (srs.get(b)!.dueAt ?? 0))[0]
   const fresh = cardIds.filter((id) => !srs.has(id))
   if (fresh.length) return fresh[0]
-  return cardIds.slice().sort((a, b) => (srs.get(a)?.dueAt ?? 0) - (srs.get(b)?.dueAt ?? 0))[0]
+  return cardIds
+    .slice()
+    .sort((a, b) => lastSeen(srs, a) - lastSeen(srs, b) || dueOf(srs, a) - dueOf(srs, b))[0]
 }
+
+const lastSeen = (srs: Map<string, FsrsState>, id: string): number => srs.get(id)?.lastReviewAt ?? 0
+const dueOf = (srs: Map<string, FsrsState>, id: string): number => srs.get(id)?.dueAt ?? 0
 
 /**
  * Picks the card to study next: overdue first, then new, and nothing else.

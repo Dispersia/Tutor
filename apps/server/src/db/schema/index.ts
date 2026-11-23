@@ -1,5 +1,5 @@
 /**
- * The SQLite schema, split by domain (docs/REFACTOR_PLAN.md §8.2, Phase 11).
+ * The SQLite schema, split by domain (docs/ARCHITECTURE.md).
  *
  * This barrel is the entry point: `db/client.ts` reads it as a namespace and
  * every repo module imports the tables it needs. The tables themselves are pure

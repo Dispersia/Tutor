@@ -1,14 +1,13 @@
 /**
- * The shared exercise context, assembled once (docs/REFACTOR_PLAN.md §8.1,
- * finding 5). Practice's three surfaces and combat all hand an `ExerciseContext`
- * to an exercise definition; this is the one place that builds it, so a new
+ * The shared exercise context, assembled once. Practice's three surfaces and
+ * combat all hand an `ExerciseContext` to an exercise definition; this is the one place that builds it, so a new
  * field (readings, known, distractors) is added once.
  */
 
 import type { Card, ExerciseContext } from '@tutor/core'
 import type { Deps } from '../../context'
 import { getDeck, otherBacks } from '../../db/repo'
-import { readStudyPrefs, showsReadings, type StudyPrefs } from '../../game/study'
+import { readStudyPrefs, showsReadings, type StudyPrefs } from '../../services/study'
 import { learnerOf, readingMap, type SessionUser } from './select'
 
 export { learnerOf, type SessionUser }

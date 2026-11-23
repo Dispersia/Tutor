@@ -175,7 +175,15 @@ export class OpenRouter {
     if (choice?.finish_reason === 'length') {
       throw new Error('the model ran out of output space before its JSON was complete')
     }
-    return parseJson<T>(choice?.message?.content ?? '{}', json.usage)
+    const content = choice?.message?.content
+    // A 200 can still carry a provider error or a refusal with no content. Passing
+    // that off as `{}` made a failed batch look like an empty, finished one.
+    if (typeof content !== 'string' || !content.trim()) {
+      throw new Error(
+        `the model returned no content${json.error?.message ? `: ${json.error.message}` : ''}`,
+      )
+    }
+    return parseJson<T>(content, json.usage)
   }
 }
 
@@ -245,7 +253,8 @@ function jsonBody(opts: JsonOptions) {
 }
 
 interface JsonResponse {
-  choices?: { message?: { content?: string }; finish_reason?: string }[]
+  choices?: { message?: { content?: string | null }; finish_reason?: string }[]
+  error?: { message?: string }
   usage?: Record<string, unknown>
 }
 

@@ -43,21 +43,37 @@ interface JudgeOpts {
   reminder: string
 }
 
+/** A grade must not hang on the model: past this the deterministic result stands. */
+const JUDGE_TIMEOUT_MS = 20_000
+
+/**
+ * The judge is a second opinion. When it is unreachable (rate limit, expired
+ * key, timeout) the exercise falls back to its deterministic grade — every
+ * caller treats `undefined` as "no verdict" — instead of failing the review.
+ */
+function judgeUnavailable(err: unknown): undefined {
+  console.warn('[judge] unavailable, using the deterministic grade:', (err as Error).message)
+  return undefined
+}
+
 /** The judge function, closed over the client, model and language rules. */
 function makeJudge(opts: JudgeOpts) {
   // The language rule is repeated next to the request: small models follow the
   // last instruction far more reliably than one buried in the system prompt.
   return async (prompt: string, schema: object): Promise<unknown> => {
-    const { json } = await opts.or.chatJSON({
-      model: opts.model,
-      schema,
-      schemaName: 'grade',
-      reasoning: roleReasoning.judge,
-      messages: [
-        { role: 'system', content: opts.system },
-        { role: 'user', content: `${prompt}\n\n${opts.reminder}` },
-      ],
-    })
-    return json
+    const messages = [
+      { role: 'system' as const, content: opts.system },
+      { role: 'user' as const, content: `${prompt}\n\n${opts.reminder}` },
+    ]
+    return opts.or
+      .chatJSON({
+        model: opts.model,
+        schema,
+        schemaName: 'grade',
+        reasoning: roleReasoning.judge,
+        signal: AbortSignal.timeout(JUDGE_TIMEOUT_MS),
+        messages,
+      })
+      .then((r) => r.json, judgeUnavailable)
   }
 }

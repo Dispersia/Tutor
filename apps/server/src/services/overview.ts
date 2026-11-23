@@ -122,6 +122,10 @@ export interface GameSummary {
   todayActive: boolean
 }
 
+function streakAlive(lastActiveDay: string | null, today: string): boolean {
+  return lastActiveDay === today || lastActiveDay === shiftDay(today, -1)
+}
+
 export function summary(db: Db, userId: string): GameSummary {
   const s = getStats(db, userId)
   const today = todayDay()
@@ -132,7 +136,9 @@ export function summary(db: Db, userId: string): GameSummary {
     xp: s.xpTotal,
     level: account.level,
     progress: account.progress,
-    streak: s.streakDays,
+    // The stored streak is only rewritten by a review: after a missed day it is
+    // stale until then, so a gap reads as broken straight away.
+    streak: streakAlive(s.lastActiveDay, today) ? s.streakDays : 0,
     dailyGoal: goal,
     dailyXp: daily,
     goalPct: Math.min(1, daily / goal),

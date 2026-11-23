@@ -9,15 +9,6 @@ export function listTalents(db: Db, userId: string) {
   return db.select().from(talents).where(eq(talents.userId, userId)).all()
 }
 
-export function hasTalent(db: Db, userId: string, talentId: string): boolean {
-  const row = db
-    .select()
-    .from(talents)
-    .where(and(eq(talents.userId, userId), eq(talents.talentId, talentId)))
-    .get()
-  return Boolean(row)
-}
-
 export interface NewTalent {
   talentId: string
   skillId: string
@@ -29,12 +20,6 @@ export function addTalent(db: Db, userId: string, t: NewTalent): void {
   db.insert(talents)
     .values({ userId, ...t, grantedAt: now() })
     .onConflictDoNothing()
-    .run()
-}
-
-export function removeTalent(db: Db, userId: string, talentId: string): void {
-  db.delete(talents)
-    .where(and(eq(talents.userId, userId), eq(talents.talentId, talentId)))
     .run()
 }
 

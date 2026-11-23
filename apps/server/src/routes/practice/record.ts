@@ -10,7 +10,7 @@ import type { Card, ExerciseDef, GradeResult } from '@tutor/core'
 import type { Deps } from '../../context'
 import { addReview } from '../../db/repo'
 import { REINFORCE_LAPSES, reinforceLapsedCard } from '../../deck/reinforce'
-import { readStudyPrefs } from '../../game/study'
+import { readStudyPrefs } from '../../services/study'
 import {
   awardXp,
   checkLessonCompletion,

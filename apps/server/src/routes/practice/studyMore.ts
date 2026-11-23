@@ -4,7 +4,7 @@
  */
 
 import type { App } from '../../context'
-import { bumpDailyExtra, readStudyPrefs } from '../../game/study'
+import { bumpDailyExtra, readStudyPrefs } from '../../services/study'
 import { studyBudget } from '../../services'
 
 export function registerStudyMore(app: App) {

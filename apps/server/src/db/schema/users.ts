@@ -1,6 +1,6 @@
 /**
  * Accounts, login sessions and per-user settings (docs/DESIGN.md §12.5).
- * Part of the schema split (docs/REFACTOR_PLAN.md §8.2, Phase 11).
+ * Part of the schema split (docs/ARCHITECTURE.md).
  */
 
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'

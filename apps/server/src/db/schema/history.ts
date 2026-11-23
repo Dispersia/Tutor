@@ -1,7 +1,7 @@
 /**
  * Append-only learner history: reviews, attempts, XP, stats and lesson
  * completion (docs/DESIGN.md §12). History tables are scoped by user_id. Part of
- * the schema split (docs/REFACTOR_PLAN.md §8.2, Phase 11).
+ * the schema split (docs/ARCHITECTURE.md).
  */
 
 import { index, integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core'

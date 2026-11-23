@@ -111,7 +111,9 @@
       <div class="flex items-baseline justify-between gap-3">
         <div class="min-w-0">
           <p class="eyebrow">Deck settings</p>
-          <h2 id="deck-settings-title" class="display truncate text-lg text-ink-100">{deck.name}</h2>
+          <h2 id="deck-settings-title" class="display truncate text-lg text-ink-100">
+            {deck.name}
+          </h2>
         </div>
         <div class="flex items-center gap-3">
           {#if saving}<span class="text-xs text-ink-400">Saving…</span>{/if}
@@ -180,7 +182,9 @@
 
       {#if note}<p class="mt-2 text-center text-xs text-jade-400">{note}</p>{/if}
       {#if error}
-        <p class="banner mt-2 text-xs" style="--accent: var(--color-ember-400)" role="alert">{error}</p>
+        <p class="banner mt-2 text-xs" style="--accent: var(--color-ember-400)" role="alert">
+          {error}
+        </p>
       {/if}
 
       <div class="mt-5 border-t border-ink-700 pt-4">

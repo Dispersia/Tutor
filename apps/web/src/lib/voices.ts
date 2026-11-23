@@ -49,10 +49,6 @@ export function setVoicePrefs(next: Partial<VoicePrefs> | null | undefined): voi
   }
 }
 
-export function getVoicePrefs(): VoicePrefs {
-  return prefs
-}
-
 /**
  * The payload every `speak`/`createSpeaker` call should use, so the learner's
  * voice mode is never ignored. Both modes carry an `instruct`: preset sends the

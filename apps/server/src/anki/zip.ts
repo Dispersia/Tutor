@@ -8,7 +8,9 @@ const EOCD_SIG = 0x06054b50
 const CEN_SIG = 0x02014b50
 
 async function inflateRaw(data: Uint8Array): Promise<Uint8Array> {
-  const stream = new Blob([data as BlobPart]).stream().pipeThrough(new DecompressionStream('deflate-raw'))
+  const stream = new Blob([data as BlobPart])
+    .stream()
+    .pipeThrough(new DecompressionStream('deflate-raw'))
   const buf = await new Response(stream).arrayBuffer()
   return new Uint8Array(buf)
 }
@@ -65,7 +67,10 @@ async function readEntry(ptr: number, ctx: EntryCtx): Promise<ZipEntry> {
   // the local header repeats the name/extra lengths and may differ from the
   // central directory's, so the data offset must be read from it
   const start =
-    localOffset + 30 + view.getUint16(localOffset + 26, true) + view.getUint16(localOffset + 28, true)
+    localOffset +
+    30 +
+    view.getUint16(localOffset + 26, true) +
+    view.getUint16(localOffset + 28, true)
   const raw = bytes.subarray(start, start + compSize)
   const data = name.endsWith('/') ? undefined : method === 0 ? raw.slice() : await inflateRaw(raw)
   return { name, data, next: ptr + 46 + nameLen + extraLen + commentLen }

@@ -24,7 +24,7 @@ import {
   startEncounter,
   summary,
 } from '../services'
-import { readStudyPrefs } from '../game/study'
+import { readStudyPrefs } from '../services/study'
 import { exerciseCtx, pickNextExercise, pickReviewCard, type SessionUser } from './practice'
 import type { App, AppEnv, Deps } from '../context'
 import { bool, jsonBody, str } from './body'

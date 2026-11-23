@@ -1,5 +1,5 @@
 /**
- * The practice routes (docs/REFACTOR_PLAN.md §8.2, Phase 9).
+ * The practice routes (docs/ARCHITECTURE.md).
  *
  * One concern per file: `catalog` (the drill catalog + quiet toggle), `next`
  * (serve a drill), `grade` (grade an answer), `speak` (grade recorded audio) and

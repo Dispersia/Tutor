@@ -67,10 +67,6 @@ export const CARD_VOICES: readonly CardVoice[] = [
   },
 ] as const
 
-export const VOICE_BY_ID: Record<string, CardVoice> = Object.fromEntries(
-  CARD_VOICES.map((v) => [v.id, v]),
-)
-
 /** Clamps an arbitrary index to a real voice (negative wraps, out of range wraps). */
 export function voiceAt(index: number): CardVoice {
   const n = CARD_VOICES.length

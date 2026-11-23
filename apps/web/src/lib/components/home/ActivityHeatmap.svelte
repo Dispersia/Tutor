@@ -2,7 +2,14 @@
   /** The daily-XP heat map: one column per week (Monday first), one row a weekday. */
 
   import type { ActivityDay } from '#lib/exercises'
-  import { HEAT_EMPTY, heatCellStyle, heatFill, heatMax, heatWeeks, monthLabels } from '#lib/homeview'
+  import {
+    HEAT_EMPTY,
+    heatCellStyle,
+    heatFill,
+    heatMax,
+    heatWeeks,
+    monthLabels,
+  } from '#lib/homeview'
 
   interface Props {
     days: ActivityDay[]

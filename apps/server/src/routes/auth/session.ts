@@ -5,6 +5,13 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import { SESSION_COOKIE, newSessionToken, tokenId } from '../../auth'
 import { deleteAuthSession, getAuthSessionUser, insertAuthSession } from '../../db/repo'
 import type { AppEnv } from '../../context'
+import { env } from '../../env'
+
+/**
+ * Scope the cookie to the app's mount: behind a shared gateway hostname
+ * (`tailscale serve /tutor`) a `Path=/` cookie is sent to every other app there.
+ */
+const COOKIE_PATH = env.basePath || '/'
 
 function isHttps(c: Context<AppEnv>): boolean {
   if (new URL(c.req.url).protocol === 'https:') return true
@@ -26,7 +33,7 @@ export function startSession(c: Context<AppEnv>, userId: string): void {
   setCookie(c, SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: 'Lax',
-    path: '/',
+    path: COOKIE_PATH,
     secure: isHttps(c),
     maxAge: Math.floor(deps.sessionTtlMs / 1000),
   })
@@ -35,5 +42,7 @@ export function startSession(c: Context<AppEnv>, userId: string): void {
 export function endSession(c: Context<AppEnv>): void {
   const token = getCookie(c, SESSION_COOKIE)
   if (token) deleteAuthSession(c.get('deps').db, tokenId(token))
-  deleteCookie(c, SESSION_COOKIE, { path: '/' })
+  deleteCookie(c, SESSION_COOKIE, { path: COOKIE_PATH })
+  // Sessions started before the cookie was scoped to the mount used `Path=/`.
+  if (COOKIE_PATH !== '/') deleteCookie(c, SESSION_COOKIE, { path: '/' })
 }

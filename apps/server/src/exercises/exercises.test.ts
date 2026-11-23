@@ -316,7 +316,11 @@ test('converse rejects the bare word without a sentence', async () => {
 test('converse is not offered for cards that already are a sentence', () => {
   const def = registry.get('converse')!
   // A generated sentence card carries payload.tokens.
-  const sentence = ctx({ type: 'phrase', back: '你要什麼？', payload: { tokens: ['你', '要', '什麼'] } })
+  const sentence = ctx({
+    type: 'phrase',
+    back: '你要什麼？',
+    payload: { tokens: ['你', '要', '什麼'] },
+  })
   expect(def.supports(sentence.card, learner)).toBe(false)
   // Any phrase card teaches a whole utterance, not a word.
   expect(def.supports(ctx({ type: 'phrase', back: '你好嗎？' }).card, learner)).toBe(false)

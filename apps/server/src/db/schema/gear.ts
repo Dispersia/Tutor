@@ -1,6 +1,6 @@
 /**
  * Crafted gear and loadouts (docs/DESIGN.md §13.5.3). Part of the schema split
- * (docs/REFACTOR_PLAN.md §8.2, Phase 11).
+ * (docs/ARCHITECTURE.md).
  */
 
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'

@@ -98,7 +98,12 @@ export function parseFrequencyList(text: string, limit = 2000): FrequencyWord[] 
  */
 export async function fetchFrequencyWords(
   targetLang: string,
-  opts: { limit?: number; variant?: CharacterVariant; fetcher?: Fetcher; source?: FrequencySource } = {},
+  opts: {
+    limit?: number
+    variant?: CharacterVariant
+    fetcher?: Fetcher
+    source?: FrequencySource
+  } = {},
 ): Promise<{ source: FrequencySource; words: FrequencyWord[] }> {
   const source = opts.source ?? frequencySourceFor(targetLang, opts.variant)
   if (!source) throw new Error(`no frequency list for language "${targetLang}"`)

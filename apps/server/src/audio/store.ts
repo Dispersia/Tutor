@@ -1,9 +1,9 @@
 /**
  * Content-addressed clip storage for pre-recorded card audio (DESIGN §12).
  *
- * A clip's file name is the sha1 of `(voiceId, text)`, so every card with the
- * same `back` text shares one file and one `audio_blobs` row — no matter how
- * many decks carry that word. Files live under `$TUTOR_DATA_DIR/audio/<hash>.wav`
+ * A clip's file name is the sha1 of `(voiceId, language, text)`, so every card
+ * with the same `back` text **in the same language** shares one file and one
+ * `audio_blobs` row — no matter how many decks carry that word. Files live under `$TUTOR_DATA_DIR/audio/<hash>.wav`
  * so the DB stays small and audio can be pruned on its own.
  */
 
@@ -14,10 +14,25 @@ import { eq } from 'drizzle-orm'
 import type { Db } from '../db/client'
 import { audioBlobs } from '../db/schema'
 
-/** Stable key for one (text, voice) pair. Never include the language: the text
- * itself is the content, and two languages never share a `back` string. */
-export function clipHash(text: string, voiceId: string): string {
-  return createHash('sha1').update(voiceId).update('\u0000').update(text).digest('hex')
+/**
+ * Stable key for one (voice, language, text) clip. The language is part of it:
+ * Mandarin, Japanese and Cantonese share written words (先生, 時間, 水), and each
+ * must be read aloud in its own language.
+ */
+export function clipHash(text: string, voiceId: string, language: string): string {
+  return sha1(voiceId, language, text)
+}
+
+/**
+ * The key clips had before the language was part of it. Only read to adopt an
+ * old recording (see `adoptLegacyClip` in the service), never written.
+ */
+export function legacyClipHash(text: string, voiceId: string): string {
+  return sha1(voiceId, text)
+}
+
+function sha1(...parts: string[]): string {
+  return createHash('sha1').update(parts.join('\u0000')).digest('hex')
 }
 
 export function audioDir(dataDir: string): string {
@@ -45,31 +60,26 @@ export function readClip(db: Db, dataDir: string, hash: string): Uint8Array | un
 }
 
 /** Writes a clip to disk and records it. Idempotent: an existing row is kept. */
-export function writeClip(db: Db, dataDir: string, userId: string, hash: string, bytes: Uint8Array): void {
+export function writeClip(
+  db: Db,
+  dataDir: string,
+  userId: string,
+  hash: string,
+  bytes: Uint8Array,
+): void {
   const path = clipPath(dataDir, hash)
   mkdirSync(dirname(path), { recursive: true })
   writeFileSync(path, bytes)
+  const size = { bytes: bytes.length, mime: 'audio/wav', seconds: null }
   db.insert(audioBlobs)
-    .values({
-      hash,
-      userId,
-      path,
-      bytes: bytes.length,
-      mime: 'audio/wav',
-      seconds: null,
-      createdAt: Date.now(),
-    })
+    .values({ hash, userId, path, ...size, createdAt: Date.now() })
     .onConflictDoNothing()
     .run()
 }
 
-/** Removes a clip's file and row (used when regeneration is forced). */
-export function deleteClip(db: Db, dataDir: string, hash: string): void {
-  try {
-    rmSync(clipPath(dataDir, hash), { force: true })
-  } catch {
-    // best effort
-  }
+/** Removes a clip's file and row. */
+export function removeClip(db: Db, dataDir: string, hash: string): void {
+  rmSync(clipPath(dataDir, hash), { force: true })
   db.delete(audioBlobs).where(eq(audioBlobs.hash, hash)).run()
 }
 

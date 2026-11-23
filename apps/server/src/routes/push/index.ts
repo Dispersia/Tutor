@@ -1,5 +1,5 @@
 /**
- * The push routes (docs/REFACTOR_PLAN.md §8.2, Phase 14): the VAPID key and
+ * The push routes (docs/ARCHITECTURE.md): the VAPID key and
  * per-device subscribe/unsubscribe in `subscribe.ts`, the test + rig clock in
  * `test.ts`.
  */

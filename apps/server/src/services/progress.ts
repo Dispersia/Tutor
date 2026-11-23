@@ -107,7 +107,7 @@ export function awardActionXp(db: Db, bus: EventBus, userId: string, award: XpAw
   const { actionId, amount, ctx } = award
   const action = ACTION_BY_ID.get(actionId)!
   // The map is derived once and threaded through, so an award is one scan
-  // whether or not the caller passed a `ProgressCtx` (docs/REFACTOR_PLAN.md §8.1).
+  // whether or not the caller passed a `ProgressCtx` (docs/ARCHITECTURE.md).
   const levels = ctx?.levels ?? actionLevelMap(db, userId)
   const bonuses = ctx?.bonuses ?? aggregateBonuses(db, userId, levels)
   const beforeXp = getActionXp(db, userId, actionId)

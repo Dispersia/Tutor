@@ -6,15 +6,18 @@ import {
   getActionXp,
   getItemCount,
   listEquipment,
+  listGearInstances,
   listGatherLog,
   listRigStates,
   listTalents,
 } from '../db/repo'
 import { EventBus } from '../events'
+import { itemRequirements } from './gear'
 import { liveRigCount } from './idle'
 import {
   ACTION_BY_ID,
   ACTION_MAX_LEVEL,
+  ITEMS,
   SKILLS,
   actionsForSkill,
   skillLevelInfo,
@@ -29,6 +32,7 @@ import {
   awardActionXp,
   chooseTalent,
   completeAction,
+  distillItem,
   equipItem,
   grantItems,
   settleRigs,
@@ -432,6 +436,42 @@ test('one maxed profession only nudges the account level — that is the point',
   // Mining reads 100, the other 22 professions sit at 1 → the average is ~5
   expect(accountLevel(db, user.id).level).toBe(
     Math.round((ACTION_MAX_LEVEL + (SKILLS.length - 1)) / SKILLS.length),
+  )
+  sqlite.close()
+})
+
+test('a piece is worn in one slot: re-equipping it elsewhere moves it', () => {
+  const { db, bus, user, sqlite } = setup()
+  const ring = ITEMS.find(
+    (i) => i.slot === 'ring1' && Object.keys(itemRequirements(i)).length === 0,
+  )!
+  addItems(db, user.id, ring.id, 1)
+  const first = equipItem(db, bus, user.id, ring.id)
+  expect(first.ok).toBe(true)
+  const again = equipItem(db, bus, user.id, ring.id, {
+    instanceId: first.instanceId,
+    targetSlot: 'ring2',
+  })
+  expect(again.ok).toBe(true)
+  expect(listEquipment(db, user.id).map((e) => e.slot)).toEqual(['ring2'])
+  sqlite.close()
+})
+
+test('distilling equipment burns its rolled instance, and never a worn piece', () => {
+  const { db, bus, user, sqlite } = setup()
+  addItems(db, user.id, 'bronze_sword', 1)
+  const worn = equipItem(db, bus, user.id, 'bronze_sword')
+  expect(distillItem(db, bus, user.id, 'bronze_sword')).toEqual({
+    ok: false,
+    error: 'unequip it first',
+  })
+  unequipItem(db, user.id, 'mainHand')
+  expect(distillItem(db, bus, user.id, 'bronze_sword').ok).toBe(true)
+  expect(getItemCount(db, user.id, 'bronze_sword')).toBe(0)
+  // the instance went with it: it cannot be worn (or salvaged) afterwards
+  expect(listGearInstances(db, user.id)).toEqual([])
+  expect(equipItem(db, bus, user.id, 'bronze_sword', { instanceId: worn.instanceId }).ok).toBe(
+    false,
   )
   sqlite.close()
 })

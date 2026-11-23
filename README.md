@@ -1,14 +1,18 @@
 # tutor
 
 AI-first language learning. A local-first, Duolingo-like tutor where the **brain
-is OpenRouter** (you pick the model) and the **speech is local Qwen3 on Apple
-MLX** — no cloud speech, and the models free your RAM when idle.
+is OpenRouter** (you pick the model) and the **speech is local on Apple MLX**
+(Whisper for ASR, VoxCPM2 for TTS) — no cloud speech, and the models free your
+RAM when idle.
 
 - **Target:** Apple Silicon Mac as the server (16 GB tested), Android **PWA** as
   the primary client.
-- **First languages:** Mandarin (HSK 1) and Japanese (JLPT N5).
+- **First languages:** Mandarin and Japanese, both as frequency-ordered paths.
 
-Full design: [`docs/DESIGN.md`](docs/DESIGN.md).
+Docs: [`docs/DESIGN.md`](docs/DESIGN.md) (what it does and why),
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (where code lives, the rules and
+the gates), [`docs/BACKLOG.md`](docs/BACKLOG.md) (open defects and refactors).
+Before a change is done: `bun run verify` (or `just ci`).
 
 ## Quickstart
 
@@ -86,7 +90,7 @@ reading/meaning fields) before it builds anything. No guessing.
 
 Adding an exercise type takes a backend `ExerciseDef` + a Svelte component keyed by
 the same `id` — no core changes (see `docs/DESIGN.md` §11.2). Adding a profession
-is content only (`apps/server/src/game/skills.ts`) — see §13.5.
+is content only (`apps/server/src/game/skills/*.data.ts`) — see §13.5.
 
 Everything except `/api/health`, `/api/models` and the auth routes requires a
 session. All data is scoped to the signed-in user.
@@ -112,28 +116,14 @@ Or ad-hoc: `just service-install && just tailscale-serve`. Full details in
 
 ```
 apps/server    Bun + Hono API, SSE, SQLite, multi-user auth, PWA host, speech supervisor
-apps/web       SvelteKit PWA (mobile-first) — chat, voice, history, settings
+apps/web       SvelteKit PWA (mobile-first) — learn, practice, chat, skills, combat, bank
 packages/core  shared types, card + exercise registry contracts
-packages/speech TS client for the speech gateway (provider interface)
-packages/ui    shared Svelte components
+packages/speech TS client for the speech gateway (unused today)
+packages/ui    placeholder for shared Svelte components (empty today)
 python/speech  MLX speech gateway (Whisper-turbo / VoxCPM2 / Qwen3-ForcedAligner)
 nix/           packaging + model-fetch wrappers
-docs/          DESIGN.md (architecture + execution plan)
+docs/          DESIGN.md, ARCHITECTURE.md, BACKLOG.md
 ```
-
-## Status
-
-- [x] Phase 0 — scaffold, flake, tooling
-- [x] Phase 1 — speech gateway (ASR/TTS/aligner + idle unload) — verified on M6
-- [x] Phase 2 — backend (Hono, SQLite, OpenRouter, speech supervisor) — 21 tests green
-- [x] Phase 3 — multi-user auth + SvelteKit PWA (chat, voice, history, settings)
-- [x] Phase 4 — exercise engine + cards (HSK 1 · JLPT N5 · 6 exercise types · XP)
-- [x] Phase 5 — pronunciation scoring (ASR + forced aligner + optional judge)
-- [x] Phase 6 — gamification (XP ledger, levels, UTC streaks, daily goal, event bus)
-- [x] Phase 7 — packaging (`nix build` / `nix run .`) + docs
-- [x] Phase 8 — professions, per-level effects, talents (5/10), materials, combat (monsters, HP, auto food/potions, drops)
-- [x] Phase 9 — the frequency path: a dynamic, n+1 curriculum built off a word list, with sentence-building drills
-- [x] Phase 10 — Silero VAD in the browser: mic takes are trimmed to the speech in them before they reach the ASR
 
 ## Browser VAD
 

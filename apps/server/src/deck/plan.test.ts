@@ -100,3 +100,30 @@ test('normalizePlan cleans meta-commentary out of a kept gloss', () => {
   expect(cards).toHaveLength(1)
   expect(cards[0]!.payload?.gloss).toBe('You have (it).')
 })
+
+test('stripMetaCommentary leaves ordinary words that happen to be markers', () => {
+  for (const plain of [
+    'to wait',
+    'Please wait a moment.',
+    'banknote',
+    'I actually like it.',
+    'correction',
+    "Let's go.",
+    'I must go now.',
+  ]) {
+    expect(stripMetaCommentary(plain)).toBe(plain)
+  }
+  // a real trailing aside still goes, and the sentence keeps its full stop
+  expect(stripMetaCommentary('He will come. Wait, 來 is not introduced yet')).toBe('He will come.')
+  expect(stripMetaCommentary('to sleep - note: informal')).toBe('to sleep')
+})
+
+test('normalizePlan keeps everyday sentences that contain a conversational marker', () => {
+  const cards = normalizePlan({
+    cards: [
+      { template: 'vocab', front: 'to wait', back: '等' },
+      { template: 'vocab', front: "Let's go.", back: '走吧' },
+    ],
+  })
+  expect(cards.map((c) => c.front)).toEqual(['to wait', "Let's go."])
+})

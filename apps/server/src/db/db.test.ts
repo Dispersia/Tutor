@@ -106,7 +106,13 @@ test('otherBacks only offers words the learner has already met', () => {
   const user = createUser(db, { username: 'alice', passwordHash: 'x' })
   const deck = createDeck(db, user.id, { name: 'd', sourceLang: 'en', targetLang: 'zh' })
   const mk = (back: string) =>
-    addCard(db, user.id, { deckId: deck.id, sourceLang: 'en', targetLang: 'zh', front: `f-${back}`, back })
+    addCard(db, user.id, {
+      deckId: deck.id,
+      sourceLang: 'en',
+      targetLang: 'zh',
+      front: `f-${back}`,
+      back,
+    })
   const [a, b, c, d] = ['一', '二', '三', '四'].map(mk)
 
   // Nothing seen yet, so there is nothing to offer — a random unseen word would

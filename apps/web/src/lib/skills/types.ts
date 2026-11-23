@@ -1,7 +1,7 @@
 /**
  * The skills/gear wire model (docs/DESIGN.md §13.5). Types only, so a component
- * can import one DTO without pulling the API client (docs/REFACTOR_PLAN.md §8.2,
- * Phase 12). The matching `fetch` wrappers live in `client.ts`.
+ * can import one DTO without pulling the API client. The matching `fetch`
+ * wrappers live in `client.ts`.
  */
 
 import type { ModKind } from '../types'

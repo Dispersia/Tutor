@@ -128,7 +128,7 @@ const TRANSLATION_SCHEMA = {
 const SYSTEM = `You translate single sentences into English for a language-learning card. For each item, translate what the WHOLE sentence MEANS, naturally and idiomatically — never word by word. A Chinese "我想你。" is "I miss you." (never "I think you."); a Japanese "請坐。" style literal gloss like "Book exists here" is "The book is here.". Return one plain English sentence per item: no notes, no quotes, no "Translate:", no romanization/pinyin, no alternative separated by "/", no "(polite)" or "(classifier)". Keep it short.`
 
 async function translateBatch(
-  or: OpenRouter,
+  or: InstanceType<typeof OpenRouter>,
   model: string,
   lang: string,
   cards: ReturnType<typeof listCards>,

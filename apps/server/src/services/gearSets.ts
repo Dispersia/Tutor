@@ -10,6 +10,7 @@ import {
   setEquipment,
 } from '../db/repo'
 import type { Db } from '../db/client'
+import { atomic } from '../db/repo/helpers'
 import type { EventBus } from '../events'
 import { meetsRequirements } from '../game/gear'
 import { ITEM_BY_ID, SLOTS, type CombatStyle } from '../game/skills'
@@ -75,7 +76,7 @@ export interface GearSetSkip {
 }
 
 /** Swaps the worn gear to a saved set. Unknown/deleted instances are skipped. */
-export function applyGearSet(
+function applyGearSetTx(
   db: Db,
   bus: EventBus,
   userId: string,
@@ -95,6 +96,9 @@ export function applyGearSet(
   }
   return { ok: true, skipped }
 }
+
+/** {@link applyGearSetTx}, all-or-nothing. */
+export const applyGearSet = atomic(applyGearSetTx)
 
 interface SetEntry {
   itemId: string

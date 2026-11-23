@@ -18,8 +18,7 @@
   const levels = $derived(contour?.levels ?? [])
   const text = $derived(size === 'sm' ? 'text-sm' : 'text-base')
 
-  const levelAt = (i: number): PitchLevel =>
-    levels[i] ?? levels[levels.length - 1] ?? 'L'
+  const levelAt = (i: number): PitchLevel => levels[i] ?? levels[levels.length - 1] ?? 'L'
 </script>
 
 {#if contour && moras.length}

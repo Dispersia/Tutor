@@ -2,7 +2,7 @@
  * Worn slots and the combat-style ↔ armour/stat mapping (docs/DESIGN.md §13.5).
  */
 
-import type { ArmourType, CombatStyle, PrimaryStat, Slot } from './types'
+import type { CombatStyle, Slot } from './types'
 
 export const SLOTS: { id: Slot; label: string; icon: string; family: Slot[] }[] = [
   { id: 'head', label: 'Head', icon: '⛑️', family: ['head'] },
@@ -23,21 +23,6 @@ export const SLOTS: { id: Slot; label: string; icon: string; family: Slot[] }[] 
 /** Which slots an item may be worn in (rings and trinkets share a family). */
 export function slotFamily(slot: Slot): Slot[] {
   return SLOTS.find((s) => s.id === slot)?.family ?? [slot]
-}
-
-/** The armour family a combat style wears. */
-export function armourTypeForStyle(style: CombatStyle): ArmourType {
-  if (style === 'ranged') return 'leather'
-  if (style === 'magic') return 'cloth'
-  if (style === 'melee') return 'plate'
-  return 'jewelry'
-}
-
-/** The primary stat a combat style scales with. */
-export function primaryStatForStyle(style: CombatStyle): PrimaryStat {
-  if (style === 'ranged') return 'agility'
-  if (style === 'magic') return 'intellect'
-  return 'strength'
 }
 
 /** The combat style a weapon tag trains. */

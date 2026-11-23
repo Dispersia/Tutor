@@ -1,5 +1,6 @@
 import type { Context } from 'hono'
 import type { App, AppEnv } from '../context'
+import { adminOnly } from './guards'
 
 async function proxyToSpeech(c: Context<AppEnv>, path: string): Promise<Response> {
   const sup = c.get('deps').supervisor
@@ -59,7 +60,10 @@ async function wakeHandler(c: Context<AppEnv>) {
   return c.json(await c.get('deps').supervisor.status())
 }
 
+/** Admin only: the gateway is shared, so stopping it cuts off every member mid-use. */
 async function unloadHandler(c: Context<AppEnv>) {
+  const denied = adminOnly(c)
+  if (denied) return denied
   const sup = c.get('deps').supervisor
   let result: unknown = null
   try {

@@ -84,10 +84,7 @@ interface JudgeOut {
 }
 
 /** The judge's verdict when it accepted the answer, else undefined. */
-async function judgeMeaning(
-  ctx: ExerciseContext,
-  typed: string,
-): Promise<GradeResult | undefined> {
+async function judgeMeaning(ctx: ExerciseContext, typed: string): Promise<GradeResult | undefined> {
   const out = (await ctx.judge!(meaningPrompt(ctx, typed), JUDGE_SCHEMA)) as JudgeOut | undefined
   if (!out?.correct) return undefined
   return {

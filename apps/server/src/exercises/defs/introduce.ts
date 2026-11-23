@@ -7,7 +7,6 @@ import { pinyinToZhuyin } from '../../seed/zhuyin'
 import { hashSeed, seededRandom } from '../seeded'
 import { readingsShown, wordView } from '../shared'
 
-
 /** Registry id of the first-exposure "teach" step. */
 export const INTRODUCE_ID = 'introduce'
 

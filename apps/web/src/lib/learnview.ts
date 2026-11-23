@@ -45,9 +45,7 @@ export const isDeckDone = (d: CurriculumDeck): boolean =>
   d.cardCount > 0 && d.learned >= d.cardCount
 
 /** Actions you can actually train: unlocked and with materials in the bank. */
-export function usableActions(
-  ref: SkillsResponse | null,
-): {
+export function usableActions(ref: SkillsResponse | null): {
   skill: SkillsResponse['skills'][number]
   action: SkillsResponse['skills'][number]['actions'][number]
 }[] {

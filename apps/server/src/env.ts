@@ -41,6 +41,15 @@ export const roleReasoning: Record<Role, 'none' | 'low' | 'medium' | 'high' | 'x
 const num = (v: string | undefined, fallback: number): number =>
   v === undefined || v === '' ? fallback : Number(v)
 
+/**
+ * A directory setting, absolute. A relative value (`.env.example` ships
+ * `./data`) is resolved against the repo root, not the process cwd: `just dev`
+ * runs in `apps/server` and the speech gateway in `python/`, so a bare `./data`
+ * used to mean a different folder to each of them.
+ */
+const dir = (value: string | undefined, fallback: string): string =>
+  resolve(repoRoot, value?.trim() || fallback)
+
 /** Normalises TUTOR_BASE_PATH to '' or '/prefix' (no trailing slash). */
 function normalizeBase(v: string | undefined): string {
   if (!v) return ''
@@ -53,12 +62,12 @@ export const env = {
   host: process.env.TUTOR_HOST ?? '127.0.0.1',
   port: num(process.env.TUTOR_PORT, 4318),
 
-  dataDir: process.env.TUTOR_DATA_DIR ?? join(repoRoot, 'data'),
-  modelsDir: process.env.TUTOR_MODELS_DIR ?? join(repoRoot, 'models'),
-  staticDir: process.env.TUTOR_STATIC_DIR ?? join(repoRoot, 'apps/web/build'),
+  dataDir: dir(process.env.TUTOR_DATA_DIR, 'data'),
+  modelsDir: dir(process.env.TUTOR_MODELS_DIR, 'models'),
+  staticDir: dir(process.env.TUTOR_STATIC_DIR, 'apps/web/build'),
   /** Served under this prefix (e.g. /tutor behind a tailnet gateway). */
   basePath: normalizeBase(process.env.TUTOR_BASE_PATH),
-  pythonDir: process.env.TUTOR_PYTHON_DIR ?? join(repoRoot, 'python'),
+  pythonDir: dir(process.env.TUTOR_PYTHON_DIR, 'python'),
 
   openrouterKey: process.env.OPENROUTER_API_KEY ?? process.env.TUTOR_OPENROUTER_KEY,
 

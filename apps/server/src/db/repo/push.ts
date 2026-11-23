@@ -6,13 +6,13 @@ import { actionProgress, pushSubscriptions } from '../schema'
 import { id, now } from './helpers'
 
 export interface PushSubscriptionRow {
+  userId: string
   endpoint: string
   p256dh: string
   auth: string
 }
 
 export interface PushSubscriptionInput extends PushSubscriptionRow {
-  userId: string
   userAgent?: string
 }
 
@@ -36,8 +36,11 @@ export function upsertPushSubscription(db: Db, sub: PushSubscriptionInput): void
     .run()
 }
 
-export function deletePushSubscription(db: Db, endpoint: string): void {
-  db.delete(pushSubscriptions).where(eq(pushSubscriptions.endpoint, endpoint)).run()
+/** Removes one of `userId`'s subscriptions (never another member's device). */
+export function deletePushSubscription(db: Db, userId: string, endpoint: string): void {
+  db.delete(pushSubscriptions)
+    .where(and(eq(pushSubscriptions.userId, userId), eq(pushSubscriptions.endpoint, endpoint)))
+    .run()
 }
 
 export function listPushSubscriptions(db: Db, userId: string): PushSubscriptionRow[] {

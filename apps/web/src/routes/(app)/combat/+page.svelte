@@ -115,7 +115,8 @@
   function applyCombat(c: CombatResponse, s: SkillsResponse | null, food?: number) {
     data = c
     ref = s
-    encounter = c.encounter
+    // A finished fight stays up until the player leaves the outcome panel.
+    if (!hit || hit.outcome === 'ongoing') encounter = c.encounter
     // Resuming a fight: adopt the drill the server rebuilt for this encounter
     // so the fight keeps going after a reload. The clock waits for Start.
     if (c.encounter) {
@@ -165,12 +166,18 @@
     }
   }
 
+  function finalState(last: typeof encounter, h: HitResult): typeof encounter {
+    return last && { ...last, monsterHp: h.monsterHp, playerHp: h.playerHp }
+  }
+
   /** Applies one exchange: the hit, the next drill and the drill clock. */
   function applyHit(r: Awaited<ReturnType<typeof combatHit>>) {
     hit = r.hit
     justHit = r.hit.playerDamage > 0
     if (r.hit.playerDamage > 0) hitSeq += 1
-    encounter = r.encounter
+    // The server clears a finished encounter; keep the last one on screen (at its
+    // final HP) so the outcome panel and the loot have a fight to render under.
+    encounter = r.encounter ?? finalState(encounter, r.hit)
     instance = r.instance
     if (r.hit.outcome !== 'ongoing') {
       // fight over — refresh the monster list / bank

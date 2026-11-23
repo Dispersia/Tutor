@@ -9,7 +9,8 @@
     speech: SpeechStatus | null
     waking: boolean
     onWake: () => void
-    onFree: () => void
+    /** Stops the shared gateway — admin only, so absent for members. */
+    onFree?: () => void
   }
 
   let { speech, waking, onWake, onFree }: Props = $props()
@@ -36,9 +37,11 @@
           {#if waking || speech?.running}<Spinner size={12} label="Waking the speech engine" /> Waking…{:else}Wake{/if}
         </button>
       {/if}
-      <button type="button" onclick={onFree} class="btn btn-ghost px-3 py-1.5 text-xs"
-        >Free memory</button
-      >
+      {#if onFree}
+        <button type="button" onclick={onFree} class="btn btn-ghost px-3 py-1.5 text-xs"
+          >Free memory</button
+        >
+      {/if}
     </div>
   </div>
   <p class="mt-2 text-xs text-ink-400">

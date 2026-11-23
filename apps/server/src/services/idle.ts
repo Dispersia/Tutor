@@ -3,6 +3,7 @@
 import {
   addGatherLog,
   addItems,
+  getItemCount,
   getRigState,
   listInventory,
   listRigStates,
@@ -38,7 +39,7 @@ import { actionProduces, actionSuccessChance } from './board'
 import { recordGearCrafts } from './gearInstances'
 import { consumeItems, grantItems } from './items'
 import { awardActionXp, loadProgress, type ProgressCtx } from './progress'
-import { inTransaction } from '../db/repo/helpers'
+import { atomic, inTransaction } from '../db/repo/helpers'
 
 // --- idle rigs (docs/DESIGN.md §13.5.1) --------------------------------------
 
@@ -140,7 +141,7 @@ function rigClock(rig: RigState, action: ActionDef, now: number) {
 
 /**
  * Credit **every** running rig up to `now`, in one pass, against one mutable bank.
- * This is the whole idle engine: O(actions) = 67 rows of pure arithmetic, one
+ * This is the whole idle engine: O(actions) rows of pure arithmetic, one
  * transaction, no timers. Hundreds of offline hours cost the same as one second.
  */
 export function settleRigs(db: Db, bus: EventBus, userId: string, now = Date.now()): SettleReport {
@@ -201,7 +202,10 @@ function settleOne(ctx: SettleCtx, action: ActionDef, totals: SettleTotals): voi
   if (!rig) return
   const choiceId = rig.choice || undefined
   const res = settleRig(rig, recipeOf(action, choiceId, ctx.progress), ctx.bank, ctx.now)
-  if (res.creditedSec > 0 || res.state.settledAt !== rig.settledAt) {
+  // A rig that was already still (most rows: XP-only actions and finished runs)
+  // has nothing to pay, so it is not rewritten on every board load.
+  const ranInWindow = rig.runEndsAt > rig.settledAt
+  if (ranInWindow || res.creditedSec > 0 || res.state.runEndsAt !== rig.runEndsAt) {
     setRigState(ctx.db, ctx.userId, action.id, res.state)
     ctx.rigs.set(action.id, res.state)
   }
@@ -267,7 +271,7 @@ export interface DrillRigResult {
  * (the old flat yield, so the loop keeps its heartbeat), then power this action's
  * rig — every run is faster and longer than the last.
  */
-export function completeAction(
+function completeActionTx(
   db: Db,
   bus: EventBus,
   userId: string,
@@ -280,6 +284,9 @@ export function completeAction(
   if (!action) return noRigResult(report, settledXp, now)
   return drillAction({ db, bus, userId, action, now, report, settledXp, opts: req })
 }
+
+/** {@link completeActionTx}, all-or-nothing. */
+export const completeAction = atomic(completeActionTx)
 
 function xpTotal(report: SettleReport): number {
   return [...report.xp.values()].reduce((n, v) => n + v, 0)
@@ -330,6 +337,8 @@ function noRigResult(report: SettleReport, settledXp: number, now: number): Dril
   }
 }
 
+const NO_STRIKE: DrillStrike = { gained: [], spent: [] }
+
 interface StrikeReq {
   action: ActionDef
   choiceId?: string
@@ -341,7 +350,11 @@ interface StrikeReq {
  * A prospect consumes its input but only *pays out* at its odds (§13.5.3.1), and
  * a `table` action rolls a single gem. The strike still powers the rig either way.
  */
-function drillStrike(db: Db, bus: EventBus, userId: string, req: StrikeReq) {
+function drillStrike(db: Db, bus: EventBus, userId: string, req: StrikeReq): DrillStrike {
+  const spent = actionConsumes(req.action, req.choiceId)
+  // The route's gate ran before the settle; this action's own rig may have used
+  // the stock since. No stock, no strike: the drill still powers the rig.
+  if (spent.some((c) => getItemCount(db, userId, c.item) < c.count)) return NO_STRIKE
   const chance = actionSuccessChance(db, userId, req.action, req.choiceId, req.levels)
   const hit = chance >= 1 || req.rand() < chance
   const gained = hit
@@ -350,7 +363,6 @@ function drillStrike(db: Db, bus: EventBus, userId: string, req: StrikeReq) {
         costs: actionRoll(req.action, req.choiceId, req.rand),
       })
     : []
-  const spent = actionConsumes(req.action, req.choiceId)
   if (spent.length) consumeItems(db, bus, userId, spent)
   return { gained, spent }
 }
@@ -411,7 +423,7 @@ function drillResult(
  * escape hatch from the live-rig cap — the UI confirms before calling this.
  * Returns false when the action has no live run.
  */
-export function stopRig(
+function stopRigTx(
   db: Db,
   bus: EventBus,
   userId: string,
@@ -425,15 +437,29 @@ export function stopRig(
   return true
 }
 
+/** {@link stopRigTx}, all-or-nothing. */
+export const stopRig = atomic(stopRigTx)
+
 /** Remember which recipe a choose-input action's rig runs (§13.5.3.1). */
-export function setRigChoice(db: Db, userId: string, actionId: string, choiceId: string): boolean {
+function setRigChoiceTx(
+  db: Db,
+  bus: EventBus,
+  userId: string,
+  pick: { actionId: string; choiceId: string },
+): boolean {
+  const { actionId, choiceId } = pick
   const action = ACTION_BY_ID.get(actionId)
   if (!action?.choices?.length) return false
   if (!action.choices.some((c) => c.id === choiceId)) return false
-  const current = getRigState(db, userId, actionId) ?? newRig()
+  // Pay the run so far at the recipe it actually ran; only time from now on is
+  // priced at the new one.
+  const current = settleRigs(db, bus, userId).rigs.get(actionId) ?? newRig()
   setRigState(db, userId, actionId, { ...current, choice: choiceId })
   return true
 }
+
+/** {@link setRigChoiceTx}, all-or-nothing. */
+export const setRigChoice = atomic(setRigChoiceTx)
 
 function toCosts(map: Record<string, number>): Cost[] {
   return Object.entries(map)

@@ -1,10 +1,10 @@
 /**
- * Architecture guardrails (docs/REFACTOR_PLAN.md, Phase 0).
+ * Architecture guardrails (docs/ARCHITECTURE.md).
  *
  * Two jobs: catch import cycles (valuable today) and hold the layer direction
- * the decomposition introduces: routes → services → data → domain, never
- * backwards. The layer rules name folders that the phases will create; until
- * then they simply match nothing. Run with `bun run arch`.
+ * the decomposition introduced: routes → services → db → game, never backwards.
+ * The rules name the folders that exist (`game/` is the domain, `db/` the data
+ * layer). Run with `bun run arch`.
  */
 module.exports = {
   forbidden: [
@@ -18,15 +18,15 @@ module.exports = {
     {
       name: 'domain-is-pure',
       severity: 'error',
-      comment: 'domain/ is the rules of the world: no data, services, routes or HTTP.',
-      from: { path: '^apps/server/src/domain' },
-      to: { path: '^apps/server/src/(data|services|routes|context|app)' },
+      comment: 'game/ is the rules of the world: no database, services, routes or HTTP.',
+      from: { path: '^apps/server/src/game', pathNot: '\\.test\\.ts$' },
+      to: { path: '^apps/server/src/(db|services|routes|context|app)' },
     },
     {
       name: 'data-has-no-upward-deps',
       severity: 'error',
-      comment: 'data/ reads the database and the domain only — never services or routes.',
-      from: { path: '^apps/server/src/data' },
+      comment: 'db/ reads the database and the domain only — never services or routes.',
+      from: { path: '^apps/server/src/db', pathNot: '\\.test\\.ts$' },
       to: { path: '^apps/server/src/(services|routes)' },
     },
     {

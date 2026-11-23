@@ -1,5 +1,12 @@
 # Agent notes for this repo
 
+## Before a task is done
+
+Run `bun run verify` (or `just ci`): format, lint, architecture rules, typecheck
+(server + web) and tests. Layout and conventions are in `docs/ARCHITECTURE.md`;
+the design, cited from code as `DESIGN §N`, is `docs/DESIGN.md`; open defects are
+in `docs/BACKLOG.md` — remove an item there when you fix it.
+
 ## Update the launchd server after completing a task
 
 tutor runs on this Mac as a per-user **launchd** agent, so code in the working

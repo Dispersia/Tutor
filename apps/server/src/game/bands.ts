@@ -242,15 +242,6 @@ export const BANDS: BandDef[] = [
 
 export const BAND_BY_ID = new Map<BandId, BandDef>(BANDS.map((b) => [b.id, b]))
 
-/** The bands of one line, cheapest tier first. */
-export function bandsForLine(line: BandLine): BandDef[] {
-  return BANDS.filter((b) => b.line === line).sort((a, b) => a.tier - b.tier)
-}
-
-export function isBandId(value: string): value is BandId {
-  return BAND_BY_ID.has(value as BandId)
-}
-
 /** `100 + (level−1)·10` per level — the same curve an action uses (§13.5). */
 export function bandXpForLevel(level: number): number {
   return 100 + (Math.max(1, Math.round(level)) - 1) * 10

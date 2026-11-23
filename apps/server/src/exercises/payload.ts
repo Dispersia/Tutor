@@ -21,7 +21,8 @@ export const hasPayloadSentence = (card: Card): boolean => payloadTokens(card).l
  * phrase card, or a sentence card with payload tokens, needs no "make a sentence
  * using it" drill — the card *is* the sentence.
  */
-export const isUtterance = (card: Card): boolean => card.type === 'phrase' || hasPayloadSentence(card)
+export const isUtterance = (card: Card): boolean =>
+  card.type === 'phrase' || hasPayloadSentence(card)
 
 // --- grammar: apply a rule to a pattern (any language) ------------------------
 

@@ -20,10 +20,5 @@
     "packages/speech": { "project": ["src/**/*.ts"] },
     "packages/ui": { "project": ["src/**/*.{ts,svelte}"] }
   },
-  "ignoreDependencies": [
-    "dependency-cruiser",
-    "svelte-eslint-parser",
-    "drizzle-kit",
-    "tailwindcss"
-  ]
+  "ignoreDependencies": ["svelte-eslint-parser", "drizzle-kit", "tailwindcss"]
 }

@@ -6,7 +6,7 @@
 import type { Context } from 'hono'
 import type { App, AppEnv, Deps } from '../../context'
 import { getDeck } from '../../db/repo'
-import { growDeck, startDeckGrowth } from '../../deck/generate'
+import { growDeck, isDeckBuilding, startDeckGrowth } from '../../deck/generate'
 import { plannerFor } from '../../deck/planner'
 import type { Planner } from '../../deck/plan'
 import { bool, jsonBody, num, str } from '../body'
@@ -31,6 +31,9 @@ interface GrowReq {
   planner: Planner
 }
 
+/** Decks with a grow request in flight (a background build is tracked by `deck/jobs`). */
+const growing = new Set<string>()
+
 export function registerDeckGrow(app: App) {
   app.post('/api/decks/:id/grow', (c) => growHandler(c))
 }
@@ -43,8 +46,17 @@ async function growHandler(c: Context<AppEnv>) {
   const body = growBody(await jsonBody(c))
   const planner = await plannerFor(deps, user.id)
   if (!planner) return c.json({ error: 'No OpenRouter key — add one in Settings.' }, 502)
+  // Two runs over one deck plan the same words twice and race the cursor.
+  if (growing.has(deckId) || isDeckBuilding(deckId)) {
+    return c.json({ error: 'This deck is already being built.' }, 409)
+  }
   const req = { c, deps, deckId, body, planner }
-  return body.all ? finishDeck(req) : growOnce(req)
+  growing.add(deckId)
+  try {
+    return await (body.all ? finishDeck(req) : growOnce(req))
+  } finally {
+    growing.delete(deckId)
+  }
 }
 
 /** One n+1 batch: a handful of new words and the sentences that weave them in. */

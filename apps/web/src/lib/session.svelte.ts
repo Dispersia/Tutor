@@ -86,7 +86,8 @@ export async function register(
 }
 
 export async function logout(): Promise<void> {
-  await api('/api/auth/logout', { method: 'POST' })
+  // Offline or already expired: this device must still forget the member.
+  await api('/api/auth/logout', { method: 'POST' }).catch(() => {})
   clearCache()
   persistUser(null)
   session.user = null

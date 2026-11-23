@@ -33,7 +33,7 @@ and their progress and history are still there months later.
 ## Positioning
 
 The brain is OpenRouter (the household's own key, model chosen per role), the
-speech is local Qwen3 on MLX, and audio never leaves the Mac. That combination —
+speech is local on MLX (Whisper + VoxCPM2), and audio never leaves the Mac. That combination —
 conversation-level drills, local speech, bring-your-own model, permanent local
 history — is the claim a neighboring language app could not truthfully copy.
 

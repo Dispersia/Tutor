@@ -1,5 +1,5 @@
 /**
- * Request bodies (docs/REFACTOR_PLAN.md, Phase 15).
+ * Request bodies (docs/ARCHITECTURE.md).
  *
  * Every JSON handler reads its body through here instead of casting
  * `await c.req.json()`: the parse never throws (a missing or malformed body is an

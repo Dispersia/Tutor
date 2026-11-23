@@ -126,18 +126,6 @@ export function addGearSet(db: Db, row: NewGearSet): string {
   return setId
 }
 
-export function updateGearSet(
-  db: Db,
-  userId: string,
-  setId: string,
-  patch: { name?: string; combatStyle?: string; slotsJson?: string },
-): void {
-  db.update(gearSets)
-    .set({ ...patch, updatedAt: now() })
-    .where(and(eq(gearSets.userId, userId), eq(gearSets.id, setId)))
-    .run()
-}
-
 export function deleteGearSet(db: Db, userId: string, setId: string): void {
   db.delete(gearSets)
     .where(and(eq(gearSets.userId, userId), eq(gearSets.id, setId)))

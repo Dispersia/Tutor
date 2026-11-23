@@ -59,7 +59,7 @@
 {#snippet body()}
   <span class="cell__glyph">
     {#if hasRuby}
-      {#each segments as seg (seg.base + (seg.ruby ?? ''))}
+      {#each segments as seg, i (i)}
         {#if seg.ruby}<ruby>{seg.base}<rt>{seg.ruby}</rt></ruby>{:else}{seg.base}{/if}
       {/each}
     {:else}{word}{/if}

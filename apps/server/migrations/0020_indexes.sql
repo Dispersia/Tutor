@@ -1,4 +1,4 @@
--- Hot-path indexes (docs/REFACTOR_PLAN.md, Phase 7). Nearly every repository read
+-- Hot-path indexes (docs/ARCHITECTURE.md). Nearly every repository read
 -- filters by user_id, and the review/XP queries also filter or group by card and
 -- day; without these, SQLite scans the whole table on every practice step.
 CREATE INDEX IF NOT EXISTS idx_reviews_user ON reviews(user_id);

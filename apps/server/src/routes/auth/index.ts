@@ -1,5 +1,5 @@
 /**
- * The auth routes (docs/REFACTOR_PLAN.md §8.2, Phase 14). `session.ts` holds the
+ * The auth routes (docs/ARCHITECTURE.md). `session.ts` holds the
  * cookie/session helpers (re-used by the app's auth gate and `/api/models`);
  * `account.ts` the register/login/profile endpoints; `admin.ts` the user list.
  */

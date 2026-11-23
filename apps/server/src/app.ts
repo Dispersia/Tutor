@@ -57,7 +57,9 @@ async function authMiddleware(c: Context<AppEnv>, next: () => Promise<void>) {
 
 function errorHandler(err: Error, c: Context<AppEnv>) {
   console.error('[error]', err)
-  return c.json({ error: err.message }, 500)
+  // A database error names tables and constraints: log it, never send it.
+  const message = err.name === 'SQLiteError' ? 'internal error' : err.message
+  return c.json({ error: message }, 500)
 }
 
 function registerRoutes(app: App, staticDir: string): void {

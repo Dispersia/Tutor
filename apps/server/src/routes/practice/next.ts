@@ -11,10 +11,10 @@ import type { Context } from 'hono'
 import type { App, AppEnv, Deps } from '../../context'
 import { getCard, getDeck, introducedCardIds, listDecks, type PublicUser } from '../../db/repo'
 import { INTRODUCE_ID, registry } from '../../exercises'
-import { bumpDailyExtra, readStudyPrefs, type StudyPrefs } from '../../game/study'
+import { bumpDailyExtra, readStudyPrefs, type StudyPrefs } from '../../services/study'
 import { type ActionDef } from '../../game/skills'
 import { selectStudyCardId } from '../../game/srs'
-import { quietState } from '../../game/quiet'
+import { quietState } from '../../services/quiet'
 import {
   knownWords,
   loadLearnerData,

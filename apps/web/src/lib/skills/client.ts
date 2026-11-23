@@ -1,5 +1,5 @@
 /**
- * The skills/gear API client (docs/REFACTOR_PLAN.md §8.2, Phase 12). Every
+ * The skills/gear API client (docs/ARCHITECTURE.md). Every
  * `fetch` wrapper over `/api/skills*`; the DTOs live in `types.ts`.
  */
 

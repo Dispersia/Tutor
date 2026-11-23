@@ -5,8 +5,7 @@ import { readApkg, type AnkiDeck } from './parse'
 import { cleanField, detectLanguage, inspectAnki, wordsFromAnki } from './words'
 import { unzip } from './zip'
 
-const fixture = () =>
-  new Uint8Array(readFileSync(join(import.meta.dir, 'fixtures/sample.apkg')))
+const fixture = () => new Uint8Array(readFileSync(join(import.meta.dir, 'fixtures/sample.apkg')))
 
 /** A modern Anki package: zstd collection, WAL, custom `unicase` collation. */
 const modernFixture = () =>

@@ -4,13 +4,13 @@ import svelte from 'eslint-plugin-svelte'
 import tseslint from 'typescript-eslint'
 
 /**
- * Lint + size-budget guardrails (docs/REFACTOR_PLAN.md, Phase 0).
+ * Lint + size-budget guardrails (docs/ARCHITECTURE.md).
  *
  * The size budget is the mechanical half of the decomposition: no file over
  * `MAX_LINES`, **no function over `MAX_FN_LINES`** (small by default — if a
  * function needs more than twenty lines it is doing more than one thing), no
  * signature over `MAX_PARAMS`. Every file is now inside the budget with no
- * exemption list (docs/REFACTOR_PLAN.md, phases 0–15); the only relaxations left
+ * exemption list (docs/ARCHITECTURE.md); the only relaxations left
  * are the data-table and test ceilings.
  *
  * Errors fail `bun run lint`; warnings are advisory (they name existing rough
@@ -111,9 +111,11 @@ export default tseslint.config(
       parserOptions: { parser: tseslint.parser, extraFileExtensions: ['.svelte'] },
     },
     rules: {
-      // SvelteKit 3 wants `resolve()` navigation everywhere, and Svelte 5 wants
-      // SvelteMap/SvelteSet: both are Phase 6 work, not Phase 0.
-      'svelte/no-navigation-without-resolve': 'warn',
+      // Every link and `goto` goes through `href()` in `#lib/paths`, which applies
+      // the base path itself (the build injects it); the rule only recognises
+      // SvelteKit's own `resolve()`, so it flagged all 43 correct call sites.
+      'svelte/no-navigation-without-resolve': 'off',
+      // Svelte 5 wants SvelteMap/SvelteSet for reactive collections.
       'svelte/prefer-svelte-reactivity': 'warn',
     },
   },

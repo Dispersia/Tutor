@@ -1,7 +1,7 @@
 /**
  * Decks, cards, chat sessions and messages, plus stored audio (docs/DESIGN.md
  * §12). Cards carry a JSON payload so new card types need no migration. Part of
- * the schema split (docs/REFACTOR_PLAN.md §8.2, Phase 11).
+ * the schema split (docs/ARCHITECTURE.md).
  */
 
 import { index, integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core'

@@ -1,5 +1,5 @@
 /**
- * The deck routes (docs/REFACTOR_PLAN.md §8.2, Phase 9).
+ * The deck routes (docs/ARCHITECTURE.md).
  *
  * One concern per file: `list`, `create`, `import` (inspect + import), `cards`,
  * `grow`, `settings` and `pitch`. The wire view lives in `view.ts`.

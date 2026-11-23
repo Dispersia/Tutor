@@ -1,6 +1,6 @@
 /**
  * Spaced-repetition state and its append-only review log (docs/DESIGN.md §13.6).
- * Part of the schema split (docs/REFACTOR_PLAN.md §8.2, Phase 11).
+ * Part of the schema split (docs/ARCHITECTURE.md).
  */
 
 import { index, integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core'

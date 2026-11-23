@@ -10,6 +10,7 @@ import {
   upsertSrs,
 } from '../db/repo'
 import type { Db } from '../db/client'
+import { atomic } from '../db/repo/helpers'
 import type { EventBus } from '../events'
 import {
   DAY_MS,
@@ -22,7 +23,7 @@ import {
   type FsrsState,
   type Rating,
 } from '../game/srs'
-import { readDailyExtra, readStudyPrefs } from '../game/study'
+import { readDailyExtra, readStudyPrefs } from './study'
 
 // --- spaced repetition + curriculum (Phase 9, docs/DESIGN.md §13.6) ----------
 
@@ -89,7 +90,7 @@ function elapsedDaysOf(prev: FsrsState, now: number): number {
  * Advances a card's FSRS-6 schedule after a review, appends to the review log
  * and emits `srs.updated`. `source` records which surface fed the schedule.
  */
-export function recordReview(
+function recordReviewTx(
   db: Db,
   bus: EventBus,
   userId: string,
@@ -106,6 +107,9 @@ export function recordReview(
   emitSrs(bus, userId, req.cardId, rating, next.state)
   return scheduleResult(rating, next.state, next.intervalDays, next.dueAt)
 }
+
+/** {@link recordReviewTx}, all-or-nothing. */
+export const recordReview = atomic(recordReviewTx)
 
 /** The card's next schedule, at this member's retention and learning steps. */
 function advance(db: Db, userId: string, prev: FsrsState, rating: Rating, now: number) {

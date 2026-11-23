@@ -1,12 +1,16 @@
 # Tutor — AI-first language learning app
 
-> Design & execution plan. Status: **approved direction, ready for Phase 0**.
+> The design of the system **as built**: what each part does and why. Code
+> comments cite it by section (`DESIGN §13.5.1`), so section numbers are stable.
+> For where code lives see [`ARCHITECTURE.md`](ARCHITECTURE.md); for open defects
+> see [`BACKLOG.md`](BACKLOG.md).
+>
 > Target: Apple **M6**, **16 GB** unified memory, macOS 27 (server) + **Android
 > PWA** (primary client, mobile-first).
 > One-liner: a local-first, Duolingo-like language tutor where the **brain is
-> OpenRouter** (user-selectable model) and the **speech (TTS/ASR) is local Qwen3
-> on MLX**, with permanent chat/voice history, an extensible card + exercise
-> engine, and XP-based gamification.
+> OpenRouter** (user-selectable model) and the **speech is local on MLX** (Whisper
+> for ASR, VoxCPM2 for TTS), with permanent chat/voice history, an extensible card
+> + exercise engine, and a profession/idle game layered on spaced repetition.
 
 ---
 
@@ -121,45 +125,14 @@ or `$TUTOR_DATA_DIR`). See §14.
 - Cost: **RTF ≈ 0.45** warm — slower than a tiny vocoder would be, but still
   faster than playback, and the sentence queue hides it (§9.2).
 
-### 4.3 Alternatives
+### 4.3 Rejected
 
-- The **Qwen3 speech family is gone** except for **Qwen3-ForcedAligner-0.6B**,
-  which has no replacement and is what produces the word timings pronunciation
-  scoring needs. No Qwen ASR or TTS checkpoint is referenced any more.
-- **Kokoro-82M** and **SenseVoice-Small** were removed too: one model per role
-  keeps the gateway, the deps and the docs simple.
-- **CosyVoice 3** was evaluated and rejected: it has no MLX implementation in
-  `mlx-audio` (only the `mlx-audio-plus` fork, which collides on the `mlx_audio`
-  namespace and drops the forced aligner), and it has no built-in voices — every
-  clip needs a reference recording.
-
-### 4.4 The runtime — `mlx-audio` (Neywa Labs / Blaizzy)
-
-- MIT. TTS + STT + STS + VAD + music, built on Apple **MLX**.
-- **OpenAI-compatible REST server**: `POST /v1/audio/speech`,
-  `POST /v1/audio/transcriptions` — so our app can treat speech like the OpenAI
-  audio API but hit localhost.
-- Supports streaming, quantization, VAD (Silero), forced alignment.
-- Swift package (`mlx-audio-swift`) exists if we ever go native.
-
-### 4.5 Too big for this Mac
-
-- **Qwen3-Omni-30B-A3B** (~60 GB fp16, ~16 GB even at 4-bit + encoders) does not
-  fit comfortably in 16 GB alongside a browser. **Rejected** for now; the
-  cascade (LLM on OpenRouter + local ASR/TTS) is better here anyway because
-  it keeps RAM low and gives us a much stronger "brain".
-
-### 4.6 Cloud fallback
-
-- OpenRouter launched **audio APIs (TTS + transcription)** in 2026. We can add a
-  `cloud` speech provider behind the same gateway interface for when the local
-  models are cold or on a second machine.
-
-### 4.7 Nix findings
-
-- `nixpkgs` has `uv`, `bun`, `nodejs_24`, `python312`, `ffmpeg` (verified on this
-  machine). No reliable `mlx` in the store → install via `uv` into a project venv.
-- MLX wheels are published for `macosx_*_arm64` cp310–cp313 → plain venv works.
+One model per role keeps the gateway, the deps and the docs simple. Rejected:
+the rest of the Qwen3 speech family (only the forced aligner remains — nothing
+replaces its word timings), Kokoro-82M and SenseVoice-Small (redundant),
+CosyVoice 3 (no `mlx-audio` port, no built-in voices) and Qwen3-Omni (too big
+for 16 GB). MLX is installed with `uv` into a venv on disk: nixpkgs has no
+reliable `mlx`, and the Nix sandbox cannot use Metal.
 
 ---
 
@@ -321,12 +294,8 @@ server owns its lifecycle.
 
 - **Client gone:** when the last browser tab disconnects and stays gone for the
   idle window → unload.
-- **Memory pressure:** poll `memory_pressure`/`sysctl vm.memory_pressure` and if
-  the Mac is under pressure, unload the heaviest model first (TTS), keeping ASR
-  for a fast reply is optional — configurable.
-- **Explicit:** a "Free memory" button in Settings calls `unload`.
-- **Idle inside the sidecar:** the sidecar also evicts least-recently-used models
-  (e.g. drop VoiceDesign if unused) so we never hold all five variants at once.
+- **Explicit:** a "Free memory" button in Settings calls `unload` — **admin
+  only**, because the gateway is shared and stopping it cuts off every member.
 
 ### 8.4 Latency tradeoff (documented)
 
@@ -336,8 +305,7 @@ server owns its lifecycle.
 | Cold start       | ~2–6 s model load (spinner + pre-warm) |
 | Mid-conversation | Warm; idle timer keeps resetting       |
 
-Config knobs: `TUTOR_SPEECH_IDLE_TIMEOUT`, `TUTOR_SPEECH_AUTOSTART`,
-`TUTOR_SPEECH_MAX_RESIDENT_MODELS`, `TUTOR_SPEECH_MEMORY_PRESSURE_UNLOAD`.
+Config knobs: `TUTOR_SPEECH_IDLE_TIMEOUT`, `TUTOR_SPEECH_AUTOSTART`.
 
 ### 8.5 App shutdown
 
@@ -406,7 +374,7 @@ the same `/v1/tts` request, chosen by `models.tts_kind_for(language, mode)`.
 
 Because the optional backends are separate checkpoints, **keep only one TTS
 checkpoint resident at a time** and swap when the config changes (§8.3). Voice
-**cloning** stays Phase 8. Everything is config-driven (`speechOpts(lang)`), so
+**cloning** is not built. Everything is config-driven (`speechOpts(lang)`), so
 switching never touches code.
 
 ### 9.3 ASR flow
@@ -631,11 +599,13 @@ food words"), or manual entry.
 TTS call: when a card is created (or on the first play of an older one) its
 target text is recorded in four voices — two female and two male, pitched high
 and low — and stored content-addressed under `$TUTOR_DATA_DIR/audio/`
-(§12). `GET /api/cards/:id/audio` streams one voice (a random one per play, or
+(§12), keyed by voice, **language** and text: Mandarin, Japanese and Cantonese
+share written words (先生, 水), and each is read in its own language. `GET /api/cards/:id/audio` streams one voice (a random one per play, or
 `?variant=N`), so playback never wakes the speech model. Recording runs through
 a serial background queue (`apps/server/src/audio/`), and
 `POST /api/audio/backfill` (or `scripts/backfill-audio.ts`) records a whole
-existing library, resuming wherever it stopped.
+existing library, resuming wherever it stopped. The queue is shared by every
+member, so starting a backfill and `POST /api/audio/cancel` are **admin only**.
 
 ### 11.2 Exercise definitions (the plugin contract)
 
@@ -659,8 +629,8 @@ interface ExerciseDef<Ctx = unknown, Inst = unknown, Res = unknown> {
 - Adding an exercise = one file in each place + a registry line. Nothing in the
   core needs editing → this is _the_ extensibility promise.
 
-The full server layout (domain / data / services / routes, and the content
-tables) is in [`docs/REFACTOR_PLAN.md`](REFACTOR_PLAN.md) §3.
+The server layout (game / db / services / routes, and the content tables) is in
+[`docs/ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ### 11.3 Built-in exercise kinds (roadmap)
 
@@ -733,7 +703,9 @@ settings and OpenRouter key**.
   everyone has signed up.
 - **Login sessions:** opaque random token in an httpOnly cookie; only its
   **SHA-256 hash** is stored in `auth_sessions`, with a 30-day sliding expiry.
-  Cookie is `Secure` automatically when served over HTTPS.
+  Cookie is `Secure` automatically when served over HTTPS, and its `Path` is the
+  app's base path (`/tutor` behind the gateway), so other apps on the same
+  tailnet hostname never receive it.
 - **Isolation:** every request resolves the session to a user and **all** queries
   are scoped by `user_id` — a user can only ever read/write their own rows.
   `/api/chat`, `/api/sessions`, `/api/settings` etc. return `401` without a
@@ -1328,10 +1300,15 @@ graduation — is ours (`apps/server/src/game/srs.ts`).
 - **Practice never serves a card ahead of its due date.** When the due backlog is
   empty and no new word is left, the day is **done** — the queue returns nothing
   rather than the soonest scheduled card. Reaching past a review card's due date
-  looked harmless but was a trap: a same-day review leaves the due date untouched
-  (`schedule`), so the "soonest card" fallback handed back the very same card
-  forever (the "This is not that." loop). Combat keeps `selectCardId`, whose
-  soonest-card fallback gives every hit a card to fight with.
+  looked harmless but was a trap: a same-day review of a card that is not yet due
+  leaves the due date untouched (`schedule`), so the "soonest card" fallback handed
+  back the very same card forever (the "This is not that." loop). Combat keeps
+  `selectCardId`, whose fallback gives every hit a card to fight with: when
+  nothing is due it serves the card that has waited **longest since its last
+  review**, so a fight rotates through the deck instead of drilling one card. A
+  review card that **is** due is always rescheduled, even inside 24h of an early
+  (combat) review — otherwise it stayed due however often it was answered — and a
+  miss on it goes to relearning.
 - **The daily budget is a goal, not a wall.** Hitting the day's new/review cap does
   not stop practice while the deck still has something to give: the next `next`
   call raises today's allowance for the kind that is blocked and serves the card,
@@ -1422,7 +1399,7 @@ rotation, so it only ever appears as this first-exposure prelude.
 
 ## 13.8 Study preferences (per user)
 
-Decks are shared content; how you *drill* them is personal. `game/study.ts` keeps
+Decks are shared content; how you *drill* them is personal. `services/study.ts` keeps
 a small bag of per-user knobs in `user_settings` (no migration needed), editable
 in **Settings › Study** and applied everywhere practice is served (the practice
 routes and the combat drill both read them):
@@ -1545,47 +1522,11 @@ remains future work.
   (Metal can't run in the sandbox; weights are multi-GB and must be mutable/cached).
 - One `nix develop` → everything for dev. One `nix run` → run the app locally.
 
-### 15.2 Sketch
+### 15.2 The flake
 
-```nix
-{
-  description = "tutor — AI language learning (MLX speech + OpenRouter brain)";
-  inputs = {
-    nixpkgs.url     = "github:NixOS/nixpkgs/nixpkgs-unstable";
-    flake-utils.url = "github:numtide/flake-utils";
-  };
-  outputs = { self, nixpkgs, flake-utils }:
-    flake-utils.lib.eachSystem [ "aarch64-darwin" ] (system:
-      let
-        pkgs = nixpkgs.legacyPackages.${system};
-        py   = pkgs.python312;
-      in {
-        devShells.default = pkgs.mkShell {
-          packages = with pkgs; [
-            bun nodejs_24 uv py ffmpeg git cacert just sqlite pkg-config
-            mkcert        # local HTTPS for Android mic (see §14.1)
-          ];
-          shellHook = ''
-            export TUTOR_DATA_DIR="''${TUTOR_DATA_DIR:-$PWD/data}"
-            export TUTOR_MODELS_DIR="''${TUTOR_MODELS_DIR:-$PWD/models}"
-            export HF_HOME="$TUTOR_MODELS_DIR"
-            export UV_PYTHON="${py}/bin/python3.12"
-            echo "tutor dev shell — run: just setup && just dev"
-          '';
-        };
-
-        # App artifact: web assets + compiled Bun binary
-        packages.default = pkgs.callPackage ./nix/package.nix { inherit py; };
-        packages.speech  = pkgs.callPackage ./nix/speech.nix  { inherit py; };
-
-        apps.default    = { type = "app"; program = "${self.packages.${system}.default}/bin/tutor"; };
-        apps.fetch-models = { type = "app"; program = "${self.packages.${system}.speech}/bin/tutor-fetch-models"; };
-
-        formatter = pkgs.nixpkgs-fmt;                 # or alejandra
-        checks.default = pkgs.runCommand "tutor-checks" {} "echo ok";
-      });
-}
-```
+`flake.nix` is the source of truth: the dev shell (bun, node, uv, python, ffmpeg,
+just, sqlite, mkcert), `packages.default` (the `/tutor` build), `packages.root`
+(the build that serves at `/`), `packages.speech` and the `fetch-models` app.
 
 ### 15.3 Packaging details
 
@@ -1658,7 +1599,8 @@ $TUTOR_DATA_DIR/tls/       mkcert cert+key for HTTPS on the LAN (§14.1)
 
 - Secrets never in the DB or the store. Load `.env`/`env` at startup; never log keys.
 - Bind to `127.0.0.1` only. Single local user by default; schema is multi-user ready.
-- Model revisions pinned (commit hash / tag) in `python/uv.lock` + a `models.json`.
+- Python deps are pinned in `python/uv.lock`; the model checkpoints are named in
+  `python/speech/models.py` (their revisions are not pinned yet).
 
 ---
 
@@ -1672,149 +1614,26 @@ $TUTOR_DATA_DIR/tls/       mkcert cert+key for HTTPS on the LAN (§14.1)
 
 ---
 
-## 18. Risks & mitigations
+## 18. Not built yet
 
-| #   | Risk                                               | Mitigation                                                                       |
-| --- | -------------------------------------------------- | -------------------------------------------------------------------------------- |
-| 1   | Nix sandbox can't do Metal / no `mlx` in nixpkgs   | Python venv + models live on disk; flake ships tools/wrappers                    |
-| 2   | macOS 27 / M6 too new for MLX wheels               | Pin `uv.lock`; verify in Phase 1 before building UI; fallback to CPU/whisper.cpp |
-| 3   | 16 GB pressure with browser + models               | 8-bit/6-bit models; idle unload (§8); memory-pressure trigger                    |
-| 4   | Cold-start latency hurts UX                        | Pre-warm on voice mode entry; "waking up" UI; keep warm mid-convo                |
-| 5   | Streaming TTS chunking + AudioContext policy       | Sentence-level chunking; unlock AudioContext on first gesture                    |
-| 6   | Pronunciation scoring is word-level, not phoneme   | Ship "understood + timing" MVP; label it clearly; Phase-8 GOP mode               |
-| 7   | OpenRouter cost / rate limits                      | Cheap models for bulk, strong for convo; cache stable prefixes; usage tracking   |
-| 8   | `mlx-audio` server model residency (one at a time) | Use **our** sidecar (load ASR+aligner+TTS, LRU evict) not stock server for prod  |
-| 9   | Audio history grows unbounded                      | Content-hash dedupe; retention/prune policy in settings                          |
-| 10  | Monorepo build complexity under Nix                | `bun build --compile` single artifact; minimal store-time Python                 |
+- Streaming / barge-in voice, and a phoneme-level (GOP) pronunciation mode.
+- Achievements, quests and leaderboards as event-bus subscribers (§11.4).
+- A second speech provider (OpenRouter audio or whisper.cpp) behind the gateway.
+- A retention policy for stored audio (today it is kept forever).
+- Cloud sync / federation.
+
+Known defects and refactors are tracked in [`BACKLOG.md`](BACKLOG.md).
 
 ---
 
-## 19. Execution roadmap
-
-Phases are sequential; each has acceptance criteria. **Phase 1 de-risks the model
-stack before any UI work.**
-
-### Phase 0 — Bootstrap (½–1 day)
-
-- `git init`; create monorepo layout (§6); `flake.nix` + `flake.lock`;
-  `justfile`; `README.md`; prettier + svelte-check; `checks` in the flake.
-- **Acceptance:** `nix develop` gives bun/uv/ffmpeg/python; `just --list` works.
-
-### Phase 1 — Speech gateway on this Mac (1–2 days) ⭐ de-risk first
-
-- `python/pyproject.toml` (uv) with `mlx-audio`, `mlx`, `soundfile`, `fastapi`.
-- `python/speech/server.py`: load ASR-1.7B + ForcedAligner + TTS-1.7B; endpoints
-  `/v1/asr`, `/v1/align`, `/v1/tts`, `/health`, `/admin/unload`; idle unload.
-- Fetch models via `hf` into `$TUTOR_MODELS_DIR`.
-- **Acceptance:** round-trip — speak Mandarin → ASR text; TTS speaks it back;
-  aligner returns word timings; peak RSS < 8 GB; process exits on idle and
-  RAM returns; measure cold-start + latency.
-
-### Phase 2 — Backend skeleton (1–2 days)
-
-- Bun + Hono server; Drizzle + SQLite schema/migrations (§12); serves the PWA
-  static shell; optional `--tls-cert/--tls-key` for the Android secure context
-  (§14.1).
-- OpenRouter client (stream + JSON schema + usage) + **model catalogue proxy**
-  (`GET /models`, filtered) and per-role model selection persisted in `settings`.
-- SSE endpoint; config loader; speech supervisor (lazy start / idle stop / health).
-- **Acceptance:** streamed chat reply over SSE; messages persist; user can switch
-  the per-role model and see it take effect; supervisor starts/stops the sidecar
-  on demand; unit tests on graders.
-
-### Phase 3 — Web MVP: SvelteKit PWA, multi-user auth + chat/voice (3–4 days)
-
-- **Multi-user backend** (done first, so the UI is auth-aware): accounts, argon2id
-  passwords, cookie sessions, per-user isolation + settings + OpenRouter keys.
-- SvelteKit + Tailwind, `adapter-static` SPA, PWA manifest + service worker;
-  sign-in/sign-up screens; mobile-first Home HUD + Conversation screen; mic
-  record → ASR; reply → streaming TTS playback; History viewer; Settings
-  (per-role model picker, voice, own key, free memory); HTTPS cert setup.
-- **Acceptance:** two accounts hold separate conversations and never see each
-  other's history; install the PWA on an Android phone; hold a typed and a spoken
-  conversation over HTTPS; reload → history intact; TTS audio plays; no orphan
-  Python process after idle.
-
-### Phase 4 — Exercise engine + cards (2–3 days)
-
-- `packages/core`: `Card`, `ExerciseDef`, registry; backend generate/grade;
-  frontend component map; built-in `translate.*`, `multiple_choice`,
-  `type_listen`, `converse`.
-- Seed the first curated decks: the **Mandarin** and **Japanese frequency** lists
-  - LLM deck generation.
-- **Acceptance:** run a practice session mixing exercise types; each yields a
-  graded result; adding a new exercise needs no core edits (documented).
-
-### Phase 5 — Pronunciation (`speak_word`) (1–2 days)
-
-- Pipeline §9.4: ASR + aligner + deterministic features + OpenRouter judge with
-  JSON schema; per-word feedback + score; record/playback UI.
-- **Acceptance:** mispronounced word scores lower; missing word detected; feedback
-  references the right word.
-
-### Phase 6 — Gamification (1–2 days)
-
-- XP ledger + level curve + streak + daily goal; HUD; event bus wiring.
-- **Acceptance:** completing exercises raises XP, levels up, updates streak;
-  XP rebuilds from `xp_events`.
-
-### Phase 7 — Nix packaging polish + docs (1–2 days)
-
-- `nix/package.nix` (compiled binary + assets), `nix/speech.nix`
-  (`tutor-fetch-models`), `nix run .` full launch; `just bench`; README quickstart.
-- **Acceptance:** `nix run .` serves the app from a clean checkout (after
-  `fetch-models`); no store-time Metal needed.
-
-### Phase 8 — post-MVP
-
-- **Done:** professions (22) with **per-action levels** (each action capped at 100;
-  the profession level is the mean of its actions, so it reads out of 100 and new
-  content lowers it), talents (minor every 5 / major
-  every 10), materials + crafting chains, equipment & gear-gated combat actions,
-  deeper combat (monsters, HP, damage rolls, drops), **FSRS-6 spaced repetition**
-  (Anki 25.07-style scheduler with the V6 default weights, learning/relearning
-  steps and desired retention) + a guided curriculum with unlocked lessons.
-- **Next:** streaming/barge-in voice, phoneme GOP precision
-  mode, achievements/quests/leaderboards on the event bus, second speech provider
-  (OpenRouter audio / whisper.cpp), cloud sync / federation, launchd/nix-darwin module.
-
----
-
-## 20. Decisions
-
-### Resolved
-
-| #   | Decision                    | Choice                                                                                                                                                                             |
-| --- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Product / package name      | **`tutor`** (kept)                                                                                                                                                                 |
-| 2   | Frontend                    | **SvelteKit** — most performant at runtime; shipped as a **mobile-first PWA** for Android                                                                                          |
-| 3   | First languages / levels    | **Mandarin**, **Japanese** — both frequency-ordered, one word per step (themed HSK 1 / JLPT N5 decks were dropped)                                                                  |
-| 4   | OpenRouter models           | **User-selectable per role in-app** from OpenRouter's catalogue (defaults: Qwen for convo/judge, cheap model for generator/translator); works with any key (DeepSeek, OpenAI, …)   |
-| 5   | Voice strategy              | **User-selectable**: **CustomVoice presets** _or_ **VoiceDesign** personas (per language), switchable in Settings; one TTS checkpoint resident at a time (§9.2). Cloning → Phase 8 |
-| 6   | Idle timeout                | **1 hour** (configurable)                                                                                                                                                          |
-| 7   | Speech provider abstraction | Build the **provider interface now** (local mlx-audio + cloud fallback), so swapping is trivial                                                                                    |
-| 8   | Client deployment           | Mac = server; phones = PWA over **HTTPS** (mkcert) — required for mic (§14.1)                                                                                                      |
-| 9   | Multi-user                  | **Local accounts** (username + password, argon2id), **fully isolated** per-user history/settings/keys; first user is admin; per-user OpenRouter key with server fallback (§12.5)   |
-
-### Still open (non-blocking)
-
-- Exact default OpenRouter ids for each role (will propose in Phase 2).
-- Which preset voice per language is the "default tutor" (propose `Serena` for
-  Mandarin, `Ono_Anna` for Japanese, then let the user change it).
-- Retention policy for stored audio (keep forever vs prune after N months).
-
----
-
-## 21. References
+## 19. References
 
 - Whisper large-v3-turbo (MIT): https://huggingface.co/openai/whisper-large-v3-turbo
 - VoxCPM2 (Apache-2.0): https://huggingface.co/openbmb/VoxCPM2
-- CosyVoice 3 (rejected — no mlx-audio port): https://github.com/FunAudioLLM/CosyVoice
 - Whisper / VoxCPM2 / the Qwen3 forced aligner in MLX (mlx-audio):
   https://github.com/Blaizzy/mlx-audio
 - mlx-audio docs: https://neywa-labs.github.io/mlx-audio/
 - MLX: https://opensource.apple.com/projects/mlx
-- Qwen3-Omni (rejected, too big): https://github.com/QwenLM/Qwen3-Omni
 - OpenRouter audio APIs: https://openrouter.ai/blog/announcements/announcing-audio-apis/
 - OpenRouter multimodal audio guide:
   https://openrouter.ai/docs/guides/overview/multimodal/audio

@@ -1,5 +1,5 @@
 import { activitySeries, rebuildStats, summary } from '../services'
-import { quietState } from '../game/quiet'
+import { quietState } from '../services/quiet'
 import type { App } from '../context'
 
 export function registerStats(app: App) {

@@ -28,6 +28,7 @@ import { decryptSecret } from '../apps/server/src/auth'
 import { OpenRouter } from '../apps/server/src/llm/openrouter'
 import { llmPlanner } from '../apps/server/src/deck/plan'
 import { createDeckForBuild, fillDeck } from '../apps/server/src/deck/generate'
+import type { CharacterVariant } from '../apps/server/src/deck/settings'
 import { curriculumView } from '../apps/server/src/services'
 
 const deckId = process.argv[2]
@@ -86,12 +87,17 @@ console.log(`real deck: ${stepByWord.size} vocab cards, ${oldExamples.length} ol
 
 // 3. Generate a fresh set into a throwaway deck, reusing the production builder
 //    (same chunking, retry-on-truncation and n+1 validation the server uses).
-const key = await decryptSecret(getUserSetting(db, userId, 'openrouter_key') || undefined, env.secret)
+const key = await decryptSecret(
+  getUserSetting(db, userId, 'openrouter_key') || undefined,
+  env.secret,
+)
 if (!key) throw new Error('no OpenRouter key for the deck owner')
 const model = getRoles(db, userId, { ...env.defaultRoles }).generator
 console.log(`generator model: ${model}`)
 if (process.env.REBUILD_DRY === '1') {
-  console.log(`dry run ok — data dir ${env.dataDir}, key ${key.slice(0, 8)}…, ${words.length} words`)
+  console.log(
+    `dry run ok — data dir ${env.dataDir}, key ${key.slice(0, 8)}…, ${words.length} words`,
+  )
   sqlite.close()
   process.exit(0)
 }
@@ -109,31 +115,29 @@ const created = await createDeckForBuild(db, userId, {
   words,
   count: words.length,
   name: `__rebuild_${Date.now()}`,
-  variant: settings.variant as string | undefined,
+  variant: settings.variant as CharacterVariant | undefined,
   readingScript: settings.readingScript as string | undefined,
   showReadings: settings.showReadings as boolean | undefined,
   disabledExercises: settings.disabledExercises as string[] | undefined,
   pitchAccent: settings.pitchAccent as boolean | undefined,
   sourceLabel: 'Kaishi 1.5k',
+  planner,
 })
 const ctx = {
   instruction,
   targetLang: deckRow.targetLang,
   sourceLang: deckRow.sourceLang,
-  variant: settings.variant as string | undefined,
+  variant: settings.variant as CharacterVariant | undefined,
   readingScript: settings.readingScript as string | undefined,
   pitchAccent: settings.pitchAccent as boolean | undefined,
 }
 const started = Date.now()
 try {
-  await fillDeck(
-    db,
-    userId,
-    created.deckId,
+  await fillDeck(db, userId, created.deckId, {
     ctx,
-    { words, count: words.length, knownWords: [], startStep: 0 },
+    opts: { words, count: words.length, knownWords: [], startStep: 0 },
     planner,
-  )
+  })
 } catch (err) {
   deleteDeck(db, created.deckId, userId)
   throw err
@@ -184,10 +188,11 @@ if (pending.length === 0) {
 
 // 5. Swap the examples. Vocab cards are never touched.
 for (const c of oldExamples) {
-  sqlite.run('delete from srs where card_id = ?', c.id)
-  sqlite.run('delete from reviews where card_id = ?', c.id)
-  sqlite.run('delete from attempts where card_id = ?', c.id)
-  sqlite.run('delete from cards where id = ?', c.id)
+  sqlite.run('delete from srs where card_id = ?', [c.id])
+  sqlite.run('delete from srs_reviews where card_id = ?', [c.id])
+  sqlite.run('delete from reviews where card_id = ?', [c.id])
+  sqlite.run('delete from attempts where card_id = ?', [c.id])
+  sqlite.run('delete from cards where id = ?', [c.id])
 }
 for (const e of pending) {
   addCard(db, userId, {

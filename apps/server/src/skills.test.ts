@@ -342,3 +342,24 @@ test('talent + equip endpoints validate input', async () => {
   expect(missingItem.status).toBe(400) // not in the bank yet
   sqlite.close()
 })
+
+test('GET /api/skills/gear is the gear screen, not a profession page', async () => {
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
+  const res = await app.request('/api/skills/gear', auth(cookie))
+  expect(res.status).toBe(200)
+  expect(Object.keys((await res.json()) as object)).toContain('equipment')
+  sqlite.close()
+})
+
+test('GET /api/settings never returns the stored OpenRouter key', async () => {
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
+  const put: RequestInit = { ...json({ key: 'sk-or-SECRET123' }), method: 'PUT' }
+  const saved = await app.request('/api/settings/openrouter-key', auth(cookie, put))
+  expect(saved.status).toBe(200)
+  const text = await (await app.request('/api/settings', auth(cookie))).text()
+  expect(text).not.toContain('SECRET123')
+  expect(text).not.toContain('openrouter_key')
+  sqlite.close()
+})

@@ -34,7 +34,7 @@ async function testHandler(c: Context<AppEnv>) {
       force: true,
     })
     if (res.ok) sent++
-    else if (res.gone) deletePushSubscription(db, sub.endpoint)
+    else if (res.gone) deletePushSubscription(db, sub.userId, sub.endpoint)
   }
   if (!sent) return c.json({ error: 'the push service rejected the notification' }, 502)
   return c.json({ ok: true, sent })

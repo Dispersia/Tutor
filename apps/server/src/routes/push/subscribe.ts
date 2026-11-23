@@ -65,6 +65,6 @@ function isHttpsEndpoint(endpoint: string): boolean {
 async function unsubscribeHandler(c: Context<AppEnv>) {
   const endpoint = str(await jsonBody(c), 'endpoint')
   if (!endpoint) return c.json({ error: 'endpoint required' }, 400)
-  deletePushSubscription(c.get('deps').db, endpoint)
+  deletePushSubscription(c.get('deps').db, c.get('user')!.id, endpoint)
   return c.json({ ok: true })
 }

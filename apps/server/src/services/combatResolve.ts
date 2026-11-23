@@ -2,6 +2,7 @@
 
 import { clearEncounter, getEncounter, setPlayerHp, upsertEncounter } from '../db/repo'
 import type { Db } from '../db/client'
+import { atomic } from '../db/repo/helpers'
 import type { EventBus } from '../events'
 import { MONSTER_BY_ID, incomingDamage, rollDrops } from '../game/combat'
 import { type Cost, type SkillId } from '../game/skills'
@@ -135,14 +136,18 @@ function playerStrike(
   }
 }
 
-/** The hit's damage: mastery scaling, a crit multiplier and a haste extra strike. */
+/**
+ * The hit's damage: a crit multiplier and a haste extra strike on the player's
+ * power. Mastery is already inside `pc.power` (`playerPower`, DESIGN §13.5), so
+ * it is not applied again here.
+ */
 function strikeDamage(
   pc: PlayerCombat,
   ctx: EncounterContext,
   crit: boolean,
   haste: boolean,
 ): number {
-  const multiplier = (crit ? 1.75 : 1) * (1 + pc.mastery) * (haste ? 1.5 : 1)
+  const multiplier = (crit ? 1.75 : 1) * (haste ? 1.5 : 1)
   return Math.max(1, Math.round(pc.power * (1 + ctx.enc.powerBonus) * multiplier))
 }
 
@@ -284,7 +289,7 @@ interface Resolve {
 }
 
 /** Resolves one drill inside an active encounter. */
-export function combatResolve(
+function combatResolveTx(
   db: Db,
   bus: EventBus,
   userId: string,
@@ -303,6 +308,9 @@ export function combatResolve(
   })
   return runEncounter({ db, bus, userId, ctx, progress, correct, eaten, rand })
 }
+
+/** {@link combatResolveTx}, all-or-nothing. */
+export const combatResolve = atomic(combatResolveTx)
 
 function runEncounter(req: Resolve): HitOutcome {
   const { ctx, progress, correct, eaten, rand } = req

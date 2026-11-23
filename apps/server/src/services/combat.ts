@@ -9,6 +9,7 @@ import {
   upsertEncounter,
 } from '../db/repo'
 import type { Db } from '../db/client'
+import { atomic } from '../db/repo/helpers'
 import type { EventBus } from '../events'
 import { MONSTER_BY_ID, playerMaxHp, playerPower, type MonsterDef } from '../game/combat'
 import {
@@ -339,12 +340,7 @@ export type StartResult =
       equipMissing?: { slot: string; tag: string }
     }
 
-export function startEncounter(
-  db: Db,
-  bus: EventBus,
-  userId: string,
-  monsterId: string,
-): StartResult {
+function startEncounterTx(db: Db, bus: EventBus, userId: string, monsterId: string): StartResult {
   const m = MONSTER_BY_ID.get(monsterId)
   if (!m) return { ok: false, error: 'unknown monster' }
   const locked = lockResult(db, userId, m)
@@ -357,6 +353,9 @@ export function startEncounter(
   upsertEncounter(db, userId, startRow(monsterId, m, potion, startHp))
   return startOk(monsterId, m, potion, startHp)
 }
+
+/** {@link startEncounterTx}, all-or-nothing. */
+export const startEncounter = atomic(startEncounterTx)
 
 function startOk(
   monsterId: string,

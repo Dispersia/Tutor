@@ -24,11 +24,11 @@ import { mandarinZhuyin } from '../deck/mandarin'
 
 /** Initial → the sound it merges with in Taiwan Mandarin. */
 const MERGED_INITIALS: Record<string, string> = {
-  'ㄓ': 'ㄗ',
-  'ㄔ': 'ㄘ',
-  'ㄕ': 'ㄙ',
-  'ㄋ': 'ㄌ',
-  'ㄈ': 'ㄏ',
+  ㄓ: 'ㄗ',
+  ㄔ: 'ㄘ',
+  ㄕ: 'ㄙ',
+  ㄋ: 'ㄌ',
+  ㄈ: 'ㄏ',
 }
 
 const LEAD_TONE = '˙' // neutral tone is written *before* the syllable

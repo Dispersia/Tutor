@@ -62,10 +62,14 @@ check:
     bun run typecheck
     bun run --cwd apps/web check
 
-# lint + architecture guardrails (docs/REFACTOR_PLAN.md, Phase 0)
+# lint + architecture guardrails (docs/ARCHITECTURE.md)
 lint:
     bun run lint
     bun run arch
+
+# every gate in one go: format, lint, architecture, typecheck (server + web), tests
+ci:
+    bun run verify
 
 # report dead code — advisory while the decomposition runs
 knip:

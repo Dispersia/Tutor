@@ -1,4 +1,4 @@
-/** The deck wire view (docs/REFACTOR_PLAN.md §8.2, Phase 9). */
+/** The deck wire view (docs/ARCHITECTURE.md). */
 
 import { publicDeckSettings, type DeckSettings } from '../../deck/settings'
 

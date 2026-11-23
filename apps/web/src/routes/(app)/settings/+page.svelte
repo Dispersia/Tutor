@@ -4,7 +4,7 @@
   import { goto } from '$app/navigation'
   import { api } from '#lib/api'
   import { getStats, listExercises } from '#lib/exercises'
-  import { session, updateProfile } from '#lib/session.svelte'
+  import { logout, session, updateProfile } from '#lib/session.svelte'
   import { speechStatus, unloadSpeech, wakeSpeech } from '#lib/speech'
   import { ACCENT } from '#lib/theme'
   import type {
@@ -165,7 +165,9 @@
       const r = await api<{ study: StudyPrefs }>('/api/settings', {
         method: 'PUT',
         body: JSON.stringify({
-          study: { ...study, learningSteps: steps },
+          // The active deck belongs to the sidebar picker; sending the copy this
+          // page loaded with would revert a switch made since.
+          study: { ...study, activeDeckId: undefined, learningSteps: steps },
         }),
       })
       study = r.study
@@ -244,8 +246,7 @@
   }
 
   async function doLogout() {
-    await api('/api/auth/logout', { method: 'POST' }).catch(() => {})
-    session.user = null
+    await logout()
     void goto(href('/login'))
   }
 
@@ -306,7 +307,7 @@
 
   <VoiceSettings bind:voiceMode bind:voices onSave={saveVoice} />
 
-  <SpeechSection {speech} {waking} onWake={wake} onFree={free} />
+  <SpeechSection {speech} {waking} onWake={wake} onFree={isAdmin ? free : undefined} />
 
   <NumberSetting
     title="Daily goal"

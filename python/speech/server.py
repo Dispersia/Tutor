@@ -17,6 +17,8 @@ import os
 import subprocess
 import tempfile
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -116,13 +118,32 @@ def to_wav16k(src: Path) -> Path:
         return src
 
 
-async def _save_upload(file: UploadFile) -> Path:
+def _save_upload(file: UploadFile) -> Path:
     suffix = Path(file.filename or "audio.wav").suffix or ".wav"
     fd, name = tempfile.mkstemp(suffix=suffix)
     os.close(fd)
     path = Path(name)
-    path.write_bytes(await file.read())
+    path.write_bytes(file.file.read())
     return path
+
+
+@contextmanager
+def _upload_as_wav(file: UploadFile) -> Iterator[Path]:
+    """The upload as a 16 kHz WAV; removes both temp files (upload + resample) on exit."""
+    path = _save_upload(file)
+    wav = path
+    try:
+        wav = to_wav16k(path)
+        yield wav
+    finally:
+        path.unlink(missing_ok=True)
+        if wav != path:
+            wav.unlink(missing_ok=True)
+
+
+# The upload routes below are plain `def` on purpose: FastAPI runs those in its
+# threadpool, so ffmpeg and MLX inference never block the event loop (an `async
+# def` route would freeze `/health` for the length of every transcription).
 
 
 # --- routes ------------------------------------------------------------------
@@ -209,15 +230,13 @@ def warm() -> dict:
 
 
 @app.post("/v1/asr")
-async def asr(
+def asr(
     file: UploadFile = File(...),
     language: str | None = Form(None),
     hint: str | None = Form(None),
     lite: bool = Form(False),
 ) -> dict:
-    path = await _save_upload(file)
-    try:
-        wav = to_wav16k(path)
+    with _upload_as_wav(file) as wav:
         if not models.has_speech(str(wav)):
             # Don't let a silent/short clip become a hallucinated word (see models.has_speech).
             return {"text": "", "segments": [], "lang": language, "ms": 0.0, "noSpeech": True}
@@ -227,29 +246,23 @@ async def asr(
             out = models.asr_transcribe(model, str(wav), language, hint)
             ms = (time.time() - t0) * 1000
         return {"text": out["text"], "segments": out["segments"], "lang": language, "ms": ms}
-    finally:
-        path.unlink(missing_ok=True)
 
 
 @app.post("/v1/align")
-async def align(
+def align(
     file: UploadFile = File(...),
     text: str = Form(...),
     language: str | None = Form(None),
 ) -> dict:
-    path = await _save_upload(file)
-    try:
-        wav = to_wav16k(path)
+    with _upload_as_wav(file) as wav:
         with manager.inference():
             model = manager.get("align")
             items = models.align_text(model, str(wav), text, language)
         return {"items": items}
-    finally:
-        path.unlink(missing_ok=True)
 
 
 @app.post("/v1/assess")
-async def assess(
+def assess(
     file: UploadFile = File(...),
     text: str = Form(...),
     language: str | None = Form(None),
@@ -257,9 +270,7 @@ async def assess(
     """One shot for pronunciation: transcribe the attempt + align it to `text`."""
     if not text.strip():
         raise HTTPException(status_code=400, detail="text is required")
-    path = await _save_upload(file)
-    try:
-        wav = to_wav16k(path)
+    with _upload_as_wav(file) as wav:
         try:
             import soundfile as sf
 
@@ -288,8 +299,6 @@ async def assess(
             "duration": duration,
             "ms": (time.time() - t0) * 1000,
         }
-    finally:
-        path.unlink(missing_ok=True)
 
 
 class TtsRequest(BaseModel):
@@ -350,9 +359,11 @@ def tts(req: TtsRequest) -> Response:
             arr = arr * min(_NORM_TARGET / peak, _NORM_MAX_GAIN)
     fd, name = tempfile.mkstemp(suffix=".wav")
     os.close(fd)
-    models.write_wav(name, arr, sr)
-    data = Path(name).read_bytes()
-    Path(name).unlink(missing_ok=True)
+    try:
+        models.write_wav(name, arr, sr)
+        data = Path(name).read_bytes()
+    finally:
+        Path(name).unlink(missing_ok=True)
 
     # Keep the MLX buffer cache from growing without bound across a long
     # recording run (see _TTS_CLEAR_EVERY). The reference to `arr` above is

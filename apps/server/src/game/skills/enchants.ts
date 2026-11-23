@@ -4,7 +4,6 @@
 
 import type { Cost, GearStats, Slot } from './types'
 import { essenceId, type EssenceId } from './essences'
-import { slotFamily } from './slots'
 
 // --- enchants (docs/DESIGN.md §13.5.3.2) -------------------------------------
 //
@@ -135,8 +134,3 @@ export const ENCHANTS: EnchantDef[] = ENCHANT_TABLE.map(([slot, stat, level]) =>
 })
 
 export const ENCHANT_BY_ID = new Map(ENCHANTS.map((e) => [e.id, e]))
-
-/** The enchants that fit a piece's slot. */
-export function enchantsForSlot(slot: Slot): EnchantDef[] {
-  return ENCHANTS.filter((e) => e.slot === slot || slotFamily(e.slot).includes(slot))
-}

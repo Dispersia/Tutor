@@ -183,5 +183,3 @@ export const FREQUENCY: FreqWord[] = [
 
 /** word -> entry, for the grammar engine and support checks. */
 export const LEXICON: Map<string, FreqWord> = new Map(FREQUENCY.map((w) => [w.word, w]))
-
-export const POS_BY_WORD: Map<string, Pos> = new Map(FREQUENCY.map((w) => [w.word, w.pos]))

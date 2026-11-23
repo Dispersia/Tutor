@@ -175,3 +175,13 @@ function metCondition() {
     or exists (select 1 from ${srs} where ${srs.cardId} = ${cards.id} and ${srs.userId} = ${cards.userId})
   )`
 }
+
+/** Every target language any member's card uses this exact `back` text in. */
+export function cardLanguages(db: Db, back: string): string[] {
+  return db
+    .selectDistinct({ lang: cards.targetLang })
+    .from(cards)
+    .where(eq(cards.back, back))
+    .all()
+    .map((r) => r.lang)
+}

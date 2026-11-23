@@ -5,5 +5,11 @@ models/
 data/
 python/.venv/
 result
+bun.lock
+# generated (scripts/gen-migrations.mjs)
+**/*.gen.ts
+# static design prototype
+design/
+.impeccable/
 # vendored woff2 subsets + generated @font-face rules
 design/tutor/assets/fonts/

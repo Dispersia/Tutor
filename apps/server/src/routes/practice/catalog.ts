@@ -3,7 +3,7 @@
 import { CARD_TEMPLATES } from '@tutor/core'
 import type { App } from '../../context'
 import { exerciseCatalog } from '../../exercises'
-import { setQuiet } from '../../game/quiet'
+import { setQuiet } from '../../services/quiet'
 import { bool, jsonBody } from '../body'
 
 /** `/api/exercises`, `/api/templates` and the quiet-mode toggle. */

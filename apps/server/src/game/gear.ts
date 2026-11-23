@@ -47,13 +47,6 @@ export const QUALITY_MULTIPLIER: Record<GearQuality, number> = {
   epic: 1.6,
 }
 
-export const QUALITY_LABEL: Record<GearQuality, string> = {
-  common: 'Common',
-  uncommon: 'Uncommon',
-  rare: 'Rare',
-  epic: 'Epic',
-}
-
 export function addStats(a: GearStats, b: Partial<GearStats>): GearStats {
   return {
     strength: a.strength + (b.strength ?? 0),
@@ -206,12 +199,6 @@ export function primaryForCombatStyle(style: CombatStyle): PrimaryStat {
   return 'strength'
 }
 
-export function primaryForArmourType(armour: ArmourType): PrimaryStat {
-  if (armour === 'leather') return 'agility'
-  if (armour === 'cloth') return 'intellect'
-  return 'strength'
-}
-
 /** Rating → percent. Diminishing, so stacking crit never reaches 100%. */
 export function ratingToPercent(rating: number, scale = 250): number {
   if (rating <= 0) return 0
@@ -356,16 +343,6 @@ export function parseStats(json: string | null | undefined): GearStats {
   } catch {
     return emptyStats()
   }
-}
-
-/** The gear score of a single piece. */
-export function pieceScore(item: ItemDef, stats: GearStats, armour: number, power: number): number {
-  return gearScore(stats, armour, power)
-}
-
-/** A short human label for a stat delta, e.g. `+4 Strength · +2 Crit`. */
-export function statLabel(id: keyof GearStats): string {
-  return id.charAt(0).toUpperCase() + id.slice(1)
 }
 
 // --- equipment requirements (RuneScape-style) --------------------------------

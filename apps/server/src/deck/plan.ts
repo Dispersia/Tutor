@@ -213,7 +213,18 @@ function hintLines(req: PlanRequest): string[] {
  * introduced yet"). A card that still contains one after cleaning is not usable.
  */
 export const META_MARKERS =
-  /\b(note:|wait,|correction|corrected|grammatically|semantically|n\+1|not introduced|introduced yet|strict n|used to test|test structure|revised|oops|as an ai|let me|let's|i'll use|i will use|i cannot|i must|per the rules|per rules|known list|however,|actually,|skip the)/i
+  /\b(note:|grammatically|semantically|n\+1|not introduced|introduced yet|strict n|used to test|test structure|as an ai|i'll use|i will use|per the rules|per rules|known list|skip the)/i
+
+/**
+ * Conversational markers that mean reasoning **only inside an aside** — a
+ * bracketed note or a trailing "Wait, …" clause. On their own they are everyday
+ * language ("Let's go.", "to wait", "I must go now."), so they never condemn a
+ * whole card the way `META_MARKERS` does.
+ */
+const ASIDE_MARKERS =
+  /\b(wait,|correction|corrected|revised|oops|let me|let's|i cannot|i must|however,|actually,)/i
+
+const isAside = (text: string): boolean => META_MARKERS.test(text) || ASIDE_MARKERS.test(text)
 
 /**
  * Strips the model's asides from a gloss or prompt: bracketed notes that read
@@ -223,10 +234,12 @@ export const META_MARKERS =
 export function stripMetaCommentary(text: string): string {
   // A leading "Translate:" / "Meaning:" is the model echoing its instruction.
   let out = text.replace(/^\s*(?:translate|translation|meaning|gloss|english)\s*[::]\s*/i, '')
-  out = out.replace(/[（([][^)）\]]*[)）\]]/g, (m) => (META_MARKERS.test(m) ? ' ' : m))
+  out = out.replace(/[（([][^)）\]]*[)）\]]/g, (m) => (isAside(m) ? ' ' : m))
+  // A trailing aside starts a new clause and is followed by ":" or ",": "…. Wait,
+  // 來 is not introduced". The word alone ("to wait", "banknote") is content.
   out = out.replace(
-    /\s*(?:[.。!！?？]\s*)?(?:note|wait|correction|revised|actually|hmm|oops)\b[\s\S]*$/i,
-    '',
+    /(?:^|[.。!！?？]\s*|\s[-–—]\s*)(?:note|wait|correction|revised|actually|hmm|oops)\s*[:,：，][\s\S]*$/i,
+    (m) => m.match(/^[.。!！?？]/)?.[0] ?? '',
   )
   return out
     .replace(/\s{2,}/g, ' ')

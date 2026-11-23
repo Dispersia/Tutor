@@ -97,8 +97,10 @@ export class SpeechSupervisor {
 
   /** Starts the gateway if it isn't running. Safe to call concurrently. */
   async ensure(): Promise<void> {
-    if (this.running) return
+    // `running` is true from the moment of spawn, long before the gateway
+    // answers: a second caller during startup must wait for it too.
     if (this.#starting) return this.#starting
+    if (this.running) return
     this.#starting = this.#spawnAndWait()
     try {
       await this.#starting

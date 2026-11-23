@@ -1,5 +1,5 @@
 /**
- * The application/service layer (docs/REFACTOR_PLAN.md, Phase 3).
+ * The application/service layer (docs/ARCHITECTURE.md).
  *
  * Each module owns one concern and imports the ones below it (repo + domain),
  * never the routes. This barrel re-exports them so call sites import `services`.

@@ -1,6 +1,6 @@
 import { api } from './api'
 import type { SkillOutcome } from './skills'
-import type { Card, CardTemplate } from './types'
+import type { Card } from './types'
 
 export interface Instance {
   exerciseId: string
@@ -206,8 +206,6 @@ export const addDeckCard = (
 export const listExercises = () =>
   api<{ exercises: { id: string; title: string; modality: string }[] }>('/api/exercises')
 
-/** The reusable card templates (vocab, spoken, listening, sentence, grammar). */
-export const listTemplates = () => api<{ templates: CardTemplate[] }>('/api/templates')
 export const getStats = () => api<Stats>('/api/stats')
 
 export const nextExercise = (body: {

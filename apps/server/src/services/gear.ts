@@ -11,6 +11,7 @@ import {
   setGearInstanceEnchant,
 } from '../db/repo'
 import type { Db } from '../db/client'
+import { atomic } from '../db/repo/helpers'
 import type { EventBus } from '../events'
 import {
   gearScore,
@@ -142,7 +143,7 @@ function findFreeGear(db: Db, userId: string, itemId: string): string | undefine
  * legacy gear (or a bare item id) equips the first free instance, or creates one
  * from the base definition. The inventory count stays as "pieces owned".
  */
-export function equipItem(
+function equipItemTx(
   db: Db,
   bus: EventBus,
   userId: string,
@@ -157,9 +158,20 @@ export function equipItem(
   const slot = resolveSlot(item.slot, opts.targetSlot)
   const resolved = resolveInstance(db, userId, item, opts.instanceId)
   if ('error' in resolved) return { ok: false, error: resolved.error }
+  if (resolved.instance) vacateOtherSlots(db, userId, resolved.instance.id, slot)
   setEquipment(db, userId, slot, itemId, resolved.instance?.id ?? null)
   bus.emit('item.equipped', { userId, itemId, slot })
   return { ok: true, instanceId: resolved.instance?.id }
+}
+
+/** {@link equipItemTx}, all-or-nothing. */
+export const equipItem = atomic(equipItemTx)
+
+/** A piece is worn once: moving it to `slot` empties wherever else it sat. */
+function vacateOtherSlots(db: Db, userId: string, instanceId: string, slot: string): void {
+  for (const e of listEquipment(db, userId)) {
+    if (e.instanceId === instanceId && e.slot !== slot) setEquipment(db, userId, e.slot, null)
+  }
 }
 
 function gateError(missing: MissingRequirement[]) {
@@ -201,7 +213,7 @@ export function unequipItem(db: Db, userId: string, slot: string): void {
 }
 
 /** Removes a single crafted piece (not while worn). */
-export function discardGear(
+function discardGearTx(
   db: Db,
   userId: string,
   instanceId: string,
@@ -214,6 +226,9 @@ export function discardGear(
   addItems(db, userId, instance.itemId, -1)
   return { ok: true }
 }
+
+/** {@link discardGearTx}, all-or-nothing. */
+export const discardGear = atomic(discardGearTx)
 
 /** Materials returned by salvaging a piece, by armour family. */
 const SALVAGE_MATERIAL: Record<ArmourType, string> = {
@@ -235,7 +250,7 @@ const SALVAGE_YIELD: Record<GearQuality, number> = {
  * Breaks a crafted piece back into crafting materials. The piece must be
  * unequipped. Higher quality rolls return more material.
  */
-export function salvageGear(
+function salvageGearTx(
   db: Db,
   bus: EventBus,
   userId: string,
@@ -253,6 +268,9 @@ export function salvageGear(
   grantMaterials(db, bus, userId, materials)
   return { ok: true, materials }
 }
+
+/** {@link salvageGearTx}, all-or-nothing. */
+export const salvageGear = atomic(salvageGearTx)
 
 /** What a broken-down piece returns: its family material, plus the band reagent. */
 function salvageYield(item: ItemDef, quality: GearQuality): Cost[] {
@@ -282,7 +300,7 @@ function grantMaterials(db: Db, bus: EventBus, userId: string, materials: Cost[]
  * essence. Enchanting XP is a **percentage of the item's coin value**, so an endgame
  * piece levels it faster but never instantly.
  */
-export function distillItem(
+function distillItemTx(
   db: Db,
   bus: EventBus,
   userId: string,
@@ -293,6 +311,7 @@ export function distillItem(
   if (!item) return { ok: false, error: 'unknown item' }
   const n = Math.max(1, Math.floor(count))
   if (getItemCount(db, userId, itemId) < n) return { ok: false, error: 'not in your bank' }
+  if (item.slot && !burnGearPieces(db, userId, itemId, n)) return STILL_WORN
   consumeItems(db, bus, userId, [{ item: itemId, count: n }])
   const xp = Math.max(1, Math.round(itemValue(item) * DISTILL_XP_PER_VALUE)) * n
   awardActionXp(db, bus, userId, { actionId: 'distill', amount: xp })
@@ -301,12 +320,35 @@ export function distillItem(
   return { ok: true, xp, essence }
 }
 
+/** {@link distillItemTx}, all-or-nothing. */
+export const distillItem = atomic(distillItemTx)
+
+const STILL_WORN = { ok: false, error: 'unequip it first' }
+
+const QUALITY_ORDER: readonly string[] = ['common', 'uncommon', 'rare', 'epic']
+
+/**
+ * Removes the rolled instances behind `n` distilled pieces of equipment, worst
+ * roll first, so a burned piece cannot still be worn or salvaged. False when
+ * fewer than `n` pieces are off the body.
+ */
+function burnGearPieces(db: Db, userId: string, itemId: string, n: number): boolean {
+  const worn = listEquipment(db, userId).filter((e) => e.itemId === itemId)
+  if (getItemCount(db, userId, itemId) - worn.length < n) return false
+  const wornIds = new Set(worn.map((e) => e.instanceId))
+  const free = listGearInstances(db, userId)
+    .filter((g) => g.itemId === itemId && !wornIds.has(g.id))
+    .sort((a, b) => QUALITY_ORDER.indexOf(a.quality) - QUALITY_ORDER.indexOf(b.quality))
+  for (const g of free.slice(0, n)) deleteGearInstance(db, userId, g.id)
+  return true
+}
+
 /**
  * Apply an enchant to a crafted piece (§13.5.3.2). The enchant fits the piece's slot,
  * needs its Enchanting level, and costs its own essence reagents. It grants **no** XP
  * — the training is Distill; this is the payoff. One enchant per piece (replace).
  */
-export function applyEnchant(
+function applyEnchantTx(
   db: Db,
   bus: EventBus,
   userId: string,
@@ -324,6 +366,9 @@ export function applyEnchant(
   bus.emit('item.enchanted', { userId, instanceId, band: def.id })
   return { ok: true }
 }
+
+/** {@link applyEnchantTx}, all-or-nothing. */
+export const applyEnchant = atomic(applyEnchantTx)
 
 type EnchantDef = NonNullable<ReturnType<typeof ENCHANT_BY_ID.get>>
 

@@ -1,5 +1,5 @@
 /**
- * The repository barrel (docs/REFACTOR_PLAN.md, Phase 2).
+ * The repository barrel (docs/ARCHITECTURE.md).
  *
  * Every query lives in the module named after its table/concern; this file only
  * re-exports them, so call sites keep importing `db/repo` unchanged.

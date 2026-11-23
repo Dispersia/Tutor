@@ -33,7 +33,7 @@
   {/if}
   {#if words.length}
     <div class="mt-3 flex flex-wrap gap-2">
-      {#each words as w (w.text)}
+      {#each words as w, i (i)}
         <span class="chip" style="--accent: {w.ok ? ACCENT.jade : ACCENT.ember}">
           {w.text}{w.tip ? ` · ${w.tip}` : ''}
         </span>

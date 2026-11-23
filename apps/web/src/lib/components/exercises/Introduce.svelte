@@ -90,7 +90,7 @@
     <div class="panel px-4 py-3">
       <p class="eyebrow">In a sentence</p>
       <p class="display mt-1.5 text-2xl text-ink-100">
-        {#each exampleParts as part (part.text + part.hit)}
+        {#each exampleParts as part, i (i)}
           {#if part.hit}<span class="text-seal-300">{part.text}</span>{:else}{part.text}{/if}
         {/each}
       </p>

@@ -11,6 +11,7 @@ import { getCard, listCards, setSetting } from '../db/repo'
 import type { App, AppEnv } from '../context'
 import { AUDIO_BACKFILL_KEY, variantVoice } from '../audio/service'
 import type { Context } from 'hono'
+import { adminOnly } from './guards'
 
 async function serveCardAudio(c: Context<AppEnv>, cardId: string): Promise<Response> {
   const deps = c.get('deps')
@@ -36,12 +37,12 @@ async function clipBytes(
   userId: string,
   voiceId: string,
 ): Promise<Uint8Array | undefined> {
-  const existing = audio.clip(card.back, voiceId)
+  const existing = audio.clip(card.back, card.targetLang, voiceId)
   if (existing) return existing
   // Not pre-recorded yet (a card made before the recording finished, or an older
   // deck): synth this one voice now and keep it for every later play.
   await audio.ensureVoice(card.back, card.targetLang, userId, voiceId)
-  return audio.clip(card.back, voiceId)
+  return audio.clip(card.back, card.targetLang, voiceId)
 }
 
 function wavResponse(bytes: Uint8Array): Response {
@@ -73,9 +74,12 @@ function statusHandler(c: Context<AppEnv>) {
 /**
  * Queue every card the user owns that is missing clips. Returns at once —
  * recording happens in the background (one clip at a time, gateway stays warm).
- * Re-running it later resumes wherever it stopped.
+ * Re-running it later resumes wherever it stopped. Admin only: it sets the
+ * server-wide resume flag, which re-queues every member's library on each boot.
  */
 function backfillHandler(c: Context<AppEnv>) {
+  const denied = adminOnly(c)
+  if (denied) return denied
   const deps = c.get('deps')
   const user = c.get('user')!
   const audio = deps.audio
@@ -86,8 +90,13 @@ function backfillHandler(c: Context<AppEnv>) {
   return c.json({ queued, cards: listCards(deps.db, user.id).length, ...audio.status() }, 202)
 }
 
-/** Stops a running backfill: drops the queue and clears the resume flag. */
+/**
+ * Stops a running backfill: drops the queue and clears the resume flag. Admin
+ * only: the queue is shared, so this cancels every member's pending recordings.
+ */
 function cancelHandler(c: Context<AppEnv>) {
+  const denied = adminOnly(c)
+  if (denied) return denied
   const deps = c.get('deps')
   const audio = deps.audio
   if (!audio) return c.json({ error: 'audio unavailable' }, 503)

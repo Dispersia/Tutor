@@ -149,6 +149,3 @@ export const FREQUENCY_JA: JaFreqWord[] = [
   { word: '三', kana: 'さん', romaji: 'san', en: 'three', pos: 'num' },
   { word: '十', kana: 'じゅう', romaji: 'juu', en: 'ten', pos: 'num' },
 ]
-
-/** word -> entry, for future grammar support checks. */
-export const LEXICON_JA: Map<string, JaFreqWord> = new Map(FREQUENCY_JA.map((w) => [w.word, w]))

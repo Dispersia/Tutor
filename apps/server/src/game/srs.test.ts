@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import { FSRS6_DEFAULT_WEIGHTS, FSRS6Model } from 'ts-fsrs/models/fsrs-6'
 import {
   AGAIN,
@@ -214,9 +214,7 @@ test('selectStudyCardId never serves a card ahead of its due date', () => {
   expect(selectStudyCardId(['a'], soon, now)).toBeUndefined()
 
   // Once the step comes due, it is served.
-  const dueStep = new Map<string, FsrsState>([
-    ['a', { ...state(now - 1, 'learning'), step: 1 }],
-  ])
+  const dueStep = new Map<string, FsrsState>([['a', { ...state(now - 1, 'learning'), step: 1 }]])
   expect(selectStudyCardId(['a'], dueStep, now)).toBe('a')
 
   // Overdue comes first, then a new word, never a scheduled-but-not-due card.
@@ -237,4 +235,46 @@ test('countDue / countNew', () => {
   ])
   expect(countDue(['a', 'b', 'c'], srs, now)).toBe(1)
   expect(countNew(['a', 'b', 'c'], srs)).toBe(1)
+})
+
+describe('early reviews (combat drills ahead of the schedule)', () => {
+  const DAY = 86_400_000
+  const review: FsrsState = {
+    state: 'review',
+    step: 0,
+    stability: 5,
+    difficulty: 5,
+    reps: 4,
+    lapses: 0,
+    intervalDays: 2,
+    dueAt: 2 * DAY,
+    lastReviewAt: 0,
+    lastRating: 3,
+  }
+
+  test('a due review card answered within a day of an early review is rescheduled', () => {
+    // drilled 8h before it fell due: a same-day review keeps the due date …
+    const drilled = { ...review, lastReviewAt: 2 * DAY - 16 * 3_600_000 }
+    const early = schedule(drilled, 3, 2 * DAY - 8 * 3_600_000)
+    expect(early.dueAt).toBe(review.dueAt)
+    // … then answered once it is due, still inside 24h of that early review
+    const now = 2 * DAY + 3_600_000
+    const due = schedule(early.state, 3, now)
+    expect(due.dueAt).toBeGreaterThan(now)
+    expect(due.state.state).toBe('review')
+    // a miss on the due card goes to relearning instead of staying due forever
+    const missed = schedule(early.state, 1, now)
+    expect(missed.state.state).toBe('relearning')
+    expect(missed.dueAt).toBeGreaterThan(now)
+  })
+
+  test('selectCardId rotates when nothing is due instead of repeating one card', () => {
+    const srs = new Map<string, FsrsState>([
+      ['a', { ...review, dueAt: 5 * DAY, lastReviewAt: 100 }],
+      ['b', { ...review, dueAt: 9 * DAY, lastReviewAt: 50 }],
+    ])
+    expect(selectCardId(['a', 'b'], srs, DAY)).toBe('b')
+    srs.set('b', { ...srs.get('b')!, lastReviewAt: DAY })
+    expect(selectCardId(['a', 'b'], srs, DAY)).toBe('a')
+  })
 })

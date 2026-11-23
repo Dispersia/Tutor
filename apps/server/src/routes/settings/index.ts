@@ -5,7 +5,6 @@
 
 import type { Context } from 'hono'
 import {
-  allUserSettings,
   getRoles,
   getUserSetting,
   listDecks,
@@ -14,7 +13,7 @@ import {
   setUserSetting,
 } from '../../db/repo'
 import { INTRODUCE_ID, registry } from '../../exercises'
-import { readStudyPrefs, writeStudyPrefs, type StudyPrefs } from '../../game/study'
+import { readStudyPrefs, writeStudyPrefs, type StudyPrefs } from '../../services/study'
 import { ROLES, type Role } from '../../env'
 import { hasUserKey, saveUserKey } from '../../llm/userkey'
 import type { App, AppEnv, Deps } from '../../context'
@@ -41,7 +40,6 @@ function settingsView(deps: Deps, userId: string) {
     deckInstruction: rememberedDeckInstruction(deps.db, userId) ?? '',
     foodThreshold: Number(getUserSetting(deps.db, userId, 'foodThreshold') ?? 50),
     desiredRetention: Number(getUserSetting(deps.db, userId, 'desiredRetention') ?? 90),
-    raw: allUserSettings(deps.db, userId),
   }
 }
 
@@ -144,8 +142,6 @@ function positiveSteps(steps: number[]): number[] {
 }
 
 function applyScalars(deps: Deps, userId: string, body: Record<string, unknown>): void {
-  const prefs = strRecord(body, 'prefs')
-  if (prefs) for (const [k, v] of Object.entries(prefs)) setUserSetting(deps.db, userId, k, v)
   const dailyGoal = num(body, 'dailyGoal')
   if (dailyGoal !== undefined) setDailyGoal(deps.db, userId, dailyGoal)
   const foodThreshold = num(body, 'foodThreshold')

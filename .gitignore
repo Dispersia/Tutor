@@ -21,6 +21,9 @@ dist/
 apps/web/static/vad/
 
 # secrets
+# `just tailscale-cert` writes the tailnet TLS cert + private key into deploy/
+deploy/*.crt
+deploy/*.key
 .env
 .env.*
 !.env.example

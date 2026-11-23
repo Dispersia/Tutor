@@ -52,7 +52,8 @@ let maxKeyLength = 0
 export function mandarinSentenceZhuyin(text: string): string | undefined {
   if (!text) return undefined
   const t = table()
-  if (maxKeyLength === 0) for (const key of t.keys()) maxKeyLength = Math.max(maxKeyLength, key.length)
+  if (maxKeyLength === 0)
+    for (const key of t.keys()) maxKeyLength = Math.max(maxKeyLength, key.length)
   const out: string[] = []
   let i = 0
   while (i < text.length) {

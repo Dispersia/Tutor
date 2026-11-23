@@ -55,9 +55,6 @@ export const GEM_TIERS: GemTierDef[] = [
   { tier: 3, word: 'Perfect', ore: 'mythril_ore', band: 'arcane', metalBand: 'mythril_band' },
 ]
 
-export const GEM_BY_TYPE = new Map(GEM_TYPES.map((g) => [g.id, g]))
-export const GEM_BY_TIER = new Map(GEM_TIERS.map((t) => [t.tier, t]))
-
 export const gemId = (type: GemType, tier: number) => `${type}${tier}`
 export const uncutGemId = (type: GemType, tier: number) => `uncut_${type}${tier}`
 export const dustId = (type: GemType) => `${type}_dust`

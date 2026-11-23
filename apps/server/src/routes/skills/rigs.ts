@@ -22,7 +22,7 @@ async function chooseRecipe(c: Context<AppEnv>) {
   const actionId = str(body, 'actionId')
   const choiceId = str(body, 'choiceId')
   if (!actionId || !choiceId) return c.json({ error: 'actionId and choiceId required' }, 400)
-  if (!setRigChoice(deps.db, user.id, actionId, choiceId)) {
+  if (!setRigChoice(deps.db, deps.events, user.id, { actionId, choiceId })) {
     return c.json({ error: 'unknown choice' }, 400)
   }
   const ctx = loadPlayerCtx(deps.db, deps.events, user.id)

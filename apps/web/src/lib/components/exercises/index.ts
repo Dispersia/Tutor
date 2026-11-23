@@ -28,5 +28,3 @@ const map: Record<string, Component<any>> = {
 export function componentFor(exerciseId: string): Component<any> {
   return map[exerciseId] ?? Translate
 }
-
-export const exerciseIds = Object.keys(map)

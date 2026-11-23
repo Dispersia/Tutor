@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import { openDb } from '../db/client'
 import {
+  addGearInstance,
   addItems,
   clearEncounter,
   createUser,
@@ -220,5 +221,29 @@ test('starting an unknown monster is refused; no encounter returns null', () => 
   expect(res.ok).toBe(false)
   if (!res.ok) expect(res.error).toBe('unknown monster')
   expect(combatResolve(db, bus, user.id, true)).toBeNull()
+  sqlite.close()
+})
+
+test('mastery scales a hit once: it is inside the power, not multiplied again', () => {
+  const { db, bus, user, sqlite } = setup()
+  addItems(db, user.id, 'bronze_sword', 1)
+  const instanceId = addGearInstance(db, {
+    userId: user.id,
+    itemId: 'bronze_sword',
+    slot: 'mainHand',
+    quality: 'epic',
+    statsJson: JSON.stringify({ mastery: 260 }), // 260 rating = 50% mastery
+    armour: 0,
+    power: 3,
+  })
+  expect(equipItem(db, bus, user.id, 'bronze_sword', { instanceId }).ok).toBe(true)
+  const pc = loadPlayerCombat(db, user.id)
+  expect(pc.mastery).toBeCloseTo(0.5)
+  expect(pc.power).toBeGreaterThan(8) // the bare sword gives 8; mastery is in here
+
+  startEncounter(db, bus, user.id, 'slime')
+  // rand = 0.99: no crit and no haste strike, so the hit is the bare power
+  const hit = combatResolve(db, bus, user.id, true, () => 0.99)!
+  expect(hit.damage).toBe(pc.power)
   sqlite.close()
 })

@@ -27,8 +27,7 @@
       ><span class="display text-sm font-bold text-ink-200 tabular-nums">{kinds}</span>
       kinds</span
     >
-    <span
-      ><span class="display text-sm font-bold text-ink-200 tabular-nums">{worn}</span> worn</span
+    <span><span class="display text-sm font-bold text-ink-200 tabular-nums">{worn}</span> worn</span
     >
     <span class="text-ink-400" aria-hidden="true">→</span>
   </span>

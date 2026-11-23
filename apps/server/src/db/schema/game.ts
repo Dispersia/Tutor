@@ -1,7 +1,7 @@
 /**
  * The game economy: action progress + idle rigs, the gather log, the materials
  * bank, talents and combat state (docs/DESIGN.md §13.5). Part of the schema split
- * (docs/REFACTOR_PLAN.md §8.2, Phase 11).
+ * (docs/ARCHITECTURE.md).
  */
 
 import { index, integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core'

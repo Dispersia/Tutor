@@ -16,9 +16,17 @@
 
 import type { Card } from '@tutor/core'
 import type { Db } from '../db/client'
-import { listCards } from '../db/repo'
+import { cardLanguages, listCards } from '../db/repo'
 import type { SpeechSupervisor } from '../speech/supervisor'
-import { clipHash, hasClip, readClip, writeClip } from './store'
+import {
+  clipHash,
+  findClip,
+  hasClip,
+  legacyClipHash,
+  readClip,
+  removeClip,
+  writeClip,
+} from './store'
 import { CARD_VOICES, voiceAt, type CardVoice } from './voices'
 
 export interface TtsRequest {
@@ -96,10 +104,10 @@ export interface AudioStatus {
 
 export interface AudioService {
   readonly voices: readonly CardVoice[]
-  /** True when every voice for this text is on disk. */
-  complete(text: string): boolean
+  /** True when every voice for this text, in this language, is on disk. */
+  complete(text: string, language: string): boolean
   /** Reads one recorded clip, or undefined when it is missing. */
-  clip(text: string, voiceId: string): Uint8Array | undefined
+  clip(text: string, language: string, voiceId: string): Uint8Array | undefined
   /** Records one voice for a text (no-op when already recorded). */
   ensureVoice(text: string, language: string, userId: string, voiceId: string): Promise<void>
   /** Records every voice for a text. */
@@ -153,8 +161,9 @@ function emptyQueue(): QueueState {
 function service(store: AudioStore): AudioService {
   return {
     voices: CARD_VOICES,
-    complete: (text) => complete(store, text),
-    clip: (text, voiceId) => readClip(store.db, store.dataDir, clipHash(text, voiceId)),
+    complete: (text, language) => complete(store, text, language),
+    clip: (text, language, voiceId) =>
+      readClip(store.db, store.dataDir, clipKey(store, { text, language, voiceId })),
     ensureVoice: (text, language, userId, voiceId) =>
       ensureVoice(store, { text, language, userId, voiceId }),
     ensure: (text, language, userId) => ensureText(store, text, language, userId),
@@ -168,8 +177,46 @@ function service(store: AudioStore): AudioService {
 
 const keyOf = (j: AudioJob): string => `${j.language}\u0000${j.text}`
 
-function complete(s: AudioStore, text: string): boolean {
-  return CARD_VOICES.every((v) => hasClip(s.db, s.dataDir, clipHash(text, v.id)))
+function complete(s: AudioStore, text: string, language: string): boolean {
+  return CARD_VOICES.every((v) =>
+    hasClip(s.db, s.dataDir, clipKey(s, { text, language, voiceId: v.id })),
+  )
+}
+
+/** One voice's clip of a text in a language. */
+interface ClipRef {
+  text: string
+  language: string
+  voiceId: string
+}
+
+/** The clip's storage key, first adopting a pre-language recording if one fits. */
+function clipKey(s: AudioStore, ref: ClipRef): string {
+  const hash = clipHash(ref.text, ref.voiceId, ref.language)
+  if (!hasClip(s.db, s.dataDir, hash)) adoptLegacyClip(s, ref, hash)
+  return hash
+}
+
+/**
+ * Clips used to be keyed without the language, so a word two languages share
+ * played whichever was recorded first. An old clip is moved to its language's
+ * key only when this is the **only** language any card uses the text in — then
+ * it can only have been recorded for it. A shared text is ambiguous: its old
+ * clip is dropped and each language records its own.
+ */
+function adoptLegacyClip(s: AudioStore, ref: ClipRef, hash: string): void {
+  const legacy = legacyClipHash(ref.text, ref.voiceId)
+  const bytes = readClip(s.db, s.dataDir, legacy)
+  if (!bytes) return
+  const languages = cardLanguages(s.db, ref.text)
+  if (languages.every((l) => l === ref.language)) {
+    writeClip(s.db, s.dataDir, clipOwner(s, legacy), hash, bytes)
+  }
+  removeClip(s.db, s.dataDir, legacy)
+}
+
+function clipOwner(s: AudioStore, hash: string): string {
+  return findClip(s.db, hash)?.userId ?? ''
 }
 
 interface VoiceJob {
@@ -182,7 +229,7 @@ interface VoiceJob {
 async function ensureVoice(s: AudioStore, job: VoiceJob): Promise<void> {
   const voice = CARD_VOICES.find((v) => v.id === job.voiceId)
   if (!voice) throw new Error(`unknown voice ${job.voiceId}`)
-  const hash = clipHash(job.text, voice.id)
+  const hash = clipKey(s, job)
   if (hasClip(s.db, s.dataDir, hash)) return
   const bytes = await s.tts({
     text: job.text,
@@ -209,7 +256,7 @@ function enqueue(s: AudioStore, jobs: AudioJob[]): number {
   for (const j of jobs) {
     if (!j.text.trim()) continue
     const key = keyOf(j)
-    if (s.q.queued.has(key) || complete(s, j.text)) continue
+    if (s.q.queued.has(key) || complete(s, j.text, j.language)) continue
     s.q.queued.add(key)
     s.q.pending.push(j)
     added++

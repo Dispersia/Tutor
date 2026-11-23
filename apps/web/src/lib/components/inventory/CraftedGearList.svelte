@@ -12,7 +12,7 @@
     enchantById: Map<string, EnchantDTO>
     enchantingLevel: number
     enchantPick: Record<string, string>
-    onEquip: (instanceId: string, slot: string) => void
+    onEquip: (slot: string, instanceId: string) => void
     onSalvage: (instanceId: string) => void
     onDiscard: (instanceId: string) => void
     onEnchant: (g: GearInstanceDTO, enchantId: string) => void
@@ -114,7 +114,7 @@
               class="btn btn-primary px-2 py-1 text-[11px]"
               disabled={locked}
               title={locked ? `Needs ${lockedText(g)}` : 'Equip'}
-              onclick={() => onEquip(g.id, g.slot)}
+              onclick={() => onEquip(g.slot, g.id)}
             >
               Equip
             </button>

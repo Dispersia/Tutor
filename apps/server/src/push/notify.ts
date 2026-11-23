@@ -120,7 +120,7 @@ async function pushOne(
     touchPushSubscription(deps.db, sub.endpoint)
     return true
   }
-  if (res.gone) deletePushSubscription(deps.db, sub.endpoint)
+  if (res.gone) deletePushSubscription(deps.db, sub.userId, sub.endpoint)
   return false
 }
 

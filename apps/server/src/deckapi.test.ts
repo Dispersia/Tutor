@@ -555,6 +555,8 @@ test('POST /api/decks/import builds a whole deck from an uploaded Anki package',
   expect(body.fields).toEqual(['Word', 'Reading', 'Meaning'])
   // the response returns immediately; the cards fill in the background
   expect(body.building).toBe(true)
+  // …and the flag is really stored (the learn page polls on it)
+  expect(body.deck.settings.building).toBe(true)
 
   await awaitDeckBuild(body.deck.id)
   const after = (await (

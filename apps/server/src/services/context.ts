@@ -1,4 +1,4 @@
-/** The per-request state a board/player view reads (docs/REFACTOR_PLAN.md §7, §8.1). */
+/** The per-request state a board/player view reads (docs/ARCHITECTURE.md). */
 
 import { listCards } from '../db/repo'
 import type { Db } from '../db/client'
@@ -38,7 +38,7 @@ export interface PlayerCtx {
  * Loads the per-request player state once: the settled idle rigs, the action map,
  * the bands, the profession/talent views and the bonuses derived from that same
  * map. Board and gear handlers share one, so a render reads each store once
- * instead of once per view (docs/REFACTOR_PLAN.md §8.1, finding 4).
+ * instead of once per view (docs/ARCHITECTURE.md).
  */
 export function loadPlayerCtx(db: Db, bus: EventBus, userId: string, now = Date.now()): PlayerCtx {
   const settled = settleRigs(db, bus, userId, now)
