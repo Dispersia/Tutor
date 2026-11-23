@@ -20,7 +20,14 @@ const KANA = /[\u3040-\u309f\u30a0-\u30ff\u30fc]/
 export function furiganaSegments(word: string, reading: string): FuriganaSegment[] {
   if (!word) return []
   if (!reading || !KANJI.test(word)) return [{ base: word }]
+  const pre = sharedPrefix(word, reading)
+  const suf = sharedSuffix(word, reading, pre)
+  const segments = middleSegments(word, reading, pre, suf)
+  return segments.length ? segments : [{ base: word }]
+}
 
+/** How many leading kana the word and reading share (kana-only prefix). */
+function sharedPrefix(word: string, reading: string): number {
   let pre = 0
   while (
     pre < word.length &&
@@ -30,16 +37,31 @@ export function furiganaSegments(word: string, reading: string): FuriganaSegment
   ) {
     pre++
   }
+  return pre
+}
+
+/** How many trailing kana they share (okurigana after the kanji run). */
+function sharedSuffix(word: string, reading: string, pre: number): number {
   let suf = 0
+  const tail = (s: string, i: number) => s[s.length - 1 - i]
   while (
     suf < word.length - pre &&
     suf < reading.length - pre &&
-    KANA.test(word[word.length - 1 - suf]!) &&
-    word[word.length - 1 - suf] === reading[reading.length - 1 - suf]
+    KANA.test(tail(word, suf)!) &&
+    tail(word, suf) === tail(reading, suf)
   ) {
     suf++
   }
+  return suf
+}
 
+/** The prefix, ruby-annotated middle and suffix segments of a split. */
+function middleSegments(
+  word: string,
+  reading: string,
+  pre: number,
+  suf: number,
+): FuriganaSegment[] {
   const segments: FuriganaSegment[] = []
   if (pre > 0) segments.push({ base: word.slice(0, pre) })
   const midBase = word.slice(pre, word.length - suf)
@@ -50,5 +72,5 @@ export function furiganaSegments(word: string, reading: string): FuriganaSegment
     )
   }
   if (suf > 0) segments.push({ base: word.slice(word.length - suf) })
-  return segments.length ? segments : [{ base: word }]
+  return segments
 }

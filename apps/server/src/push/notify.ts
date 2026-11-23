@@ -15,6 +15,8 @@ import {
   listPushSubscriptions,
   markRigAlerted,
   touchPushSubscription,
+  type DueRigRow,
+  type PushSubscriptionRow,
 } from '../db/repo'
 import { ACTION_BY_ID } from '../game/skills'
 import { rigRunSec } from '../game/idle'
@@ -45,10 +47,20 @@ export interface RigAlertResult {
 export async function runRigAlerts(deps: RigAlertDeps): Promise<RigAlertResult> {
   const now = deps.now ?? Date.now()
   const send = deps.send ?? sendPush
-  const due = dueRigAlerts(deps.db, now, RIG_ALERT_LEAD_SEC * 1000)
+  let users = 0
+  let rigs = 0
+  for (const [userId, rows] of dueByUser(deps.db, now)) {
+    const sent = await notifyUser(deps, send, { userId, rows, now })
+    if (!sent) continue
+    users++
+    rigs += rows.length
+  }
+  return { users, rigs }
+}
 
-  const byUser = new Map<string, typeof due>()
-  for (const row of due) {
+function dueByUser(db: Db, now: number): Map<string, DueRigRow[]> {
+  const byUser = new Map<string, DueRigRow[]>()
+  for (const row of dueRigAlerts(db, now, RIG_ALERT_LEAD_SEC * 1000)) {
     // A short run that happens to be ending is not "running low" — the rig was
     // only just powered. Only runs long enough to cross the lead time qualify.
     if (rigRunSec(row.completions) <= MIN_RUN_SEC) continue
@@ -56,36 +68,60 @@ export async function runRigAlerts(deps: RigAlertDeps): Promise<RigAlertResult> 
     if (list) list.push(row)
     else byUser.set(row.userId, [row])
   }
+  return byUser
+}
 
-  let users = 0
-  let rigs = 0
-  for (const [userId, rows] of byUser) {
-    const subs = listPushSubscriptions(deps.db, userId)
-    if (!subs.length) continue
+interface UserAlert {
+  userId: string
+  rows: DueRigRow[]
+  now: number
+}
 
-    const payload = alertPayload(rows, now)
-    let delivered = false
-    for (const sub of subs) {
-      const res = await send(deps.db, sub, payload, { ttlSec: TTL_SEC }).catch(() => ({
-        ok: false,
-        gone: false,
-      }))
-      if (res.ok) {
-        delivered = true
-        touchPushSubscription(deps.db, sub.endpoint)
-      } else if (res.gone) {
-        deletePushSubscription(deps.db, sub.endpoint)
-      }
-    }
+/** Sends one user's alert; true when at least one device accepted it. */
+async function notifyUser(
+  deps: RigAlertDeps,
+  send: typeof sendPush,
+  req: UserAlert,
+): Promise<boolean> {
+  const subs = listPushSubscriptions(deps.db, req.userId)
+  if (!subs.length) return false
+  const delivered = await deliver(deps, send, subs, alertPayload(req.rows, req.now))
+  // Only mark when something actually went out; a failed send retries next tick.
+  if (!delivered) return false
+  for (const row of req.rows) markRigAlerted(deps.db, req.userId, row.actionId, row.runEndsAt)
+  return true
+}
 
-    // Only mark when something actually went out; a failed send retries next tick.
-    if (!delivered) continue
-    for (const row of rows) markRigAlerted(deps.db, userId, row.actionId, row.runEndsAt)
-    users++
-    rigs += rows.length
+/** Pushes to every device, pruning the ones the push service says are gone. */
+async function deliver(
+  deps: RigAlertDeps,
+  send: typeof sendPush,
+  subs: PushSubscriptionRow[],
+  payload: ReturnType<typeof alertPayload>,
+): Promise<boolean> {
+  let delivered = false
+  for (const sub of subs) {
+    if (await pushOne(deps, send, sub, payload)) delivered = true
   }
+  return delivered
+}
 
-  return { users, rigs }
+async function pushOne(
+  deps: RigAlertDeps,
+  send: typeof sendPush,
+  sub: PushSubscriptionRow,
+  payload: ReturnType<typeof alertPayload>,
+): Promise<boolean> {
+  const res = await send(deps.db, sub, payload, { ttlSec: TTL_SEC }).catch(() => ({
+    ok: false,
+    gone: false,
+  }))
+  if (res.ok) {
+    touchPushSubscription(deps.db, sub.endpoint)
+    return true
+  }
+  if (res.gone) deletePushSubscription(deps.db, sub.endpoint)
+  return false
 }
 
 /** One notification per user, listing every rig that crossed the line. */

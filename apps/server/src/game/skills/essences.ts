@@ -31,31 +31,30 @@ export function essenceFamily(item: ItemDef): EssenceId {
   if (item.armourType && ESSENCE_BY_FAMILY.has(item.armourType as EssenceId)) {
     return item.armourType as EssenceId
   }
-  const id = item.id
-  if (
-    id.includes('log') ||
-    id === 'plank' ||
-    id === 'ash' ||
-    (id.includes('dust') && id.includes('wood'))
-  )
-    return 'wood'
+  return idFamily(item.id)
+}
+
+/** Which essence an item id distills into, by its naming. */
+function idFamily(id: string): EssenceId {
+  if (isWood(id)) return 'wood'
   if (id === 'hide' || id.includes('leather')) return 'leather'
-  if (id === 'wool' || id === 'cloth' || id.includes('silk') || id.includes('cloth')) return 'cloth'
-  if (
-    id.includes('gem') ||
-    id.includes('ruby') ||
-    id.includes('emerald') ||
-    id.includes('sapphire') ||
-    id.includes('dust')
-  )
-    return 'gem'
-  if (
-    id.includes('rune') ||
-    id.includes('essence') ||
-    id.includes('ore') ||
-    id.includes('bar') ||
-    id === 'coal'
-  )
-    return 'metal'
+  if (isCloth(id)) return 'cloth'
+  if (isGem(id)) return 'gem'
+  // runes, essence, ore, bar, coal — and anything unrecognised
   return 'metal'
 }
+
+const isWood = (id: string): boolean =>
+  id.includes('log') ||
+  id === 'plank' ||
+  id === 'ash' ||
+  (id.includes('dust') && id.includes('wood'))
+
+const isCloth = (id: string): boolean => id === 'wool' || id === 'cloth' || id.includes('silk')
+
+const isGem = (id: string): boolean =>
+  id.includes('gem') ||
+  id.includes('ruby') ||
+  id.includes('emerald') ||
+  id.includes('sapphire') ||
+  id.includes('dust')

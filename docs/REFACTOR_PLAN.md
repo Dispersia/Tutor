@@ -505,10 +505,12 @@ feature maths, the web speech client, the deck growth planner and the gear
 service, then the converse grader, `game/study.ts`, gear sets, the push client
 and the deck-delete query, then the Anki parser, `persistCards`, `startDeckBuild`,
 `createApp` and the bonus aggregation, then the card/review/gear/push/xp/srs/
-talent repositories, the curriculum view and the talent option builders. That took
-the list from 127 files / 255 functions to **40 files / 60 functions**. The
-biggest left are exercise graders and the web client helpers, all under 45 lines.
-The list shrinks; it never grows, and new code is held to 20 from day one.
+talent repositories, the curriculum view and the talent option builders, then the
+service worker, the rig-alert scan, `buildDeps`, the essence family and the
+furigana splitter. That took the list from 127 files / 255 functions to **35
+files / 54 functions**. The biggest left are exercise graders, the web VAD and
+alert helpers and the seed parsers, all under 40 lines. The list shrinks; it
+never grows, and new code is held to 20 from day one.
 
 **Phase 15 — the web shells & route validation (open).**
 The remaining `+page.svelte` files over ~250 lines (`practice`, `settings`,

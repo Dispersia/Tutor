@@ -1,7 +1,12 @@
 import { join } from 'node:path'
 import type { Deps } from './context'
-import { AUDIO_BACKFILL_KEY, createAudioService, gatewayTts } from './audio/service'
-import { openDb } from './db/client'
+import {
+  AUDIO_BACKFILL_KEY,
+  createAudioService,
+  gatewayTts,
+  type AudioService,
+} from './audio/service'
+import { openDb, type Db } from './db/client'
 import { clearDeckBuilds, getSetting, listUsers } from './db/repo'
 import { env } from './env'
 import { EventBus } from './events'
@@ -20,7 +25,14 @@ export function buildDeps(cfg: typeof env): Built {
   // behind so a half-built domain never looks busy forever.
   clearDeckBuilds(db)
   const or = new OpenRouter(cfg.openrouterKey)
-  const supervisor = new SpeechSupervisor({
+  const supervisor = speechSupervisor(cfg)
+  const audio = createAudioService({ db, dataDir: cfg.dataDir, tts: gatewayTts(supervisor) })
+  resumeBackfill(db, audio)
+  return { deps: depsOf(cfg, { db, or, supervisor, audio }), close: () => sqlite.close() }
+}
+
+function speechSupervisor(cfg: typeof env): SpeechSupervisor {
+  return new SpeechSupervisor({
     url: cfg.speechUrl,
     port: cfg.speechPort,
     pythonDir: cfg.pythonDir,
@@ -28,28 +40,31 @@ export function buildDeps(cfg: typeof env): Built {
     idleTimeoutMs: cfg.speechIdleTimeoutMs,
     autostart: cfg.speechAutostart,
   })
-  const audio = createAudioService({ db, dataDir: cfg.dataDir, tts: gatewayTts(supervisor) })
-  // A full library recording runs for hours and lives in memory, so a restart
-  // would abandon it. When the backfill flag is set, pick it back up on boot —
-  // already-recorded clips are skipped, so it resumes where it stopped.
-  if (getSetting(db, AUDIO_BACKFILL_KEY) === '1') {
-    let queued = 0
-    for (const user of listUsers(db)) queued += audio.enqueueUser(user.id)
-    console.log(`[audio] resuming the library backfill (${queued} cards queued)`)
-  }
+}
+
+/** A full recording run lives in memory; when the flag is set, resume it on boot. */
+function resumeBackfill(db: Db, audio: AudioService): void {
+  if (getSetting(db, AUDIO_BACKFILL_KEY) !== '1') return
+  let queued = 0
+  for (const user of listUsers(db)) queued += audio.enqueueUser(user.id)
+  console.log(`[audio] resuming the library backfill (${queued} cards queued)`)
+}
+
+interface Cores {
+  db: Db
+  or: OpenRouter
+  supervisor: SpeechSupervisor
+  audio: AudioService
+}
+
+function depsOf(cfg: typeof env, core: Cores): Deps {
   return {
-    deps: {
-      db,
-      or,
-      supervisor,
-      audio,
-      events: new EventBus(),
-      defaults: cfg.defaultRoles,
-      serverKey: cfg.openrouterKey,
-      secret: cfg.secret,
-      allowRegistration: cfg.allowRegistration,
-      sessionTtlMs: cfg.sessionTtlDays * 24 * 60 * 60 * 1000,
-    },
-    close: () => sqlite.close(),
+    ...core,
+    events: new EventBus(),
+    defaults: cfg.defaultRoles,
+    serverKey: cfg.openrouterKey,
+    secret: cfg.secret,
+    allowRegistration: cfg.allowRegistration,
+    sessionTtlMs: cfg.sessionTtlDays * 24 * 60 * 60 * 1000,
   }
 }
