@@ -1,0 +1,23 @@
+# Every gate the repo has, on every push and pull request: format, lint,
+# architecture rules, typecheck (server + web) and tests. Same as `just ci`.
+name: ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The pitch and reading dictionaries (and the fonts) are Git LFS files;
+          # without them the tests read pointer stubs.
+          lfs: true
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - run: bun install --frozen-lockfile
+      - run: bun run verify

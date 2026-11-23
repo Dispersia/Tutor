@@ -118,8 +118,6 @@ Or ad-hoc: `just service-install && just tailscale-serve`. Full details in
 apps/server    Bun + Hono API, SSE, SQLite, multi-user auth, PWA host, speech supervisor
 apps/web       SvelteKit PWA (mobile-first) — learn, practice, chat, skills, combat, bank
 packages/core  shared types, card + exercise registry contracts
-packages/speech TS client for the speech gateway (unused today)
-packages/ui    placeholder for shared Svelte components (empty today)
 python/speech  MLX speech gateway (Whisper-turbo / VoxCPM2 / Qwen3-ForcedAligner)
 nix/           packaging + model-fetch wrappers
 docs/          DESIGN.md, ARCHITECTURE.md, BACKLOG.md
@@ -165,3 +163,10 @@ dictionary `apps/server/src/deck/mandarin-readings.txt`, built by
   [CC BY-ND 3.0 TW](https://creativecommons.org/licenses/by-nd/3.0/tw/).
 - [McBopomofo](https://github.com/openvanilla/McBopomofo) — preferred character
   readings and additional words, MIT licensed.
+
+## Licence
+
+The code is under the [PolyForm Noncommercial License 1.0.0](LICENSE.md): anyone
+may use, change and share it for any noncommercial purpose; selling it or using
+it commercially is not permitted. Bundled dictionary data and fonts keep their
+own licences — see [NOTICE.md](NOTICE.md).

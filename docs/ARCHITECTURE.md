@@ -10,8 +10,6 @@ defects and planned refactors are in [`BACKLOG.md`](BACKLOG.md).
 apps/server     Bun + Hono API, SQLite (drizzle), speech supervisor, PWA host
 apps/web        SvelteKit PWA (Svelte 5 runes, static adapter)
 packages/core   types and pure functions shared by server and web (idle curve, templates)
-packages/speech typed speech-gateway client — unused today (BACKLOG §3)
-packages/ui     placeholder — empty today (BACKLOG §3)
 python/speech   the MLX speech gateway (FastAPI): ASR, forced aligner, TTS
 scripts/        maintenance CLIs that open the live database
 nix/, deploy/   packaging, the launchd agent and the nix-darwin module
@@ -27,7 +25,9 @@ db/         schema/ (drizzle tables by domain), repo/ (every SQL query), migrate
 game/       the rules of the world — pure: no database, no HTTP
 exercises/  one file per drill under defs/, plus the registry
 deck/       deck building: the LLM planner, growth, Anki import glue, readings, pitch
-llm/ audio/ speech/ pronunciation/ push/ anki/ frequency/ seed/   integrations
+text/       shared text utilities: normalisers, reading keys, Zhuyin, furigana, the lexicon
+llm/ audio/ speech/ pronunciation/ push/ anki/ frequency/   integrations
+seed/       the curated starter decks — a test fixture, not runtime code
 ```
 
 **Layer direction:** `routes → services → db → game`, never backwards.
@@ -44,11 +44,33 @@ Conventions:
 - **Multi-write use cases are all-or-nothing.** Wrap the function with `atomic()`
   (`db/repo/helpers.ts`); it nests as a savepoint. Services are synchronous, so
   an `await` can never sit inside a transaction.
+- **Events fire after the commit.** `bus.emit` inside a transaction is held
+  until the outermost one commits, and dropped if it rolls back (`events.ts`), so
+  a subscriber never sees a write that did not happen.
+- **One error shape.** Routes answer errors with `fail(c, status, message)` from
+  `routes/errors.ts` (`{ error }`), and a missing OpenRouter key with `needKey`.
+- **One helper per text job.** Normalising, reading keys and language names live
+  in `text/` and `llm/prompts.ts` (`langName`); calls to the speech gateway go
+  through `withGateway` (`speech/gateway.ts`). Do not write a local copy.
+- **Equipment is its instances.** `gear_instances` is the only record of owned
+  gear; `getItemCount`/`listInventory`/`addItems` handle that in one place
+  (`db/repo/game.ts`). Use `spendableCount` when something is to be *spent*:
+  worn gear is owned but never consumed.
+- **Ids are branded** (`ids.ts`): `UserId`, `DeckId`, `CardId`, `SessionId`,
+  `GearInstanceId`, `GearSetId`. Passing one where another is expected is a
+  compile error. They are branded at the schema (`.$type<…>()`), so rows come out
+  typed; turn a raw string into one only where it enters (`idField` for a request
+  body, `toDeckId(c.req.param('id'))` for a route param). Game-content ids
+  (skills, items, actions) stay as they are.
 - **Validate at the boundary.** Read request bodies with `jsonBody` and the typed
   readers in `routes/body.ts`; never cast `await c.req.json()`.
-- **Every query is scoped by `userId`.** Server-wide controls (the shared
-  recording queue, the speech gateway, the member list) go through `adminOnly`
-  (`routes/guards.ts`).
+- **A member's progress is scoped by `userId`; decks and cards are shared.** A
+  card can be private to one member (`cards.private_to`, their reinforcement
+  cards): pass the member to `listCards`/`getCard` and they see the shared cards
+  plus their own. Server-wide controls (the shared recording queue, the speech
+  gateway, the member list) go through `adminOnly` (`routes/guards.ts`).
+- **Days come from `services/clock.ts`**, never `toISOString().slice(0, 10)`: a
+  day starts at the member's own midnight.
 - **Load once per request.** `services/context.ts` (`loadPlayerCtx`,
   `loadLearnerData`) carries the expensive maps; pass it down instead of
   re-querying.
@@ -63,6 +85,10 @@ lib/components/<feature>/             presentational pieces
 lib/<feature>view.ts                  pure derivations for a page
 lib/skills/                           the skills/gear client (types.ts + client.ts)
 lib/api.ts, cache.ts, session.svelte.ts, paths.ts   fetch, GET cache, session, base path
+lib/resource.svelte.ts                 cachedResource(path): seed from cache, then refresh()
+                                       (never throws) or load() (rejects, for flows that must abort)
+lib/skills/store.svelte.ts             the one shared skills board (useSkills())
+lib/clock.svelte.ts                    the one shared ticker
 styles/                               tokens, base, components/<family>.css, animations
 ```
 

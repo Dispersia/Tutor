@@ -13,3 +13,5 @@ design/
 .impeccable/
 # vendored woff2 subsets + generated @font-face rules
 design/tutor/assets/fonts/
+# the licence text is kept verbatim
+LICENSE.md

@@ -725,10 +725,17 @@ settings and OpenRouter key**.
   Cookie is `Secure` automatically when served over HTTPS, and its `Path` is the
   app's base path (`/tutor` behind the gateway), so other apps on the same
   tailnet hostname never receive it.
-- **Isolation:** every request resolves the session to a user and **all** queries
-  are scoped by `user_id` — a user can only ever read/write their own rows.
-  `/api/chat`, `/api/sessions`, `/api/settings` etc. return `401` without a
-  session; there is no cross-user read path.
+- **What is personal, and what is shared.** Every request resolves the session
+  to a member. A member's **progress** is theirs alone: the schedule, review
+  history, XP, chats, settings, inventory and gear are all scoped by `user_id`.
+  **Decks and cards are shared** by every member — a household builds one
+  library — so `decks.user_id` only records who created the deck. Any member can
+  study, grow or edit a deck; **deleting** one removes it and everyone's
+  progress on it, so only the admin or its creator may.
+- **Deleting a member** removes everything that is theirs in one transaction.
+  Shared decks stay (losing only their creator) until the last member is gone.
+- **Sign-in** is throttled per username (8 wrong passwords lock it for ten
+  minutes), and an unknown username takes as long to reject as a wrong password.
 - **Per-user keys:** each user stores their own OpenRouter key in `user_settings`
   (encrypted at rest when `TUTOR_SECRET` is set, otherwise marked `plain:`). If a
   user has no key, the server-level `OPENROUTER_API_KEY` is used as a fallback.
@@ -749,7 +756,12 @@ Public endpoints (no session): `GET /api/health`, `GET /api/models`,
   profession's level (§13.5), i.e. a percent-complete figure out of 100 — 1 when you
   start and 100 when every action is maxed. Adding a profession or an action lowers
   it, which is the point.
-- **Streak**: one "active day" per **UTC calendar day** with ≥1 completed exercise.
+- **Streak**: one "active day" per calendar day with ≥1 completed exercise.
+- **Days are the member's own.** Every timestamp is stored in UTC; what is
+  personal is where a day *begins*. The browser reports its time zone once
+  (`PUT /api/settings { timezone }`), and the streak, the daily goal and the
+  study budget roll over at that member's midnight (`services/clock.ts`). With
+  no zone stored a day is a UTC day.
 - **Daily goal**: configurable XP target with a progress ring.
 - **Combo / accuracy bonus**: small multipliers; formula lives with the exercise.
 - **Achievements**: table + triggers on events (later).
@@ -913,8 +925,11 @@ screen holds materials and consumables. The Inventory screen shows every crafted
 piece, its rolled stats and its gear score, and lets you save named **gear sets**
 (loadouts) for quick swapping between melee, ranged and magic. A set snapshots the
 slot → instance map; applying it swaps the whole loadout in one click. Equipping
-an instance keeps its rolled stats; the inventory stack count is "pieces owned",
-so worn gear stays visible in the bank.
+an instance keeps its rolled stats. **Instances are the only record of owned
+equipment**: an item's count in the bank is the number of its instances, worn
+ones included, and the `inventory` table holds materials only. A recipe, a rig
+or a drill can spend only *spare* pieces — what you are wearing is never
+consumed.
 
 **Set bonuses and salvage.** Wearing 2, 4 or 6 pieces of the same armour family
 unlocks a set bonus: Vanguard (plate) grants armour, crit and power; Trailblazer
@@ -965,7 +980,10 @@ potions (`attack_potion` +25% power, `restore_potion` +25% max HP). A potion is
 whenever HP drops below the threshold** (default 50%, a per-user setting). Monsters
 are balanced around you bringing food — without it the harder fights are a straight
 race you'll lose. Grading an action also validates unlock + affordability, so
-material costs can't be bypassed by calling the grader directly.
+material costs can't be bypassed by calling the grader directly. And a grade is
+only taken for a drill the server **handed to that member** (the card and the
+exercise both, `routes/practice/issued.ts`): practice and combat cannot be
+farmed by posting the easiest exercise for a known card.
 
 Everything still flows through the **event bus**: `skill.xp`, `skill.level.up`,
 `item.gained`, `item.consumed`, `talent.chosen`, `talent.changed` (both tagging the
@@ -1176,7 +1194,9 @@ server — the scan is a read, not a settle.
 **No new dependency.** Payload encryption is RFC 8291 (`aes128gcm`: ECDH P-256 →
 HKDF → AES-GCM) and authorization is RFC 8292 VAPID (ES256), both on WebCrypto. The
 VAPID keypair is generated lazily and kept in the `settings` table; devices live in
-`push_subscriptions` (one row per installed PWA, keyed by endpoint). A revoked
+`push_subscriptions` (one row per installed PWA, keyed by endpoint). A device has
+one owner: when another member enables alerts in the same browser it becomes
+theirs. A revoked
 subscription answers 410 and its row is dropped. The VAPID contact defaults to
 `mailto:push@localhost` and can be set with `TUTOR_PUSH_SUBJECT`.
 
@@ -1358,7 +1378,7 @@ graduation — is ours (`apps/server/src/game/srs.ts`).
 ## 13.7 The frequency path & n+1 sentences
 
 The flagship path is built **dynamically off a frequency list**, not hand-written
-lessons. `seed/frequency.ts` (Mandarin) and `seed/frequency-ja.ts` (Japanese) hold
+lessons. `text/lexicon.ts` (Mandarin) and `seed/frequency-ja.ts` (Japanese) hold
 frequency-ordered lists tagged with a part of speech; the deck is seeded in that
 order and the curriculum walks it **one word per step**, so a step can only ever
 introduce a single new thing:
@@ -1395,9 +1415,9 @@ both Mandarin (`zhfreq`) and Japanese (`jafreq`).
 Latin transliteration — the UI shows:
 
 - Chinese → **Traditional characters** with **Zhuyin** (bopomofo) below, derived from
-  pinyin by a mechanical converter (`seed/zhuyin.ts`), e.g. 學生 = ㄒㄩㄝˊ ˙ㄕㄥ.
+  pinyin by a mechanical converter (`text/zhuyin.ts`), e.g. 學生 = ㄒㄩㄝˊ ˙ㄕㄥ.
 - Japanese → **furigana**, i.e. the kana split into ruby segments over the kanji
-  (`seed/furigana.ts`): 食べる → 食[た]べる, お茶 → お茶[ちゃ].
+  (`text/furigana.ts`): 食べる → 食[た]べる, お茶 → お茶[ちゃ].
 
 No pinyin or romaji is stored or shown; the Latin source is used only to derive the
 native reading at seed time. Grading accepts the characters or the native reading.
@@ -1443,8 +1463,10 @@ routes and the combat drill both read them):
 - **Auto-reinforce** — `autoReinforce` (default on). When a card reaches
   `REINFORCE_LAPSES` lapses, `deck/reinforce.ts` asks the planner for one extra
   sentence/grammar card that practises the same word using only words already met
-  (n+1), and adds it to that word's lesson (`payload.reinforces = <cardId>`, once
-  per card). `POST /api/decks/:id/cards` is the same insertion path for a
+  (n+1), and adds it to that word's lesson (`payload.reinforces = <cardId>`).
+  The card is **private to that member** (`cards.private_to`): the shared deck is
+  the same for everyone, and each member's copy grows only where they need it.
+  One reinforcement per card and member; a failed attempt is retried a day later. `POST /api/decks/:id/cards` is the same insertion path for a
   hand-authored card: a `step` places it in that lesson, no `step` appends a new
   one.
 

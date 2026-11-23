@@ -1,6 +1,7 @@
 {
   "name": "tutor",
   "private": true,
+  "license": "SEE LICENSE IN LICENSE.md",
   "type": "module",
   "workspaces": [
     "apps/*",
