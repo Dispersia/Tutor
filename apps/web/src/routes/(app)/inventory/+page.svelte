@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
   import {
     applyEnchant,
     applyGearSet,
@@ -7,7 +6,6 @@
     discardGear,
     equipInstance,
     equipItem,
-    getGear,
     salvageGear,
     saveGearSet,
     unequipSlot,
@@ -29,13 +27,11 @@
     totalsOf,
     wornOf,
   } from '#lib/inventoryview'
-  import { peekCached } from '#lib/cache'
+  import { cachedResource } from '#lib/resource.svelte'
 
   // Seed from the last fetch so returning to Inventory shows the gear at once.
-  const cachedGear = peekCached<GearResponse>('/api/skills/gear')
-  let data = $state<GearResponse | null>(cachedGear ?? null)
-  let error = $state('')
-  let loading = $state(cachedGear === undefined)
+  const loadout = cachedResource<GearResponse>('/api/skills/gear')
+  const data = $derived(loadout.data ?? null)
   let busy = $state(false)
   let pickedSlot = $state<string | null>(null)
   let setName = $state('')
@@ -62,29 +58,15 @@
   /** Equipment-tier bank items with no rolled instance (legacy crafts). */
   const baseEquipment = $derived(baseEquipmentOf(data?.inventory ?? [], itemMap, gear))
 
-  onMount(() => {
-    void refresh()
-  })
-
-  async function refresh() {
-    try {
-      data = await getGear()
-    } catch (e) {
-      error = (e as Error).message
-    } finally {
-      loading = false
-    }
-  }
-
   async function run(action: () => Promise<unknown>) {
     if (busy) return
     busy = true
-    error = ''
+    loadout.error = ''
     try {
       await action()
-      await refresh()
+      await loadout.refresh()
     } catch (e) {
-      error = (e as Error).message
+      loadout.error = (e as Error).message
     } finally {
       busy = false
     }
@@ -108,7 +90,7 @@
   function saveCurrentSet() {
     const name = setName.trim()
     if (!name) {
-      error = 'Name the set first.'
+      loadout.error = 'Name the set first.'
       return
     }
     void run(async () => {
@@ -122,7 +104,7 @@
       const res = await applyGearSet(setId)
       const skipped = res.skipped ?? []
       if (skipped.length > 0) {
-        error = `Some pieces are locked: ${skipped
+        loadout.error = `Some pieces are locked: ${skipped
           .map(
             (s) => `${s.name} (needs ${s.missing.map((m) => `${m.name} ${m.level}`).join(', ')})`,
           )
@@ -162,11 +144,11 @@
   </div>
 </div>
 
-{#if error}
-  <p class="banner mt-3" style={accentStyle(ACCENT.ember)} role="alert">{error}</p>
+{#if loadout.error}
+  <p class="banner mt-3" style={accentStyle(ACCENT.ember)} role="alert">{loadout.error}</p>
 {/if}
 
-{#if loading}
+{#if loadout.loading}
   <p class="banner mt-4 flex items-center gap-2" style={accentStyle(ACCENT.brass)}>
     <Spinner size={14} label="Loading your inventory" /> Loading…
   </p>

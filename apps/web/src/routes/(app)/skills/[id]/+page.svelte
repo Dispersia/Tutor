@@ -2,45 +2,43 @@
   import { href } from '#lib/paths'
   import { page } from '$app/state'
   import { goto } from '$app/navigation'
-  import { onMount, tick } from 'svelte'
+  import { tick } from 'svelte'
   import {
     chooseAction,
     chooseTalent,
     distillGear,
-    getSkill,
     stopRig,
     type ActionDTO,
     type SkillPageResponse,
   } from '#lib/skills'
   import { CATEGORY, ACCENT, accentStyle, categoryAccent } from '#lib/theme'
-  import { peekCached } from '#lib/cache'
+  import { cachedResource } from '#lib/resource.svelte'
+  import { clock } from '#lib/clock.svelte'
+  import { anyRigActive } from '#lib/idle'
   import { buildBandGroups, buildTalentRail, distillablesOf } from '#lib/skillview'
   import DistillPanel from '#lib/components/skill/DistillPanel.svelte'
   import SkillLedger from '#lib/components/skill/SkillLedger.svelte'
   import TalentRail from '#lib/components/skill/TalentRail.svelte'
   import ActionList from '#lib/components/skill/ActionList.svelte'
 
-  // Seed from the last fetch so returning to a profession renders at once.
-  const initialId = page.params.id
-  const cachedSkill = peekCached<SkillPageResponse>(`/api/skills/${initialId}`)
-  let data = $state<SkillPageResponse | null>(cachedSkill ?? null)
-  let error = $state('')
+  const id = $derived(page.params.id)
+  // Seeded from the last fetch so returning to a profession renders at once, and
+  // re-opened (cached copy first, only a cold id waits) when the route's id changes.
+  const profession = cachedResource<SkillPageResponse>(() =>
+    id ? `/api/skills/${encodeURIComponent(id)}` : undefined,
+  )
+  const data = $derived(profession.data ?? null)
   let note = $state('')
-  let loading = $state(cachedSkill === undefined)
   let busy = $state(false)
   let changing = $state<string | null>(null)
   /** The action row a material link jumped to, briefly tinted so you can find it. */
   let flash = $state<string | null>(null)
-  /** Ticking clock so a rig's run bar and clock drain live (§13.5.1). */
-  let now = $state(Date.now())
+  /** The `id#hash` already scrolled to (plain, not reactive: it only gates the effect). */
+  let highlighted = ''
 
-  onMount(() => {
-    const timer = setInterval(() => (now = Date.now()), 250)
-    return () => clearInterval(timer)
-  })
-
-  const id = $derived(page.params.id)
   const skill = $derived(data?.skill ?? null)
+  /** Ticks (shared clock) only while a rig runs, so its bar and clock drain live (§13.5.1). */
+  const now = $derived(skill && anyRigActive([skill]) ? clock.now : Date.now())
   const accent = $derived(skill ? categoryAccent(skill.category) : ACCENT.azure)
   /** The live-rig cap readout (§13.5.1): how many machines may run, and how many are. */
   const rigs = $derived(data?.rigs ?? { maxLive: 2, live: 0 })
@@ -64,9 +62,9 @@
     try {
       const res = await distillGear(itemId)
       distillNote = `+${res.xp} Enchanting XP · +1 ${res.essence.replace('_', ' ')}`
-      if (id) await load(id)
+      await load()
     } catch (e) {
-      error = (e as Error).message
+      profession.error = (e as Error).message
     } finally {
       busy = false
     }
@@ -78,12 +76,6 @@
   /** The whole talent ladder, one row per milestone (see `skillview`). */
   const rail = $derived(skill ? buildTalentRail(skill) : [])
 
-  $effect(() => {
-    const current = id
-    if (!current) return
-    void load(current)
-  })
-
   /**
    * A material link lands on `/skills/<profession>#action-<id>`: once that
    * profession has loaded, scroll the source action into view and tint it, so
@@ -91,7 +83,13 @@
    */
   $effect(() => {
     const hash = page.url.hash
-    if (!hash || !data) return
+    if (!hash) highlighted = ''
+    // Wait for this profession's own data (a cached neighbour may still be up).
+    if (!hash || !id || skill?.id !== id) return
+    // Once per link: a reload after a mutation must not yank the scroll back.
+    const key = `${id}${hash}`
+    if (key === highlighted) return
+    highlighted = key
     void highlight(decodeURIComponent(hash.replace(/^#/, '')))
   })
 
@@ -106,24 +104,10 @@
     }, 1800)
   }
 
-  async function load(skillId: string) {
-    // A cached profession for this id renders at once; only a cold id waits.
-    const cached = peekCached<SkillPageResponse>(`/api/skills/${skillId}`)
-    if (cached) {
-      data = cached
-      loading = false
-    } else {
-      loading = true
-    }
-    error = ''
-    try {
-      data = await getSkill(skillId)
-    } catch (e) {
-      error = (e as Error).message
-      if (!cached) data = null
-    } finally {
-      loading = false
-    }
+  /** Re-reads the profession after a mutation; the copy on screen stays up meanwhile. */
+  async function load() {
+    profession.error = ''
+    await profession.refresh()
   }
 
   async function pick(talentId: string) {
@@ -133,9 +117,9 @@
       await chooseTalent(talentId)
       note = 'Talent saved.'
       changing = null
-      if (id) await load(id)
+      await load()
     } catch (e) {
-      error = (e as Error).message
+      profession.error = (e as Error).message
     } finally {
       busy = false
     }
@@ -149,12 +133,12 @@
   /** Pick which recipe a choose-input action runs (prospect ore, cut a gem). */
   async function pickChoice(a: ActionDTO, choiceId: string) {
     busy = true
-    error = ''
+    profession.error = ''
     try {
       await chooseAction(a.id, choiceId)
-      if (id) await load(id)
+      await load()
     } catch (e) {
-      error = (e as Error).message
+      profession.error = (e as Error).message
     } finally {
       busy = false
     }
@@ -168,12 +152,12 @@
     if (!confirm(`Stop the ${a.name} rig? Its run ends now and frees a slot for another action.`))
       return
     busy = true
-    error = ''
+    profession.error = ''
     try {
       await stopRig(a.id)
-      if (id) await load(id)
+      await load()
     } catch (e) {
-      error = (e as Error).message
+      profession.error = (e as Error).message
     } finally {
       busy = false
     }
@@ -184,14 +168,14 @@
   <button onclick={() => goto(href('/skills'))} class="link link-btn text-sm">← Skills</button>
 </div>
 
-{#if error}
-  <p class="banner mt-3" style={accentStyle(ACCENT.ember)} role="alert">{error}</p>
+{#if profession.error}
+  <p class="banner mt-3" style={accentStyle(ACCENT.ember)} role="alert">{profession.error}</p>
 {/if}
 {#if note}
   <p class="banner mt-3" style={accentStyle(ACCENT.jade)}>{note}</p>
 {/if}
 
-{#if loading}
+{#if profession.loading}
   <p class="mt-4 text-sm text-ink-400">Loading…</p>
 {:else if skill}
   <!-- Header ---------------------------------------------------------------->

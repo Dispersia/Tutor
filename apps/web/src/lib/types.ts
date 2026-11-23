@@ -48,9 +48,9 @@ export interface StudyPrefs {
   showZhuyin: boolean
   showFurigana: boolean
   disabledExercises: string[]
-  /** New cards to introduce per UTC day (0 = unlimited). */
+  /** New cards to introduce per day (0 = unlimited). */
   newPerDay: number
-  /** Graded reviews allowed per UTC day (0 = unlimited). */
+  /** Graded reviews allowed per day (0 = unlimited). */
   maxReviewsPerDay: number
   /** Learning steps in minutes; a new card repeats once per step. */
   learningSteps: number[]

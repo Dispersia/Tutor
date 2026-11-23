@@ -1,13 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { getStats, type Stats } from '#lib/exercises'
-  import { getSkills, type SkillsResponse } from '#lib/skills'
+  import type { Stats } from '#lib/exercises'
+  import { useSkills } from '#lib/skills/store.svelte'
   import { session } from '#lib/session.svelte'
   import { activeDeckOf, loadActiveDeck } from '#lib/activeDeck.svelte'
   import { ACCENT, accentStyle } from '#lib/theme'
   import { LANG_NAMES } from '#lib/voices'
   import { htmlLang } from '#lib/lang'
-  import { cachedAt, peekCached } from '#lib/cache'
+  import { cachedResource } from '#lib/resource.svelte'
   import { bankSummary, heatWeeks, levelLabelFor, rigRows, xpToGoal } from '#lib/homeview'
   import ActivityHeatmap from '#lib/components/home/ActivityHeatmap.svelte'
   import ProgressList from '#lib/components/home/ProgressList.svelte'
@@ -16,14 +16,14 @@
 
   // Seed from the last fetch so returning to Home shows the numbers at once
   // instead of blanking to the loading skeleton (see lib/cache.ts).
-  let stats = $state<Stats | null>(peekCached<Stats>('/api/stats') ?? null)
-  let error = $state('')
+  const progress = cachedResource<Stats>('/api/stats', {
+    auto: false,
+    fallback: 'Could not load your progress.',
+  })
+  const stats = $derived(progress.data ?? null)
   /** The idle panel is optional: Home works even if the board fails to load. */
-  let skills = $state<SkillsResponse | null>(peekCached<SkillsResponse>('/api/skills') ?? null)
-  /** When the board was fetched — the cursor the live counters extrapolate from. */
-  let fetchedAt = $state(cachedAt('/api/skills'))
-  /** Ticking clock so a rig's counter climbs in place (§13.5.1). */
-  let now = $state(Date.now())
+  const board = useSkills()
+  const skills = $derived(board.data ?? null)
 
   const lang = $derived(session.user?.targetLang ?? 'zh')
   /** The deck the member studies everywhere, shown beside the language. */
@@ -32,29 +32,19 @@
   const toGoal = $derived(xpToGoal(stats))
   const days = $derived(stats?.activity?.days ?? [])
   const weeks = $derived(heatWeeks(days.length))
-  const rigs = $derived(rigRows(skills, fetchedAt, now))
+  const rigs = $derived(rigRows(skills, board.fetchedAt, board.now))
   const bank = $derived(bankSummary(skills))
 
   onMount(() => {
     void load()
     void loadActiveDeck()
-    const timer = setInterval(() => (now = Date.now()), 250)
-    return () => clearInterval(timer)
   })
 
   async function load() {
-    error = ''
-    try {
-      stats = await getStats()
-    } catch (e) {
-      error = (e as Error).message || 'Could not load your progress.'
-    }
-    try {
-      skills = await getSkills()
-      fetchedAt = Date.now()
-    } catch {
-      // the idle panel is a bonus: a failed board must not blank the page
-    }
+    progress.error = ''
+    await progress.refresh()
+    // the idle panel is a bonus: a failed board must not blank the page
+    await board.refresh()
   }
 </script>
 
@@ -74,9 +64,9 @@
   </p>
 </header>
 
-{#if error}
+{#if progress.error}
   <div class="banner mt-3" style={accentStyle(ACCENT.brass)} role="alert">
-    <p class="banner__text flex-1">Couldn't load your progress — {error}</p>
+    <p class="banner__text flex-1">Couldn't load your progress — {progress.error}</p>
     <button type="button" class="btn btn-ghost px-3 py-2 text-xs" onclick={load}>Retry</button>
   </div>
 {:else}

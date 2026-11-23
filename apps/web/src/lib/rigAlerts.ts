@@ -170,6 +170,8 @@ async function refreshRigs(state: RigAlertState): Promise<void> {
   }
   try {
     const { leadSec, rigs } = await api<{ leadSec: number; rigs: RigClock[] }>('/api/rigs')
+    // The layout may have unmounted while the request was in flight.
+    if (state.stopped) return
     state.cancel?.()
     state.cancel = scheduleRigAlerts(rigs, leadSec)
   } catch {

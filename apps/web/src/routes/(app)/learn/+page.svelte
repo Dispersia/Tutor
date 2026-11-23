@@ -2,7 +2,7 @@
   import { onMount } from 'svelte'
   import { api } from '#lib/api'
   import { href } from '#lib/paths'
-  import { getCurriculum, getSrsStats, type CurriculumDeck, type SrsStats } from '#lib/curriculum'
+  import type { CurriculumDeck, SrsStats } from '#lib/curriculum'
   import {
     createDeck,
     growDeck,
@@ -10,7 +10,7 @@
     inspectDeck,
     type AnkiInspection,
   } from '#lib/exercises'
-  import { getSkills, type SkillsResponse } from '#lib/skills'
+  import { useSkills } from '#lib/skills/store.svelte'
   import { session } from '#lib/session.svelte'
   import { activeDeck, loadActiveDeck, setActiveDeck } from '#lib/activeDeck.svelte'
   import { ACCENT } from '#lib/theme'
@@ -22,25 +22,32 @@
   import ImportPanel from '#lib/components/learn/ImportPanel.svelte'
   import ProfessionPicker from '#lib/components/learn/ProfessionPicker.svelte'
   import { groupedActions, orderDecks, usableActions } from '#lib/learnview'
-  import { peekCached } from '#lib/cache'
+  import { cachedResource } from '#lib/resource.svelte'
 
-  // Seed from the last fetch so returning to Learn renders the path at once.
-  const cachedCurriculum = peekCached<{ decks: CurriculumDeck[] }>('/api/curriculum')
-  const cachedSrs = peekCached<SrsStats>('/api/srs/stats')
-  const cachedSkills = peekCached<SkillsResponse>('/api/skills')
-  let decks = $state<CurriculumDeck[]>(cachedCurriculum?.decks ?? [])
-  let stats = $state<SrsStats | null>(cachedSrs ?? null)
-  let ref = $state<SkillsResponse | null>(cachedSkills ?? null)
+  // Seeded from the last fetch so returning to Learn renders the path at once.
+  // Both are fetched with `load()`, which rejects: `init` and the build, grow and
+  // import flows each show a failure in their own slot, and the poll drops it.
+  const path = cachedResource<{ decks: CurriculumDeck[] }>('/api/curriculum', { auto: false })
+  const totals = cachedResource<SrsStats>('/api/srs/stats', { auto: false })
+  /**
+   * The path as listed. A copy taken when a load lands (`orderDecks`), not a
+   * derivation: choosing another active deck must not reshuffle the list in hand.
+   */
+  let decks = $state<CurriculumDeck[]>(path.data?.decks ?? [])
+  const stats = $derived(totals.data ?? null)
+  /** The shared skills board: the professions the picker offers. */
+  const board = useSkills()
+  const ref = $derived(board.data ?? null)
   let actionId = $state('')
-  let loading = $state(cachedCurriculum === undefined && cachedSrs === undefined)
+  /** Until `init` settles, when neither the path nor the totals were cached. */
+  let loading = $state(path.loading && totals.loading)
   let error = $state('')
   /** Deck builder: the instruction the user types. */
   let instruction = $state('')
   let building = $state(false)
   let buildError = $state('')
-  /** Organic growth: which deck is growing, and the optional topic to focus on. */
+  /** Organic growth: which deck is growing (each deck keeps its own topic field). */
   let growing = $state('')
-  let growTopic = $state('')
   let deckError = $state('')
   /** The deck whose settings (readings, pitch accent, delete) are open. */
   let settingsDeck = $state<CurriculumDeck | null>(null)
@@ -74,20 +81,21 @@
   /** While a deck is generating in the background, follow its progress. */
   onMount(() => {
     const timer = setInterval(() => {
-      if (decks.some((d) => d.settings?.building)) void reload()
+      // A failed poll (offline, a restart) is retried on the next tick.
+      if (decks.some((d) => d.settings?.building)) reload().catch(() => {})
     }, 4000)
     return () => clearInterval(timer)
   })
 
   async function init() {
     try {
-      const [c, s, sk, prefs] = await Promise.all([
-        getCurriculum(),
-        getSrsStats(),
-        getSkills().catch(() => null),
+      const [c, , prefs] = await Promise.all([
+        path.load(),
+        totals.load(),
         api<{ deckInstruction?: string }>('/api/settings').catch(() => null),
+        board.refresh(),
       ])
-      await applyLoaded(c, s, sk, prefs?.deckInstruction)
+      await applyLoaded(c, prefs?.deckInstruction)
     } catch (e) {
       error = (e as Error).message
     } finally {
@@ -95,18 +103,11 @@
     }
   }
 
-  /** Applies a fresh path, stats, professions and the remembered deck prompt. */
-  async function applyLoaded(
-    c: { decks: CurriculumDeck[] },
-    s: SrsStats,
-    sk: SkillsResponse | null,
-    prompt: string | undefined,
-  ) {
+  /** Applies a fresh path and the remembered deck prompt. */
+  async function applyLoaded(c: { decks: CurriculumDeck[] }, prompt?: string) {
     // the active deck leads; then the frequency path — that is where you start
     await loadActiveDeck()
     decks = orderDecks(c.decks, activeDeck.id)
-    stats = s
-    ref = sk
     // the prompt you gave on an earlier deck follows you into every new one
     if (prompt) instruction = prompt
     buildLang = session.user?.targetLang ?? 'zh'
@@ -129,10 +130,10 @@
     return href(`/practice?${query.toString()}`)
   }
 
+  /** Re-reads the path and totals; rejects on a failure, for the caller to place. */
   async function reload() {
-    const [c, s] = await Promise.all([getCurriculum(), getSrsStats()])
+    const [c] = await Promise.all([path.load(), totals.load()])
     decks = orderDecks(c.decks, activeDeck.id)
-    stats = s
     // A deck that was just built should reach the profile menu's picker too.
     void loadActiveDeck()
   }
@@ -154,33 +155,26 @@
     }
   }
 
-  /** Grow a deck organically, optionally focusing on a topic. */
-  async function grow(d: CurriculumDeck) {
-    if (growing) return
-    growing = d.deckId
-    deckError = ''
-    try {
-      await growDeck(d.deckId, { topic: growTopic.trim() || undefined })
-      growTopic = ''
-      await reload()
-    } catch (e) {
-      deckError = (e as Error).message
-    } finally {
-      growing = ''
-    }
-  }
+  /** Grow a deck organically, optionally focusing on the topic typed on that deck. */
+  const grow = (d: CurriculumDeck, topic: string) =>
+    growWith(d, { topic: topic.trim() || undefined })
 
   /** Finish a partly-built deck (an interrupted import) in the background. */
-  async function finish(d: CurriculumDeck) {
-    if (growing) return
+  const finish = (d: CurriculumDeck, topic: string) =>
+    growWith(d, { all: true, topic: topic.trim() || undefined })
+
+  /** Runs one growth request; resolves true when it worked (the deck clears its topic). */
+  async function growWith(d: CurriculumDeck, opts: Parameters<typeof growDeck>[1]) {
+    if (growing) return false
     growing = d.deckId
     deckError = ''
     try {
-      await growDeck(d.deckId, { all: true, topic: growTopic.trim() || undefined })
-      growTopic = ''
+      await growDeck(d.deckId, opts)
       await reload()
+      return true
     } catch (e) {
       deckError = (e as Error).message
+      return false
     } finally {
       growing = ''
     }
@@ -332,7 +326,6 @@
             {actionId}
             activeDeckId={activeDeck.id}
             {growing}
-            bind:growTopic
             {practiceHref}
             onSetActive={setActiveDeck}
             onGrow={grow}

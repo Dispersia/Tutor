@@ -6,7 +6,6 @@
     abandonFight,
     combatHit,
     COMBAT_TIME_LIMIT_MS,
-    getCombat,
     startFight,
     type CombatResponse,
     type EncounterDTO,
@@ -14,7 +13,7 @@
     type MonsterDTO,
   } from '#lib/combat'
   import type { Instance } from '#lib/exercises'
-  import { getSkills, type SkillsResponse } from '#lib/skills'
+  import { useSkills } from '#lib/skills/store.svelte'
   import { ACCENT } from '#lib/theme'
   import Icon from '#lib/components/Icon.svelte'
   import Spinner from '#lib/components/Spinner.svelte'
@@ -23,21 +22,18 @@
   import MonsterList from '#lib/components/combat/MonsterList.svelte'
   import OutcomePanel from '#lib/components/combat/OutcomePanel.svelte'
   import { countConsumables } from '#lib/combatview'
-  import { peekCached } from '#lib/cache'
+  import { cachedResource } from '#lib/resource.svelte'
 
   // Seed from the last fetch so returning to Combat shows the board at once.
-  const cachedCombat = peekCached<CombatResponse>('/api/combat')
-  const cachedSkills = peekCached<SkillsResponse>('/api/skills')
-  let data = $state<CombatResponse | null>(cachedCombat ?? null)
-  let ref = $state<SkillsResponse | null>(cachedSkills ?? null)
-  let encounter = $state<EncounterDTO | null>(cachedCombat?.encounter ?? null)
-  let instance = $state<Instance | null>(cachedCombat?.instance ?? null)
+  const combat = cachedResource<CombatResponse>('/api/combat', { auto: false })
+  const board = useSkills()
+  const data = $derived(combat.data ?? null)
+  let encounter = $state<EncounterDTO | null>(combat.data?.encounter ?? null)
+  let instance = $state<Instance | null>(combat.data?.instance ?? null)
   let hit = $state<HitResult | null>(null)
   let drank = $state<{ item: string; buff: { kind: string; value: number } } | null>(null)
   let foodThreshold = $state(50)
   let busy = $state(false)
-  let error = $state('')
-  let loading = $state(cachedCombat === undefined)
   /**
    * Time attack: each drill has a countdown. The first drill of a fight waits
    * for a Start click; every drill after that starts its own clock. A timeout
@@ -58,12 +54,12 @@
     deadline > 0 ? Math.max(0, Math.min(100, (timeLeft / COMBAT_TIME_LIMIT_MS) * 100)) : 0,
   )
 
-  const itemMap = $derived(new Map((ref?.items ?? []).map((i) => [i.id, i])))
-  const skillMap = $derived(new Map((ref?.skills ?? []).map((s) => [s.id, s])))
+  const itemMap = $derived(board.itemMap)
+  const skillMap = $derived(board.skillMap)
   // The fight trains whatever profession the equipped weapon is for.
   const fightSkill = $derived(skillMap.get(data?.player.skill ?? '')?.name ?? '')
   const fightSkillIcon = $derived(skillMap.get(data?.player.skill ?? '')?.icon ?? '')
-  const consumables = $derived(countConsumables(ref?.inventory ?? [], itemMap))
+  const consumables = $derived(countConsumables(board.inventory, itemMap))
   const foodCount = $derived(consumables.food)
   const potionCount = $derived(consumables.potions)
 
@@ -99,22 +95,14 @@
   }
 
   async function refresh() {
-    try {
-      const [c, s, set] = await Promise.all([getCombat(), getSkills().catch(() => null), prefs()])
-      applyCombat(c, s, set?.foodThreshold)
-    } catch (e) {
-      error = (e as Error).message
-    } finally {
-      loading = false
-    }
+    const [ok, , set] = await Promise.all([combat.refresh(), board.refresh(), prefs()])
+    if (ok && combat.data) applyCombat(combat.data, set?.foodThreshold)
   }
 
   const prefs = () => api<{ foodThreshold?: number }>('/api/settings').catch(() => null)
 
-  /** Applies a fresh combat + skills board, adopting any running encounter. */
-  function applyCombat(c: CombatResponse, s: SkillsResponse | null, food?: number) {
-    data = c
-    ref = s
+  /** Applies a fresh combat board, adopting any running encounter. */
+  function applyCombat(c: CombatResponse, food?: number) {
     // A finished fight stays up until the player leaves the outcome panel.
     if (!hit || hit.outcome === 'ongoing') encounter = c.encounter
     // Resuming a fight: adopt the drill the server rebuilt for this encounter
@@ -128,7 +116,7 @@
   }
 
   async function fight(m: MonsterDTO) {
-    error = ''
+    combat.error = ''
     stopTimer()
     try {
       const r = await startFight(m.id)
@@ -138,18 +126,18 @@
       hit = null
       justHit = false
     } catch (e) {
-      error = (e as Error).message
+      combat.error = (e as Error).message
     }
   }
 
   async function submit(answer: unknown, timedOut = false) {
     if (!instance || busy) return
     busy = true
-    error = ''
+    combat.error = ''
     try {
       applyHit(await combatHit(hitBody(answer, timedOut)))
     } catch (e) {
-      error = (e as Error).message
+      combat.error = (e as Error).message
       stopTimer()
     } finally {
       busy = false
@@ -206,12 +194,12 @@
     if (busy) return
     if (!confirm('Leave the fight? Your progress in this battle is lost.')) return
     busy = true
-    error = ''
+    combat.error = ''
     try {
       await abandonFight()
       leave()
     } catch (e) {
-      error = (e as Error).message
+      combat.error = (e as Error).message
     } finally {
       busy = false
     }
@@ -309,11 +297,11 @@
     {/if}
   </div>
 
-  {#if error}
-    <p class="banner mb-3" style="--accent: {ACCENT.ember}" role="alert">{error}</p>
+  {#if combat.error}
+    <p class="banner mb-3" style="--accent: {ACCENT.ember}" role="alert">{combat.error}</p>
   {/if}
 
-  {#if loading}
+  {#if combat.loading}
     <p class="banner flex items-center gap-2" style="--accent: {ACCENT.ember}">
       <Spinner size={14} label="Loading encounter" /> Loading…
     </p>

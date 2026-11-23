@@ -1,28 +1,16 @@
 <script lang="ts">
   import { href } from '#lib/paths'
   import { onMount } from 'svelte'
-  import {
-    EFFECT_SHORT,
-    getSkills,
-    type ActionDTO,
-    type SkillDTO,
-    type SkillsResponse,
-  } from '#lib/skills'
+  import { EFFECT_SHORT, type ActionDTO, type SkillDTO } from '#lib/skills'
+  import { useSkills } from '#lib/skills/store.svelte'
   import { fmtInterval, rigGainedSince, rigSecondsLeft } from '#lib/idle'
   import { ACCENT, CATEGORY, accentStyle, type SkillCategory } from '#lib/theme'
   import Icon from '#lib/components/Icon.svelte'
   import Spinner from '#lib/components/Spinner.svelte'
-  import { cachedAt, peekCached } from '#lib/cache'
 
-  // Seed from the last fetch so returning to Skills renders the board at once.
-  const cachedSkills = peekCached<SkillsResponse>('/api/skills')
-  let data = $state<SkillsResponse | null>(cachedSkills ?? null)
-  let error = $state('')
-  let loading = $state(cachedSkills === undefined)
-  /** When the board was fetched — the cursor the live counters extrapolate from. */
-  let fetchedAt = $state(cachedAt('/api/skills'))
-  /** Ticking clock so a running rig's counter climbs in place (§13.5.1). */
-  let now = $state(Date.now())
+  // The shared board: seeded from the last fetch, so it renders at once.
+  const board = useSkills()
+  const data = $derived(board.data ?? null)
 
   const pct = (v: number) => `${Math.round(v * 100)}%`
   /** Like pct, but keeps the decimal for sub-1% passives (0.5%, not 1%). */
@@ -32,21 +20,19 @@
   }
   // the average profession level, so it also reads out of 100
   const totalLevel = $derived.by(() => {
-    const skills = data?.skills ?? []
+    const skills = board.skills
     if (!skills.length) return 1
     return Math.round(skills.reduce((n, s) => n + s.level, 0) / skills.length)
   })
   const pendingTalents = $derived(
-    (data?.skills ?? []).filter(
-      (s) => s.talent.pendingChoice || s.talent.mastery.pending.length > 0,
-    ),
+    board.skills.filter((s) => s.talent.pendingChoice || s.talent.mastery.pending.length > 0),
   )
 
   const groups = $derived(
     (['gathering', 'artisan', 'support', 'combat'] as SkillCategory[]).map((key) => ({
       key,
       ...CATEGORY[key],
-      skills: (data?.skills ?? []).filter((s) => s.category === key),
+      skills: board.skills.filter((s) => s.category === key),
     })),
   )
 
@@ -66,9 +52,9 @@
     count: number
   }
 
-  function runningRigs(d: SkillsResponse | null, fetchedAt: number, now: number): RunningRig[] {
+  function runningRigs(skills: SkillDTO[], fetchedAt: number, now: number): RunningRig[] {
     const out: RunningRig[] = []
-    for (const s of d?.skills ?? []) {
+    for (const s of skills) {
       const rig = runningIn(s, fetchedAt, now)
       if (rig) out.push(rig)
     }
@@ -103,28 +89,14 @@
     return gained
   }
 
-  const running = $derived(runningRigs(data, fetchedAt, now))
+  const running = $derived(runningRigs(board.skills, board.fetchedAt, board.now))
 
   /** The running tell for one profession, by id. */
   const runningById = $derived(new Map(running.map((r) => [r.id, r])))
 
   onMount(() => {
-    void refresh()
-    const timer = setInterval(() => (now = Date.now()), 250)
-    return () => clearInterval(timer)
+    void board.refresh()
   })
-
-  async function refresh() {
-    try {
-      const res = await getSkills()
-      fetchedAt = Date.now()
-      data = res
-    } catch (e) {
-      error = (e as Error).message
-    } finally {
-      loading = false
-    }
-  }
 </script>
 
 <div class="border-b border-ink-700 pt-4 pb-4">
@@ -140,8 +112,8 @@
   <p class="sub mt-2">Train a trade, gather materials, grow stronger.</p>
 </div>
 
-{#if error}
-  <p class="banner mt-3" style={accentStyle(ACCENT.ember)} role="alert">{error}</p>
+{#if board.error}
+  <p class="banner mt-3" style={accentStyle(ACCENT.ember)} role="alert">{board.error}</p>
 {/if}
 
 {#if pendingTalents.length}
@@ -199,7 +171,7 @@
   </div>
 {/if}
 
-{#if loading}
+{#if board.loading}
   <p class="banner mt-4" style={accentStyle(ACCENT.azure)}>
     <Spinner size={14} label="Loading skills" /> Loading…
   </p>

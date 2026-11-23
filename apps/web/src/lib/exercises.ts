@@ -83,7 +83,7 @@ export interface BuiltDeck {
   newWords: string[]
 }
 
-/** One day of the activity map: the UTC day and the XP earned in it. */
+/** One day of the activity map: the member's own calendar day (server-keyed) and the XP earned in it. */
 export interface ActivityDay {
   day: string
   xp: number

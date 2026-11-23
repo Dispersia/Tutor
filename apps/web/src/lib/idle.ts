@@ -63,3 +63,8 @@ export function itemRigs(skills: SkillDTO[]): Map<string, IdleRigDTO> {
   }
   return map
 }
+
+/** True while any rig is mid-run — the only time a screen needs a ticking clock. */
+export function anyRigActive(skills: SkillDTO[]): boolean {
+  return skills.some((s) => s.actions.some((a) => a.idle?.active))
+}

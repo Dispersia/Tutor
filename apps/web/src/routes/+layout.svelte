@@ -1,7 +1,7 @@
 <script lang="ts">
   import '../app.css'
   import { onMount } from 'svelte'
-  import { goto } from '$app/navigation'
+  import { beforeNavigate, goto } from '$app/navigation'
   import { page } from '$app/state'
   import { loadUser, session } from '#lib/session.svelte'
   import { href, stripBase } from '#lib/paths'
@@ -21,16 +21,23 @@
     else if (session.user && onLogin) void goto(href('/home'))
   })
 
-  // Pick up new deploys: ask for a service-worker update, and reload once the new
-  // worker takes over (only when one was already controlling the page).
+  // Pick up new deploys: ask for a service-worker update. When the new worker
+  // takes over (and one was already controlling the page) the build on screen is
+  // stale — but a reload right then would throw away a half-typed answer or a
+  // live recording, so it waits for the next navigation or for the app to be
+  // put in the background.
+  let stale = false
+  beforeNavigate(({ willUnload, to }) => {
+    if (stale && !willUnload && to?.url) location.href = to.url.href
+  })
   onMount(() => {
     if (!('serviceWorker' in navigator)) return
     const hadController = Boolean(navigator.serviceWorker.controller)
-    let reloading = false
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (!hadController || reloading) return
-      reloading = true
-      location.reload()
+      if (hadController) stale = true
+    })
+    document.addEventListener('visibilitychange', () => {
+      if (stale && document.visibilityState === 'hidden') location.reload()
     })
     void navigator.serviceWorker
       .getRegistration()

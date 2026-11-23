@@ -1,23 +1,15 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { getSkills, type SkillsResponse } from '#lib/skills'
+  import { useSkills } from '#lib/skills/store.svelte'
   import { itemRigs, rigGainedSince } from '#lib/idle'
   import { ACCENT, accentStyle, tierAccent } from '#lib/theme'
   import { href } from '#lib/paths'
   import Spinner from '#lib/components/Spinner.svelte'
-  import { cachedAt, peekCached } from '#lib/cache'
 
-  // Seed from the last fetch so returning to Bank shows the ledger at once.
-  const cachedSkills = peekCached<SkillsResponse>('/api/skills')
-  let data = $state<SkillsResponse | null>(cachedSkills ?? null)
-  let error = $state('')
-  let loading = $state(cachedSkills === undefined)
-  /** Tick so running rigs keep counting up. */
-  let fetchedAt = $state(cachedAt('/api/skills'))
-  let now = $state(Date.now())
-
-  const itemMap = $derived(new Map((data?.items ?? []).map((i) => [i.id, i])))
-  const rigs = $derived(itemRigs(data?.skills ?? []))
+  // The shared board: seeded from the last fetch, so the ledger shows at once.
+  const board = useSkills()
+  const itemMap = $derived(board.itemMap)
+  const rigs = $derived(itemRigs(board.skills))
 
   const GROUPS = [
     { key: 'raw', label: 'Raw' },
@@ -30,7 +22,7 @@
   const groups = $derived.by(() =>
     GROUPS.map((group) => ({
       ...group,
-      rows: (data?.inventory ?? []).filter((row) => {
+      rows: board.inventory.filter((row) => {
         const item = itemMap.get(row.itemId)
         return row.count > 0 && item?.tier === group.key
       }),
@@ -38,21 +30,8 @@
   )
 
   onMount(() => {
-    void refresh()
-    const timer = setInterval(() => (now = Date.now()), 250)
-    return () => clearInterval(timer)
+    void board.refresh()
   })
-
-  async function refresh() {
-    try {
-      data = await getSkills()
-      fetchedAt = Date.now()
-    } catch (e) {
-      error = (e as Error).message
-    } finally {
-      loading = false
-    }
-  }
 </script>
 
 <div class="border-b border-ink-700 pt-4 pb-4">
@@ -65,11 +44,11 @@
   </div>
 </div>
 
-{#if error}
-  <p class="banner mt-3" style={accentStyle(ACCENT.ember)} role="alert">{error}</p>
+{#if board.error}
+  <p class="banner mt-3" style={accentStyle(ACCENT.ember)} role="alert">{board.error}</p>
 {/if}
 
-{#if loading}
+{#if board.loading}
   <p class="banner mt-4 flex items-center gap-2" style={accentStyle(ACCENT.brass)}>
     <Spinner size={14} label="Loading your inventory" /> Loading…
   </p>
@@ -86,7 +65,9 @@
           {#each group.rows as row (row.itemId)}
             {@const item = itemMap.get(row.itemId)}
             {@const rig = rigs.get(row.itemId)}
-            {@const delta = rig ? (rigGainedSince(rig, fetchedAt, now)[row.itemId] ?? 0) : 0}
+            {@const delta = rig
+              ? (rigGainedSince(rig, board.fetchedAt, board.now)[row.itemId] ?? 0)
+              : 0}
             <span class="chip" style={accentStyle(tierAccent(item?.tier))}>
               {item?.icon ?? ''}
               {item?.name ?? row.itemId}

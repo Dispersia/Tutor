@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte'
   import type { Instance } from '#lib/exercises'
   import { typingAttrs } from '#lib/lang'
   import type { PitchContour } from '#lib/types'
@@ -16,6 +17,8 @@
   }: { instance: Instance; busy?: boolean; onsubmit: (answer: string) => void } = $props()
 
   const recorder = new Recorder()
+  // The next card (or another screen) must not inherit a live mic.
+  onDestroy(() => recorder.dispose())
   const language = $derived((instance.data.language as string) ?? undefined)
   const answerLang = $derived((instance.data.answerLang as string) ?? language)
   const topic = $derived((instance.data.topic as string) ?? '')
@@ -127,6 +130,8 @@
         type="button"
         onclick={record}
         disabled={busy || working}
+        aria-label="Record your answer"
+        aria-pressed={recording}
         class="btn px-4 py-3 {recording
           ? 'recording border-ember-500 bg-ember-500 text-ink-950'
           : 'btn-ghost'}"

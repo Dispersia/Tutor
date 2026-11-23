@@ -24,7 +24,7 @@
   import NumberSetting from '#lib/components/settings/NumberSetting.svelte'
   import AccountSection from '#lib/components/settings/AccountSection.svelte'
   import AdminUsers from '#lib/components/settings/AdminUsers.svelte'
-  import { peekCached } from '#lib/cache'
+  import { cachedResource } from '#lib/resource.svelte'
 
   let roles = $state<Roles>({ ...EMPTY_ROLES })
   let roleDefaults = $state<Roles | null>(null)
@@ -89,16 +89,13 @@
   }
 
   // Seed the form from the last fetch so fields don't pop in from defaults.
-  const cachedSettings = peekCached<SettingsPayload>('/api/settings')
-  if (cachedSettings) applySettings(cachedSettings)
+  const settings = cachedResource<SettingsPayload>('/api/settings', { auto: false })
+  if (settings.data) applySettings(settings.data)
 
   onMount(async () => {
     handle = session.user?.handle ?? ''
-    try {
-      applySettings(await api<SettingsPayload>('/api/settings'))
-    } catch (e) {
-      error = (e as Error).message
-    }
+    if ((await settings.refresh()) && settings.data) applySettings(settings.data)
+    else error = settings.error
     void loadModels()
     void loadExercises()
     void refreshSpeech()
@@ -286,7 +283,7 @@
 
   <NumberSetting
     title="Daily goal"
-    help="XP to earn each UTC day to keep your streak."
+    help="XP to earn each day to keep your streak."
     min={10}
     max={1000}
     step={10}

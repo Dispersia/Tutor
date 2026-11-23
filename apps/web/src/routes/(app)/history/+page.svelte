@@ -1,28 +1,14 @@
 <script lang="ts">
   import { href } from '#lib/paths'
-  import { onMount } from 'svelte'
-  import { api } from '#lib/api'
   import { accentStyle } from '#lib/theme'
   import { KIND_ACCENT, ACCENT } from '#lib/theme'
   import type { ChatSession } from '#lib/types'
   import Spinner from '#lib/components/Spinner.svelte'
-  import { peekCached } from '#lib/cache'
+  import { cachedResource } from '#lib/resource.svelte'
 
   // Seed from the last fetch so returning to History lists at once.
-  const cached = peekCached<{ sessions: ChatSession[] }>('/api/sessions')
-  let sessions = $state<ChatSession[]>(cached?.sessions ?? [])
-  let error = $state('')
-  let loading = $state(cached === undefined)
-
-  onMount(async () => {
-    try {
-      sessions = (await api<{ sessions: ChatSession[] }>('/api/sessions')).sessions
-    } catch (e) {
-      error = (e as Error).message
-    } finally {
-      loading = false
-    }
-  })
+  const list = cachedResource<{ sessions: ChatSession[] }>('/api/sessions')
+  const sessions = $derived(list.data?.sessions ?? [])
 
   const when = (ts: number) =>
     new Date(ts).toLocaleString(undefined, {
@@ -40,12 +26,12 @@
   <p class="sub mt-1.5">Everything you have practised, only visible to you.</p>
 </div>
 
-{#if loading}
+{#if list.loading}
   <p class="banner flex items-center gap-2" style={accentStyle(ACCENT.azure)}>
     <Spinner size={14} label="Loading history" /> Loading…
   </p>
-{:else if error}
-  <p class="banner" style={accentStyle(ACCENT.ember)} role="alert">{error}</p>
+{:else if list.error}
+  <p class="banner" style={accentStyle(ACCENT.ember)} role="alert">{list.error}</p>
 {:else if sessions.length === 0}
   <p class="panel p-4 text-sm text-ink-400">
     No conversations yet. <a class="link" href={href('/chat')}>Start one →</a>

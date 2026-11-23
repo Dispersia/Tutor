@@ -6,6 +6,7 @@
   import { autoGrow } from '#lib/grow'
   import CharCell from './CharCell.svelte'
   import Spinner from './Spinner.svelte'
+  import { focusTrap } from '#lib/focusTrap'
 
   /** A card metadata editor (docs/DESIGN.md §11.1): annotate a deck's cards. */
   let {
@@ -187,6 +188,7 @@
     <div
       role="dialog"
       aria-modal="true"
+      use:focusTrap
       aria-labelledby="card-editor-title"
       class="panel relative z-10 my-auto p-4 sm:p-5"
     >

@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
-  import { api } from '#lib/api'
+  import { onDestroy, onMount } from 'svelte'
+  import { api, jsonBody } from '#lib/api'
   import { drainSentences, streamChat } from '#lib/chat'
   import { Recorder, micSupported, MIN_CLIP_MS } from '#lib/recorder'
   import { session } from '#lib/session.svelte'
@@ -13,18 +13,25 @@
   import { autoGrow } from '#lib/grow'
   import type { ChatSession, Message } from '#lib/types'
   import { speechOpts } from '#lib/voices'
-  import { peekCached } from '#lib/cache'
+  import { cachedResource } from '#lib/resource.svelte'
+
+  const threadPath = (id: string) => `/api/sessions/${id}`
 
   // Seed the latest conversation from the last fetch so reopening Chat shows it
-  // at once; the stream itself still goes to the server.
-  const cachedSessions = peekCached<{ sessions: ChatSession[] }>('/api/sessions')
-  const firstSession = cachedSessions?.sessions[0]
-  const cachedMessages = firstSession
-    ? peekCached<{ messages: Message[] }>(`/api/sessions/${firstSession.id}`)
-    : undefined
-  let messages = $state<Message[]>(
-    cachedMessages ? cachedMessages.messages.filter((m) => m.role !== 'system') : [],
+  // at once; the stream itself still goes to the server. Two steps: the cached
+  // session list names the latest session, whose cached messages seed the thread.
+  const list = cachedResource<{ sessions: ChatSession[] }>('/api/sessions', { auto: false })
+  const firstSession = list.data?.sessions[0]
+  /**
+   * The conversation on screen. A send writes it with `set` (the optimistic pair,
+   * then every streamed delta), and a `set` outdates any load still in flight —
+   * so a load that finishes late can never replace what the user just sent.
+   */
+  const thread = cachedResource<{ messages: Message[] }>(
+    () => (firstSession ? threadPath(firstSession.id) : undefined),
+    { auto: false },
   )
+  const messages = $derived((thread.data?.messages ?? []).filter((m) => m.role !== 'system'))
   let sessionId = $state<string | null>(firstSession?.id ?? null)
   let input = $state('')
   let busy = $state(false)
@@ -34,6 +41,10 @@
   let error = $state('')
   let speaking = $state(false)
   let speaker: Speaker | null = null
+  /** The reply being streamed, so leaving the screen can abort it. */
+  let stream: AbortController | null = null
+  /** Set by the first send: from then on the mount load must not overwrite the view. */
+  let touched = false
 
   const recorder = new Recorder()
   const lang = $derived(session.user?.targetLang ?? undefined)
@@ -44,27 +55,62 @@
     // reply should not also pay the 2-6 s model load (DESIGN §8.1).
     if (ttsOn) void wakeSpeech().catch(() => {})
     try {
-      const { sessions } = await api<{ sessions: ChatSession[] }>('/api/sessions')
-      const latest = sessions[0]
-      if (latest) {
-        sessionId = latest.id
-        await loadMessages(latest.id)
-      } else {
-        const s = await api<ChatSession>('/api/sessions', {
-          method: 'POST',
-          body: JSON.stringify({ kind: 'chat', lang }),
-        })
-        sessionId = s.id
-      }
+      await openLatest()
     } catch (e) {
       error = (e as Error).message
     }
   })
 
+  // Leaving the screen must let go of everything live: the mic, the reply
+  // stream and whatever is being spoken.
+  onDestroy(() => {
+    stream?.abort()
+    recorder.dispose()
+    speaker?.cancel()
+    stopAudio()
+  })
+
+  /**
+   * Opens the latest conversation (or starts one). A message sent while this is
+   * still loading owns the view from then on — `touched` — so a slow load never
+   * replaces the optimistic messages or points `sessionId` at an older session.
+   * Both loads reject (`load()`), so the caller shows the failure.
+   */
+  async function openLatest() {
+    const { sessions } = await list.load()
+    const latest = sessions[0]
+    if (touched) return
+    if (latest) {
+      sessionId = latest.id
+      await loadMessages(latest.id)
+      return
+    }
+    const s = await api<ChatSession>('/api/sessions', jsonBody({ kind: 'chat', lang }))
+    if (!touched) sessionId = s.id
+  }
+
+  /** Loads a session's messages; a send in the meantime (its `set`) keeps the view. */
   async function loadMessages(id: string) {
-    const r = await api<{ messages: Message[] }>(`/api/sessions/${id}`)
-    messages = r.messages.filter((m) => m.role !== 'system')
-    scrollDown()
+    follow(id)
+    await thread.load()
+    if (!touched) scrollDown()
+  }
+
+  /**
+   * Points the thread at a session while keeping what is on screen: `open` alone
+   * would re-seed from the cache and drop the messages shown (the optimistic ones).
+   */
+  function follow(id: string) {
+    const path = threadPath(id)
+    if (thread.path === path) return
+    const shown = thread.data ?? { messages: [] }
+    thread.open(path)
+    thread.set(shown)
+  }
+
+  /** Rewrites one message by id — an index would go stale when the list is replaced. */
+  function patchMessage(id: string, patch: (m: Message) => Message) {
+    thread.set({ messages: messages.map((m) => (m.id === id ? patch(m) : m)) })
   }
 
   function scrollDown() {
@@ -91,18 +137,18 @@
     error = ''
     input = ''
     busy = true
-    const { idx, sp, sink } = beginReply(text)
+    touched = true
+    const { id, sp, sink } = beginReply(text)
+    const ctl = (stream = new AbortController())
     try {
-      await streamChat(
-        { sessionId: sessionId ?? undefined, text, role: 'conversation' },
-        { onSession: sink.onSession, onDelta: sink.onDelta },
-      )
+      const body = { sessionId: sessionId ?? undefined, text, role: 'conversation' }
+      await streamChat(body, { onSession: sink.onSession, onDelta: sink.onDelta }, ctl.signal)
       sink.flush()
     } catch (e) {
-      failReply(idx, sp, e)
+      failReply(id, sp, e)
     } finally {
       busy = false
-      await reloadMessages()
+      if (!ctl.signal.aborted) await reloadMessages()
     }
   }
 
@@ -111,31 +157,30 @@
     stopAudio()
     speaker?.cancel()
     speaker = null
-    messages = [...messages, localMsg('user', text), localMsg('assistant', '')]
-    const idx = messages.length - 1
+    const reply = localMsg('assistant', '')
+    thread.set({ messages: [...messages, localMsg('user', text), reply] })
     scrollDown()
     const sp = startSpeaking()
-    return { idx, sp, sink: replySink(idx, sp) }
+    return { id: reply.id, sp, sink: replySink(reply.id, sp) }
   }
 
   /** Records the error, marks the empty reply and silences the speaker. */
-  function failReply(idx: number, sp: Speaker | null, e: unknown) {
+  function failReply(id: string, sp: Speaker | null, e: unknown) {
     error = (e as Error).message
-    messages[idx] = { ...messages[idx], text: messages[idx].text || '(no reply)' }
+    patchMessage(id, (m) => ({ ...m, text: m.text || '(no reply)' }))
     sp?.cancel()
     if (speaker === sp) speaking = false
   }
 
-  /** Re-reads the conversation after the stream (keeps the optimistic view on failure). */
+  /**
+   * Re-reads the conversation after the stream. `refresh()` never rejects and
+   * keeps the optimistic view on failure; a newer send's `set` outdates it, so
+   * that send owns the view (and reloads when it is done).
+   */
   async function reloadMessages() {
     if (!sessionId) return
-    try {
-      messages = (await api<{ messages: Message[] }>(`/api/sessions/${sessionId}`)).messages.filter(
-        (m) => m.role !== 'system',
-      )
-    } catch {
-      /* keep optimistic */
-    }
+    follow(sessionId)
+    await thread.refresh()
   }
 
   /**
@@ -156,21 +201,21 @@
     flush: () => void
   }
 
-  /** Streams a reply into message `idx`, speaking each finished sentence. */
-  function replySink(idx: number, sp: Speaker | null): ReplySink {
+  /** Streams a reply into message `id`, speaking each finished sentence. */
+  function replySink(id: string, sp: Speaker | null): ReplySink {
     let buf = ''
     return {
       onSession: (id) => (sessionId = id),
       onDelta: (d) => {
-        buf = speakDelta(idx, sp, buf, d)
+        buf = speakDelta(id, sp, buf, d)
       },
       flush: () => flushSpeech(sp, buf),
     }
   }
 
   /** Appends a delta to the message (and the speaker), returning the new buffer. */
-  function speakDelta(idx: number, sp: Speaker | null, buf: string, d: string): string {
-    messages[idx] = { ...messages[idx], text: messages[idx].text + d }
+  function speakDelta(id: string, sp: Speaker | null, buf: string, d: string): string {
+    patchMessage(id, (m) => ({ ...m, text: m.text + d }))
     scrollDown()
     if (!sp) return buf
     const next = buf + d
@@ -331,7 +376,8 @@
       <button
         onclick={toggleRecord}
         title="Hold a conversation"
-        aria-label="Hold a conversation"
+        aria-label="Record a message"
+        aria-pressed={recording}
         class="grid h-11 w-11 place-items-center rounded-[10px] {recording
           ? 'recording bg-ember-500 text-ink-950'
           : transcribing

@@ -7,6 +7,7 @@
   import { href, stripBase } from '#lib/paths'
   import { htmlLang } from '#lib/lang'
   import { startRigAlerts } from '#lib/rigAlerts'
+  import { reportTimezone } from '#lib/timezone'
   import Icon from '#lib/components/Icon.svelte'
   import type { LayoutProps } from './$types'
 
@@ -30,6 +31,8 @@
     // The deck chosen everywhere (free practice, Learn) lives in the profile
     // menu; load it once so every screen shares the same choice.
     void loadActiveDeck()
+    // The server rolls the day over at the member's own midnight.
+    void reportTimezone(session.user?.id)
     // Rig alerts are per device; the timer checks the switch on each tick.
     return startRigAlerts()
   })

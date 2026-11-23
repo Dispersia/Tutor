@@ -18,13 +18,17 @@ export class Recorder {
   #stream: MediaStream | null = null
   #chunks: Blob[] = []
   #startedAt = 0
+  #disposed = false
 
   get recording(): boolean {
     return this.#rec?.state === 'recording'
   }
 
   async start(): Promise<void> {
-    this.#stream = await navigator.mediaDevices.getUserMedia({ audio: micConstraints() })
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: micConstraints() })
+    // The screen was left while the permission prompt was up: let the mic go.
+    if (this.#disposed) return stopTracks(stream)
+    this.#stream = stream
     this.#chunks = []
     this.#rec = createRecorder(this.#stream, (data) => {
       if (data.size) this.#chunks.push(data)
@@ -58,14 +62,34 @@ export class Recorder {
   #finish(rec: MediaRecorder): Promise<Blob> {
     return new Promise<Blob>((resolve) => {
       rec.onstop = () => {
-        this.#stream?.getTracks().forEach((t) => t.stop())
-        this.#stream = null
-        this.#rec = null
+        this.#release()
         resolve(new Blob(this.#chunks, { type: rec.mimeType || 'audio/webm' }))
       }
       rec.stop()
     })
   }
+
+  /**
+   * Lets go of the mic for good, discarding any take in progress. Call it when
+   * the owning screen unmounts — otherwise the recording indicator stays lit
+   * after the user has navigated away.
+   */
+  dispose(): void {
+    this.#disposed = true
+    const rec = this.#rec
+    if (rec && rec.state !== 'inactive') rec.stop()
+    this.#release()
+  }
+
+  #release(): void {
+    if (this.#stream) stopTracks(this.#stream)
+    this.#stream = null
+    this.#rec = null
+  }
+}
+
+function stopTracks(stream: MediaStream): void {
+  stream.getTracks().forEach((t) => t.stop())
 }
 
 function micConstraints(): MediaTrackConstraints {

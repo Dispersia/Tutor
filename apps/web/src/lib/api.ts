@@ -1,5 +1,5 @@
 import { apiPath } from './paths'
-import { peekCached, writeCache } from './cache'
+import { clearCache, peekCached, writeCache } from './cache'
 
 export class ApiError extends Error {
   constructor(
@@ -10,8 +10,32 @@ export class ApiError extends Error {
   }
 }
 
+interface Pending {
+  /** The mutation generation the request was started in. */
+  gen: number
+  promise: Promise<unknown>
+}
+
 /** In-flight GETs, so several screens opening together share one request. */
-const inflight = new Map<string, Promise<unknown>>()
+const inflight = new Map<string, Pending>()
+/**
+ * Bumped when a mutation starts and again when it settles. A GET started in an
+ * older generation may carry pre-mutation data, so it is never joined and never
+ * overwrites what a newer GET cached.
+ */
+let generation = 0
+/** The generation of the GET that last wrote each path to the cache. */
+const written = new Map<string, number>()
+
+let unauthorized: (() => void) | null = null
+
+/**
+ * Registers what to do when the server rejects the cookie (the session module
+ * signs the member out). A callback, so this module never imports the session.
+ */
+export function onUnauthorized(handler: (() => void) | null): void {
+  unauthorized = handler
+}
 
 /**
  * fetch wrapper: JSON by default, cookie credentials, typed errors.
@@ -23,19 +47,29 @@ const inflight = new Map<string, Promise<unknown>>()
  */
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const method = (init.method ?? 'GET').toUpperCase()
-  const cacheable = method === 'GET'
-  if (cacheable) {
-    const pending = inflight.get(path)
-    if (pending) return pending as Promise<T>
-  }
-  const run = () => runRequest<T>(path, init, cacheable)
-  if (!cacheable) return run()
-  const promise = run().finally(() => inflight.delete(path))
-  inflight.set(path, promise)
-  return promise
+  if (method !== 'GET') return mutate<T>(path, init)
+  const pending = inflight.get(path)
+  if (pending && pending.gen === generation) return pending.promise as Promise<T>
+  const entry: Pending = { gen: generation, promise: Promise.resolve() }
+  entry.promise = runRequest<T>(path, init, entry.gen).finally(() => {
+    if (inflight.get(path) === entry) inflight.delete(path)
+  })
+  inflight.set(path, entry)
+  return entry.promise as Promise<T>
 }
 
-async function runRequest<T>(path: string, init: RequestInit, cacheable: boolean): Promise<T> {
+/** A non-GET: every GET in flight around it is stale from here on. */
+async function mutate<T>(path: string, init: RequestInit): Promise<T> {
+  generation++
+  try {
+    return await runRequest<T>(path, init, null)
+  } finally {
+    generation++
+  }
+}
+
+/** Runs one request; `gen` is the GET's generation, or null for a mutation. */
+async function runRequest<T>(path: string, init: RequestInit, gen: number | null): Promise<T> {
   const headers = new Headers(init.headers)
   if (typeof init.body === 'string' && !headers.has('content-type')) {
     headers.set('content-type', 'application/json')
@@ -44,18 +78,26 @@ async function runRequest<T>(path: string, init: RequestInit, cacheable: boolean
   try {
     res = await fetch(apiPath(path), { credentials: 'same-origin', ...init, headers })
   } catch (err) {
-    const cached = cacheable ? peekCached<T>(path) : undefined
+    const cached = gen === null ? undefined : peekCached<T>(path)
     if (cached !== undefined) return cached
     throw err
   }
-  if (!res.ok) throw await apiError(res)
+  if (!res.ok) throw await apiError(path, res)
   const data = await parseBody<T>(res)
-  if (cacheable) writeCache(path, data)
+  if (gen !== null) cacheFresh(path, data, gen)
   return data
 }
 
+/** Caches a GET unless a GET from a newer generation already did. */
+function cacheFresh(path: string, data: unknown, gen: number): void {
+  if (gen < (written.get(path) ?? 0)) return
+  written.set(path, gen)
+  writeCache(path, data)
+}
+
 /** The typed error a non-2xx response becomes (its `error` field, or raw text). */
-async function apiError(res: Response): Promise<ApiError> {
+async function apiError(path: string, res: Response): Promise<ApiError> {
+  if (res.status === 401) signedOut(path)
   const text = await res.text().catch(() => '')
   let msg = text
   try {
@@ -64,6 +106,18 @@ async function apiError(res: Response): Promise<ApiError> {
     // keep raw text
   }
   return new ApiError(res.status, msg || res.statusText)
+}
+
+/**
+ * An expired cookie: forget the cached data and tell the session, so the layout
+ * sends the member to the login screen. The auth routes answer 401 for their
+ * own reasons (a wrong password, the `/me` probe) and handle it themselves.
+ */
+function signedOut(path: string): void {
+  if (path.startsWith('/api/auth/')) return
+  clearCache()
+  written.clear()
+  unauthorized?.()
 }
 
 async function parseBody<T>(res: Response): Promise<T> {

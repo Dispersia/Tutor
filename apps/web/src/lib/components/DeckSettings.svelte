@@ -7,6 +7,7 @@
     type DeckSettings as DeckSettingsPatch,
   } from '#lib/exercises'
   import Spinner from './Spinner.svelte'
+  import { focusTrap } from '#lib/focusTrap'
 
   /** Deck-level settings (docs/DESIGN.md §13.8): readings, pitch accent, delete. */
   let {
@@ -105,6 +106,7 @@
     <div
       role="dialog"
       aria-modal="true"
+      use:focusTrap
       aria-labelledby="deck-settings-title"
       class="panel relative z-10 my-auto p-4 sm:p-5"
     >

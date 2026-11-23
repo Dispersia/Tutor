@@ -1,4 +1,4 @@
-import { api, ApiError } from './api'
+import { api, ApiError, onUnauthorized } from './api'
 import { clearCache } from './cache'
 import type { PublicUser } from './types'
 
@@ -37,6 +37,15 @@ class SessionState {
 }
 
 export const session = new SessionState()
+
+// A 401 on any data route means the cookie expired mid-session: forget the
+// member, so the layout redirects to the login screen (api.ts has already
+// dropped the cached data).
+onUnauthorized(() => {
+  persistUser(null)
+  session.user = null
+  session.loaded = true
+})
 
 export async function loadUser(): Promise<void> {
   try {

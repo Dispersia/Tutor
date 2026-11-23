@@ -50,8 +50,10 @@ interface Decoded {
 }
 
 let loaded: Promise<NonRealTimeVAD> | null = null
-/** After one failure the asset/runtime is not going to appear mid-session. */
-let broken = false
+/** After a failure, don't refetch ~16 MB on every take — but do try again later. */
+const RETRY_AFTER_MS = 60_000
+/** Epoch ms of the last failed load (0 when the last attempt worked). */
+let failedAt = 0
 
 /**
  * Starts downloading the VAD weights and the onnxruntime wasm in the background,
@@ -120,13 +122,19 @@ async function encodeTrimmed(
 }
 
 async function loadVad(): Promise<NonRealTimeVAD> {
-  if (broken) throw new Error('vad unavailable')
-  loaded ??= loadOnce()
+  if (failedAt && Date.now() - failedAt < RETRY_AFTER_MS) throw new Error('vad unavailable')
+  const attempt = (loaded ??= loadOnce())
   try {
-    return await loaded
+    const vad = await attempt
+    failedAt = 0
+    return vad
   } catch (err) {
-    broken = true
-    loaded = null
+    // One blip (offline, a deploy mid-fetch) must not disable trimming for the
+    // whole session: forget the attempt and allow another after the cooldown.
+    if (loaded === attempt) {
+      loaded = null
+      failedAt = Date.now()
+    }
     throw err
   }
 }

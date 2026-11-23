@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte'
   import type { Instance } from '#lib/exercises'
   import type { PitchContour } from '#lib/types'
   import { typingAttrs } from '#lib/lang'
@@ -23,6 +24,8 @@
   } = $props()
 
   const recorder = new Recorder()
+  // The next card (or another screen) must not inherit a live mic.
+  onDestroy(() => recorder.dispose())
   const target = $derived((instance.data.target as string) ?? '')
   const reading = $derived((instance.data.reading as string) ?? '')
   const lang = $derived((instance.data.readingLang as string) ?? '')
@@ -34,6 +37,12 @@
   let recording = $state(false)
   let working = $state(false)
   let err = $state('')
+
+  /** Plays the model pronunciation; a failed synthesis shows instead of vanishing. */
+  function hear() {
+    err = ''
+    speak(target, speechOpts(language)).catch((e) => (err = (e as Error).message))
+  }
 
   async function record() {
     err = ''
@@ -102,16 +111,15 @@
   </div>
 
   <div class="flex gap-2">
-    <button
-      type="button"
-      onclick={() => speak(target, speechOpts(language))}
-      class="btn btn-ghost flex-1 gap-1.5 py-3"><Icon name="sound" size={15} /> Hear it</button
+    <button type="button" onclick={hear} class="btn btn-ghost flex-1 gap-1.5 py-3"
+      ><Icon name="sound" size={15} /> Hear it</button
     >
     {#if canMic}
       <button
         type="button"
         onclick={record}
         disabled={busy || working}
+        aria-pressed={recording}
         class="btn flex-1 gap-1.5 py-3 {recording
           ? 'recording border-ember-500 bg-ember-500 text-ink-950'
           : 'btn-primary'}"

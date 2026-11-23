@@ -12,11 +12,11 @@
     actionId: string
     activeDeckId: string | null
     growing: string
-    growTopic: string
     practiceHref: (params: { lesson?: string; deck?: string }) => string
     onSetActive: (deckId: string) => void
-    onGrow: (d: CurriculumDeck) => void
-    onFinish: (d: CurriculumDeck) => void
+    /** Both resolve true when the growth worked, so this deck can clear its topic. */
+    onGrow: (d: CurriculumDeck, topic: string) => Promise<boolean>
+    onFinish: (d: CurriculumDeck, topic: string) => Promise<boolean>
     onSettings: (d: CurriculumDeck) => void
     onEdit: (d: CurriculumDeck) => void
   }
@@ -26,7 +26,6 @@
     actionId,
     activeDeckId,
     growing,
-    growTopic = $bindable(),
     practiceHref,
     onSetActive,
     onGrow,
@@ -38,6 +37,13 @@
   const acc = $derived(deckAccent(d.level ?? ''))
   const next = $derived(nextLesson(d))
   const progress = $derived(d.cardCount > 0 ? (d.learned / d.cardCount) * 100 : 0)
+
+  /** This deck's own topic: typing here must not fill every other deck's field. */
+  let growTopic = $state('')
+
+  async function run(action: Props['onGrow']) {
+    if (await action(d, growTopic)) growTopic = ''
+  }
 </script>
 
 <section class="panel panel-accent mb-5 p-4" style={accentStyle(acc)}>
@@ -141,7 +147,7 @@
   {#if !d.settings?.building && (d.remaining ?? 0) > 0}
     <button
       type="button"
-      onclick={() => onFinish(d)}
+      onclick={() => run(onFinish)}
       disabled={Boolean(growing)}
       class="btn btn-ghost mt-3 w-full py-3"
     >
@@ -157,11 +163,12 @@
     <input
       bind:value={growTopic}
       placeholder="grow on a topic (optional)"
+      aria-label="Topic to grow {d.name} on (optional)"
       class="field min-w-0 flex-1 text-xs"
     />
     <button
       type="button"
-      onclick={() => onGrow(d)}
+      onclick={() => run(onGrow)}
       disabled={Boolean(growing) || Boolean(d.settings?.building)}
       class="btn btn-ghost px-3 py-2 text-xs"
     >
