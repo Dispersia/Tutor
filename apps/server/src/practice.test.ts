@@ -63,6 +63,14 @@ const auth = (cookie: string, extra: RequestInit = {}): RequestInit => ({
   headers: { ...(extra.headers ?? {}), cookie },
 })
 
+async function getJson<T>(app: App, cookie: string, path: string): Promise<T> {
+  return (await (await app.request(path, auth(cookie))).json()) as T
+}
+
+async function postJson<T>(app: App, cookie: string, path: string, body: unknown): Promise<T> {
+  return (await (await app.request(path, auth(cookie, json(body)))).json()) as T
+}
+
 test('decks are seeded per user and list their cards', async () => {
   const { app, db, sqlite } = makeApp()
   const cookie = await signup(app, db)
@@ -103,70 +111,53 @@ test('practice: next -> grade -> xp, and exercise catalog', async () => {
   const { app, db, sqlite } = makeApp()
   const cookie = await signup(app, db)
 
-  const cat = (await (await app.request('/api/exercises', auth(cookie))).json()) as {
-    exercises: { id: string }[]
-  }
+  const cat = await getJson<{ exercises: { id: string }[] }>(app, cookie, '/api/exercises')
   expect(cat.exercises.length).toBeGreaterThanOrEqual(7)
 
-  const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
-    decks: { id: string; name: string; level: string }[]
-  }
+  const decks = await getJson<{ decks: { id: string; name: string; level: string }[] }>(
+    app,
+    cookie,
+    '/api/decks',
+  )
   const deckId = decks.decks.find((d) => d.level === 'zhfreq')!.id
 
   // a specific exercise type (requires auth)
-  const nextAuthed = (await (
-    await app.request(
-      '/api/practice/next',
-      auth(cookie, json({ deckId, exerciseId: 'multiple_choice' })),
-    )
-  ).json()) as { instance: { exerciseId: string; cardId: string; data: { choices: string[] } } }
-  expect(nextAuthed.instance.exerciseId).toBe('multiple_choice')
-  expect(Array.isArray(nextAuthed.instance.data.choices)).toBe(true)
+  const next = await postJson<{
+    instance: { exerciseId: string; cardId: string; data: { choices: string[] } }
+  }>(app, cookie, '/api/practice/next', { deckId, exerciseId: 'multiple_choice' })
+  expect(next.instance.exerciseId).toBe('multiple_choice')
+  expect(Array.isArray(next.instance.data.choices)).toBe(true)
 
   // fetch a card to grade against a known answer
-  const cards = (await (await app.request(`/api/decks/${deckId}/cards`, auth(cookie))).json()) as {
-    cards: { id: string; back: string }[]
-  }
+  const cards = await getJson<{ cards: { id: string; back: string }[] }>(
+    app,
+    cookie,
+    `/api/decks/${deckId}/cards`,
+  )
   const card = cards.cards[0]!
 
-  const good = (await (
-    await app.request(
-      '/api/practice/grade',
-      auth(
-        cookie,
-        json({
-          exerciseId: 'translate.front_to_back',
-          cardId: card.id,
-          answer: card.back,
-          latencyMs: 1200,
-        }),
-      ),
-    )
-  ).json()) as { result: { correct: boolean; score: number; xp: number }; stats: { xp: number } }
+  const good = await postJson<{
+    result: { correct: boolean; score: number; xp: number }
+    stats: { xp: number }
+  }>(app, cookie, '/api/practice/grade', {
+    exerciseId: 'translate.front_to_back',
+    cardId: card.id,
+    answer: card.back,
+    latencyMs: 1200,
+  })
   expect(good.result.correct).toBe(true)
   expect(good.result.score).toBe(100)
   expect(good.result.xp).toBeGreaterThan(0)
   expect(good.stats.xp).toBe(good.result.xp)
 
-  const bad = (await (
-    await app.request(
-      '/api/practice/grade',
-      auth(
-        cookie,
-        json({
-          exerciseId: 'translate.front_to_back',
-          cardId: card.id,
-          answer: 'definitely wrong',
-        }),
-      ),
-    )
-  ).json()) as { result: { correct: boolean } }
+  const bad = await postJson<{ result: { correct: boolean } }>(app, cookie, '/api/practice/grade', {
+    exerciseId: 'translate.front_to_back',
+    cardId: card.id,
+    answer: 'definitely wrong',
+  })
   expect(bad.result.correct).toBe(false)
 
-  const stats = (await (await app.request('/api/stats', auth(cookie))).json()) as {
-    xp: number
-    level: number
-  }
+  const stats = await getJson<{ xp: number; level: number }>(app, cookie, '/api/stats')
   expect(stats.xp).toBeGreaterThan(0)
   expect(stats.level).toBeGreaterThanOrEqual(1)
   sqlite.close()

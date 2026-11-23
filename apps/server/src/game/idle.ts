@@ -113,66 +113,89 @@ export function settleRig(
   now: number,
 ): RigSettle {
   const from = Math.max(0, state.settledAt)
+  const { next, idle, runEndsAt } = rigStart(state, now)
+  if (runEndsAt <= 0 || now <= from) return idle
+  const end = Math.min(now, runEndsAt)
+  if (end <= from) return idle
+  const sec = clamp((end - from) / 1000, 0, IDLE.maxCreditSec)
+  const wanted = state.crafts + sec / rigIntervalSec(state.completions, recipe.tier ?? 1)
+  const args: SettleArgs = { idle, next, recipe, bank, wanted, sec }
+  return (recipe.consumes?.length ?? 0) > 0 ? settleArtisan(args) : settlePassive(args)
+}
+
+/** The state every settle starts from, plus whether the run is still alive. */
+function rigStart(
+  state: RigState,
+  now: number,
+): {
+  next: RigState
+  idle: RigSettle
+  runEndsAt: number
+} {
   // The invariant `extendRig` now maintains: a live run always ends within
   // `maxRunSec` of the current time. Reinforced here so a row written before the
   // cap existed (a run stacked to a day or more) is trimmed on its next settle.
   const runEndsAt = state.runEndsAt > 0 ? Math.min(state.runEndsAt, now + IDLE.maxRunSec * 1000) : 0
-  const running = runEndsAt > now
   const next: RigState = { ...state, runEndsAt, settledAt: now, remainder: { ...state.remainder } }
-  const idle: RigSettle = {
-    state: next,
-    produced: {},
-    consumed: {},
-    crafted: 0,
-    creditedSec: 0,
-    running,
-  }
-  if (runEndsAt <= 0 || now <= from) return idle
+  return { next, runEndsAt, idle: emptySettle(next, runEndsAt > now) }
+}
 
-  const end = Math.min(now, runEndsAt)
-  if (end <= from) return idle
-  const sec = clamp((end - from) / 1000, 0, IDLE.maxCreditSec)
+function emptySettle(state: RigState, running: boolean): RigSettle {
+  return { state, produced: {}, consumed: {}, crafted: 0, creditedSec: 0, running }
+}
 
-  const rate = 1 / rigIntervalSec(state.completions, recipe.tier ?? 1)
-  const wanted = state.crafts + rate * sec
+interface SettleArgs {
+  idle: RigSettle
+  next: RigState
+  recipe: RigRecipe
+  bank: BankView
+  wanted: number
+  sec: number
+}
 
+/** An artisan: only craft from stock already in the bank, then spend it. */
+function settleArtisan(a: SettleArgs): RigSettle {
+  const { idle, next, recipe, bank, wanted, sec } = a
   const consumes = recipe.consumes ?? []
-  let crafts: number
-  if (consumes.length > 0) {
-    // An artisan can only craft from stock already in the bank (clamped here, so
-    // no amount of offline time can manufacture a negative bank).
-    let allowed = Number.POSITIVE_INFINITY
-    for (const c of consumes) {
-      const have = bankGet(bank, c.item)
-      if (c.count > 0) allowed = Math.min(allowed, Math.floor(have / c.count))
-    }
-    const done = Math.max(0, Math.min(Math.floor(wanted), allowed))
-    crafts = Math.min(wanted - done, 0.999)
-    if (done > 0) {
-      for (const c of consumes) {
-        const n = done * c.count
-        bankAdd(bank, c.item, -n)
-        idle.consumed[c.item] = (idle.consumed[c.item] ?? 0) + n
-      }
-    }
-    if (done <= 0) {
-      return { ...idle, state: { ...next, crafts } }
-    }
-    idle.creditedSec = sec
-    idle.crafted = done
-    emitProduced(idle, recipe, done, bank, next)
-    next.crafts = crafts
-    return idle
-  }
+  // Clamped here, so no amount of offline time can manufacture a negative bank.
+  const allowed = stockLimit(bank, consumes)
+  const done = Math.max(0, Math.min(Math.floor(wanted), allowed))
+  next.crafts = Math.min(wanted - done, 0.999)
+  if (done <= 0) return idle
+  spendStock(idle, bank, consumes, done)
+  idle.creditedSec = sec
+  idle.crafted = done
+  emitProduced(idle, recipe, done, bank, next)
+  return idle
+}
 
+/** A gathering rig: nothing to consume, so every whole craft lands. */
+function settlePassive(a: SettleArgs): RigSettle {
+  const { idle, next, recipe, bank, wanted, sec } = a
   const done = Math.floor(wanted)
-  crafts = wanted - done
-  next.crafts = crafts
+  next.crafts = wanted - done
   if (done <= 0) return idle
   idle.creditedSec = sec
   idle.crafted = done
   emitProduced(idle, recipe, done, bank, next)
   return idle
+}
+
+/** How many crafts the bank's stock allows (unbounded when nothing is consumed). */
+function stockLimit(bank: BankView, consumes: Cost[]): number {
+  let allowed = Number.POSITIVE_INFINITY
+  for (const c of consumes) {
+    if (c.count > 0) allowed = Math.min(allowed, Math.floor(bankGet(bank, c.item) / c.count))
+  }
+  return allowed
+}
+
+function spendStock(idle: RigSettle, bank: BankView, consumes: Cost[], done: number): void {
+  for (const c of consumes) {
+    const n = done * c.count
+    bankAdd(bank, c.item, -n)
+    idle.consumed[c.item] = (idle.consumed[c.item] ?? 0) + n
+  }
 }
 
 /** Apply `done` crafts' worth of `produces` with yield+double folded to a rate. */
@@ -270,21 +293,28 @@ export function replayRig(
   bank: BankView = new Map(),
 ): RigSettle {
   let state = newRig()
-  const produced: Record<string, number> = {}
-  const consumed: Record<string, number> = {}
-  let crafted = 0
+  const totals: Totals = { produced: {}, consumed: {}, crafted: 0 }
   for (const at of [...completionTimes].sort((a, b) => a - b)) {
     const settled = settleRig(state, recipe, bank, at)
-    merge(produced, settled.produced)
-    merge(consumed, settled.consumed)
-    crafted += settled.crafted
+    fold(settled, totals)
     state = extendRig(settled.state, at)
   }
   const last = settleRig(state, recipe, bank, now)
-  merge(produced, last.produced)
-  merge(consumed, last.consumed)
-  crafted += last.crafted
-  return { ...last, produced, consumed, crafted }
+  fold(last, totals)
+  return { ...last, ...totals }
+}
+
+/** The running totals a replay accumulates across settles. */
+interface Totals {
+  produced: Record<string, number>
+  consumed: Record<string, number>
+  crafted: number
+}
+
+function fold(settled: RigSettle, totals: Totals): void {
+  merge(totals.produced, settled.produced)
+  merge(totals.consumed, settled.consumed)
+  totals.crafted += settled.crafted
 }
 
 function merge(into: Record<string, number>, from: Record<string, number>): void {

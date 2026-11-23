@@ -487,21 +487,21 @@ were already over twenty lines before the bar moved are listed in
 files holding 255 long functions when the bar moved).
 
 **Phase 14 — the function burn-down (in progress).**
-Work the `eslint.function-baseline.js` list to zero, worst first. Landed so far:
-the five remaining mega route modules (`skills`, `settings`, `chat`, `auth`,
-`push`) became folders of small handlers; the FSRS scheduler
-(`game/srs.ts:schedule`, 162 lines) split into `newCard`/`sameDay`/`lapse`/
-`reviewPass`/`graduate`/`stayStep`; the combat resolver
-(`services/combatResolve.ts`) and the player's combat maths
-(`services/combat.ts`) split into `runEncounter`/`strikeExchange`/`loadout`/
-`gearTotals`/`combatNumbers`; `services/srs.ts` (review + budget),
-`services/board.ts` (the action gate), `services/talents.ts`,
-`db/repo/encounters.ts` and the web `lib/api.ts` followed. That took the list
-from 127 files / 255 functions to **98 files / 220 functions**. The biggest left
-are the audio service (`createAudioService`, 112 lines), the deck builder
-(`fillDeck`, 66) and the exercise graders (`speakWord:gradeAudio`, 70). Most of
-the rest are repository row mappers (`toCard`, `upsertSrs`) that list every
-column inline. The list shrinks; it never grows, and new code is held to 20 from
+Work the `eslint.function-baseline.js` list to zero, worst first. The five mega
+route modules (`skills`, `settings`, `chat`, `auth`, `push`) are folders of small
+handlers. The FSRS scheduler (`game/srs.ts:schedule`, 162 lines) split into
+`newCard`/`sameDay`/`lapse`/`reviewPass`/`graduate`/`stayStep`; the combat
+resolver and the player's combat maths split the same way; the audio service's
+112-line `createAudioService` became a store plus free functions; the exercise
+grader `speakWord` and the deck builder (`createDeckForBuild`/`fillDeck`) split
+into planning and persistence steps; `services/{srs,board,talents,idle}`,
+`game/idle.ts:settleRig`, `db/repo/encounters.ts` and the web `lib/api.ts`
+followed. Tests got their own, larger ceiling (**60** lines: a case is
+arrange/act/assert, read as one unit) instead of the production 20, and the
+long ones were split or given `getJson`/`postJson` helpers. That took the list
+from 127 files / 255 functions to **68 files / 114 functions**. The biggest left
+are the web speech client, the deck growth planner and the remaining repository
+row mappers. The list shrinks; it never grows, and new code is held to 20 from
 day one.
 
 **Phase 15 — the web shells & route validation (open).**

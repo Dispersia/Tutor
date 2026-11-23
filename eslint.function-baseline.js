@@ -1,23 +1,18 @@
 /**
  * Burn-down baseline for the function-size budget (docs/REFACTOR_PLAN.md).
  *
- * The target is a small function — at most 20 lines, no exceptions in new code.
- * Every path here still holds one or more functions over that line count from
- * before the budget was lowered; the entry lifts only the function ceiling, so
- * the file still has to fit the 400-line budget. **Remove an entry the moment
- * its last long function is split** — this list only ever shrinks.
+ * The target is a small function — at most 20 lines in production code, 60 in
+ * tests (arrange/act/assert). Every path here still holds one or more functions
+ * over its ceiling from before the budget was lowered; the entry lifts only the
+ * function ceiling, so the file still has to fit the 400-line budget. **Remove
+ * an entry the moment its last long function is split** — it only ever shrinks.
  */
 export const longFunctions = [
   'apps/server/src/anki/parse.ts',
   'apps/server/src/anki/words.ts',
   'apps/server/src/anki/zip.ts',
-  'apps/server/src/app.test.ts',
   'apps/server/src/app.ts',
-  'apps/server/src/audio/audio.test.ts',
-  'apps/server/src/audio/service.ts',
   'apps/server/src/bootstrap.ts',
-  'apps/server/src/combatapi.test.ts',
-  'apps/server/src/db/db.test.ts',
   'apps/server/src/db/repo/cards.ts',
   'apps/server/src/db/repo/decks.ts',
   'apps/server/src/db/repo/gear.ts',
@@ -26,7 +21,6 @@ export const longFunctions = [
   'apps/server/src/db/repo/srs.ts',
   'apps/server/src/db/repo/talents.ts',
   'apps/server/src/db/repo/xp.ts',
-  'apps/server/src/deck/build.ts',
   'apps/server/src/deck/context.ts',
   'apps/server/src/deck/growth.ts',
   'apps/server/src/deck/instruction.ts',
@@ -34,49 +28,29 @@ export const longFunctions = [
   'apps/server/src/deck/kanjium.ts',
   'apps/server/src/deck/mandarin.ts',
   'apps/server/src/deck/pitch.ts',
-  'apps/server/src/deck/plan.test.ts',
   'apps/server/src/deck/plan.ts',
-  'apps/server/src/deck/reinforce.test.ts',
   'apps/server/src/deck/reinforce.ts',
-  'apps/server/src/deckapi.test.ts',
   'apps/server/src/exercises/defs/converse.ts',
   'apps/server/src/exercises/defs/introduce.ts',
   'apps/server/src/exercises/defs/sentenceBuild.ts',
-  'apps/server/src/exercises/defs/speakWord.ts',
   'apps/server/src/exercises/defs/translate.ts',
-  'apps/server/src/exercises/exercises.test.ts',
   'apps/server/src/frequency/source.ts',
-  'apps/server/src/game/bands.test.ts',
   'apps/server/src/game/bands.ts',
-  'apps/server/src/game/combatservice.test.ts',
   'apps/server/src/game/curriculum.ts',
-  'apps/server/src/game/gear.test.ts',
   'apps/server/src/game/gear.ts',
-  'apps/server/src/game/idle.test.ts',
-  'apps/server/src/game/idle.ts',
   'apps/server/src/game/modifiers.ts',
-  'apps/server/src/game/professions.test.ts',
-  'apps/server/src/game/professionservice.test.ts',
-  'apps/server/src/game/service.test.ts',
   'apps/server/src/game/skills/essences.ts',
-  'apps/server/src/game/srs.test.ts',
   'apps/server/src/game/study.ts',
   'apps/server/src/game/talents.ts',
-  'apps/server/src/llm/openrouter.test.ts',
   'apps/server/src/llm/openrouter.ts',
-  'apps/server/src/practice.test.ts',
-  'apps/server/src/pronunciation/assess.test.ts',
-  'apps/server/src/pronunciation/features.test.ts',
   'apps/server/src/pronunciation/features.ts',
   'apps/server/src/pronunciation/variants.ts',
   'apps/server/src/push/notify.ts',
-  'apps/server/src/push/push.test.ts',
   'apps/server/src/push/webpush.ts',
   'apps/server/src/routes/audio.ts',
   'apps/server/src/routes/models.ts',
   'apps/server/src/routes/speech.ts',
   'apps/server/src/seed/furigana.ts',
-  'apps/server/src/seed/seed.test.ts',
   'apps/server/src/seed/service.ts',
   'apps/server/src/seed/zhuyin.ts',
   'apps/server/src/services/bands.ts',
@@ -85,11 +59,7 @@ export const longFunctions = [
   'apps/server/src/services/gearSets.ts',
   'apps/server/src/services/idle.ts',
   'apps/server/src/services/items.ts',
-  'apps/server/src/skills.test.ts',
-  'apps/server/src/speech/supervisor.test.ts',
   'apps/server/src/speech/supervisor.ts',
-  'apps/server/src/srsapi.test.ts',
-  'apps/web/src/lib/audio.test.ts',
   'apps/web/src/lib/audio.ts',
   'apps/web/src/lib/chat.ts',
   'apps/web/src/lib/components/CardEditor.svelte',

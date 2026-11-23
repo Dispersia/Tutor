@@ -140,7 +140,9 @@ describe('settleRig', () => {
     two = extendRig(two, 2_000)
     expect(two.runEndsAt).toBe(2_000 + Math.round(rigRunSec(2) * 1000))
   })
+})
 
+describe('settleRig: stock and yield', () => {
   test('an artisan consumes stock and is clamped by the bank', () => {
     const forge = extendRig(newRig(), 0)
     // empty bank → starved, nothing made, nothing eaten

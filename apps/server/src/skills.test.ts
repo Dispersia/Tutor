@@ -115,100 +115,123 @@ test('GET /api/skills returns the profession board', async () => {
   sqlite.close()
 })
 
+/** A drill instance as the practice API returns it. */
+interface Instance {
+  exerciseId: string
+  cardId: string
+  data?: Record<string, unknown>
+}
+
+/** The rig readout a graded drill and the board both carry. */
+interface RigView {
+  completions: number
+  active: boolean
+  intervalSec: number
+  runSec: number
+  maxRunSec: number
+  runFullAtCompletions: number
+  runProgress: number
+  maxed: boolean
+}
+
+interface Graded {
+  result: { correct: boolean }
+  skill: { skillId: string; xp: number; gained: unknown[]; idle: RigView | null }
+  stats: { xp: number }
+}
+
+interface Board {
+  inventory: { itemId: string; count: number }[]
+  skills: { id: string; xp: number; actions: { id: string; idle: unknown }[] }[]
+}
+
+async function getJson<T>(app: App, cookie: string, path: string): Promise<T> {
+  return (await (await app.request(path, auth(cookie))).json()) as T
+}
+
+async function postJson<T>(app: App, cookie: string, path: string, body: unknown): Promise<T> {
+  return (await (await app.request(path, auth(cookie, json(body)))).json()) as T
+}
+
+/** The first exposure is a "teach" step, not a graded drill: clear it. */
+async function clearTeachStep(app: App, cookie: string, instance: Instance, actionId: string) {
+  if (instance.exerciseId !== 'introduce') return
+  await postJson(app, cookie, '/api/practice/grade', {
+    exerciseId: 'introduce',
+    cardId: instance.cardId,
+    answer: 'ok',
+    actionId,
+  })
+}
+
+async function gradeDrill(
+  app: App,
+  cookie: string,
+  instance: Instance,
+  answer: string | string[],
+  actionId: string,
+): Promise<Graded> {
+  return postJson<Graded>(app, cookie, '/api/practice/grade', {
+    exerciseId: instance.exerciseId,
+    cardId: instance.cardId,
+    answer,
+    actionId,
+  })
+}
+
+function expectTrainingAwarded(g: Graded) {
+  expect(g.result.correct).toBe(true)
+  expect(g.skill.skillId).toBe('mining')
+  expect(g.skill.xp).toBeGreaterThan(0)
+  expect(g.stats.xp).toBeGreaterThan(0)
+  // the drill powered a rig (docs/DESIGN.md §13.5.1): one completion, a 10-minute run
+  expect(g.skill.idle?.completions).toBe(1)
+  expect(g.skill.idle?.active).toBe(true)
+  expect(g.skill.idle?.runSec).toBe(600)
+  expect(g.skill.idle?.intervalSec).toBeGreaterThan(2)
+  // the client can show how far the rig is toward the 3 h cap, and when it is maxed
+  expect(g.skill.idle?.maxRunSec).toBe(3 * 60 * 60)
+  expect(g.skill.idle?.runFullAtCompletions).toBe(50)
+  expect(g.skill.idle?.runProgress).toBeCloseTo(1 / 50, 6)
+  expect(g.skill.idle?.maxed).toBe(false)
+}
+
+function expectBoardCarriesRig(board: Board) {
+  expect(board.inventory.find((i) => i.itemId === 'copper_ore')?.count).toBeGreaterThanOrEqual(1)
+  expect(board.skills.find((s) => s.id === 'mining')?.xp).toBeGreaterThan(0)
+  // the board carries every action's rig, so the client can tick it locally
+  const mine = board.skills
+    .find((s) => s.id === 'mining')!
+    .actions.find((a) => a.id === 'mine-copper')
+  expect(mine?.idle).toBeTruthy()
+}
+
 test('training an action awards skill XP and materials', async () => {
   const { app, db, sqlite } = makeApp()
   const cookie = await signup(app, db)
 
-  // The first exposure to a card is a "teach" step, not a graded drill: clear it
-  // so the next fetch hands back the action's exercise.
-  const first = (await (
-    await app.request('/api/practice/next', auth(cookie, json({ actionId: 'mine-copper' })))
-  ).json()) as { instance: { exerciseId: string; cardId: string } }
-  if (first.instance.exerciseId === 'introduce') {
-    await app.request(
-      '/api/practice/grade',
-      auth(
-        cookie,
-        json({
-          exerciseId: 'introduce',
-          cardId: first.instance.cardId,
-          answer: 'ok',
-          actionId: 'mine-copper',
-        }),
-      ),
-    )
-  }
+  const first = await postJson<{ instance: Instance }>(app, cookie, '/api/practice/next', {
+    actionId: 'mine-copper',
+  })
+  await clearTeachStep(app, cookie, first.instance, 'mine-copper')
 
-  const next = (await (
-    await app.request('/api/practice/next', auth(cookie, json({ actionId: 'mine-copper' })))
-  ).json()) as {
-    instance: { exerciseId: string; cardId: string; data?: Record<string, unknown> }
-    action: { skillId: string }
-  }
+  const next = await postJson<{ instance: Instance; action: { skillId: string } }>(
+    app,
+    cookie,
+    '/api/practice/next',
+    { actionId: 'mine-copper' },
+  )
   expect(next.action.skillId).toBe('mining')
-
-  const cards = await cardIndex(app, cookie)
-  const card = cards.get(next.instance.cardId)!
-  const answer = correctAnswer(next.instance, card)
-
-  const graded = (await (
-    await app.request(
-      '/api/practice/grade',
-      auth(
-        cookie,
-        json({
-          exerciseId: next.instance.exerciseId,
-          cardId: next.instance.cardId,
-          answer,
-          actionId: 'mine-copper',
-        }),
-      ),
-    )
-  ).json()) as {
-    result: { correct: boolean }
-    skill: {
-      skillId: string
-      xp: number
-      gained: unknown[]
-      idle: {
-        completions: number
-        active: boolean
-        intervalSec: number
-        runSec: number
-        maxRunSec: number
-        runFullAtCompletions: number
-        runProgress: number
-        maxed: boolean
-      } | null
-    }
-    stats: { xp: number }
-  }
-  expect(graded.result.correct).toBe(true)
-  expect(graded.skill.skillId).toBe('mining')
-  expect(graded.skill.xp).toBeGreaterThan(0)
-  expect(graded.stats.xp).toBeGreaterThan(0)
-  // the drill powered a rig (docs/DESIGN.md §13.5.1): one completion, a 10-minute run
-  expect(graded.skill.idle?.completions).toBe(1)
-  expect(graded.skill.idle?.active).toBe(true)
-  expect(graded.skill.idle?.runSec).toBe(600)
-  expect(graded.skill.idle?.intervalSec).toBeGreaterThan(2)
-  // the client can show how far the rig is toward the 3 h cap, and when it is maxed
-  expect(graded.skill.idle?.maxRunSec).toBe(3 * 60 * 60)
-  expect(graded.skill.idle?.runFullAtCompletions).toBe(50)
-  expect(graded.skill.idle?.runProgress).toBeCloseTo(1 / 50, 6)
-  expect(graded.skill.idle?.maxed).toBe(false)
-
-  const skills = (await (await app.request('/api/skills', auth(cookie))).json()) as {
-    inventory: { itemId: string; count: number }[]
-    skills: { id: string; xp: number; actions: { id: string; idle: unknown }[] }[]
-  }
-  expect(skills.inventory.find((i) => i.itemId === 'copper_ore')?.count).toBeGreaterThanOrEqual(1)
-  expect(skills.skills.find((s) => s.id === 'mining')?.xp).toBeGreaterThan(0)
-  // the board carries every action's rig, so the client can tick it locally
-  const mine = skills.skills
-    .find((s) => s.id === 'mining')!
-    .actions.find((a) => a.id === 'mine-copper')
-  expect(mine?.idle).toBeTruthy()
+  const card = (await cardIndex(app, cookie)).get(next.instance.cardId)!
+  const graded = await gradeDrill(
+    app,
+    cookie,
+    next.instance,
+    correctAnswer(next.instance, card),
+    'mine-copper',
+  )
+  expectTrainingAwarded(graded)
+  expectBoardCarriesRig(await getJson<Board>(app, cookie, '/api/skills'))
   sqlite.close()
 })
 

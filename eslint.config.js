@@ -140,11 +140,15 @@ export default tseslint.config(
     rules: { 'max-lines': 'off', 'max-lines-per-function': 'off', 'max-params': 'off' },
   },
 
-  // Tests may be long, but their functions still obey the ceiling.
+  // Tests are arrange/act/assert: long, but their bodies still obey a ceiling
+  // (a larger one than production code — a case reads as one unit).
   {
     files: ['**/*.test.ts', '**/*.test.js'],
     languageOptions: { globals: bunTest },
-    rules: { 'max-lines': 'off' },
+    rules: {
+      'max-lines': 'off',
+      'max-lines-per-function': ['error', { max: 60, skipBlankLines: true, skipComments: true }],
+    },
   },
 
   ...svelte.configs['flat/recommended'],

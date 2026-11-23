@@ -40,25 +40,29 @@ export function gatewayTts(sup: SpeechSupervisor): TtsFn {
     await sup.ensure()
     sup.begin()
     try {
-      const res = await fetch(`${sup.url}/v1/tts`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          text: req.text,
-          language: req.language,
-          mode: req.mode ?? 'design',
-          instruct: req.instruct,
-          normalize: req.normalize ?? false,
-        }),
-        // A gateway that dies mid-request must not stall the queue forever.
-        signal: AbortSignal.timeout(120_000),
-      })
-      if (!res.ok) throw new Error(`tts -> ${res.status}: ${await res.text().catch(() => '')}`)
-      return new Uint8Array(await res.arrayBuffer())
+      return await postTts(sup.url, req)
     } finally {
       sup.end()
     }
   }
+}
+
+async function postTts(url: string, req: TtsRequest): Promise<Uint8Array> {
+  const res = await fetch(`${url}/v1/tts`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      text: req.text,
+      language: req.language,
+      mode: req.mode ?? 'design',
+      instruct: req.instruct,
+      normalize: req.normalize ?? false,
+    }),
+    // A gateway that dies mid-request must not stall the queue forever.
+    signal: AbortSignal.timeout(120_000),
+  })
+  if (!res.ok) throw new Error(`tts -> ${res.status}: ${await res.text().catch(() => '')}`)
+  return new Uint8Array(await res.arrayBuffer())
 }
 
 /** One text to record, plus the language the TTS model should assume. */
@@ -113,127 +117,161 @@ export interface AudioService {
   status(): AudioStatus
 }
 
-export function createAudioService(opts: {
+/** The in-process recording queue's mutable state. */
+interface QueueState {
+  pending: AudioJob[]
+  queued: Set<string>
+  running: boolean
+  current: string | null
+  recorded: number
+  failed: number
+}
+
+/** Everything the recording helpers read, threaded as a parameter. */
+interface AudioStore {
   db: Db
   dataDir: string
   tts: TtsFn
-}): AudioService {
-  const { db, dataDir, tts } = opts
-  const pending: AudioJob[] = []
-  const queued = new Set<string>()
-  let running = false
-  let current: string | null = null
-  let recorded = 0
-  let failed = 0
+  q: QueueState
+}
 
-  const keyOf = (j: AudioJob) => `${j.language}\u0000${j.text}`
-
-  function complete(text: string): boolean {
-    return CARD_VOICES.every((v) => hasClip(db, dataDir, clipHash(text, v.id)))
+export function createAudioService(opts: { db: Db; dataDir: string; tts: TtsFn }): AudioService {
+  const store: AudioStore = {
+    db: opts.db,
+    dataDir: opts.dataDir,
+    tts: opts.tts,
+    q: emptyQueue(),
   }
+  return service(store)
+}
 
-  function clip(text: string, voiceId: string): Uint8Array | undefined {
-    return readClip(db, dataDir, clipHash(text, voiceId))
-  }
+function emptyQueue(): QueueState {
+  return { pending: [], queued: new Set(), running: false, current: null, recorded: 0, failed: 0 }
+}
 
-  async function ensureVoice(
-    text: string,
-    language: string,
-    userId: string,
-    voiceId: string,
-  ): Promise<void> {
-    const voice = CARD_VOICES.find((v) => v.id === voiceId)
-    if (!voice) throw new Error(`unknown voice ${voiceId}`)
-    const hash = clipHash(text, voice.id)
-    if (hasClip(db, dataDir, hash)) return
-    const bytes = await tts({
-      text,
-      language,
-      instruct: voice.instruct,
-      mode: 'design',
-      normalize: true,
-    })
-    if (bytes.length === 0) throw new Error('tts produced no audio')
-    writeClip(db, dataDir, userId, hash, bytes)
-  }
-
-  async function ensure(text: string, language: string, userId: string): Promise<void> {
-    for (const v of CARD_VOICES) await ensureVoice(text, language, userId, v.id)
-  }
-
-  function enqueue(jobs: AudioJob[]): number {
-    let added = 0
-    for (const j of jobs) {
-      if (!j.text.trim()) continue
-      const key = keyOf(j)
-      if (queued.has(key)) continue
-      if (complete(j.text)) continue
-      queued.add(key)
-      pending.push(j)
-      added++
-    }
-    void pump()
-    return added
-  }
-
-  function enqueueDeck(userId: string, deckId: string): void {
-    const cards = listCards(db, userId, deckId)
-    enqueue(cards.map((c: Card) => ({ userId, text: c.back, language: c.targetLang })))
-  }
-
-  function enqueueUser(userId: string): number {
-    const cards = listCards(db, userId)
-    return enqueue(cards.map((c: Card) => ({ userId, text: c.back, language: c.targetLang })))
-  }
-
-  function cancel(): number {
-    const n = pending.length
-    pending.length = 0
-    queued.clear()
-    return n
-  }
-
-  async function pump(): Promise<void> {
-    if (running) return
-    running = true
-    try {
-      while (pending.length > 0) {
-        const job = pending.shift()!
-        current = job.text
-        try {
-          await ensure(job.text, job.language, job.userId)
-          recorded++
-        } catch (err) {
-          failed++
-          console.error('[audio] recording failed:', (err as Error).message)
-        } finally {
-          queued.delete(keyOf(job))
-          current = null
-        }
-      }
-    } finally {
-      running = false
-    }
-  }
-
+/** The public surface, closing over the store the helpers read. */
+function service(store: AudioStore): AudioService {
   return {
     voices: CARD_VOICES,
-    complete,
-    clip,
-    ensureVoice,
-    ensure,
-    enqueue,
-    enqueueDeck,
-    enqueueUser,
-    cancel,
-    status: () => ({
-      pending: pending.length,
-      running,
-      current,
-      recorded,
-      failed,
-      voices: CARD_VOICES.length,
-    }),
+    complete: (text) => complete(store, text),
+    clip: (text, voiceId) => readClip(store.db, store.dataDir, clipHash(text, voiceId)),
+    ensureVoice: (text, language, userId, voiceId) =>
+      ensureVoice(store, { text, language, userId, voiceId }),
+    ensure: (text, language, userId) => ensureText(store, text, language, userId),
+    enqueue: (jobs) => enqueue(store, jobs),
+    enqueueDeck: (userId, deckId) => enqueueDeck(store, userId, deckId),
+    enqueueUser: (userId) => enqueueUser(store, userId),
+    cancel: () => cancel(store),
+    status: () => status(store),
+  }
+}
+
+const keyOf = (j: AudioJob): string => `${j.language}\u0000${j.text}`
+
+function complete(s: AudioStore, text: string): boolean {
+  return CARD_VOICES.every((v) => hasClip(s.db, s.dataDir, clipHash(text, v.id)))
+}
+
+interface VoiceJob {
+  text: string
+  language: string
+  userId: string
+  voiceId: string
+}
+
+async function ensureVoice(s: AudioStore, job: VoiceJob): Promise<void> {
+  const voice = CARD_VOICES.find((v) => v.id === job.voiceId)
+  if (!voice) throw new Error(`unknown voice ${job.voiceId}`)
+  const hash = clipHash(job.text, voice.id)
+  if (hasClip(s.db, s.dataDir, hash)) return
+  const bytes = await s.tts({
+    text: job.text,
+    language: job.language,
+    instruct: voice.instruct,
+    mode: 'design',
+    normalize: true,
+  })
+  if (bytes.length === 0) throw new Error('tts produced no audio')
+  writeClip(s.db, s.dataDir, job.userId, hash, bytes)
+}
+
+async function ensureText(
+  s: AudioStore,
+  text: string,
+  language: string,
+  userId: string,
+): Promise<void> {
+  for (const v of CARD_VOICES) await ensureVoice(s, { text, language, userId, voiceId: v.id })
+}
+
+function enqueue(s: AudioStore, jobs: AudioJob[]): number {
+  let added = 0
+  for (const j of jobs) {
+    if (!j.text.trim()) continue
+    const key = keyOf(j)
+    if (s.q.queued.has(key) || complete(s, j.text)) continue
+    s.q.queued.add(key)
+    s.q.pending.push(j)
+    added++
+  }
+  void pump(s)
+  return added
+}
+
+function enqueueCards(s: AudioStore, cards: Card[], userId: string): number {
+  return enqueue(
+    s,
+    cards.map((c) => ({ userId, text: c.back, language: c.targetLang })),
+  )
+}
+
+function enqueueDeck(s: AudioStore, userId: string, deckId: string): void {
+  enqueueCards(s, listCards(s.db, userId, deckId), userId)
+}
+
+function enqueueUser(s: AudioStore, userId: string): number {
+  return enqueueCards(s, listCards(s.db, userId), userId)
+}
+
+function cancel(s: AudioStore): number {
+  const n = s.q.pending.length
+  s.q.pending.length = 0
+  s.q.queued.clear()
+  return n
+}
+
+function status(s: AudioStore): AudioStatus {
+  return {
+    pending: s.q.pending.length,
+    running: s.q.running,
+    current: s.q.current,
+    recorded: s.q.recorded,
+    failed: s.q.failed,
+    voices: CARD_VOICES.length,
+  }
+}
+
+async function pump(s: AudioStore): Promise<void> {
+  if (s.q.running) return
+  s.q.running = true
+  try {
+    while (s.q.pending.length > 0) await runJob(s, s.q.pending.shift()!)
+  } finally {
+    s.q.running = false
+  }
+}
+
+async function runJob(s: AudioStore, job: AudioJob): Promise<void> {
+  s.q.current = job.text
+  try {
+    await ensureText(s, job.text, job.language, job.userId)
+    s.q.recorded++
+  } catch (err) {
+    s.q.failed++
+    console.error('[audio] recording failed:', (err as Error).message)
+  } finally {
+    s.q.queued.delete(keyOf(job))
+    s.q.current = null
   }
 }
 

@@ -51,13 +51,41 @@ const auth = (cookie: string, extra: RequestInit = {}): RequestInit => ({
   headers: { ...(extra.headers ?? {}), cookie },
 })
 
-async function signup(app: App, db: Db, username = 'alice') {
+async function getJson<T>(app: App, cookie: string, path: string): Promise<T> {
+  return (await (await app.request(path, auth(cookie))).json()) as T
+}
+
+async function postJson<T>(app: App, cookie: string, path: string, body: unknown): Promise<T> {
+  return (await (await app.request(path, auth(cookie, json(body)))).json()) as T
+}
+
+async function putJson<T>(app: App, cookie: string, path: string, body: unknown): Promise<T> {
+  return (await (
+    await app.request(path, auth(cookie, { ...json(body), method: 'PUT' }))
+  ).json()) as T
+}
+
+/** Register a member and seed their curated decks. */
+async function signupUser(app: App, db: Db, username = 'alice') {
   const res = await app.request('/api/auth/register', json({ username, password: 'password123' }))
   const cookie = res.headers.getSetCookie()[0]!.split(';')[0]!
   // Decks are no longer pre-seeded; tests drill the curated fixture decks.
   const { user } = (await res.json()) as { user: { id: string } }
   seedStarterDecks(db, user.id)
-  return cookie
+  return { cookie, user }
+}
+
+async function signup(app: App, db: Db, username = 'alice') {
+  return (await signupUser(app, db, username)).cookie
+}
+
+interface Step {
+  instance: { exerciseId: string; cardId: string }
+}
+
+/** The next drill the server hands back, as a typed step. */
+function nextStep(app: App, cookie: string, body: unknown): Promise<Step> {
+  return postJson<Step>(app, cookie, '/api/practice/next', body)
 }
 
 test('GET /api/curriculum returns the frequency decks split into one-word steps', async () => {
@@ -229,71 +257,62 @@ test('sentence_build builds and grades an n+1 sentence once words are known', as
   const { app, db, sqlite } = makeApp()
   const cookie = await signup(app, db)
   // This test wants unlimited new cards so the budget never blocks the lesson.
-  await app.request(
-    '/api/settings',
-    auth(cookie, { ...json({ study: { newPerDay: 0, maxReviewsPerDay: 0 } }), method: 'PUT' }),
-  )
-  const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
-    decks: { id: string; level: string }[]
-  }
+  await putJson(app, cookie, '/api/settings', { study: { newPerDay: 0, maxReviewsPerDay: 0 } })
+  const decks = await getJson<{ decks: { id: string; level: string }[] }>(app, cookie, '/api/decks')
   const freqDeck = decks.decks.find((d) => d.level === 'zhfreq')!
-  const cards = (await (
-    await app.request(`/api/decks/${freqDeck.id}/cards`, auth(cookie))
-  ).json()) as { cards: { id: string; back: string }[] }
-
+  const cards = await getJson<{ cards: { id: string; back: string }[] }>(
+    app,
+    cookie,
+    `/api/decks/${freqDeck.id}/cards`,
+  )
   // learn the first 35 words: grade each until it graduates through its steps
-  for (const card of cards.cards.slice(0, 35)) {
-    for (let pass = 0; pass < 5; pass++) {
-      const res = (await (
-        await app.request(
-          '/api/practice/grade',
-          auth(
-            cookie,
-            json({
-              exerciseId: 'translate.front_to_back',
-              cardId: card.id,
-              answer: card.back,
-            }),
-          ),
-        )
-      ).json()) as { result: { correct: boolean } }
-      expect(res.result.correct).toBe(true)
-    }
-  }
+  await learnWords(app, cookie, cards.cards, 35)
 
   // the step for 喝 should now be able to build "我 喝 茶"
   const idx = cards.cards.findIndex((c) => c.back === '喝')
   expect(idx).toBeGreaterThanOrEqual(0)
   const card = cards.cards[idx]!
-  const built = (await (
-    await app.request(
-      '/api/practice/next',
-      auth(cookie, json({ cardId: card.id, exerciseId: 'sentence_build' })),
-    )
-  ).json()) as {
+  const built = await postJson<{
     instance: { exerciseId: string; cardId: string; data: { tokens: string[]; bank: string[] } }
-  }
+  }>(app, cookie, '/api/practice/next', { cardId: card.id, exerciseId: 'sentence_build' })
   expect(built.instance.exerciseId).toBe('sentence_build')
   expect(built.instance.data.tokens).toContain('喝')
   expect(built.instance.data.bank.length).toBeGreaterThanOrEqual(built.instance.data.tokens.length)
 
-  const graded = (await (
-    await app.request(
-      '/api/practice/grade',
-      auth(
-        cookie,
-        json({
-          exerciseId: 'sentence_build',
-          cardId: card.id,
-          answer: built.instance.data.tokens.join(''),
-        }),
-      ),
-    )
-  ).json()) as { result: { correct: boolean; score: number } }
+  const graded = await postJson<{ result: { correct: boolean; score: number } }>(
+    app,
+    cookie,
+    '/api/practice/grade',
+    {
+      exerciseId: 'sentence_build',
+      cardId: card.id,
+      answer: built.instance.data.tokens.join(''),
+    },
+  )
   expect(graded.result.correct).toBe(true)
   expect(graded.result.score).toBe(100)
   sqlite.close()
 })
+
+/** Grade a card correct through its learning steps, `passes` times each. */
+async function learnWords(
+  app: App,
+  cookie: string,
+  cards: { id: string; back: string }[],
+  count: number,
+) {
+  for (const card of cards.slice(0, count)) {
+    for (let pass = 0; pass < 5; pass++) {
+      const res = await postJson<{ result: { correct: boolean } }>(
+        app,
+        cookie,
+        '/api/practice/grade',
+        { exerciseId: 'translate.front_to_back', cardId: card.id, answer: card.back },
+      )
+      expect(res.result.correct).toBe(true)
+    }
+  }
+}
 
 test('a new card is taught before it is quizzed', async () => {
   const { app, db, sqlite } = makeApp()
@@ -466,21 +485,15 @@ test('a wrong answer schedules the card to come back soon', async () => {
 
 test('a sitting opens with a few new words before the due backlog', async () => {
   const { app, db, sqlite } = makeApp()
-  const res = await app.request(
-    '/api/auth/register',
-    json({ username: 'warmup', password: 'password123' }),
-  )
-  const cookie = res.headers.getSetCookie()[0]!.split(';')[0]!
-  const { user } = (await res.json()) as { user: { id: string } }
-  seedStarterDecks(db, user.id)
+  const { cookie, user } = await signupUser(app, db, 'warmup')
 
-  const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
-    decks: { id: string; level: string }[]
-  }
+  const decks = await getJson<{ decks: { id: string; level: string }[] }>(app, cookie, '/api/decks')
   const deckId = decks.decks.find((d) => d.level === 'zhfreq')!.id
-  const cards = (await (await app.request(`/api/decks/${deckId}/cards`, auth(cookie))).json()) as {
-    cards: { id: string; back: string }[]
-  }
+  const cards = await getJson<{ cards: { id: string; back: string }[] }>(
+    app,
+    cookie,
+    `/api/decks/${deckId}/cards`,
+  )
   // Put one word deep in the deck into review, due now: it is the card the
   // due-first queue would serve immediately.
   const due = cards.cards.at(-1)!
@@ -501,36 +514,29 @@ test('a sitting opens with a few new words before the due backlog', async () => 
   // The sitting starts with three new words in a row, not the overdue review.
   const opened: string[] = []
   for (let i = 0; i < 3; i++) {
-    const step = (await (
-      await app.request('/api/practice/next', auth(cookie, json({ deckId })))
-    ).json()) as { instance: { exerciseId: string; cardId: string } }
+    const step = await nextStep(app, cookie, { deckId })
     expect(step.instance.exerciseId).toBe('introduce')
     expect(step.instance.cardId).not.toBe(due.id)
     opened.push(step.instance.cardId)
-    await app.request(
-      '/api/practice/grade',
-      auth(cookie, json({ exerciseId: 'introduce', cardId: step.instance.cardId, answer: 'ok' })),
-    )
+    await postJson(app, cookie, '/api/practice/grade', {
+      exerciseId: 'introduce',
+      cardId: step.instance.cardId,
+      answer: 'ok',
+    })
     // the same word comes back as its first graded drill (this is what gives it
     // an SRS state; the teach step alone does not)
-    const drill = (await (
-      await app.request('/api/practice/next', auth(cookie, json({ deckId })))
-    ).json()) as { instance: { exerciseId: string; cardId: string } }
+    const drill = await nextStep(app, cookie, { deckId })
     expect(drill.instance.cardId).toBe(step.instance.cardId)
-    await app.request(
-      '/api/practice/grade',
-      auth(
-        cookie,
-        json({ exerciseId: drill.instance.exerciseId, cardId: drill.instance.cardId, answer: '~' }),
-      ),
-    )
+    await postJson(app, cookie, '/api/practice/grade', {
+      exerciseId: drill.instance.exerciseId,
+      cardId: drill.instance.cardId,
+      answer: '~',
+    })
   }
   expect(new Set(opened).size).toBe(3)
 
   // Once the sitting has had its new words, the due review comes back first.
-  const after = (await (
-    await app.request('/api/practice/next', auth(cookie, json({ deckId })))
-  ).json()) as { instance: { exerciseId: string; cardId: string } }
+  const after = await nextStep(app, cookie, { deckId })
   expect(after.instance.cardId).toBe(due.id)
   expect(after.instance.exerciseId).not.toBe('introduce')
   sqlite.close()
