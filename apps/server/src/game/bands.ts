@@ -101,18 +101,6 @@ export interface BandDef {
   after?: { band: BandId; level: number }
 }
 
-function band(
-  line: BandLine,
-  tier: number,
-  id: BandId,
-  name: string,
-  icon: string,
-  stat: BandStat,
-  after?: BandDef['after'],
-): BandDef {
-  return bandDef({ line, tier, id, name, icon, stat, after })
-}
-
 interface BandSpec {
   line: BandLine
   tier: number
@@ -142,26 +130,114 @@ function bandDef(spec: BandSpec): BandDef {
 
 export const BANDS: BandDef[] = [
   // plate — Smithing
-  band('plate', 1, 'bronze', 'Bronze', '🟫', 'crit'),
-  band('plate', 2, 'iron', 'Iron', '⬜', 'lifesteal', { band: 'bronze', level: 40 }),
-  band('plate', 3, 'steel', 'Steel', '🔩', 'haste', { band: 'iron', level: 40 }),
-  band('plate', 4, 'mythril', 'Mythril', '🔹', 'mastery', { band: 'steel', level: 40 }),
-  band('plate', 5, 'adamant', 'Adamant', '🔷', 'stamina', { band: 'mythril', level: 40 }),
+  bandDef({ line: 'plate', tier: 1, id: 'bronze', name: 'Bronze', icon: '🟫', stat: 'crit' }),
+  bandDef({
+    line: 'plate',
+    tier: 2,
+    id: 'iron',
+    name: 'Iron',
+    icon: '⬜',
+    stat: 'lifesteal',
+    after: { band: 'bronze', level: 40 },
+  }),
+  bandDef({
+    line: 'plate',
+    tier: 3,
+    id: 'steel',
+    name: 'Steel',
+    icon: '🔩',
+    stat: 'haste',
+    after: { band: 'iron', level: 40 },
+  }),
+  bandDef({
+    line: 'plate',
+    tier: 4,
+    id: 'mythril',
+    name: 'Mythril',
+    icon: '🔹',
+    stat: 'mastery',
+    after: { band: 'steel', level: 40 },
+  }),
+  bandDef({
+    line: 'plate',
+    tier: 5,
+    id: 'adamant',
+    name: 'Adamant',
+    icon: '🔷',
+    stat: 'stamina',
+    after: { band: 'mythril', level: 40 },
+  }),
   // leather — Leatherworking
-  band('leather', 1, 'leather', 'Leather', '🟤', 'crit'),
-  band('leather', 2, 'hardened', 'Hardened', '🟫', 'lifesteal', { band: 'leather', level: 40 }),
+  bandDef({ line: 'leather', tier: 1, id: 'leather', name: 'Leather', icon: '🟤', stat: 'crit' }),
+  bandDef({
+    line: 'leather',
+    tier: 2,
+    id: 'hardened',
+    name: 'Hardened',
+    icon: '🟫',
+    stat: 'lifesteal',
+    after: { band: 'leather', level: 40 },
+  }),
   // cloth — Tailoring
-  band('cloth', 1, 'cloth', 'Cloth', '🧵', 'haste'),
-  band('cloth', 2, 'silk', 'Silk', '🕸️', 'mastery', { band: 'cloth', level: 40 }),
-  band('cloth', 3, 'mystic', 'Mystic', '🔮', 'stamina', { band: 'silk', level: 40 }),
+  bandDef({ line: 'cloth', tier: 1, id: 'cloth', name: 'Cloth', icon: '🧵', stat: 'haste' }),
+  bandDef({
+    line: 'cloth',
+    tier: 2,
+    id: 'silk',
+    name: 'Silk',
+    icon: '🕸️',
+    stat: 'mastery',
+    after: { band: 'cloth', level: 40 },
+  }),
+  bandDef({
+    line: 'cloth',
+    tier: 3,
+    id: 'mystic',
+    name: 'Mystic',
+    icon: '🔮',
+    stat: 'stamina',
+    after: { band: 'silk', level: 40 },
+  }),
   // wood — Fletching
-  band('wood', 1, 'oak', 'Oak', '🪵', 'crit'),
-  band('wood', 2, 'willow', 'Willow', '🌿', 'haste', { band: 'oak', level: 40 }),
-  band('wood', 3, 'yew', 'Yew', '🎋', 'mastery', { band: 'willow', level: 40 }),
+  bandDef({ line: 'wood', tier: 1, id: 'oak', name: 'Oak', icon: '🪵', stat: 'crit' }),
+  bandDef({
+    line: 'wood',
+    tier: 2,
+    id: 'willow',
+    name: 'Willow',
+    icon: '🌿',
+    stat: 'haste',
+    after: { band: 'oak', level: 40 },
+  }),
+  bandDef({
+    line: 'wood',
+    tier: 3,
+    id: 'yew',
+    name: 'Yew',
+    icon: '🎋',
+    stat: 'mastery',
+    after: { band: 'willow', level: 40 },
+  }),
   // jewellery — Crafting + Enchanting
-  band('jewelry', 1, 'copper', 'Copper', '🟠', 'stamina'),
-  band('jewelry', 2, 'sapphire', 'Sapphire', '🔷', 'crit', { band: 'copper', level: 40 }),
-  band('jewelry', 3, 'arcane', 'Arcane', '💠', 'lifesteal', { band: 'sapphire', level: 40 }),
+  bandDef({ line: 'jewelry', tier: 1, id: 'copper', name: 'Copper', icon: '🟠', stat: 'stamina' }),
+  bandDef({
+    line: 'jewelry',
+    tier: 2,
+    id: 'sapphire',
+    name: 'Sapphire',
+    icon: '🔷',
+    stat: 'crit',
+    after: { band: 'copper', level: 40 },
+  }),
+  bandDef({
+    line: 'jewelry',
+    tier: 3,
+    id: 'arcane',
+    name: 'Arcane',
+    icon: '💠',
+    stat: 'lifesteal',
+    after: { band: 'sapphire', level: 40 },
+  }),
 ]
 
 export const BAND_BY_ID = new Map<BandId, BandDef>(BANDS.map((b) => [b.id, b]))

@@ -147,17 +147,15 @@ export function equipItem(
   bus: EventBus,
   userId: string,
   itemId: string,
-  instanceId?: string,
-  targetSlot?: string,
-  levels?: Map<string, number>,
+  opts: { instanceId?: string; targetSlot?: string; levels?: Map<string, number> } = {},
 ): { ok: boolean; error?: string; instanceId?: string; missing?: GearRequirementView[] } {
   const item = ITEM_BY_ID.get(itemId)
   if (!item?.slot) return { ok: false, error: 'not equippable' }
   // RuneScape-style gate: the piece's stat requirements must be met first.
-  const gate = meetsRequirements(item, (skill) => skillLevelOf(db, userId, skill, levels))
+  const gate = meetsRequirements(item, (skill) => skillLevelOf(db, userId, skill, opts.levels))
   if (!gate.ok) return gateError(gate.missing)
-  const slot = resolveSlot(item.slot, targetSlot)
-  const resolved = resolveInstance(db, userId, item, instanceId)
+  const slot = resolveSlot(item.slot, opts.targetSlot)
+  const resolved = resolveInstance(db, userId, item, opts.instanceId)
   if ('error' in resolved) return { ok: false, error: resolved.error }
   setEquipment(db, userId, slot, itemId, resolved.instance?.id ?? null)
   bus.emit('item.equipped', { userId, itemId, slot })
@@ -313,14 +311,13 @@ export function applyEnchant(
   bus: EventBus,
   userId: string,
   instanceId: string,
-  enchantId: string,
-  levels?: Map<string, number>,
+  opts: { enchantId: string; levels?: Map<string, number> },
 ): { ok: boolean; error?: string; enchantingLevel?: number } {
-  const def = ENCHANT_BY_ID.get(enchantId)
+  const def = ENCHANT_BY_ID.get(opts.enchantId)
   if (!def) return { ok: false, error: 'unknown enchant' }
   const instance = getGearInstance(db, userId, instanceId)
   if (!instance) return { ok: false, error: 'not found' }
-  const invalid = enchantGuard(db, userId, def, ITEM_BY_ID.get(instance.itemId), levels)
+  const invalid = enchantGuard(db, userId, def, ITEM_BY_ID.get(instance.itemId), opts.levels)
   if (invalid) return invalid
   consumeItems(db, bus, userId, def.reagents)
   setGearInstanceEnchant(db, userId, instanceId, JSON.stringify([def.id]))

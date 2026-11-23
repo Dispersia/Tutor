@@ -64,7 +64,7 @@ test('a craft creates a gear instance and equipping keeps the stack count', () =
   const { db, sqlite, user, bus } = setup()
   addItems(db, user.id, 'bronze_bar', 20)
 
-  const result = completeAction(db, bus, user.id, 'forge-bronze-helm')
+  const result = completeAction(db, bus, user.id, { actionId: 'forge-bronze-helm' })
   expect(result.gained).toEqual([{ item: 'bronze_helm', count: 1 }])
 
   const gear = listGearInstances(db, user.id)
@@ -91,8 +91,8 @@ test('saved gear sets swap the whole loadout', () => {
   const { db, sqlite, user, bus } = setup()
   addItems(db, user.id, 'bronze_bar', 40)
   addItems(db, user.id, 'leather', 20)
-  completeAction(db, bus, user.id, 'forge-bronze-helm')
-  completeAction(db, bus, user.id, 'sew-leather-helm')
+  completeAction(db, bus, user.id, { actionId: 'forge-bronze-helm' })
+  completeAction(db, bus, user.id, { actionId: 'sew-leather-helm' })
 
   equipItem(db, bus, user.id, 'bronze_helm')
   const set = saveGearSet(db, user.id, 'Melee')
@@ -138,7 +138,7 @@ test('wearing two pieces of one armour family activates its set bonus', () => {
 test('salvaging a piece returns its crafting material', () => {
   const { db, sqlite, user, bus } = setup()
   addItems(db, user.id, 'bronze_bar', 20)
-  completeAction(db, bus, user.id, 'forge-bronze-helm')
+  completeAction(db, bus, user.id, { actionId: 'forge-bronze-helm' })
 
   const piece = listGearInstances(db, user.id)[0]!
   const res = salvageGear(db, bus, user.id, piece.id)

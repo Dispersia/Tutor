@@ -78,12 +78,12 @@ export interface FinalizeInput {
  * the reinforcement hook and lesson completion.
  */
 export function finalizeReview(deps: Deps, input: FinalizeInput): ReviewOutcome {
-  const { userId, card, def, result } = input
-  const { leveledUp } = awardXp(deps.db, deps.events, userId, input.xp, 'review', def.id)
+  const { userId, result } = input
+  const leveledUp = awardReviewXp(deps, userId, input)
   touchActivity(deps.db, deps.events, userId)
   emitCompleted(deps, input)
   const skill = settleAction(deps, userId, input.actionId, result, input.choiceId)
-  const srs = recordReview(deps.db, deps.events, userId, card.id, result.score, result.correct)
+  const srs = reviewSchedule(deps, userId, input)
   maybeReinforce(deps, input, srs.lapses)
   return {
     result: { ...result, xp: input.xp, leveledUp },
@@ -92,6 +92,25 @@ export function finalizeReview(deps: Deps, input: FinalizeInput): ReviewOutcome 
     lessonCompleted: lessonDone(deps, input),
     stats: summary(deps.db, userId),
   }
+}
+
+/** Pays the review's XP (the reason is fixed: a graded card review). */
+function awardReviewXp(deps: Deps, userId: string, input: FinalizeInput): boolean {
+  const { leveledUp } = awardXp(deps.db, deps.events, userId, {
+    amount: input.xp,
+    reason: 'review',
+    sourceId: input.def.id,
+  })
+  return leveledUp
+}
+
+/** Advances the card's FSRS schedule for this review. */
+function reviewSchedule(deps: Deps, userId: string, input: FinalizeInput) {
+  return recordReview(deps.db, deps.events, userId, {
+    cardId: input.card.id,
+    score: input.result.score,
+    correct: input.result.correct,
+  })
 }
 
 function emitCompleted(deps: Deps, input: FinalizeInput): void {

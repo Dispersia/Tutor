@@ -1,14 +1,14 @@
 # Tutor — decomposition & architecture plan
 
-> Status: **phases 0–14 landed.** A second pass (Phases 9–13) split the two mega
-> routes, the grammar tables, the schema and the web skills client, lowered the
-> function budget to 20 lines, and fixed the action-level map rebuild. Phase 14
-> then worked the function burn-down to zero — the exemption list is gone and
-> every function fits. Phase 15 (the web shells, route validation and the last
-> wide signatures) is open — see §8.2. Goal: no mega files, no mega structs, no
-> mega methods. Small files, small pure functions, like‑with‑like, modern
-> practices. §8 records each phase; §8.1 is the re-audit that opened the second
-> pass.
+> Status: **phases 0–14 landed, phase 15 half done.** A second pass (Phases 9–13)
+> split the two mega routes, the grammar tables, the schema and the web skills
+> client, lowered the function budget to 20 lines, and fixed the action-level map
+> rebuild. Phase 14 then worked the function burn-down to zero — the exemption
+> list is gone and every function fits. Phase 15's route validation and the last
+> wide signatures are done too; only the remaining web `+page.svelte` shells are
+> open — see §8.2. Goal: no mega files, no mega structs, no mega methods. Small
+> files, small pure functions, like‑with‑like, modern practices. §8 records each
+> phase; §8.1 is the re-audit that opened the second pass.
 
 ---
 
@@ -501,14 +501,24 @@ production code and 60 for tests, enforced everywhere, with the only remaining
 relaxations being `legacyBig` (the web route shells) and `wideSignatures` (five
 services' parameter counts, Phase 15).
 
-**Phase 15 — the web shells & route validation (open).**
-The remaining `+page.svelte` files over ~250 lines (`practice`, `settings`,
-`skills/[id]`, `learn`, `inventory`, `home`) get the Phase 6 treatment: pure
-derivations into `lib/<feature>view.ts`, presentational pieces into
-`lib/components/<feature>/`. `styles/components.css` splits per feature. Then
-Phase 4's other half: a `parseBody(c, schema)` helper (valibot) replaces the
-remaining `(await c.req.json()) as {…}` casts in the split routes, and the
-`Deps`/per-request context (findings 3–4) gains one shared board/player loader.
+**Phase 15 — the web shells & route validation (in progress).**
+Route validation is done: `routes/body.ts` holds `jsonBody(c)` (the parse never
+throws) plus typed field readers (`str`/`num`/`bool`/`obj`/`strArray`/
+`strRecord`/`oneOf`), and every `(await c.req.json()) as {…}` cast in the split
+routes now goes through it — structured bodies keep their interfaces, filled by
+small `read*Body` helpers that only set the keys actually sent. It is
+dependency-free rather than valibot: the repo has no schema library and adding
+one would re-hash the nix dependency derivation. The wide signatures are done
+too: `equipItem`/`applyEnchant`/`grantItems`/`awardXp`/`recordReview`/
+`completeAction` fold their trailing arguments into one options object and the
+`band` table calls `bandDef(spec)` directly, so `eslint.config.js` drops its
+`wideSignatures` list (`max-params` is now on everywhere except the two legacy
+scopes). Still open: the remaining `+page.svelte` files over ~250 lines
+(`practice`, `settings`, `skills/[id]`, `learn`, `inventory`, `home`) get the
+Phase 6 treatment — pure derivations into `lib/<feature>view.ts`, presentational
+pieces into `lib/components/<feature>/`, and `styles/components.css` split per
+feature. Then the `Deps`/per-request context (findings 3–4) gains one shared
+board/player loader.
 
 ---
 

@@ -111,7 +111,11 @@ function runRig(
     actionId: action.id,
     amount: action.xp,
   })
-  const rig = completeAction(deps.db, deps.events, userId, action.id, Date.now(), { choiceId })
+  const rig = completeAction(deps.db, deps.events, userId, {
+    actionId: action.id,
+    now: Date.now(),
+    choiceId,
+  })
   return { ...awardSummary(award), ...rigSummary(rig) }
 }
 

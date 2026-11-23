@@ -143,18 +143,18 @@ test('an enchant fits the slot, needs its level and reagents, and grants no XP (
   const piece = craftGearInstance(db, user.id, ITEM_BY_ID.get('iron_sword')!)
 
   // Wrong slot and too low a level are both refused.
-  expect(applyEnchant(db, bus, user.id, piece, 'chest:stamina').ok).toBe(false)
-  expect(applyEnchant(db, bus, user.id, piece, 'mainHand:strength').ok).toBe(false)
+  expect(applyEnchant(db, bus, user.id, piece, { enchantId: 'chest:stamina' }).ok).toBe(false)
+  expect(applyEnchant(db, bus, user.id, piece, { enchantId: 'mainHand:strength' }).ok).toBe(false)
 
   awardActionXp(db, bus, user.id, { actionId: 'distill', amount: bandXpToLevel(5) })
   expect(skillLevelOf(db, user.id, 'enchanting')).toBe(5)
   // Still needs its reagents.
-  expect(applyEnchant(db, bus, user.id, piece, 'mainHand:strength').ok).toBe(false)
+  expect(applyEnchant(db, bus, user.id, piece, { enchantId: 'mainHand:strength' }).ok).toBe(false)
   addItems(db, user.id, 'metal_essence', 2)
   addItems(db, user.id, 'gem_essence', 1)
   addItems(db, user.id, 'wood_essence', 1)
   const xpBefore = getActionXp(db, user.id, 'distill')
-  expect(applyEnchant(db, bus, user.id, piece, 'mainHand:strength').ok).toBe(true)
+  expect(applyEnchant(db, bus, user.id, piece, { enchantId: 'mainHand:strength' }).ok).toBe(true)
   // Applying is the payoff, not the training: no XP.
   expect(getActionXp(db, user.id, 'distill')).toBe(xpBefore)
   const row = listGearInstances(db, user.id).find((g) => g.id === piece)!
@@ -208,13 +208,23 @@ test('prospecting is ONE action — you choose the ore (§13.5.3.1)', () => {
   const count = (ids: string[]) => ids.reduce((n, i) => n + getItemCount(db, user.id, i), 0)
   addItems(db, user.id, 'copper_ore', 5)
   // rand() = 1 → certain miss: ore gone, no gem.
-  completeAction(db, bus, user.id, 'prospect', Date.now(), { rand: () => 1, choiceId: 'copper' })
+  completeAction(db, bus, user.id, {
+    actionId: 'prospect',
+    now: Date.now(),
+    rand: () => 1,
+    choiceId: 'copper',
+  })
   expect(getItemCount(db, user.id, 'copper_ore')).toBe(0)
   expect(count(tier1)).toBe(0)
 
   // rand() = 0 → certain hit, and the hit rolls the chosen ore's tier of gems.
   addItems(db, user.id, 'iron_ore', 5)
-  completeAction(db, bus, user.id, 'prospect', Date.now(), { rand: () => 0, choiceId: 'iron' })
+  completeAction(db, bus, user.id, {
+    actionId: 'prospect',
+    now: Date.now(),
+    rand: () => 0,
+    choiceId: 'iron',
+  })
   expect(getItemCount(db, user.id, 'iron_ore')).toBe(0)
   const got = count(['uncut_ruby2', 'uncut_emerald2', 'uncut_sapphire2'])
   expect(got).toBeGreaterThanOrEqual(1)

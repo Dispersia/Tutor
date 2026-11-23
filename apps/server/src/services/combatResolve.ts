@@ -197,7 +197,7 @@ function awardWin(
   drops: Cost[],
 ): void {
   grantFixedItems(db, bus, userId, drops)
-  awardXp(db, bus, userId, ctx.xpReward, 'combat', ctx.monster.id)
+  awardXp(db, bus, userId, { amount: ctx.xpReward, reason: 'combat', sourceId: ctx.monster.id })
 }
 
 function endFight(

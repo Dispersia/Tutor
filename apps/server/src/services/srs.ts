@@ -93,20 +93,17 @@ export function recordReview(
   db: Db,
   bus: EventBus,
   userId: string,
-  cardId: string,
-  score: number,
-  correct: boolean,
-  opts: { source?: string } = {},
+  req: { cardId: string; score: number; correct: boolean; source?: string },
 ): ReviewSchedule {
-  const prev = prevStateOf(getSrs(db, userId, cardId))
+  const prev = prevStateOf(getSrs(db, userId, req.cardId))
   const now = Date.now()
-  const rating = ratingFromScore(score, correct)
+  const rating = ratingFromScore(req.score, req.correct)
   const next = advance(db, userId, prev, rating, now)
-  saveSchedule(db, userId, cardId, next.state, now)
-  const source = opts.source ?? 'practice'
+  saveSchedule(db, userId, req.cardId, next.state, now)
+  const source = req.source ?? 'practice'
   const retention = desiredRetention(db, userId)
-  logReview({ db, userId, cardId, rating, prev, next, retention, now, source })
-  emitSrs(bus, userId, cardId, rating, next.state)
+  logReview({ db, userId, cardId: req.cardId, rating, prev, next, retention, now, source })
+  emitSrs(bus, userId, req.cardId, rating, next.state)
   return scheduleResult(rating, next.state, next.intervalDays, next.dueAt)
 }
 

@@ -10,7 +10,8 @@ import tseslint from 'typescript-eslint'
  * `MAX_LINES`, **no function over `MAX_FN_LINES`** (small by default — if a
  * function needs more than twenty lines it is doing more than one thing), no
  * signature over `MAX_PARAMS`. Every file is now inside the budget with no
- * exemption list (docs/REFACTOR_PLAN.md, phases 0–14).
+ * exemption list (docs/REFACTOR_PLAN.md, phases 0–15); the only relaxations left
+ * are `legacyBig` (the web route shells) and the data-table / test ceilings.
  *
  * Errors fail `bun run lint`; warnings are advisory (they name existing rough
  * edges that the phase plan works through).
@@ -30,24 +31,6 @@ const sizeRules = {
 
 /** Mega files awaiting decomposition: the size ceiling is off here, nothing else. */
 const legacyBig = ['apps/web/src/routes/**/*.svelte', 'scripts/sweep-cards.ts']
-
-/** Wide signatures that predate the budget; fold these into options objects as
- * they are touched. Only `max-params` is relaxed for these files. */
-const wideSignatures = [
-  'apps/server/src/audio/service.ts',
-  'apps/server/src/game/bands.ts',
-  'apps/server/src/game/srs.ts',
-  'apps/server/src/routes/auth.ts',
-  'apps/server/src/routes/chat.ts',
-  'apps/server/src/routes/combat.ts',
-  'apps/server/src/routes/settings.ts',
-  'apps/server/src/routes/skills.ts',
-  'apps/server/src/services/gear.ts',
-  'apps/server/src/services/items.ts',
-  'apps/server/src/services/idle.ts',
-  'apps/server/src/services/overview.ts',
-  'apps/server/src/services/srs.ts',
-]
 
 /** `bun test` globals (the `globals` package has no bun preset). */
 const bunTest = {
@@ -110,13 +93,6 @@ export default tseslint.config(
   {
     files: legacyBig,
     rules: { 'max-lines': 'off', 'max-lines-per-function': 'off', 'max-params': 'off' },
-  },
-
-  // Files whose wide signatures predate the budget; fold these into options
-  // objects as they are touched. Only `max-params` is relaxed here.
-  {
-    files: wideSignatures,
-    rules: { 'max-params': 'off' },
   },
 
   // Content tables (`*.data.ts`) are data, not logic: the budget is for code.

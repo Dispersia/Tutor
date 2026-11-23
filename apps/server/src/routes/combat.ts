@@ -224,7 +224,10 @@ async function hitCombat(c: Context<AppEnv>) {
   const result = await gradeHit(deps, user, card, def, body)
   const hit = combatResolve(deps.db, deps.events, user.id, result.correct)
   if (!hit) return c.json({ error: 'no active encounter' }, 409)
-  const srs = recordReview(deps.db, deps.events, user.id, card.id, result.score, result.correct, {
+  const srs = recordReview(deps.db, deps.events, user.id, {
+    cardId: card.id,
+    score: result.score,
+    correct: result.correct,
     source: 'combat',
   })
   return finishHit(c, deps, user, { result, hit, srs })

@@ -65,7 +65,10 @@ async function equipPiece(c: Context<AppEnv>, piece: EquipPiece) {
     : undefined
   const itemId = piece.itemId ?? instance?.itemId
   if (!itemId) return c.json({ error: 'itemId or instanceId required' }, 400)
-  const res = equipItem(deps.db, deps.events, user.id, itemId, instance?.id, piece.slot)
+  const res = equipItem(deps.db, deps.events, user.id, itemId, {
+    instanceId: instance?.id,
+    targetSlot: piece.slot,
+  })
   if (!res.ok) return c.json({ error: res.error, missing: res.missing }, 400)
   return c.json(gearPayload(deps, user.id))
 }
@@ -105,7 +108,7 @@ async function enchantHandler(c: Context<AppEnv>) {
   if (!instanceId || !enchantId) {
     return c.json({ error: 'instanceId and enchantId required' }, 400)
   }
-  const res = applyEnchant(deps.db, deps.events, user.id, instanceId, enchantId)
+  const res = applyEnchant(deps.db, deps.events, user.id, instanceId, { enchantId })
   if (!res.ok) return c.json({ error: res.error }, 400)
   return c.json(gearPayload(deps, user.id))
 }

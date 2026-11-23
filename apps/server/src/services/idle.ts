@@ -271,15 +271,14 @@ export function completeAction(
   db: Db,
   bus: EventBus,
   userId: string,
-  actionId: string,
-  now = Date.now(),
-  opts: { rand?: () => number; choiceId?: string } = {},
+  req: { actionId: string; now?: number; rand?: () => number; choiceId?: string },
 ): DrillRigResult {
+  const now = req.now ?? Date.now()
   const report = settleRigs(db, bus, userId, now)
   const settledXp = xpTotal(report)
-  const action = ACTION_BY_ID.get(actionId)
+  const action = ACTION_BY_ID.get(req.actionId)
   if (!action) return noRigResult(report, settledXp, now)
-  return drillAction({ db, bus, userId, action, now, report, settledXp, opts })
+  return drillAction({ db, bus, userId, action, now, report, settledXp, opts: req })
 }
 
 function xpTotal(report: SettleReport): number {
@@ -314,7 +313,7 @@ function drillAction(req: DrillReq): DrillRigResult {
     rand,
     levels: req.report.progress.levels,
   })
-  const powered = powerRig(req.db, req.userId, req.action, current, choiceId, req.now, req.report)
+  const powered = powerRig(req, current, choiceId)
   const stoppedRig = capAfterDrill(req.db, req.userId, req.report.rigs, req.action.id, req.now)
   return drillResult(req, strike, powered, stoppedRig)
 }
@@ -346,7 +345,10 @@ function drillStrike(db: Db, bus: EventBus, userId: string, req: StrikeReq) {
   const chance = actionSuccessChance(db, userId, req.action, req.choiceId, req.levels)
   const hit = chance >= 1 || req.rand() < chance
   const gained = hit
-    ? grantItems(db, bus, userId, req.action.id, actionRoll(req.action, req.choiceId, req.rand))
+    ? grantItems(db, bus, userId, {
+        actionId: req.action.id,
+        costs: actionRoll(req.action, req.choiceId, req.rand),
+      })
     : []
   const spent = actionConsumes(req.action, req.choiceId)
   if (spent.length) consumeItems(db, bus, userId, spent)
@@ -357,19 +359,11 @@ function drillStrike(db: Db, bus: EventBus, userId: string, req: StrikeReq) {
  * The drill always powers its own machine. `report.rigs` already carries the
  * post-settle (and post-cap) states, so no second query is needed.
  */
-function powerRig(
-  db: Db,
-  userId: string,
-  action: ActionDef,
-  current: RigState,
-  choiceId: string | undefined,
-  now: number,
-  report: SettleReport,
-): RigState {
-  const powered = extendRig({ ...current, settledAt: now, choice: choiceId ?? '' }, now)
-  setRigState(db, userId, action.id, powered)
-  addGatherLog(db, userId, action.id, powered.completions)
-  report.rigs.set(action.id, powered)
+function powerRig(req: DrillReq, current: RigState, choiceId?: string): RigState {
+  const powered = extendRig({ ...current, settledAt: req.now, choice: choiceId ?? '' }, req.now)
+  setRigState(req.db, req.userId, req.action.id, powered)
+  addGatherLog(req.db, req.userId, req.action.id, powered.completions)
+  req.report.rigs.set(req.action.id, powered)
   return powered
 }
 

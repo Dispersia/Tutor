@@ -13,14 +13,13 @@ export function grantItems(
   db: Db,
   bus: EventBus,
   userId: string,
-  actionId: string,
-  costs: Cost[],
-  rand: () => number = Math.random,
+  req: { actionId: string; costs: Cost[]; rand?: () => number },
 ): Cost[] {
   const bonus = aggregateBonuses(db, userId)
+  const rand = req.rand ?? Math.random
   const granted: Cost[] = []
-  for (const cost of costs) {
-    const got = grantOne({ db, bus, userId, cost, bonus, actionId, rand })
+  for (const cost of req.costs) {
+    const got = grantOne({ db, bus, userId, cost, bonus, actionId: req.actionId, rand })
     if (got) granted.push(got)
   }
   return granted

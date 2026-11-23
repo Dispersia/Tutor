@@ -84,7 +84,9 @@ test('awardActionXp levels the action up; the profession rounds the mean to 100'
   expect(listTalents(db, user.id).length).toBe(0)
 
   // no new milestone between 10 and 20
-  expect(awardActionXp(db, bus, user.id, { actionId: 'mine-copper', amount: 10 }).talentUnlocked).toBeNull()
+  expect(
+    awardActionXp(db, bus, user.id, { actionId: 'mine-copper', amount: 10 }).talentUnlocked,
+  ).toBeNull()
 
   // levelling them all to 20 opens the next choice
   setMining(db, bus, user.id, 20)
@@ -232,12 +234,20 @@ test('a mastery capstone needs Lv 50 and a level in the partner profession', () 
 test('grantItems applies yield + double bonuses', () => {
   const { db, bus, user, sqlite } = setup()
   // no bonuses: exactly the base count
-  grantItems(db, bus, user.id, 'mine-copper', [{ item: 'copper_ore', count: 1 }], () => 0.99)
+  grantItems(db, bus, user.id, {
+    actionId: 'mine-copper',
+    costs: [{ item: 'copper_ore', count: 1 }],
+    rand: () => 0.99,
+  })
   expect(getItemCount(db, user.id, 'copper_ore')).toBe(1)
 
   // mine-copper 11 → +10% yield; rand=0 carries the fraction to +1
   awardActionXp(db, bus, user.id, { actionId: 'mine-copper', amount: xpForLevel(11) })
-  grantItems(db, bus, user.id, 'mine-copper', [{ item: 'copper_ore', count: 1 }], () => 0)
+  grantItems(db, bus, user.id, {
+    actionId: 'mine-copper',
+    costs: [{ item: 'copper_ore', count: 1 }],
+    rand: () => 0,
+  })
   expect(getItemCount(db, user.id, 'copper_ore')).toBe(3) // 1 + 1 (carry) + 2nd gather
   sqlite.close()
 })
@@ -285,7 +295,7 @@ test('combat actions require the right equipped gear', () => {
 test('a drill lands the strike, then the rig keeps gathering while you are away', () => {
   const { db, bus, user, sqlite } = setup()
   const t0 = 1_000_000_000_000
-  const first = completeAction(db, bus, user.id, 'mine-copper', t0)
+  const first = completeAction(db, bus, user.id, { actionId: 'mine-copper', now: t0 })
 
   // the strike is the old flat yield — a drill still lands one ore
   expect(getItemCount(db, user.id, 'copper_ore')).toBe(1)
@@ -304,7 +314,7 @@ test('a drill lands the strike, then the rig keeps gathering while you are away'
 test('settling twice over the same instant never double counts', () => {
   const { db, bus, user, sqlite } = setup()
   const t0 = 1_500_000_000_000
-  completeAction(db, bus, user.id, 'mine-copper', t0)
+  completeAction(db, bus, user.id, { actionId: 'mine-copper', now: t0 })
   const once = settleRigs(db, bus, user.id, t0 + 30_000)
   const twice = settleRigs(db, bus, user.id, t0 + 30_000)
   expect(once.gained.length).toBeGreaterThan(0)
@@ -318,7 +328,7 @@ test('settling twice over the same instant never double counts', () => {
 test('a rig levels its action on its own, no drill required', () => {
   const { db, bus, user, sqlite } = setup()
   const t0 = 2_500_000_000_000
-  completeAction(db, bus, user.id, 'mine-copper', t0)
+  completeAction(db, bus, user.id, { actionId: 'mine-copper', now: t0 })
   const before = getActionXp(db, user.id, 'mine-copper')
 
   // the first completion runs for 10 minutes; leave it be and it pays for itself
@@ -335,7 +345,7 @@ test('an artisan rig turns stock into product and runs out when the bank does', 
   addItems(db, user.id, 'copper_ore', 20)
   addItems(db, user.id, 'tin_ore', 20)
 
-  const first = completeAction(db, bus, user.id, 'smelt-bronze', t0)
+  const first = completeAction(db, bus, user.id, { actionId: 'smelt-bronze', now: t0 })
   expect(first.gained.some((g) => g.item === 'bronze_bar')).toBe(true)
   expect(getItemCount(db, user.id, 'copper_ore')).toBeLessThan(20)
 
@@ -353,8 +363,8 @@ test('an artisan rig turns stock into product and runs out when the bank does', 
 test('only two rigs run at once: a third drill stops the one closest to finishing', () => {
   const { db, bus, user, sqlite } = setup()
   const t0 = 3_000_000_000_000
-  const first = completeAction(db, bus, user.id, 'mine-copper', t0)
-  const second = completeAction(db, bus, user.id, 'chop-oak', t0 + 1)
+  const first = completeAction(db, bus, user.id, { actionId: 'mine-copper', now: t0 })
+  const second = completeAction(db, bus, user.id, { actionId: 'chop-oak', now: t0 + 1 })
   expect(first.idle?.active).toBe(true)
   expect(second.idle?.active).toBe(true)
   expect(second.stoppedRig).toBe(null)
@@ -362,7 +372,7 @@ test('only two rigs run at once: a third drill stops the one closest to finishin
   expect(second.maxLiveRigs).toBe(2)
 
   // the third drill powers its own machine and pushes the earliest-ending rig out
-  const third = completeAction(db, bus, user.id, 'fish-shrimp', t0 + 2)
+  const third = completeAction(db, bus, user.id, { actionId: 'fish-shrimp', now: t0 + 2 })
   expect(third.idle?.active).toBe(true)
   expect(third.rigsRunning).toBe(2)
   expect(third.stoppedRig?.actionId).toBe('mine-copper')
@@ -377,8 +387,8 @@ test('only two rigs run at once: a third drill stops the one closest to finishin
 test('a rig can be stopped on purpose to free its slot for another', () => {
   const { db, bus, user, sqlite } = setup()
   const t0 = 4_000_000_000_000
-  completeAction(db, bus, user.id, 'mine-copper', t0)
-  completeAction(db, bus, user.id, 'chop-oak', t0 + 1)
+  completeAction(db, bus, user.id, { actionId: 'mine-copper', now: t0 })
+  completeAction(db, bus, user.id, { actionId: 'chop-oak', now: t0 + 1 })
   expect(liveRigCount(listRigStates(db, user.id), t0 + 2)).toBe(2)
 
   // stopping settles the run, then falls still; a second stop is a no-op
@@ -389,7 +399,7 @@ test('a rig can be stopped on purpose to free its slot for another', () => {
   expect(liveRigCount(rigs, t0 + 3)).toBe(1)
 
   // the freed slot lets a third rig start without displacing anything
-  const third = completeAction(db, bus, user.id, 'fish-shrimp', t0 + 4)
+  const third = completeAction(db, bus, user.id, { actionId: 'fish-shrimp', now: t0 + 4 })
   expect(third.stoppedRig).toBe(null)
   expect(liveRigCount(listRigStates(db, user.id), t0 + 5)).toBe(2)
   sqlite.close()
@@ -398,8 +408,8 @@ test('a rig can be stopped on purpose to free its slot for another', () => {
 test('every powered drill is written to the completion log', () => {
   const { db, bus, user, sqlite } = setup()
   const t0 = 3_000_000_000_000
-  completeAction(db, bus, user.id, 'mine-copper', t0)
-  completeAction(db, bus, user.id, 'mine-copper', t0 + 1_000)
+  completeAction(db, bus, user.id, { actionId: 'mine-copper', now: t0 })
+  completeAction(db, bus, user.id, { actionId: 'mine-copper', now: t0 + 1_000 })
   const log = listGatherLog(db, user.id, 'mine-copper')
   expect(log.map((r) => r.completions)).toEqual([1, 2])
   sqlite.close()

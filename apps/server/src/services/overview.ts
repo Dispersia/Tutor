@@ -85,18 +85,16 @@ export function awardXp(
   db: Db,
   bus: EventBus,
   userId: string,
-  amount: number,
-  reason: string,
-  sourceId?: string,
+  req: { amount: number; reason: string; sourceId?: string },
 ): { total: number; level: number; leveledUp: boolean } {
   const before = getStats(db, userId).level
   const bonus = aggregateBonuses(db, userId).globalXp
-  const gained = Math.max(0, Math.round(amount * (1 + bonus)))
-  addXpEvent(db, userId, gained, reason, sourceId)
+  const gained = Math.max(0, Math.round(req.amount * (1 + bonus)))
+  addXpEvent(db, userId, gained, req.reason, req.sourceId)
   const total = sumXp(db, userId)
   const info = levelInfo(total)
   upsertStats(db, userId, { xpTotal: total, level: info.level })
-  bus.emit('xp.awarded', { userId, amount: gained, reason, total })
+  bus.emit('xp.awarded', { userId, amount: gained, reason: req.reason, total })
   const leveledUp = info.level > before
   if (leveledUp) bus.emit('level.up', { userId, level: info.level })
   return { total, level: info.level, leveledUp }
