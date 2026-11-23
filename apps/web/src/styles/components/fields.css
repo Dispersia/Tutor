@@ -1,0 +1,35 @@
+/** Form fields and their validation note. */
+
+@layer components {
+  .field {
+    width: 100%;
+    min-height: 44px;
+    border-radius: 9px;
+    border: 1px solid var(--color-ink-600);
+    background: var(--color-ink-900);
+    padding: 0.6rem 0.75rem;
+    color: var(--color-ink-100);
+    font-family: var(--font-sans);
+    font-size: 0.95rem;
+    line-height: 1.4;
+  }
+  .field::placeholder {
+    color: var(--color-ink-400);
+  }
+  .field:focus-visible {
+    outline: none;
+    border-color: var(--color-seal-400);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-seal-400) 35%, transparent);
+  }
+  .field:disabled {
+    background: var(--color-ink-850);
+    border-color: var(--color-ink-700);
+    color: var(--color-ink-400);
+  }
+  .field-error {
+    margin-top: 0.35rem;
+    font-size: 0.82rem;
+    line-height: 1.4;
+    color: var(--color-ember-300);
+  }
+}

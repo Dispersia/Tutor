@@ -1,0 +1,143 @@
+/** Actions — everything the player presses: links, tiles, ruled rows, buttons. */
+
+@layer components {
+  /* ---- text link --------------------------------------------------------- */
+  .link {
+    color: var(--color-ink-200);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+  }
+  .link:hover {
+    color: var(--color-ink-100);
+  }
+  /* A link that stands alone as a control still needs a real touch target;
+     inline links inside prose keep their natural line height. */
+  .link-btn {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  /* ---- tiles ------------------------------------------------------------- */
+  .tile {
+    position: relative;
+    border-radius: 12px;
+    border: 1px solid color-mix(in oklab, var(--accent) 45%, var(--color-ink-700));
+    background: color-mix(in oklab, var(--accent) 14%, var(--color-ink-850));
+    transition:
+      transform 0.12s ease,
+      border-color 0.15s ease,
+      background 0.15s ease;
+  }
+  .tile:hover,
+  .tile:focus-visible {
+    transform: translateY(-1px);
+    border-color: color-mix(in oklab, var(--accent) 65%, var(--color-ink-700));
+    background: color-mix(in oklab, var(--accent) 20%, var(--color-ink-850));
+  }
+
+  /* ---- ruled entries ----------------------------------------------------- */
+  /* A list row that acts as a button: hairline top, flat hover, neutral when
+     it cannot act. */
+  .row-btn {
+    display: flex;
+    width: 100%;
+    min-height: 44px;
+    align-items: center;
+    gap: 0.75rem;
+    text-align: left;
+    transition: background 0.12s ease;
+  }
+  .row-btn:hover:not(:disabled) {
+    background: var(--color-ink-800);
+  }
+  .row-btn:disabled {
+    cursor: not-allowed;
+    background: var(--color-ink-850);
+    color: var(--color-ink-400);
+  }
+
+  /* ---- buttons ----------------------------------------------------------- */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    min-height: 44px;
+    border-radius: 10px;
+    padding: 0.6rem 1rem;
+    font-family: var(--font-display);
+    font-size: 0.92rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    line-height: 1;
+    cursor: pointer;
+    transition:
+      filter 0.12s ease,
+      transform 0.06s ease,
+      background 0.12s ease,
+      border-color 0.12s ease;
+  }
+  .btn:active {
+    transform: translateY(1px);
+  }
+  .btn:disabled {
+    cursor: not-allowed;
+    transform: none;
+    background: var(--color-ink-850);
+    border: 1px solid var(--color-ink-700);
+    color: var(--color-ink-400);
+  }
+  /* primary = the one action that moves the session forward */
+  .btn-primary {
+    color: var(--color-ink-950);
+    border: 1px solid color-mix(in oklab, var(--color-seal-400) 60%, black);
+    background: var(--color-seal-400);
+  }
+  .btn-primary:hover {
+    filter: brightness(1.08);
+  }
+  /* gold = spending, claiming, rewarding */
+  .btn-gold {
+    color: var(--color-ink-950);
+    border: 1px solid color-mix(in oklab, var(--color-gold-400) 55%, black);
+    background: var(--color-gold-300);
+  }
+  .btn-gold:hover {
+    filter: brightness(1.08);
+  }
+  .btn-ghost {
+    color: var(--color-ink-200);
+    border: 1px solid var(--color-ink-600);
+    background: transparent;
+  }
+  .btn-ghost:hover {
+    color: var(--color-ink-100);
+    background: var(--color-ink-800);
+    border-color: var(--color-ink-500);
+  }
+  .btn-accent {
+    color: var(--color-ink-950);
+    border: 1px solid color-mix(in oklab, var(--accent) 65%, black);
+    background: var(--accent);
+  }
+  /* A destructive action: same weight as ghost, but the border and label carry
+     the ember signal so it never reads as a normal secondary button. */
+  .btn-danger {
+    color: var(--color-ember-400);
+    border: 1px solid color-mix(in oklab, var(--color-ember-400) 45%, var(--color-ink-700));
+    background: transparent;
+  }
+  .btn-danger:hover {
+    color: var(--color-ember-300);
+    border-color: color-mix(in oklab, var(--color-ember-400) 70%, var(--color-ink-700));
+    background: color-mix(in oklab, var(--color-ember-400) 10%, transparent);
+  }
+  .btn-danger:disabled {
+    color: var(--color-ink-400);
+    border-color: var(--color-ink-700);
+    background: transparent;
+  }
+}

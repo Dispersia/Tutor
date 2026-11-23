@@ -7,11 +7,11 @@
 > bodies, folded the last wide signatures, split all six large web `+page.svelte`
 > shells, split the `chat`/`combat`/`skills`/`sweep-cards` scripts, and deleted
 > the last size exemption — **no `legacyBig`/`wideSignatures`/baseline lists
-> remain** — and gave the board/gear handlers one shared per-request player
-> loader. What is still open is a per-feature CSS split — see §8.2. Goal: no mega
-> files, no mega structs, no mega methods. Small files, small pure functions,
-> like‑with‑like, modern practices. §8 records each phase; §8.1 is the re-audit
-> that opened the second pass.
+> remain** — gave the board/gear handlers one shared per-request player loader,
+> and split the shared stylesheet per component family. **Phase 15 is done.** Goal:
+> no mega files, no mega structs, no mega methods. Small files, small pure
+> functions, like‑with‑like, modern practices. §8 records each phase; §8.1 is the
+> re-audit that opened the second pass.
 
 ---
 
@@ -504,7 +504,7 @@ production code and 60 for tests, enforced everywhere, with the only remaining
 relaxations being `legacyBig` (the web route shells) and `wideSignatures` (five
 services' parameter counts, Phase 15).
 
-**Phase 15 — the web shells & route validation (done apart from CSS/context).**
+**Phase 15 — the web shells & route validation (done).**
 Route validation is done: `routes/body.ts` holds `jsonBody(c)` (the parse never
 throws) plus typed field readers (`str`/`num`/`bool`/`obj`/`strArray`/
 `strRecord`/`oneOf`), and every `(await c.req.json()) as {…}` cast in the split
@@ -531,8 +531,11 @@ kind remain**. The shared board/player loader is in too: `services/context.ts`
 gains `loadPlayerCtx` (`PlayerCtx`: the settled rigs, action map, bands,
 profession/talent views and bonuses, loaded once), and `boardSkills`/`gearPayload`
 take it so the skills handlers read each store once instead of up to three times
-(findings 3–4; combat already threads one `levels` map). Still open: a
-`styles/components.css` split per feature.
+(findings 3–4; combat already threads one `levels` map). Finally the stylesheet
+split: `styles/components.css` is now a manifest that imports one file per family
+under `styles/components/` (`surfaces`, `typography`, `cells`, `fields`,
+`notices`, `actions`, `indicators`, `figures`, `heat`), verified to carry the same
+selectors and declarations as the single file it replaced. **Phase 15 is done.**
 
 ---
 

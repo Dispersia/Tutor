@@ -1,0 +1,14 @@
+/** The activity heat map grid. */
+
+@layer components {
+  /* the activity heat map: square cells that shrink so the grid fits a phone
+     instead of scrolling sideways */
+  .heat {
+    --heat-cell: 0.75rem;
+  }
+  @media (max-width: 430px) {
+    .heat {
+      --heat-cell: 0.6rem;
+    }
+  }
+}

@@ -1,0 +1,116 @@
+/** The character cell — the system's signature mark. */
+
+@layer components {
+  /* the character cell — the system's signature mark. It grows to fit a
+     multi-character word; it never clips. */
+  .cell {
+    position: relative;
+    display: grid;
+    place-items: center;
+    gap: 0.15rem;
+    min-width: 4.5rem;
+    min-height: 4.5rem;
+    padding: 0.85rem 1rem;
+    border: 1px solid color-mix(in oklab, var(--accent) 45%, var(--color-ink-700));
+    border-radius: 12px;
+    background: color-mix(in oklab, var(--accent) 10%, var(--color-ink-850));
+    text-align: center;
+  }
+  /* faint cross guides at 12% inset: two hairlines, no gradient */
+  .cell::before,
+  .cell::after {
+    content: '';
+    position: absolute;
+    background: color-mix(in oklab, var(--accent) 22%, transparent);
+    pointer-events: none;
+  }
+  .cell::before {
+    left: 12%;
+    right: 12%;
+    top: 50%;
+    height: 1px;
+  }
+  .cell::after {
+    top: 12%;
+    bottom: 12%;
+    left: 50%;
+    width: 1px;
+  }
+  .cell__glyph {
+    position: relative;
+    font-family: var(--font-display);
+    font-size: 2rem;
+    line-height: 1.3;
+    letter-spacing: 0;
+    white-space: nowrap;
+    color: var(--color-ink-100);
+  }
+  .cell__glyph rt {
+    font-size: 0.5em;
+    font-weight: 400;
+    letter-spacing: 0;
+    color: var(--color-ink-400);
+  }
+  /* the small cell cannot afford 0.5em of a 1.5rem glyph: keep ruby readable */
+  .cell--sm .cell__glyph rt {
+    font-size: 0.55em;
+  }
+  .cell__reading {
+    position: relative;
+    font-family: var(--font-display);
+    font-size: 0.9rem;
+    line-height: 1.4;
+    letter-spacing: 0;
+    color: var(--color-ink-400);
+  }
+  .cell--sm {
+    min-width: 3.5rem;
+    min-height: 3.5rem;
+    padding: 0.5rem 0.7rem;
+  }
+  .cell--sm .cell__glyph {
+    font-size: 1.5rem;
+  }
+  .cell--lg {
+    min-width: 6rem;
+    min-height: 6rem;
+  }
+  .cell--lg .cell__glyph {
+    font-size: 2.5rem;
+  }
+  .cell--word .cell__glyph {
+    font-size: 1.65rem;
+  }
+
+  /* a cell the player can press (a choice, a word chip) */
+  .cell--press {
+    cursor: pointer;
+    transition:
+      border-color 0.12s ease,
+      background 0.12s ease;
+  }
+  .cell--press:hover:not(:disabled) {
+    border-color: color-mix(in oklab, var(--accent) 70%, var(--color-ink-700));
+    background: color-mix(in oklab, var(--accent) 18%, var(--color-ink-850));
+  }
+  /* a control that cannot act goes neutral: surface fill, hairline, muted text.
+     Never a faded smear of its own accent. */
+  .cell--press:disabled,
+  .cell--off {
+    cursor: not-allowed;
+    border-color: var(--color-ink-700);
+    background: var(--color-ink-850);
+  }
+  .cell--press:disabled::before,
+  .cell--press:disabled::after,
+  .cell--off::before,
+  .cell--off::after {
+    background: color-mix(in oklab, var(--color-ink-400) 20%, transparent);
+  }
+  .cell--press:disabled .cell__glyph,
+  .cell--off .cell__glyph,
+  .cell--press:disabled .cell__reading,
+  .cell--off .cell__reading {
+    color: var(--color-ink-400);
+  }
+}

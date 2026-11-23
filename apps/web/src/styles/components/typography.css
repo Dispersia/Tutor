@@ -1,0 +1,28 @@
+/** Typography — the display face, tracked labels and page subtitles. */
+
+@layer components {
+  .display {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
+  }
+
+  .eyebrow {
+    font-size: 0.82rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--color-ink-400);
+  }
+
+  /* Page subtitle. The brief reserves uppercase for tracked labels; a sentence
+     stays in the body face so it reads as prose and does not shout. */
+  .sub {
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: var(--color-ink-400);
+  }
+
+  .gold {
+    color: var(--color-gold-300);
+  }
+}
