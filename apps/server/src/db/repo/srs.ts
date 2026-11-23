@@ -17,23 +17,20 @@ export function listSrs(db: Db, userId: string) {
   return db.select().from(srs).where(eq(srs.userId, userId)).all()
 }
 
-export function upsertSrs(
-  db: Db,
-  userId: string,
-  cardId: string,
-  s: {
-    state: string
-    step: number
-    stability: number
-    difficulty: number
-    reps: number
-    lapses: number
-    intervalDays: number
-    dueAt: number
-    lastRating: number | null
-    lastReviewAt: number
-  },
-): void {
+export interface SrsWrite {
+  state: string
+  step: number
+  stability: number
+  difficulty: number
+  reps: number
+  lapses: number
+  intervalDays: number
+  dueAt: number
+  lastRating: number | null
+  lastReviewAt: number
+}
+
+export function upsertSrs(db: Db, userId: string, cardId: string, s: SrsWrite): void {
   db.insert(srs)
     .values({ userId, cardId, ...s })
     .onConflictDoUpdate({ target: [srs.userId, srs.cardId], set: { ...s } })
@@ -41,25 +38,24 @@ export function upsertSrs(
 }
 
 /** Appends one FSRS review to the log (docs/DESIGN.md §13.6). */
-export function addSrsReview(
-  db: Db,
-  r: {
-    userId: string
-    cardId: string
-    rating: number
-    stateBefore: string
-    stateAfter: string
-    stabilityBefore: number
-    stabilityAfter: number
-    difficultyBefore: number
-    difficultyAfter: number
-    intervalDays: number
-    elapsedDays: number
-    desiredRetention: number
-    dueAt: number
-    source?: string
-  },
-): void {
+export interface SrsReviewWrite {
+  userId: string
+  cardId: string
+  rating: number
+  stateBefore: string
+  stateAfter: string
+  stabilityBefore: number
+  stabilityAfter: number
+  difficultyBefore: number
+  difficultyAfter: number
+  intervalDays: number
+  elapsedDays: number
+  desiredRetention: number
+  dueAt: number
+  source?: string
+}
+
+export function addSrsReview(db: Db, r: SrsReviewWrite): void {
   db.insert(srsReviews)
     .values({ ...r, id: id(), createdAt: now() })
     .run()

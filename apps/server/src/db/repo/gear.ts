@@ -16,18 +16,19 @@ export function setEquipment(
   itemId: string | null,
   instanceId: string | null = null,
 ): void {
-  if (itemId === null) {
-    db.delete(equipment)
-      .where(and(eq(equipment.userId, userId), eq(equipment.slot, slot)))
-      .run()
-    return
-  }
+  if (itemId === null) return clearEquipment(db, userId, slot)
   db.insert(equipment)
     .values({ userId, slot, itemId, instanceId, updatedAt: now() })
     .onConflictDoUpdate({
       target: [equipment.userId, equipment.slot],
       set: { itemId, instanceId, updatedAt: now() },
     })
+    .run()
+}
+
+function clearEquipment(db: Db, userId: string, slot: string): void {
+  db.delete(equipment)
+    .where(and(eq(equipment.userId, userId), eq(equipment.slot, slot)))
     .run()
 }
 
@@ -59,30 +60,31 @@ export function getGearInstance(db: Db, userId: string, id: string) {
     .get()
 }
 
-export function addGearInstance(
-  db: Db,
-  row: Omit<GearInstanceRow, 'id' | 'createdAt' | 'enchantJson'> & {
-    id?: string
-    createdAt?: number
-    enchantJson?: string
-  },
-): string {
+export type NewGearInstance = Omit<GearInstanceRow, 'id' | 'createdAt' | 'enchantJson'> & {
+  id?: string
+  createdAt?: number
+  enchantJson?: string
+}
+
+export function addGearInstance(db: Db, row: NewGearInstance): string {
   const gearId = row.id ?? id()
-  db.insert(gearInstances)
-    .values({
-      id: gearId,
-      userId: row.userId,
-      itemId: row.itemId,
-      slot: row.slot,
-      quality: row.quality,
-      statsJson: row.statsJson,
-      enchantJson: row.enchantJson ?? '[]',
-      armour: row.armour,
-      power: row.power,
-      createdAt: row.createdAt ?? now(),
-    })
-    .run()
+  db.insert(gearInstances).values(gearValues(gearId, row)).run()
   return gearId
+}
+
+function gearValues(gearId: string, row: NewGearInstance) {
+  return {
+    id: gearId,
+    userId: row.userId,
+    itemId: row.itemId,
+    slot: row.slot,
+    quality: row.quality,
+    statsJson: row.statsJson,
+    enchantJson: row.enchantJson ?? '[]',
+    armour: row.armour,
+    power: row.power,
+    createdAt: row.createdAt ?? now(),
+  }
 }
 
 /** Replaces a piece's enchant list (a JSON array of band ids). */
@@ -108,27 +110,18 @@ export function listGearSets(db: Db, userId: string) {
   return db.select().from(gearSets).where(eq(gearSets.userId, userId)).all()
 }
 
-export function addGearSet(
-  db: Db,
-  row: {
-    userId: string
-    name: string
-    combatStyle: string
-    slotsJson: string
-  },
-): string {
+export interface NewGearSet {
+  userId: string
+  name: string
+  combatStyle: string
+  slotsJson: string
+}
+
+export function addGearSet(db: Db, row: NewGearSet): string {
   const setId = id()
   const stamp = now()
   db.insert(gearSets)
-    .values({
-      id: setId,
-      userId: row.userId,
-      name: row.name,
-      combatStyle: row.combatStyle,
-      slotsJson: row.slotsJson,
-      createdAt: stamp,
-      updatedAt: stamp,
-    })
+    .values({ id: setId, ...row, createdAt: stamp, updatedAt: stamp })
     .run()
   return setId
 }

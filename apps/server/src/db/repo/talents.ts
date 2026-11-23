@@ -18,20 +18,16 @@ export function hasTalent(db: Db, userId: string, talentId: string): boolean {
   return Boolean(row)
 }
 
-export function addTalent(
-  db: Db,
-  userId: string,
-  t: { talentId: string; skillId: string; tier: string; milestone: number },
-): void {
+export interface NewTalent {
+  talentId: string
+  skillId: string
+  tier: string
+  milestone: number
+}
+
+export function addTalent(db: Db, userId: string, t: NewTalent): void {
   db.insert(talents)
-    .values({
-      userId,
-      talentId: t.talentId,
-      skillId: t.skillId,
-      tier: t.tier,
-      milestone: t.milestone,
-      grantedAt: now(),
-    })
+    .values({ userId, ...t, grantedAt: now() })
     .onConflictDoNothing()
     .run()
 }
@@ -43,25 +39,13 @@ export function removeTalent(db: Db, userId: string, talentId: string): void {
 }
 
 /** Swaps an owned talent for a different one (respec at the same milestone). */
-export function replaceTalent(
-  db: Db,
-  userId: string,
-  oldTalentId: string,
-  t: { talentId: string; skillId: string; tier: string; milestone: number },
-): void {
+export function replaceTalent(db: Db, userId: string, oldTalentId: string, t: NewTalent): void {
   db.transaction((tx) => {
     tx.delete(talents)
       .where(and(eq(talents.userId, userId), eq(talents.talentId, oldTalentId)))
       .run()
     tx.insert(talents)
-      .values({
-        userId,
-        talentId: t.talentId,
-        skillId: t.skillId,
-        tier: t.tier,
-        milestone: t.milestone,
-        grantedAt: now(),
-      })
+      .values({ userId, ...t, grantedAt: now() })
       .run()
   })
 }

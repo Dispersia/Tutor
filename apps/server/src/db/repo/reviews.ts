@@ -5,31 +5,32 @@ import type { Db } from '../client'
 import { reviews } from '../schema'
 import { id, now } from './helpers'
 
-export function addReview(
-  db: Db,
-  r: {
-    cardId: string
-    userId: string
-    exerciseId: string
-    score: number
-    latencyMs?: number
-    detail?: Record<string, unknown>
-    audioRef?: string
-  },
-): void {
-  db.insert(reviews)
-    .values({
-      id: id(),
-      cardId: r.cardId,
-      userId: r.userId,
-      exerciseId: r.exerciseId,
-      score: r.score,
-      latencyMs: r.latencyMs ?? 0,
-      detailJson: JSON.stringify(r.detail ?? {}),
-      audioRef: r.audioRef ?? null,
-      createdAt: now(),
-    })
-    .run()
+export interface ReviewInput {
+  cardId: string
+  userId: string
+  exerciseId: string
+  score: number
+  latencyMs?: number
+  detail?: Record<string, unknown>
+  audioRef?: string
+}
+
+export function addReview(db: Db, r: ReviewInput): void {
+  db.insert(reviews).values(reviewValues(r)).run()
+}
+
+function reviewValues(r: ReviewInput) {
+  return {
+    id: id(),
+    cardId: r.cardId,
+    userId: r.userId,
+    exerciseId: r.exerciseId,
+    score: r.score,
+    latencyMs: r.latencyMs ?? 0,
+    detailJson: JSON.stringify(r.detail ?? {}),
+    audioRef: r.audioRef ?? null,
+    createdAt: now(),
+  }
 }
 
 export function lastExerciseUse(db: Db, userId: string): Map<string, number> {
@@ -67,15 +68,24 @@ export interface DailyReviewCounts {
 }
 
 export function dailyReviewCounts(db: Db, userId: string, since: number): DailyReviewCounts {
-  // A card counts as "new today" when it entered learning today, i.e. its first
-  // graded review is today — reviewing an old card again today is not "new".
+  return { newCards: newToday(db, userId, since), reviews: gradedCount(db, userId, since) }
+}
+
+/** A card is "new today" when its first graded review is at/after `since`. */
+function newToday(db: Db, userId: string, since: number): number {
+  // Reviewing an old card again today is not "new": only its first graded
+  // review counts, and the teach-only `introduce` step is not graded.
   const firsts = db
     .select({ firstAt: sql<number>`min(${reviews.createdAt})` })
     .from(reviews)
     .where(and(eq(reviews.userId, userId), ne(reviews.exerciseId, 'introduce')))
     .groupBy(reviews.cardId)
     .all()
-  const newCards = firsts.filter((r) => Number(r.firstAt) >= since).length
+  return firsts.filter((r) => Number(r.firstAt) >= since).length
+}
+
+/** Graded reviews at/after `since` (the teach-only `introduce` step excluded). */
+function gradedCount(db: Db, userId: string, since: number): number {
   const row = db
     .select({ n: sql<number>`count(*)` })
     .from(reviews)
@@ -87,7 +97,7 @@ export function dailyReviewCounts(db: Db, userId: string, since: number): DailyR
       ),
     )
     .get()
-  return { newCards, reviews: Number(row?.n ?? 0) }
+  return Number(row?.n ?? 0)
 }
 
 /**

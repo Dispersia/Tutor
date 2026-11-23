@@ -69,17 +69,15 @@ export function getStats(db: Db, userId: string) {
   )
 }
 
-export function upsertStats(
-  db: Db,
-  userId: string,
-  patch: Partial<{
-    xpTotal: number
-    level: number
-    streakDays: number
-    lastActiveDay: string | null
-    dailyGoal: number
-  }>,
-): void {
+export interface StatsPatch {
+  xpTotal?: number
+  level?: number
+  streakDays?: number
+  lastActiveDay?: string | null
+  dailyGoal?: number
+}
+
+export function upsertStats(db: Db, userId: string, patch: StatsPatch): void {
   db.insert(stats)
     .values({
       userId,

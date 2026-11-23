@@ -46,39 +46,42 @@ export function addCard(db: Db, userId: string, c: NewCard) {
  * Updates a card's content in place. Keeps the same id, so review history and
  * SRS scheduling survive a curated-data fix (e.g. Simplified -> Traditional).
  */
-export function updateCard(
-  db: Db,
-  cardId: string,
-  userId: string,
-  patch: {
-    front?: string
-    back?: string
-    readings?: Record<string, string>
-    /** Replaces the whole payload bag when given (merge by key at the caller). */
-    payload?: Record<string, unknown>
-    /** Replaces the whole metadata bag when given (merge by key at the caller). */
-    metadata?: CardMetadata
-  },
-): void {
+export interface CardPatch {
+  front?: string
+  back?: string
+  readings?: Record<string, string>
+  /** Replaces the whole payload bag when given (merge by key at the caller). */
+  payload?: Record<string, unknown>
+  /** Replaces the whole metadata bag when given (merge by key at the caller). */
+  metadata?: CardMetadata
+}
+
+export function updateCard(db: Db, cardId: string, userId: string, patch: CardPatch): void {
   const row = db.select().from(cards).where(eq(cards.id, cardId)).get()
   if (!row || row.userId !== userId) return
+  const set = cardSet(patch)
+  if (Object.keys(set).length > 0) db.update(cards).set(set).where(eq(cards.id, cardId)).run()
+}
+
+function cardSet(patch: CardPatch): Partial<typeof cards.$inferInsert> {
   const set: Partial<typeof cards.$inferInsert> = {}
   if (patch.front !== undefined) set.front = patch.front
   if (patch.back !== undefined) set.back = patch.back
   if (patch.readings !== undefined) set.readingsJson = JSON.stringify(patch.readings)
   if (patch.payload !== undefined) set.payloadJson = JSON.stringify(patch.payload)
   if (patch.metadata !== undefined) set.metadataJson = JSON.stringify(patch.metadata)
-  if (Object.keys(set).length > 0) db.update(cards).set(set).where(eq(cards.id, cardId)).run()
+  return set
+}
+
+function parseJson<T>(json: string, fallback: T): T {
+  try {
+    return JSON.parse(json) as T
+  } catch {
+    return fallback
+  }
 }
 
 function toCard(row: typeof cards.$inferSelect): Card {
-  const parse = <T>(json: string, fallback: T): T => {
-    try {
-      return JSON.parse(json) as T
-    } catch {
-      return fallback
-    }
-  }
   return {
     id: row.id,
     deckId: row.deckId,
@@ -87,10 +90,10 @@ function toCard(row: typeof cards.$inferSelect): Card {
     targetLang: row.targetLang,
     front: row.front,
     back: row.back,
-    readings: parse<Record<string, string>>(row.readingsJson, {}),
-    tags: parse<string[]>(row.tagsJson, []),
-    payload: parse<Record<string, unknown>>(row.payloadJson, {}),
-    metadata: parse<CardMetadata>(row.metadataJson, {}),
+    readings: parseJson<Record<string, string>>(row.readingsJson, {}),
+    tags: parseJson<string[]>(row.tagsJson, []),
+    payload: parseJson<Record<string, unknown>>(row.payloadJson, {}),
+    metadata: parseJson<CardMetadata>(row.metadataJson, {}),
     origin: row.origin as Card['origin'],
     createdAt: row.createdAt,
   }
@@ -153,18 +156,22 @@ export function otherBacks(
   excludeBack: string,
   limit = 3,
 ): string[] {
-  const met = sql`(
-    exists (select 1 from ${reviews} where ${reviews.cardId} = ${cards.id} and ${reviews.userId} = ${cards.userId})
-    or exists (select 1 from ${srs} where ${srs.cardId} = ${cards.id} and ${srs.userId} = ${cards.userId})
-  )`
   return db
     .selectDistinct({ back: cards.back })
     .from(cards)
-    .where(and(eq(cards.userId, userId), eq(cards.targetLang, targetLang), met))
+    .where(and(eq(cards.userId, userId), eq(cards.targetLang, targetLang), metCondition()))
     .orderBy(sql`random()`)
     .limit(limit + 1)
     .all()
     .map((r) => r.back)
     .filter((b) => b !== excludeBack)
     .slice(0, limit)
+}
+
+/** The learner has met a card when they have reviewed it or hold SRS state for it. */
+function metCondition() {
+  return sql`(
+    exists (select 1 from ${reviews} where ${reviews.cardId} = ${cards.id} and ${reviews.userId} = ${cards.userId})
+    or exists (select 1 from ${srs} where ${srs.cardId} = ${cards.id} and ${srs.userId} = ${cards.userId})
+  )`
 }

@@ -180,35 +180,58 @@ const isCombat = (skillId: SkillId) => SKILL_BY_ID.get(skillId)?.category === 'c
  */
 export function talentOptions(skillId: SkillId, milestone: number): TalentDef[] {
   const name = SKILL_BY_ID.get(skillId)?.name ?? skillId
+  const base: ChoiceBase = {
+    skillId,
+    milestone,
+    tier: 'choice',
+    requires: [],
+  }
   const combat = isCombat(skillId)
-  const base = { skillId, milestone, tier: 'choice' as const, requires: [] as UnlockReq[] }
-  const syn = SYNERGY[skillId]
-  return [
-    {
-      ...base,
-      id: `${skillId}:t:${milestone}:1`,
-      name: combat ? 'Keen strikes' : 'Prospector',
-      description: combat ? '+15% combat power' : `+15% ${name} yield`,
-      mods: [
-        combat ? { kind: 'damage', value: 0.15 } : { kind: 'yield', value: 0.15, skill: skillId },
-      ],
-    },
-    {
-      ...base,
-      id: `${skillId}:t:${milestone}:2`,
-      name: 'Studious',
-      description: '+5% XP to every profession',
-      mods: [{ kind: 'global_xp', value: 0.05 }],
-    },
-    {
-      ...base,
-      id: `${skillId}:t:${milestone}:3`,
-      name: syn.name,
-      // the synergy: +X% to the target per level of *this* profession
-      description: synergyDescription(skillId),
-      mods: [{ kind: syn.kind, value: syn.value, skill: syn.target, synergy: skillId }],
-    },
-  ]
+  return [outputOption(base, name, combat), studiousOption(base), synergyOption(base)]
+}
+
+interface ChoiceBase {
+  skillId: SkillId
+  milestone: number
+  tier: 'choice'
+  requires: UnlockReq[]
+}
+
+/** The profession's own output boost (Keen strikes for combat, else yield). */
+function outputOption(base: ChoiceBase, name: string, combat: boolean): TalentDef {
+  return {
+    ...base,
+    id: `${base.skillId}:t:${base.milestone}:1`,
+    name: combat ? 'Keen strikes' : 'Prospector',
+    description: combat ? '+15% combat power' : `+15% ${name} yield`,
+    mods: [
+      combat
+        ? { kind: 'damage', value: 0.15 }
+        : { kind: 'yield', value: 0.15, skill: base.skillId },
+    ],
+  }
+}
+
+function studiousOption(base: ChoiceBase): TalentDef {
+  return {
+    ...base,
+    id: `${base.skillId}:t:${base.milestone}:2`,
+    name: 'Studious',
+    description: '+5% XP to every profession',
+    mods: [{ kind: 'global_xp', value: 0.05 }],
+  }
+}
+
+function synergyOption(base: ChoiceBase): TalentDef {
+  const syn = SYNERGY[base.skillId]
+  return {
+    ...base,
+    id: `${base.skillId}:t:${base.milestone}:3`,
+    name: syn.name,
+    // the synergy: +X% to the target per level of *this* profession
+    description: synergyDescription(base.skillId),
+    mods: [{ kind: syn.kind, value: syn.value, skill: syn.target, synergy: base.skillId }],
+  }
 }
 
 /** The levels at which a **mastery** talent (the capstone) opens up. */
@@ -269,42 +292,78 @@ function legendaryMod(skillId: SkillId): Mod {
  *      which is not maxed — levels faster.
  */
 export function masteryOptions(skillId: SkillId, milestone: number): TalentDef[] {
-  const name = SKILL_BY_ID.get(skillId)?.name ?? skillId
-  const syn = SYNERGY[skillId]
-  const partner = syn.target
-  const partnerName = SKILL_BY_ID.get(partner)?.name ?? partner
-  const capstone = milestone >= 100
-  const giftPct = capstone ? 1 : 0.5
-  const needSelf = capstone ? 40 : 20
-  const needGift = capstone ? 50 : 30
-  const base = { skillId, milestone, tier: 'mastery' as const }
+  const ctx = masteryCtx(skillId, milestone)
+  return [selfOption(ctx), patronOption(ctx)]
+}
 
+interface MasteryCtx {
+  skillId: SkillId
+  milestone: number
+  name: string
+  partner: SkillId
+  partnerName: string
+  capstone: boolean
+  giftPct: number
+  needSelf: number
+  needGift: number
+  base: { skillId: SkillId; milestone: number; tier: 'mastery' }
+  selfMod: Mod
+  selfLabel: string
+}
+
+function masteryCtx(skillId: SkillId, milestone: number): MasteryCtx {
+  const name = SKILL_BY_ID.get(skillId)?.name ?? skillId
+  const partner = SYNERGY[skillId].target
+  const capstone = milestone >= 100
+  const self = selfParts(skillId, name, capstone)
+  return {
+    skillId,
+    milestone,
+    name,
+    partner,
+    partnerName: SKILL_BY_ID.get(partner)?.name ?? partner,
+    capstone,
+    giftPct: capstone ? 1 : 0.5,
+    needSelf: capstone ? 40 : 20,
+    needGift: capstone ? 50 : 30,
+    base: { skillId, milestone, tier: 'mastery' },
+    ...self,
+  }
+}
+
+function selfParts(skillId: SkillId, name: string, capstone: boolean) {
   const selfMod: Mod = capstone
     ? legendaryMod(skillId)
     : { kind: 'xp', value: 0.25, skill: skillId }
-  const selfPer = Math.round(selfMod.value * 100)
+  const per = Math.round(selfMod.value * 100)
   const selfLabel = capstone
-    ? `+${selfPer}% ${LEGENDARY_LABEL[selfMod.kind]} forever`
-    : `+${selfPer}% XP to every ${name} action`
+    ? `+${per}% ${LEGENDARY_LABEL[selfMod.kind]} forever`
+    : `+${per}% XP to every ${name} action`
+  return { selfMod, selfLabel }
+}
 
-  return [
-    {
-      ...base,
-      id: `${skillId}:m:${milestone}:1`,
-      name: `${capstone ? 'Legendary' : 'Grandmaster'} ${name}`,
-      description: `${selfLabel} (needs ${partnerName} ${needSelf})`,
-      mods: [selfMod],
-      requires: [{ skill: partner, level: needSelf }],
-    },
-    {
-      ...base,
-      id: `${skillId}:m:${milestone}:2`,
-      name: `${capstone ? 'Grand ' : ''}Patron of ${partnerName}`,
-      description: `+${giftPct}% ${partnerName} XP per ${name} level (needs ${partnerName} ${needGift})`,
-      mods: [{ kind: 'xp', value: giftPct / 100, skill: partner, synergy: skillId }],
-      requires: [{ skill: partner, level: needGift }],
-    },
-  ]
+/** The profession's own capstone: +25% XP (Lv 50) or a permanent output bonus. */
+function selfOption(c: MasteryCtx): TalentDef {
+  return {
+    ...c.base,
+    id: `${c.skillId}:m:${c.milestone}:1`,
+    name: `${c.capstone ? 'Legendary' : 'Grandmaster'} ${c.name}`,
+    description: `${c.selfLabel} (needs ${c.partnerName} ${c.needSelf})`,
+    mods: [c.selfMod],
+    requires: [{ skill: c.partner, level: c.needSelf }],
+  }
+}
+
+/** The partner gift: XP to the other line, per level of this profession. */
+function patronOption(c: MasteryCtx): TalentDef {
+  return {
+    ...c.base,
+    id: `${c.skillId}:m:${c.milestone}:2`,
+    name: `${c.capstone ? 'Grand ' : ''}Patron of ${c.partnerName}`,
+    description: `+${c.giftPct}% ${c.partnerName} XP per ${c.name} level (needs ${c.partnerName} ${c.needGift})`,
+    mods: [{ kind: 'xp', value: c.giftPct / 100, skill: c.partner, synergy: c.skillId }],
+    requires: [{ skill: c.partner, level: c.needGift }],
+  }
 }
 
 export interface ParsedTalentId {

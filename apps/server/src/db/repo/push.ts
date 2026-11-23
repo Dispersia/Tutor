@@ -11,25 +11,19 @@ export interface PushSubscriptionRow {
   auth: string
 }
 
+export interface PushSubscriptionInput extends PushSubscriptionRow {
+  userId: string
+  userAgent?: string
+}
+
 /**
  * Stores a device's subscription. The endpoint identifies the device, so a
  * re-subscribe (permission granted again, key rotated) replaces the old row
  * instead of piling up dead ones.
  */
-export function upsertPushSubscription(
-  db: Db,
-  sub: PushSubscriptionRow & { userId: string; userAgent?: string },
-): void {
+export function upsertPushSubscription(db: Db, sub: PushSubscriptionInput): void {
   db.insert(pushSubscriptions)
-    .values({
-      id: id(),
-      userId: sub.userId,
-      endpoint: sub.endpoint,
-      p256dh: sub.p256dh,
-      auth: sub.auth,
-      userAgent: sub.userAgent,
-      createdAt: now(),
-    })
+    .values({ id: id(), ...sub, createdAt: now() })
     .onConflictDoUpdate({
       target: pushSubscriptions.endpoint,
       set: {
