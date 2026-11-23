@@ -42,13 +42,14 @@ export function actionProgressView(db: Db, userId: string): Map<string, ActionPr
 /**
  * Per-profession summary with its **derived** level (the sum of its actions). The
  * profession has no XP bar of its own, so `progress` is the average of its
- * actions' progress toward their next level.
+ * actions' progress toward their next level. Pass the action map when the caller
+ * already built one (see `loadPlayerCtx`).
  */
-export function skillSummaries(db: Db, userId: string) {
-  const byAction = actionProgressView(db, userId)
+export function skillSummaries(db: Db, userId: string, byAction?: Map<string, ActionProgress>) {
+  const actions = byAction ?? actionProgressView(db, userId)
   return SKILLS.map((s) => {
     const acts = actionsForSkill(s.id)
-    const rows = acts.map((a) => byAction.get(a.id))
+    const rows = acts.map((a) => actions.get(a.id))
     // the mean of the action levels: reads out of 100, and a new action lowers it
     const level = acts.length
       ? Math.round(rows.reduce((n, r) => n + (r?.level ?? 1), 0) / acts.length)

@@ -1,7 +1,7 @@
 /** The idle-rig controls (docs/DESIGN.md §13.5.1, §13.5.3.1). */
 
 import type { Context } from 'hono'
-import { setRigChoice, stopRig } from '../../services'
+import { loadPlayerCtx, setRigChoice, stopRig } from '../../services'
 import type { App, AppEnv } from '../../context'
 import { jsonBody, str } from '../body'
 import { boardSkills, gearPayload } from './board'
@@ -25,12 +25,13 @@ async function chooseRecipe(c: Context<AppEnv>) {
   if (!setRigChoice(deps.db, user.id, actionId, choiceId)) {
     return c.json({ error: 'unknown choice' }, 400)
   }
-  const board = boardSkills(deps, user.id)
+  const ctx = loadPlayerCtx(deps.db, deps.events, user.id)
+  const board = boardSkills(deps, user.id, ctx)
   return c.json({
     ok: true,
     skills: board.skills,
     rigs: board.rigs,
-    ...gearPayload(deps, user.id),
+    ...gearPayload(deps, user.id, ctx),
   })
 }
 
@@ -41,11 +42,12 @@ async function stopRigHandler(c: Context<AppEnv>) {
   const actionId = str(await jsonBody(c), 'actionId')
   if (!actionId) return c.json({ error: 'actionId required' }, 400)
   const stopped = stopRig(deps.db, deps.events, user.id, actionId)
-  const board = boardSkills(deps, user.id)
+  const ctx = loadPlayerCtx(deps.db, deps.events, user.id)
+  const board = boardSkills(deps, user.id, ctx)
   return c.json({
     ok: stopped,
     skills: board.skills,
     rigs: board.rigs,
-    ...gearPayload(deps, user.id),
+    ...gearPayload(deps, user.id, ctx),
   })
 }

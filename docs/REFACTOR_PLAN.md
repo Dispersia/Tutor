@@ -7,10 +7,11 @@
 > bodies, folded the last wide signatures, split all six large web `+page.svelte`
 > shells, split the `chat`/`combat`/`skills`/`sweep-cards` scripts, and deleted
 > the last size exemption — **no `legacyBig`/`wideSignatures`/baseline lists
-> remain**. What is still open is a per-feature CSS split and the shared
-> board/player loader — see §8.2. Goal: no mega files, no mega structs, no mega
-> methods. Small files, small pure functions, like‑with‑like, modern practices.
-> §8 records each phase; §8.1 is the re-audit that opened the second pass.
+> remain** — and gave the board/gear handlers one shared per-request player
+> loader. What is still open is a per-feature CSS split — see §8.2. Goal: no mega
+> files, no mega structs, no mega methods. Small files, small pure functions,
+> like‑with‑like, modern practices. §8 records each phase; §8.1 is the re-audit
+> that opened the second pass.
 
 ---
 
@@ -526,8 +527,12 @@ sweep script split last: its audit moves to `deck/sweep.ts`
 (`sweepDeck`/`deckContext`/`runPool`/`runBatch`/`applyVerdict` and the
 validation helpers) and `scripts/sweep-cards.ts` keeps only the CLI, so
 `eslint.config.js` deletes its `legacyBig` list too — **no size exemptions of any
-kind remain**. Also open: a `styles/components.css` split per feature, and the
-`Deps`/per-request context (findings 3–4) gaining one shared board/player loader.
+kind remain**. The shared board/player loader is in too: `services/context.ts`
+gains `loadPlayerCtx` (`PlayerCtx`: the settled rigs, action map, bands,
+profession/talent views and bonuses, loaded once), and `boardSkills`/`gearPayload`
+take it so the skills handlers read each store once instead of up to three times
+(findings 3–4; combat already threads one `levels` map). Still open: a
+`styles/components.css` split per feature.
 
 ---
 

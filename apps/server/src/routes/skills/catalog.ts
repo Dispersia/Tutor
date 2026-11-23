@@ -3,7 +3,7 @@
 import type { Context } from 'hono'
 import { SKILLS, SKILL_BY_ID, type SkillId } from '../../game/skills'
 import { SYNERGY } from '../../game/talents'
-import { aggregateBonuses } from '../../services'
+import { loadPlayerCtx } from '../../services'
 import type { App, AppEnv } from '../../context'
 import { bonusSummary, boardSkills, gearPayload, itemSources, type Board } from './board'
 
@@ -16,12 +16,13 @@ export function registerSkillCatalog(app: App) {
 function boardHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
-  const board = boardSkills(deps, user.id)
+  const ctx = loadPlayerCtx(deps.db, deps.events, user.id)
+  const board = boardSkills(deps, user.id, ctx)
   return c.json({
     skills: board.skills,
     rigs: board.rigs,
-    ...gearPayload(deps, user.id),
-    bonuses: bonusSummary(aggregateBonuses(deps.db, user.id)),
+    ...gearPayload(deps, user.id, ctx),
+    bonuses: bonusSummary(ctx.bonuses),
   })
 }
 
@@ -31,14 +32,15 @@ function skillPage(c: Context<AppEnv>) {
   const user = c.get('user')!
   const id = c.req.param('id') as SkillId
   if (!SKILL_BY_ID.has(id)) return c.json({ error: 'unknown profession' }, 404)
-  const board = boardSkills(deps, user.id)
+  const ctx = loadPlayerCtx(deps.db, deps.events, user.id)
+  const board = boardSkills(deps, user.id, ctx)
   return c.json({
     skill: board.skills.find((s) => s.id === id)!,
     fedBy: fedBy(id, board),
     rigs: board.rigs,
     sources: itemSources(),
-    ...gearPayload(deps, user.id),
-    bonuses: bonusSummary(aggregateBonuses(deps.db, user.id)),
+    ...gearPayload(deps, user.id, ctx),
+    bonuses: bonusSummary(ctx.bonuses),
   })
 }
 

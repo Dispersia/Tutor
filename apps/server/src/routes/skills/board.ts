@@ -26,20 +26,17 @@ import type { Bonuses } from '../../game/modifiers'
 import { listEquipment } from '../../db/repo'
 import {
   accountBandBonuses,
-  actionProgressView,
   actionState,
-  aggregateBonuses,
   bandView,
   gearSetsView,
   gearView,
   idleView,
   inventoryView,
   loadoutSetBonuses,
+  loadPlayerCtx,
   loadProgress,
-  settleRigs,
   skillLevelOf,
-  skillSummaries,
-  talentView,
+  type PlayerCtx,
 } from '../../services'
 import type { Deps } from '../../context'
 
@@ -47,18 +44,11 @@ import type { Deps } from '../../context'
 export type SkillView = ReturnType<typeof skillView>
 export type Board = ReturnType<typeof boardSkills>
 
-/** Every map the board reads, loaded once per request. */
-interface BoardData {
+/** The shared request maps plus the one lookup only the board derives. */
+interface BoardData extends PlayerCtx {
   db: Deps['db']
   userId: string
-  now: number
-  settled: ReturnType<typeof settleRigs>
-  progress: Map<string, ReturnType<typeof skillSummaries>[number]>
-  byAction: ReturnType<typeof actionProgressView>
-  talents: Map<string, ReturnType<typeof talentView>[number]>
-  bonuses: Bonuses
   bandById: Map<BandId, ReturnType<typeof bandView>[number]>
-  levels: Map<string, number>
   bandLevels: Map<BandId, number>
 }
 
@@ -66,34 +56,25 @@ interface BoardData {
  * Every profession with its derived level, and each action with its own level and
  * current passive. Idle rigs settle here, on read (docs §13.5.1): the bank is
  * credited for whatever every running machine made since the last request, so the
- * client always sees the truth.
+ * client always sees the truth. Pass the request's `PlayerCtx` to share the load
+ * with `gearPayload` instead of scanning the stores again.
  */
-export function boardSkills(deps: Deps, userId: string, now = Date.now()) {
-  const data = loadBoard(deps, userId, now)
+export function boardSkills(deps: Deps, userId: string, ctx?: PlayerCtx) {
+  const data = boardData(deps, userId, ctx ?? loadPlayerCtx(deps.db, deps.events, userId))
   return {
     skills: SKILLS.map((s) => skillView(s, data)),
-    rigs: { maxLive: MAX_LIVE_RIGS, live: liveRigCount(data.settled.rigs, now) },
+    rigs: { maxLive: MAX_LIVE_RIGS, live: liveRigCount(data.settled.rigs, data.now) },
   }
 }
 
-function loadBoard(deps: Deps, userId: string, now: number): BoardData {
-  const db = deps.db
-  const settled = settleRigs(db, deps.events, userId, now)
-  const byAction = actionProgressView(db, userId)
-  const levels = new Map([...byAction].map(([id, p]) => [id, p.level]))
-  const bands = bandView(db, userId)
+/** The board's view data: the shared request maps plus the band lookup. */
+function boardData(deps: Deps, userId: string, ctx: PlayerCtx): BoardData {
   return {
-    db,
+    ...ctx,
+    db: deps.db,
     userId,
-    now,
-    settled,
-    byAction,
-    levels,
-    progress: new Map(skillSummaries(db, userId).map((s) => [s.skillId, s])),
-    talents: new Map(talentView(db, userId).map((t) => [t.skillId, t])),
-    bonuses: aggregateBonuses(db, userId, levels),
-    bandById: new Map(bands.map((b) => [b.id, b])),
-    bandLevels: new Map(bands.map((b) => [b.id, b.level])),
+    bandById: new Map(ctx.bands.map((b) => [b.id, b])),
+    bandLevels: new Map(ctx.bands.map((b) => [b.id, b.level])),
   }
 }
 
@@ -181,22 +162,23 @@ export function bonusSummary(b: Bonuses) {
 }
 
 /** The gear screen's payload: worn rows, rolled instances and saved sets. */
-export function gearPayload(deps: Deps, userId: string) {
-  const progress = loadProgress(deps.db, userId)
+export function gearPayload(deps: Deps, userId: string, ctx?: Pick<PlayerCtx, 'levels' | 'bands'>) {
+  const levels = ctx?.levels ?? loadProgress(deps.db, userId).levels
+  const bands = ctx?.bands ?? bandView(deps.db, userId)
   return {
     equipment: listEquipment(deps.db, userId).map((e) => ({
       slot: e.slot,
       itemId: e.itemId,
       instanceId: e.instanceId ?? null,
     })),
-    gear: gearView(deps.db, userId, progress.levels),
+    gear: gearView(deps.db, userId, levels),
     sets: gearSetsView(deps.db, userId),
     setBonuses: loadoutSetBonuses(deps.db, userId),
-    bands: bandView(deps.db, userId),
+    bands,
     /** the enchant catalog, grouped by slot (§13.5.3.2) */
     enchants: ENCHANTS,
     /** the player's Enchanting level, to gate enchants in the UI */
-    enchantingLevel: skillLevelOf(deps.db, userId, 'enchanting', progress.levels),
+    enchantingLevel: skillLevelOf(deps.db, userId, 'enchanting', levels),
     /** the account-wide passive from tier bands (§13.5.3) */
     buffs: { band: accountBandBonuses(deps.db, userId) },
     items: ITEMS.map((i) => ({ ...i, value: itemValue(i) })),
