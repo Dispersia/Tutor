@@ -4,7 +4,13 @@ import { getActionXp, listActionProgress, listTalents, setActionXp } from '../db
 import type { Db } from '../db/client'
 import type { EventBus } from '../events'
 import { computeBonuses, type Bonuses } from '../game/modifiers'
-import { ACTION_BY_ID, actionLevelInfo, actionsForSkill, type SkillId } from '../game/skills'
+import {
+  ACTION_BY_ID,
+  actionLevelInfo,
+  actionsForSkill,
+  type ActionDef,
+  type SkillId,
+} from '../game/skills'
 import { resolveTalents } from '../game/talents'
 
 /** Every action's level for a user; actions never trained sit at level 1. */
@@ -60,11 +66,7 @@ export function primaryActionId(skillId: SkillId): string {
   return actionsForSkill(skillId)[0]!.id
 }
 
-export function aggregateBonuses(
-  db: Db,
-  userId: string,
-  levels?: Map<string, number>,
-): Bonuses {
+export function aggregateBonuses(db: Db, userId: string, levels?: Map<string, number>): Bonuses {
   return computeBonuses(
     levels ?? actionLevelMap(db, userId),
     resolveTalents(listTalents(db, userId)),
@@ -101,53 +103,84 @@ export interface XpAward {
 }
 
 /** Credits XP to one action. */
-export function awardActionXp(
-  db: Db,
-  bus: EventBus,
-  userId: string,
-  award: XpAward,
-): ActionAward {
+export function awardActionXp(db: Db, bus: EventBus, userId: string, award: XpAward): ActionAward {
   const { actionId, amount, ctx } = award
   const action = ACTION_BY_ID.get(actionId)!
+  // The map is derived once and threaded through, so an award is one scan
+  // whether or not the caller passed a `ProgressCtx` (docs/REFACTOR_PLAN.md §8.1).
+  const levels = ctx?.levels ?? actionLevelMap(db, userId)
+  const bonuses = ctx?.bonuses ?? aggregateBonuses(db, userId, levels)
   const beforeXp = getActionXp(db, userId, actionId)
-  const bonus = ctx?.bonuses ?? aggregateBonuses(db, userId)
-  const gained = Math.max(0, Math.round(amount * (1 + bonus.xp(actionId) + bonus.globalXp)))
+  const gained = Math.max(0, Math.round(amount * (1 + bonuses.xp(actionId) + bonuses.globalXp)))
+  const credited = creditXp(db, bus, { userId, actionId, action, beforeXp, gained, levels })
+  return { actionId, skillId: action.skillId, gained, ...credited }
+}
+
+interface CreditReq {
+  userId: string
+  actionId: string
+  action: ActionDef
+  beforeXp: number
+  gained: number
+  levels: Map<string, number>
+}
+
+/** Writes the new XP, emits the events and reports the levels it produced. */
+function creditXp(db: Db, bus: EventBus, req: CreditReq) {
+  const { userId, actionId, action, beforeXp, gained, levels } = req
   const xp = beforeXp + gained
   const info = actionLevelInfo(xp)
   const before = actionLevelInfo(beforeXp).level
-  const skillBefore = skillLevelOf(db, userId, action.skillId, ctx?.levels)
+  const skillBefore = skillLevelOf(db, userId, action.skillId, levels)
   setActionXp(db, userId, actionId, xp, info.level)
-  ctx?.levels.set(actionId, info.level)
-  bus.emit('skill.xp', {
-    userId,
-    actionId,
-    skillId: action.skillId,
-    amount: gained,
-    xp,
-    level: info.level,
-  })
-
+  levels.set(actionId, info.level)
+  const skillLevel = skillLevelOf(db, userId, action.skillId, levels)
+  emitXp({ bus, userId, action, actionId, gained, xp, level: info.level })
   const leveledUp = info.level > before
-  let talentUnlocked: number | null = null
-  if (leveledUp) {
-    bus.emit('skill.level.up', {
-      userId,
-      actionId,
-      skillId: action.skillId,
-      level: info.level,
-    })
-    const skillLevel = skillLevelOf(db, userId, action.skillId, ctx?.levels)
-    const milestone = Math.floor(skillLevel / 10) * 10
-    if (milestone >= 10 && milestone > skillBefore) talentUnlocked = milestone
-  }
-  return {
-    actionId,
-    skillId: action.skillId,
-    xp,
-    level: info.level,
-    skillLevel: skillLevelOf(db, userId, action.skillId, ctx?.levels),
-    leveledUp,
-    gained,
-    talentUnlocked,
-  }
+  const talentUnlocked = leveledUp
+    ? unlockedTalent({ bus, userId, action, level: info.level, skillBefore, skillLevel })
+    : null
+  return { xp, level: info.level, skillLevel, leveledUp, talentUnlocked }
+}
+
+interface XpEvent {
+  bus: EventBus
+  userId: string
+  action: ActionDef
+  actionId: string
+  gained: number
+  xp: number
+  level: number
+}
+
+function emitXp(e: XpEvent): void {
+  e.bus.emit('skill.xp', {
+    userId: e.userId,
+    actionId: e.actionId,
+    skillId: e.action.skillId,
+    amount: e.gained,
+    xp: e.xp,
+    level: e.level,
+  })
+}
+
+/** A profession level-up: announces it and reports the milestone it opened. */
+interface LevelUp {
+  bus: EventBus
+  userId: string
+  action: ActionDef
+  level: number
+  skillBefore: number
+  skillLevel: number
+}
+
+function unlockedTalent(up: LevelUp): number | null {
+  up.bus.emit('skill.level.up', {
+    userId: up.userId,
+    actionId: up.action.id,
+    skillId: up.action.skillId,
+    level: up.level,
+  })
+  const milestone = Math.floor(up.skillLevel / 10) * 10
+  return milestone >= 10 && milestone > up.skillBefore ? milestone : null
 }

@@ -1,18 +1,13 @@
 /**
- * n+1 sentence builder for the frequency curriculum (docs/DESIGN.md §13.7).
+ * The hand-written Mandarin pattern grammar — data only (docs/DESIGN.md §13.7).
  *
- * Given the *new* word of the current step and the set of words the learner
- * already knows, this finds a short Mandarin sentence that uses the new word
- * exactly once and nothing else the learner has not met. That is the whole
- * point of the path: every card is "known words + exactly one new thing".
- *
- * It is deliberately a small hand-written pattern grammar, not an LLM call, so
- * it is instant, deterministic and works with no API key. A little semantic
- * tagging (verb → allowed objects, which adjectives describe a person) keeps
- * the generated sentences from being nonsense like "I drink computer".
+ * `PATTERNS` is the list of sentence shapes the builder tries, in order. The
+ * semantic sets (which noun is a person, which verb takes which object) are what
+ * keep the generated sentences from being nonsense like "I drink computer".
+ * `build.ts` is the engine that fills these slots; a content edit lives here.
  */
 
-import { FREQUENCY, LEXICON, type FreqWord, type Pos } from '../seed/frequency'
+import type { FreqWord, Pos } from '../../seed/frequency'
 
 export type NounClass = 'person' | 'place' | 'thing'
 
@@ -48,7 +43,7 @@ const PEOPLE = [...PERSON_NOUNS]
 const THING_SUBJECTS = [...FOOD, ...ITEMS, '中國', '家', '學校', '醫院', '商店', '飯館']
 
 /** What each transitive verb can reasonably take as its object. */
-const VERB_OBJECTS: Record<string, string[]> = {
+export const VERB_OBJECTS: Record<string, string[]> = {
   吃: ['米飯', '菜', '水果', '蘋果'],
   喝: ['水', '茶'],
   看: ['書', '電視', '電腦', '貓', '狗', '人'],
@@ -67,7 +62,7 @@ const VERB_OBJECTS: Record<string, string[]> = {
   做: ['米飯', '菜', '工作'],
 }
 
-const OBJECT_VERBS = new Set(Object.keys(VERB_OBJECTS))
+export const OBJECT_VERBS = new Set(Object.keys(VERB_OBJECTS))
 
 /** Action verbs that read naturally after a modal (我會寫). */
 const ACTION_VERBS = ['吃', '喝', '看', '讀', '寫', '買', '用', '找', '做']
@@ -81,7 +76,7 @@ const STRONG_ADJ = ['忙', '累', '高興', '漂亮']
 /** Nouns that work with 很 + THING_ADJ. */
 const THING_ADJ_NOUNS = [...THING_SUBJECTS]
 
-interface Slot {
+export interface Slot {
   pos: Pos[]
   role: string
   /** prefer these words when filling the slot (still must be known) */
@@ -98,7 +93,7 @@ interface Slot {
   exclude?: string[]
 }
 
-interface Pattern {
+export interface Pattern {
   /** literal Chinese words and fillable slots, in order */
   parts: Array<string | Slot>
   /** the new word may fill one of these roles */
@@ -157,7 +152,7 @@ const vrb = (o: Partial<Slot> = {}): Slot => ({
 })
 const obj = (o: Partial<Slot> = {}): Slot => ({ pos: ['noun'], role: 'o', objectOf: 'v', ...o })
 
-const PATTERNS: Pattern[] = [
+export const PATTERNS: Pattern[] = [
   // Subject + verb + object:  我喝茶
   {
     parts: [subj(), vrb(), obj()],
@@ -348,175 +343,3 @@ const PATTERNS: Pattern[] = [
     english: (v) => `${gloss(v.a!)} and ${gloss(v.b!)}`,
   },
 ]
-
-/** Positions of speech for which sentence_build can ever apply. */
-export const SENTENCE_POS: ReadonlySet<Pos> = new Set<Pos>([
-  'pron',
-  'noun',
-  'vt',
-  'vi',
-  'vadj',
-  'adv',
-  'aux',
-  'part',
-  'conj',
-  'prep',
-])
-
-export interface SentenceBuild {
-  /** the correct order, one token per word */
-  tokens: string[]
-  /** shuffled tiles: the tokens plus a few distractors */
-  bank: string[]
-  /** English prompt for the sentence */
-  gloss: string
-  /** pinyin of the whole sentence */
-  reading: string
-  /** the new word that this sentence introduces */
-  target: string
-}
-
-function matchesSlot(w: FreqWord, slot: Slot): boolean {
-  if (!slot.pos.includes(w.pos)) return false
-  if (slot.only && !slot.only.includes(w.word)) return false
-  if (slot.exclude?.includes(w.word)) return false
-  if (slot.objectVerb && !OBJECT_VERBS.has(w.word)) return false
-  if (slot.nounClass && nounClass(w.word) !== slot.nounClass) return false
-  return true
-}
-
-function candidatesFor(
-  slot: Slot,
-  target: FreqWord,
-  known: Set<string>,
-  used: Set<string>,
-  values: Record<string, FreqWord>,
-): FreqWord[] {
-  let pool = FREQUENCY.filter(
-    (w) => matchesSlot(w, slot) && known.has(w.word) && !used.has(w.word) && w.word !== target.word,
-  )
-  if (slot.objectOf) {
-    const allowed = VERB_OBJECTS[values[slot.objectOf]?.word ?? '']
-    pool = allowed ? pool.filter((w) => allowed.includes(w.word)) : []
-  }
-  if (slot.prefer) {
-    const preferred = pool.filter((w) => slot.prefer!.includes(w.word))
-    if (preferred.length) return preferred
-  }
-  return pool
-}
-
-/**
- * Tries to place the new word into one pattern, filling every other part with
- * words the learner already knows. Returns the first match, or `undefined`.
- */
-export function buildSentence(
-  target: FreqWord,
-  known: Set<string>,
-  rand: () => number = Math.random,
-): SentenceBuild | undefined {
-  const knows = new Set(known)
-  knows.add(target.word)
-
-  for (const pattern of PATTERNS) {
-    const roleFeatures = (pattern.featureRoles ?? []).filter((f) => f.pos.includes(target.pos))
-    const litFeature = pattern.featureLiterals?.includes(target.word) ?? false
-    if (roleFeatures.length === 0 && !litFeature) continue
-
-    const literalOk = pattern.parts.every(
-      (p) => typeof p !== 'string' || knows.has(p) || p === target.word,
-    )
-    if (!literalOk) continue
-
-    const attempts: Array<string | undefined> = roleFeatures.map((f) => f.role)
-    const roleChoices: Array<string | undefined> = litFeature ? [undefined, ...attempts] : attempts
-
-    for (const targetRole of roleChoices) {
-      const values: Record<string, FreqWord> = {}
-      const used = new Set<string>([target.word])
-      let ok = true
-      for (const part of pattern.parts) {
-        if (typeof part === 'string') continue
-        if (part.role === targetRole) {
-          if (!matchesSlot(target, part)) {
-            ok = false
-            break
-          }
-          // object compatibility (the verb is already filled: patterns put it first)
-          if (part.objectOf) {
-            const allowed = VERB_OBJECTS[values[part.objectOf]?.word ?? '']
-            if (!allowed || !allowed.includes(target.word)) {
-              ok = false
-              break
-            }
-          }
-          values[part.role] = target
-          continue
-        }
-        const pool = candidatesFor(part, target, knows, used, values)
-        if (pool.length === 0) {
-          ok = false
-          break
-        }
-        const pick = pool[Math.floor(rand() * pool.length) % pool.length]!
-        values[part.role] = pick
-        used.add(pick.word)
-      }
-      if (!ok) continue
-
-      const tokens = pattern.parts
-        .map((p) => (typeof p === 'string' ? p : values[p.role]!.word))
-        .filter(Boolean)
-      if (tokens.length < 2) continue
-
-      const distractors = pickDistractors(target, tokens, rand)
-      const bank = shuffle([...tokens, ...distractors], rand)
-      return {
-        tokens,
-        bank,
-        gloss: sentenceGloss(pattern.english(values)),
-        reading: tokens.map((t) => LEXICON.get(t)?.pinyin ?? t).join(' '),
-        target: target.word,
-      }
-    }
-  }
-  return undefined
-}
-
-/** Cheap feature check without building a full sentence (used for availability). */
-export function canBuildSentence(target: FreqWord, known: Set<string>): boolean {
-  return buildSentence(target, known, () => 0) !== undefined
-}
-
-function sentenceGloss(raw: string): string {
-  const s = raw.trim().replace(/\s+/g, ' ')
-  return s.charAt(0).toUpperCase() + s.slice(1) + (/[.?!]$/.test(s) ? '' : '.')
-}
-
-function pickDistractors(target: FreqWord, tokens: string[], rand: () => number): string[] {
-  const inSentence = new Set(tokens)
-  const tokenPos = new Set(tokens.map((t) => LEXICON.get(t)?.pos).filter(Boolean) as Pos[])
-  const pool = FREQUENCY.filter(
-    (w) => !inSentence.has(w.word) && w.word !== target.word && tokenPos.has(w.pos),
-  )
-  const fallback = FREQUENCY.filter((w) => !inSentence.has(w.word) && w.word !== target.word)
-  const source = pool.length >= 2 ? pool : fallback
-  const picks: string[] = []
-  const seen = new Set(inSentence)
-  for (let i = 0; i < source.length * 2 && picks.length < 3; i++) {
-    const w = source[Math.floor(rand() * source.length) % source.length]!
-    if (seen.has(w.word)) continue
-    seen.add(w.word)
-    picks.push(w.word)
-  }
-  return picks
-}
-
-function shuffle<T>(items: T[], rand: () => number): T[] {
-  const a = [...items]
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(rand() * (i + 1))
-    ;[a[i], a[j]] = [a[j]!, a[i]!]
-  }
-  return a
-}

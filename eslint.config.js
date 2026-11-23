@@ -2,22 +2,23 @@ import js from '@eslint/js'
 import globals from 'globals'
 import svelte from 'eslint-plugin-svelte'
 import tseslint from 'typescript-eslint'
+import { longFunctions } from './eslint.function-baseline.js'
 
 /**
  * Lint + size-budget guardrails (docs/REFACTOR_PLAN.md, Phase 0).
  *
  * The size budget is the mechanical half of the decomposition: no file over
- * `MAX_LINES`, no function over `MAX_FN_LINES`, no signature over `MAX_PARAMS`.
- * New code is held to the budget from day one. The files still being split are
- * listed in `legacyBig` with the size ceiling off — **remove each entry the
- * moment its file fits**. Tests are exempt from `max-lines` (they grow with
- * cases) but not from the function ceiling.
+ * `MAX_LINES`, **no function over `MAX_FN_LINES`** (small by default — if a
+ * function needs more than twenty lines it is doing more than one thing), no
+ * signature over `MAX_PARAMS`. New code is held to the budget from day one. The
+ * functions still being split are listed in `eslint.function-baseline.js` with
+ * the function ceiling off — **that list only ever shrinks**.
  *
  * Errors fail `bun run lint`; warnings are advisory (they name existing rough
  * edges that the phase plan works through).
  */
 const MAX_LINES = 400
-const MAX_FN_LINES = 80
+const MAX_FN_LINES = 20
 const MAX_PARAMS = 5
 
 const sizeRules = {
@@ -30,32 +31,31 @@ const sizeRules = {
 }
 
 /** Mega files awaiting decomposition: the size ceiling is off here, nothing else. */
-const legacyBig = [
-  'apps/server/src/game/grammar.ts',
-  'apps/server/src/db/schema.ts',
-  'apps/server/src/routes/practice.ts',
-  'apps/server/src/routes/decks.ts',
-  'apps/web/src/routes/**/*.svelte',
-  'apps/web/src/lib/skills.ts',
-  'scripts/sweep-cards.ts',
-]
+const legacyBig = ['apps/web/src/routes/**/*.svelte', 'scripts/sweep-cards.ts']
 
 /**
  * Files whose own length is fine but which still hold one oversized function or
  * signature. Only the function ceiling is off here, so the file budget still
  * applies. Remove each entry once its function is split.
  */
-const legacyFunctions = [
+const legacyFunctions = longFunctions
+
+/** Wide signatures that predate the budget; fold these into options objects as
+ * they are touched. Only `max-params` is relaxed for these files. */
+const wideSignatures = [
   'apps/server/src/audio/service.ts',
   'apps/server/src/game/bands.ts',
-  'apps/server/src/game/idle.test.ts',
   'apps/server/src/game/srs.ts',
   'apps/server/src/routes/auth.ts',
   'apps/server/src/routes/chat.ts',
   'apps/server/src/routes/combat.ts',
   'apps/server/src/routes/settings.ts',
   'apps/server/src/routes/skills.ts',
-  'apps/server/src/skills.test.ts',
+  'apps/server/src/services/gear.ts',
+  'apps/server/src/services/items.ts',
+  'apps/server/src/services/idle.ts',
+  'apps/server/src/services/overview.ts',
+  'apps/server/src/services/srs.ts',
 ]
 
 /** `bun test` globals (the `globals` package has no bun preset). */
@@ -124,19 +124,13 @@ export default tseslint.config(
   // Files with one oversized function left: keep the file ceiling, drop the rest.
   {
     files: legacyFunctions,
-    rules: { 'max-lines-per-function': 'off', 'max-params': 'off' },
+    rules: { 'max-lines-per-function': 'off' },
   },
 
   // Files whose wide signatures predate the budget; fold these into options
   // objects as they are touched. Only `max-params` is relaxed here.
   {
-    files: [
-      'apps/server/src/services/gear.ts',
-      'apps/server/src/services/items.ts',
-      'apps/server/src/services/idle.ts',
-      'apps/server/src/services/overview.ts',
-      'apps/server/src/services/srs.ts',
-    ],
+    files: wideSignatures,
     rules: { 'max-params': 'off' },
   },
 

@@ -1,8 +1,12 @@
 # Tutor — decomposition & architecture plan
 
-> Status: **proposal, not yet executed.** Goal: no mega files, no mega structs,
-> no mega methods. Small files, small pure functions, like‑with‑like, modern
-> practices. This document is the map; work is split into phases at the end.
+> Status: **phases 0–13 landed.** A second pass (Phases 9–13) split the two mega
+> routes, the grammar tables, the schema and the web skills client, lowered the
+> function budget to 20 lines, and fixed the action-level map rebuild. Phases 14
+> (the function burn-down) and 15 (web shells, route validation) are open — see
+> §8.2. Goal: no mega files, no mega structs, no mega methods. Small files, small
+> pure functions, like‑with‑like, modern practices. §8 records each phase; §8.1 is
+> the re-audit that opened the second pass.
 
 ---
 
@@ -43,7 +47,8 @@ style — `game/idle.ts` (pure math, one concern, documented) and
 2. **Pure core, thin edges.** Maths and rules are pure functions with no `Db`.
    Only a thin *application* layer touches the database; only a thin *route*
    layer touches HTTP.
-3. **Small by construction, enforced by tooling.** `max-lines`, `max-lines-per-function`,
+3. **Small by construction, enforced by tooling.** `max-lines`, `max-lines-per-function`
+   (**20** lines — if it needs more, it is doing more than one thing; see Phase 13),
    `max-params`, no-barrel-cycle rules in ESLint, plus `knip` for dead code and
    `dependency-cruiser` for layer rules (routes → services → data → domain, never
    backwards).
@@ -372,6 +377,131 @@ map; the stale `game/service.ts` reference is fixed. The remaining `knip` report
 is an advisory baseline of unused exports to clear as modules are touched — the
 barrels (`db/repo`, `services`, `game/skills`, `deck/generate`, `exercises`) are
 the public entry points, so they stay.
+
+---
+
+## 8.1 Re-audit after Phase 8 (what is still oversized)
+
+A fresh pass over what `legacyBig` / `legacyFunctions` still hide, plus new
+findings. Line counts are the files as they stand at `d43a606`.
+
+| File | Lines | Problem |
+| --- | ---: | --- |
+| `apps/server/src/routes/practice.ts` | 742 | Phase 4 never ran: one `registerPractice` closure, 8 handlers + pure selectors + LLM-judge factory in one file |
+| `apps/server/src/routes/decks.ts` | 602 | Phase 4 never ran: one `registerDecks` closure, 10 handlers + a `DECK_SCHEMA` blob + the pitch annotator factory |
+| `apps/server/src/game/grammar.ts` | 522 | Phase 5 never ran: 14 `PATTERNS` + the semantic/gender tables fused with `buildSentence`/`matchesSlot`/`candidatesFor` |
+| `apps/server/src/db/schema.ts` | 459 | 26 tables of pure declarations in one file (Phase 2 deferred it) |
+| `apps/server/src/routes/skills.ts` | 405 | 16 handlers over one resource; `boardSkills` builds a whole profession tree in the route |
+| `apps/web/src/lib/skills.ts` | 506 | 35 DTO interfaces + 25 client functions in one module; a page importing one type pulls the whole API surface |
+| `apps/web/src/routes/(app)/{practice,settings,skills/[id],learn,inventory,home}` | 404–628 | Still above the ~250-line shell target after Phase 6 |
+| `apps/web/src/styles/components.css` | 527 | One stylesheet for every shared primitive and feature |
+
+New findings this pass:
+
+**Correctness / efficiency**
+
+1. **`awardActionXp` rebuilds the action-level map up to 3× per award** when no
+   `ProgressCtx` is passed: `aggregateBonuses` loads it once, then each of the
+   three `skillLevelOf` calls (`skillBefore`, the milestone check, the return
+   value) reloads it. Every caller that awards several actions in a row (`combat`
+   passes a ctx) is fine; a single award pays for 4 `listActionProgress` scans.
+2. **`awardActionXp` re-reads `getActionXp` and re-writes `setActionXp` per
+   award**, but a `ProgressCtx` already knows the level — the XP row still has to
+   be read, so this one is acceptable, not a bug.
+3. **`combatResolve` runs `loadProgress` and then `encounterContext` →
+   `loadPlayerCombat(…, levels)`; `combat.ts` `monsterState` re-derives bands per
+   monster**, so `/api/combat` settles rigs, loads progress twice
+   (`boardSkills`-style) and derives gear stats per monster. Reading the combat
+   screen loads the action map at least twice.
+4. **`routes/skills.ts` and `routes/combat.ts` each build the "board"/player view
+   from scratch per request**, with no shared per-request context; two GETs in
+   the same page render recompute `settleRigs` (a write path) twice.
+5. **`learnerOf` is duplicated verbatim in `routes/practice.ts` and
+   `routes/combat.ts`**, and the same `{card, learner, distractors, readings,
+   known, showReadings}` exercise-context literal is assembled in four places
+   (practice next, practice grade, practice speak, combat hit/start).
+
+**Structure**
+
+6. `registerPractice` / `registerDecks` / `registerSkills` are the last
+   "register everything in one closure" route modules; the per-handler split is
+   what makes a route's schema, guards and body cast reviewable in isolation.
+7. `apps/web/src/lib/skills.ts` is a barrel that mixes wire DTOs with `fetch`
+   wrappers; the DTOs belong in `lib/skills/types.ts` so components import only
+   types.
+8. `db/schema.ts` monolith makes a data edit and a query edit touch one file.
+
+---
+
+## 8.2 Phase list (second pass)
+
+Each phase is independently shippable and typechecked, one module per commit.
+
+**Phase 9 — split the mega routes (done).**
+`routes/practice.ts` (742) became `routes/practice/`: `index.ts` (registration
+only), `select.ts` (the pure selectors — `pickStudyCard`, `pickReviewCard`,
+`resolveLesson`, `readingMap`, `pickNextExercise`, `lessonOfCard`), `exerciseCtx.ts`
+(the one assembled exercise context, plus the shared `learnerOf`), `judge.ts` (the
+LLM-judge factory), `action.ts` (`settleAction`), `catalog.ts` (the GET catalog),
+`next.ts`, `grade.ts`, `speak.ts`, `studyMore.ts`. `routes/decks.ts` (602) became
+`routes/decks/`: `index.ts`, `view.ts` (`deckView` + the pitch fetcher factory),
+`cards.ts`, `create.ts`, `import.ts`, `grow.ts`, `settings.ts`, `pitch.ts`.
+`learnerOf` and the exercise-context literal now live in
+`routes/practice/exerciseCtx.ts`, and `routes/combat.ts` imports them, so the
+duplication (finding 5) is gone. `legacyBig` no longer lists either route. Every
+function in the split modules was then held to the new 20-line budget, so
+neither module is in `eslint.function-baseline.js` either.
+
+**Phase 10 — split `game/grammar.ts` (done).**
+The pure pattern data (`PATTERNS`, the semantic sets, the English gloss tables)
+moved to `game/grammar/patterns.data.ts`; `nounClass`/`SENTENCE_POS`/`buildSentence`
+/`canBuildSentence` and the slot matcher live in `game/grammar/build.ts` behind a
+thin `game/grammar/index.ts` barrel. Call sites keep importing `game/grammar`.
+`legacyBig` no longer lists `grammar.ts`.
+
+**Phase 11 — split `db/schema.ts` (done).**
+`db/schema.ts` (459) became `db/schema/`: `users.ts`, `content.ts` (decks/cards/
+sessions/messages), `history.ts` (reviews/attempts/xp/stats/settings), `game.ts`
+(action progress/gather log/inventory/talents), `gear.ts` (instances/equipment/
+sets/player state), `srs.ts`, `push.ts`, `audio.ts`, behind `db/schema/index.ts`.
+Every importer keeps using `db/schema` (or `../db/schema`). `legacyBig` no longer
+lists `schema.ts`.
+
+**Phase 12 — web: split `lib/skills.ts` (done).**
+`apps/web/src/lib/skills.ts` became `apps/web/src/lib/skills/`: `types.ts` (every
+DTO) and `client.ts` (the `api()` wrappers) behind `skills/index.ts`, so a
+component can import a type without pulling the fetch surface. `legacyBig` no
+longer lists `web/…/lib/skills.ts`.
+
+**Phase 13 — efficiency & the function budget (done).**
+(a) `awardActionXp` no longer rebuilds the action-level map: it derives the map
+once (from `ctx` or `listActionProgress`), threads that map into every
+`skillLevelOf` call and into `aggregateBonuses`, and computes the profession
+level once, so a single award is one scan instead of three (finding 1).
+(b) `max-lines-per-function` dropped from 80 to **20**: a function over twenty
+lines is doing more than one thing. Every module this pass wrote or rewrote
+(the two route splits, the grammar engine, the web skills client, the combat
+route) was split to fit, and its `legacyFunctions` entry removed. The files that
+were already over twenty lines before the bar moved are listed in
+`eslint.function-baseline.js` — a burn-down list that only ever shrinks (123
+paths after this pass, down from 127 files holding 164 functions over 25 lines).
+
+**Phase 14 — the function burn-down (open).**
+Work the `eslint.function-baseline.js` list to zero, worst first (the >40-line
+functions before the 20-line ones). Most are repository row mappers
+(`toCard`, `upsertSrs`, `upsertEncounter`) that list every column inline — the
+fix is a small `row → field` helper per table, not a schema change. Others are
+test bodies, which get a smaller allowance rather than none. The list shrinks;
+it never grows, and new code is held to 20 from day one.
+
+**Phase 15 — the web shells & route validation (open).**
+The remaining `+page.svelte` files over ~250 lines (`practice`, `settings`,
+`skills/[id]`, `learn`, `inventory`, `home`) get the Phase 6 treatment: pure
+derivations into `lib/<feature>view.ts`, presentational pieces into
+`lib/components/<feature>/`. `styles/components.css` splits per feature. Then
+Phase 4's other half: a `parseBody(c, schema)` helper (valibot) replaces the
+remaining `(await c.req.json()) as {…}` casts in the split routes, and the
+`Deps`/per-request context (findings 3–4) gains one shared board/player loader.
 
 ---
 
