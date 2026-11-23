@@ -14,19 +14,18 @@
     type GearInstanceDTO,
     type GearResponse,
   } from '#lib/skills'
-  import { ACCENT, accentStyle, qualityAccent, tierAccent } from '#lib/theme'
+  import { ACCENT, accentStyle, tierAccent } from '#lib/theme'
   import { href } from '#lib/paths'
   import Spinner from '#lib/components/Spinner.svelte'
   import CraftedGearList from '#lib/components/inventory/CraftedGearList.svelte'
+  import PaperDoll from '#lib/components/inventory/PaperDoll.svelte'
+  import StatChips from '#lib/components/inventory/StatChips.svelte'
+  import SetBonusList from '#lib/components/inventory/SetBonusList.svelte'
+  import SavedSets from '#lib/components/inventory/SavedSets.svelte'
   import {
-    SLOTS,
-    STAT_LABEL,
-    STAT_ORDER,
+    baseEquipmentOf,
     candidatesIn,
     combatBuffsOf,
-    lockedText,
-    requiresText,
-    statsText,
     totalsOf,
     wornOf,
   } from '#lib/inventoryview'
@@ -61,13 +60,7 @@
   const candidates = (slot: string) => candidatesIn(slot, gear)
 
   /** Equipment-tier bank items with no rolled instance (legacy crafts). */
-  const baseEquipment = $derived.by(() => {
-    const rolled = new Set(gear.map((g) => g.itemId))
-    return (data?.inventory ?? []).filter((row) => {
-      const item = itemMap.get(row.itemId)
-      return row.count > 0 && item?.tier === 'equipment' && !rolled.has(row.itemId)
-    })
-  })
+  const baseEquipment = $derived(baseEquipmentOf(data?.inventory ?? [], itemMap, gear))
 
   onMount(() => {
     void refresh()
@@ -100,18 +93,6 @@
   /** Apply the selected catalog enchant to a piece. */
   function enchant(g: GearInstanceDTO, enchantId: string) {
     void run(() => applyEnchant(g.id, enchantId))
-  }
-
-  function wornName(slot: string): string {
-    const g = worn.get(slot)
-    if (!g) return 'Empty'
-    return itemMap.get(g.itemId)?.name ?? g.itemId
-  }
-
-  function wornIcon(slot: string): string {
-    const g = worn.get(slot)
-    if (g) return itemMap.get(g.itemId)?.icon ?? '◆'
-    return SLOTS.find((s) => s.id === slot)?.icon ?? '◇'
   }
 
   function setEquip(slot: string, instanceId: string) {
@@ -190,234 +171,31 @@
     <Spinner size={14} label="Loading your inventory" /> Loading…
   </p>
 {:else}
-  <div class="mt-4 flex flex-wrap gap-1.5">
-    <span class="chip" style={accentStyle(ACCENT.gold)}>⚔️ {totals.power} power</span>
-    <span class="chip" style={accentStyle(ACCENT.azure)}>🛡️ {totals.armour} armour</span>
-    {#each STAT_ORDER.filter((id) => totals.stats[id] > 0) as id (id)}
-      <span class="chip" style={accentStyle(ACCENT.jade)}>+{totals.stats[id]} {STAT_LABEL[id]}</span
-      >
-    {/each}
-  </div>
+  <StatChips {totals} {combatBuffs} />
 
-  {#if combatBuffs.length}
-    <p class="mt-2 text-[11px] text-ink-400">
-      Tier &amp; enchant bonuses
-      {#each combatBuffs as b (b.stat)}
-        <span style="color: var(--color-jade)"
-          >+{b.stat === 'stamina' ? Math.round(b.v) : Math.round(b.v * 1000) / 10}{b.stat ===
-          'stamina'
-            ? ''
-            : '%'}
-          {b.stat}</span
-        >
-      {/each}
-    </p>
-  {/if}
-
-  {#if (data?.setBonuses?.length ?? 0) > 0}
-    <section class="mt-4" style={accentStyle(ACCENT.violet)}>
-      <h2 class="eyebrow" style="color: var(--accent)">Set bonuses</h2>
-      <div class="mt-2 grid gap-2 sm:grid-cols-2">
-        {#each data?.setBonuses ?? [] as set (set.id)}
-          <div class="panel p-3" style={accentStyle(ACCENT.violet)}>
-            <div class="flex items-center justify-between gap-2">
-              <p class="display text-sm text-ink-100">
-                {set.name}
-                <span class="text-ink-400">({set.pieces})</span>
-              </p>
-              <span class="chip text-[10px]" style={accentStyle(ACCENT.violet)}
-                >{set.armourType}</span
-              >
-            </div>
-            {#if set.active.length > 0}
-              <p class="mt-1 text-[11px] text-ink-300">
-                {set.active.map((tier) => tier.label).join(' · ')}
-              </p>
-            {:else}
-              <p class="mt-1 text-[11px] text-ink-400">No bonus yet.</p>
-            {/if}
-            {#if set.next}
-              <p class="mt-1 text-[10px] text-ink-500">
-                Next at {set.next.pieces}: {set.next.label}
-              </p>
-            {/if}
-          </div>
-        {/each}
-      </div>
-    </section>
-  {/if}
+  <SetBonusList bonuses={data?.setBonuses ?? []} />
 
   <div class="xl:grid xl:grid-cols-2 xl:items-start xl:gap-x-16">
-    <!-- Paper doll -->
-    <section class="mt-6" style={accentStyle(ACCENT.gold)}>
-      <div class="flex items-center justify-between border-b border-ink-700 pb-2">
-        <h2 class="eyebrow" style="color: var(--accent)">Equipped</h2>
-        <span class="text-xs text-ink-400">{worn.size} worn</span>
-      </div>
-
-      <div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {#each SLOTS as slot (slot.id)}
-          {@const g = worn.get(slot.id)}
-          <button
-            type="button"
-            class="panel panel-accent flex min-h-20 flex-col items-start gap-1 p-2 text-left"
-            style={accentStyle(g ? qualityAccent(g.quality) : ACCENT.ink)}
-            onclick={() => (pickedSlot = pickedSlot === slot.id ? null : slot.id)}
-            aria-label="Change {slot.label}"
-          >
-            <span class="flex w-full items-center justify-between gap-2 text-[11px] text-ink-400">
-              <span>{slot.label}</span>
-              <span>{wornIcon(slot.id)}</span>
-            </span>
-            <span class="display truncate text-sm text-ink-100">{wornName(slot.id)}</span>
-            {#if g}
-              <span class="text-[10px] text-ink-300">{statsText(g.stats)}</span>
-              {#if g.missing.length > 0}
-                <span class="text-[10px]" style="color: var(--color-ember)"
-                  >Needs {lockedText(g)}</span
-                >
-              {/if}
-            {:else}
-              <span class="text-[10px] text-ink-500">Choose a piece</span>
-            {/if}
-          </button>
-        {/each}
-      </div>
-
-      {#if pickedSlot}
-        {@const slot = SLOTS.find((s) => s.id === pickedSlot)}
-        <div class="panel mt-3 p-3" style={accentStyle(ACCENT.brass)}>
-          <div class="flex items-center justify-between gap-2">
-            <h3 class="eyebrow" style="color: var(--accent)">Choose for {slot?.label}</h3>
-            <button
-              type="button"
-              class="btn btn-ghost px-2 py-1 text-[11px]"
-              onclick={() => (pickedSlot = null)}>Close</button
-            >
-          </div>
-          <div class="mt-2 space-y-2">
-            {#if candidates(pickedSlot).length === 0}
-              <p class="text-xs text-ink-400">
-                No crafted gear for this slot yet. Craft a piece with a profession.
-              </p>
-            {/if}
-            {#each candidates(pickedSlot) as g (g.id)}
-              {@const item = itemMap.get(g.itemId)}
-              {@const locked = g.missing.length > 0}
-              <div class="flex items-start justify-between gap-3 border-b border-ink-700 pb-2">
-                <div class="min-w-0">
-                  <p class="display truncate text-sm" style="color: {qualityAccent(g.quality)}">
-                    {item?.icon ?? '◆'}
-                    {item?.name ?? g.itemId}
-                  </p>
-                  <p class="text-[11px] text-ink-300">{statsText(g.stats)}</p>
-                  <p class="text-[10px] text-ink-500">
-                    {g.quality} · {g.armour} armour · {g.power} power · score {g.gearScore}
-                  </p>
-                  {#if requiresText(g)}
-                    <p
-                      class="text-[10px]"
-                      style="color: {locked ? 'var(--color-ember)' : 'var(--color-ink-400)'}"
-                    >
-                      {locked ? `Locked — needs ${lockedText(g)}` : `Requires ${requiresText(g)}`}
-                    </p>
-                  {/if}
-                </div>
-                <div class="flex shrink-0 gap-1">
-                  {#if g.equipped}
-                    <span class="chip text-[10px]" style={accentStyle(ACCENT.jade)}>Worn</span>
-                  {:else}
-                    <button
-                      type="button"
-                      class="btn btn-primary px-2 py-1 text-[11px]"
-                      disabled={locked}
-                      title={locked ? `Needs ${lockedText(g)}` : 'Equip'}
-                      onclick={() => setEquip(pickedSlot!, g.id)}
-                    >
-                      Equip
-                    </button>
-                    <button
-                      type="button"
-                      class="btn btn-ghost px-2 py-1 text-[11px]"
-                      onclick={() => salvage(g.id)}
-                    >
-                      Salvage
-                    </button>
-                  {/if}
-                  <button
-                    type="button"
-                    class="btn btn-ghost px-2 py-1 text-[11px]"
-                    onclick={() => discard(g.id)}
-                  >
-                    Discard
-                  </button>
-                </div>
-              </div>
-            {/each}
-          </div>
-          {#if worn.has(pickedSlot)}
-            <button
-              type="button"
-              class="btn btn-ghost mt-2 px-2 py-1 text-[11px]"
-              onclick={() => clearSlot(pickedSlot!)}
-            >
-              Unequip {slot?.label}
-            </button>
-          {/if}
-        </div>
-      {/if}
-    </section>
+    <PaperDoll
+      {worn}
+      {itemMap}
+      {pickedSlot}
+      {candidates}
+      onPick={(s) => (pickedSlot = s)}
+      onEquip={setEquip}
+      onSalvage={salvage}
+      onDiscard={discard}
+      onClear={clearSlot}
+    />
 
     <div>
-      <!-- Saved sets -->
-      <section class="mt-6" style={accentStyle(ACCENT.violet)}>
-        <div class="flex items-center justify-between border-b border-ink-700 pb-2">
-          <h2 class="eyebrow" style="color: var(--accent)">Loadouts</h2>
-          <span class="text-xs text-ink-400">{data?.sets.length ?? 0} saved</span>
-        </div>
-        <div class="mt-3 flex gap-2">
-          <input
-            class="field flex-1"
-            placeholder="Set name (e.g. Ranged)"
-            bind:value={setName}
-            onkeydown={(e) => e.key === 'Enter' && saveCurrentSet()}
-          />
-          <button type="button" class="btn btn-primary" onclick={saveCurrentSet}>Save</button>
-        </div>
-        <div class="mt-3 space-y-2">
-          {#if (data?.sets.length ?? 0) === 0}
-            <p class="text-xs text-ink-400">
-              Save the current loadout, then swap the whole outfit in one tap.
-            </p>
-          {/if}
-          {#each data?.sets ?? [] as set (set.id)}
-            <div class="flex items-center justify-between gap-3 border-b border-ink-700 pb-2">
-              <div class="min-w-0">
-                <p class="display truncate text-sm text-ink-100">{set.name}</p>
-                <p class="text-[11px] text-ink-400">
-                  {set.combatStyle} · {Object.keys(set.slots).length} slots
-                </p>
-              </div>
-              <div class="flex shrink-0 gap-1">
-                <button
-                  type="button"
-                  class="btn btn-primary px-2 py-1 text-[11px]"
-                  onclick={() => applySet(set.id)}
-                >
-                  Wear
-                </button>
-                <button
-                  type="button"
-                  class="btn btn-ghost px-2 py-1 text-[11px]"
-                  onclick={() => removeSet(set.id)}
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          {/each}
-        </div>
-      </section>
+      <SavedSets
+        sets={data?.sets ?? []}
+        bind:name={setName}
+        onSave={saveCurrentSet}
+        onApply={applySet}
+        onRemove={removeSet}
+      />
 
       <!-- Crafted gear -->
       <CraftedGearList

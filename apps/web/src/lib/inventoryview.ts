@@ -1,6 +1,13 @@
 /** Pure derivations for the inventory screen: slots, stat text and gear totals. */
 
-import type { BandBuffs, GearInstanceDTO, GearStatId, GearStats, GearResponse } from './skills'
+import type {
+  BandBuffs,
+  GearInstanceDTO,
+  GearStatId,
+  GearStats,
+  GearResponse,
+  ItemDTO,
+} from './skills'
 
 /** One worn slot; rings and trinkets share a family. */
 export interface SlotDef {
@@ -101,6 +108,41 @@ export function wornOf(
     }
   }
   return out
+}
+
+/** The worn piece's name in a slot, or `Empty`. */
+export function wornName(
+  slot: string,
+  worn: Map<string, GearInstanceDTO>,
+  itemMap: Map<string, ItemDTO>,
+): string {
+  const g = worn.get(slot)
+  if (!g) return 'Empty'
+  return itemMap.get(g.itemId)?.name ?? g.itemId
+}
+
+/** The slot's icon: the worn piece's, else the empty slot's. */
+export function wornIcon(
+  slot: string,
+  worn: Map<string, GearInstanceDTO>,
+  itemMap: Map<string, ItemDTO>,
+): string {
+  const g = worn.get(slot)
+  if (g) return itemMap.get(g.itemId)?.icon ?? '◆'
+  return SLOTS.find((s) => s.id === slot)?.icon ?? '◇'
+}
+
+/** Equipment-tier bank rows with no rolled instance (legacy crafts). */
+export function baseEquipmentOf(
+  inventory: { itemId: string; count: number }[],
+  items: Map<string, ItemDTO>,
+  gear: GearInstanceDTO[],
+): { itemId: string; count: number }[] {
+  const rolled = new Set(gear.map((g) => g.itemId))
+  return inventory.filter((row) => {
+    const item = items.get(row.itemId)
+    return row.count > 0 && item?.tier === 'equipment' && !rolled.has(row.itemId)
+  })
 }
 
 const emptyStats = (): GearStats => ({
