@@ -94,39 +94,52 @@ function parseModels(json: string | null): Record<string, AnkiModel> {
 
 /** Reads the note-type field names from the legacy `col` blob or the v18 tables. */
 function readModels(db: Database): Record<string, AnkiModel> {
-  // legacy containers: a JSON blob in the `col` table
-  let legacy: string | null = null
-  try {
-    legacy =
-      (db.query('SELECT models FROM col LIMIT 1').get() as { models?: string } | undefined)
-        ?.models ?? null
-  } catch {
-    // no col table
-  }
-  const fromJson = parseModels(legacy)
-  if (Object.keys(fromJson).length) return fromJson
+  const legacy = legacyModels(db)
+  return Object.keys(legacy).length ? legacy : tableModels(db)
+}
 
-  // modern containers: notetypes + fields tables
+/** Legacy containers: a JSON blob in the `col` table. */
+function legacyModels(db: Database): Record<string, AnkiModel> {
+  try {
+    const row = db.query('SELECT models FROM col LIMIT 1').get() as { models?: string } | undefined
+    return parseModels(row?.models ?? null)
+  } catch {
+    return {}
+  }
+}
+
+/** Modern containers: the notetypes + fields tables. */
+function tableModels(db: Database): Record<string, AnkiModel> {
   const out: Record<string, AnkiModel> = {}
   try {
-    const notetypes = db.query('SELECT id, name FROM notetypes').all() as {
-      id: number
-      name: string
-    }[]
-    for (const nt of notetypes) out[String(nt.id)] = { name: nt.name, fields: [] }
-    const fields = db.query('SELECT ntid, ord, name FROM fields ORDER BY ntid, ord').all() as {
-      ntid: number
-      ord: number
-      name: string
-    }[]
-    for (const f of fields) {
-      const model = out[String(f.ntid)]
-      if (model) model.fields[f.ord] = f.name
-    }
+    for (const nt of notetypesOf(db)) out[String(nt.id)] = { name: nt.name, fields: [] }
+    attachFields(out, fieldsOf(db))
   } catch {
     // fall through with whatever we have
   }
   return out
+}
+
+function notetypesOf(db: Database) {
+  return db.query('SELECT id, name FROM notetypes').all() as { id: number; name: string }[]
+}
+
+function fieldsOf(db: Database) {
+  return db.query('SELECT ntid, ord, name FROM fields ORDER BY ntid, ord').all() as {
+    ntid: number
+    ord: number
+    name: string
+  }[]
+}
+
+function attachFields(
+  out: Record<string, AnkiModel>,
+  fields: { ntid: number; ord: number; name: string }[],
+): void {
+  for (const f of fields) {
+    const model = out[String(f.ntid)]
+    if (model) model.fields[f.ord] = f.name
+  }
 }
 
 /** Anki joins parent/child deck names with U+001F; make that readable. */
@@ -140,30 +153,32 @@ function prettyDeckName(name: string | undefined): string | undefined {
 
 /** The deck that holds most of the cards, by name. */
 function readDeckName(db: Database): string | undefined {
-  // legacy containers: a JSON blob in `col`
+  return legacyDeckName(db) ?? tableDeckName(db)
+}
+
+/** Legacy containers: the deck list is a JSON blob in `col`. */
+function legacyDeckName(db: Database): string | undefined {
   try {
     const decksJson = (
       db.query('SELECT decks FROM col LIMIT 1').get() as { decks?: string } | undefined
     )?.decks
-    if (decksJson) {
-      const decks = JSON.parse(decksJson) as Record<string, { name?: string }>
-      const top = db
-        .query('SELECT did, COUNT(*) AS n FROM cards GROUP BY did ORDER BY n DESC LIMIT 1')
-        .get() as { did: number } | undefined
-      if (top && decks[String(top.did)]?.name) return decks[String(top.did)]!.name
-      const first = Object.values(decks).find((d) => d.name && d.name !== 'Default')
-      if (first?.name) return first.name
-    }
+    if (!decksJson) return undefined
+    const decks = JSON.parse(decksJson) as Record<string, { name?: string }>
+    const top = topDeckId(db)
+    if (top && decks[String(top)]?.name) return decks[String(top)]!.name
+    const first = Object.values(decks).find((d) => d.name && d.name !== 'Default')
+    return first?.name
   } catch {
-    // no col table / bad JSON
+    return undefined
   }
-  // modern containers: a decks table
+}
+
+/** Modern containers: a `decks` table keyed by the busiest card's deck id. */
+function tableDeckName(db: Database): string | undefined {
   try {
-    const top = db
-      .query('SELECT did, COUNT(*) AS n FROM cards GROUP BY did ORDER BY n DESC LIMIT 1')
-      .get() as { did: number } | undefined
+    const top = topDeckId(db)
     if (top) {
-      const deck = db.query('SELECT name FROM decks WHERE id = ?').get(top.did) as
+      const deck = db.query('SELECT name FROM decks WHERE id = ?').get(top) as
         { name?: string } | undefined
       if (deck?.name && deck.name !== 'Default') return deck.name
     }
@@ -176,50 +191,63 @@ function readDeckName(db: Database): string | undefined {
   }
 }
 
+/** The deck id holding the most cards (Anki's main deck). */
+function topDeckId(db: Database): number | undefined {
+  const top = db
+    .query('SELECT did, COUNT(*) AS n FROM cards GROUP BY did ORDER BY n DESC LIMIT 1')
+    .get() as { did: number } | undefined
+  return top?.did
+}
+
 /** Reads an `.apkg` (or `.colpkg`) into a deck of notes. */
 export async function readApkg(bytes: Uint8Array): Promise<AnkiDeck> {
   const entries = await unzip(bytes)
   const collection = collectionBytes(entries)
   if (!collection) throw new Error('no Anki collection found in the package')
-  const sqlite = relaxCollations(collection)
-
   const dir = mkdtempSync(join(tmpdir(), 'tutor-anki-'))
   const path = join(dir, 'collection.anki2')
   try {
-    writeFileSync(path, sqlite)
+    writeFileSync(path, relaxCollations(collection))
     // read-write: the collection is a WAL database, which cannot open read-only
-    const db = new Database(path)
-    try {
-      const models = readModels(db)
-
-      // order notes by their earliest card's due value (Anki's new-card order)
-      const orderRows = db.query('SELECT nid, MIN(due) AS due FROM cards GROUP BY nid').all() as {
-        nid: number
-        due: number
-      }[]
-      const order = new Map(orderRows.map((r) => [r.nid, r.due]))
-
-      const rows = db.query('SELECT id, mid, flds, tags FROM notes').all() as {
-        id: number
-        mid: number
-        flds: string
-        tags: string
-      }[]
-
-      const notes: AnkiNote[] = rows
-        .map((r) => ({
-          mid: r.mid,
-          fields: r.flds.split('\u001f'),
-          tags: r.tags.trim().split(/\s+/).filter(Boolean),
-          order: order.get(r.id) ?? r.id,
-        }))
-        .sort((a, b) => a.order - b.order)
-
-      return { name: prettyDeckName(readDeckName(db)), models, notes }
-    } finally {
-      db.close()
-    }
+    return readCollection(new Database(path))
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
+}
+
+function readCollection(db: Database): AnkiDeck {
+  try {
+    return { name: prettyDeckName(readDeckName(db)), models: readModels(db), notes: readNotes(db) }
+  } finally {
+    db.close()
+  }
+}
+
+interface NoteRow {
+  id: number
+  mid: number
+  flds: string
+  tags: string
+}
+
+function readNotes(db: Database): AnkiNote[] {
+  const order = noteOrder(db)
+  const rows = db.query('SELECT id, mid, flds, tags FROM notes').all() as NoteRow[]
+  return rows
+    .map((r) => ({
+      mid: r.mid,
+      fields: r.flds.split('\u001f'),
+      tags: r.tags.trim().split(/\s+/).filter(Boolean),
+      order: order.get(r.id) ?? r.id,
+    }))
+    .sort((a, b) => a.order - b.order)
+}
+
+/** Notes by their earliest card's due value (Anki's new-card order). */
+function noteOrder(db: Database): Map<number, number> {
+  const rows = db.query('SELECT nid, MIN(due) AS due FROM cards GROUP BY nid').all() as {
+    nid: number
+    due: number
+  }[]
+  return new Map(rows.map((r) => [r.nid, r.due]))
 }

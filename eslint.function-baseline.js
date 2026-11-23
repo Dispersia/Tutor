@@ -8,10 +8,8 @@
  * an entry the moment its last long function is split** — it only ever shrinks.
  */
 export const longFunctions = [
-  'apps/server/src/anki/parse.ts',
   'apps/server/src/anki/words.ts',
   'apps/server/src/anki/zip.ts',
-  'apps/server/src/app.ts',
   'apps/server/src/bootstrap.ts',
   'apps/server/src/db/repo/cards.ts',
   'apps/server/src/db/repo/gear.ts',
@@ -20,9 +18,7 @@ export const longFunctions = [
   'apps/server/src/db/repo/srs.ts',
   'apps/server/src/db/repo/talents.ts',
   'apps/server/src/db/repo/xp.ts',
-  'apps/server/src/deck/context.ts',
   'apps/server/src/deck/instruction.ts',
-  'apps/server/src/deck/jobs.ts',
   'apps/server/src/deck/kanjium.ts',
   'apps/server/src/deck/mandarin.ts',
   'apps/server/src/deck/pitch.ts',
@@ -33,7 +29,6 @@ export const longFunctions = [
   'apps/server/src/game/bands.ts',
   'apps/server/src/game/curriculum.ts',
   'apps/server/src/game/gear.ts',
-  'apps/server/src/game/modifiers.ts',
   'apps/server/src/game/skills/essences.ts',
   'apps/server/src/game/talents.ts',
   'apps/server/src/pronunciation/variants.ts',

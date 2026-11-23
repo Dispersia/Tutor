@@ -503,10 +503,11 @@ drill (`services/idle.ts`), the n+1 reinforcement, the OpenRouter client, the we
 chat streamer and the sentence-builder exercise followed, then the pronunciation
 feature maths, the web speech client, the deck growth planner and the gear
 service, then the converse grader, `game/study.ts`, gear sets, the push client
-and the deck-delete query. That took the list from 127 files / 255 functions to
-**54 files / 85 functions**. The biggest left are exercise graders and repository
-row mappers, all under 60 lines. The list shrinks; it never grows, and new code is
-held to 20 from day one.
+and the deck-delete query, then the Anki parser, `persistCards`, `startDeckBuild`,
+`createApp` and the bonus aggregation. That took the list from 127 files / 255
+functions to **49 files / 78 functions**. The biggest left are exercise graders
+and repository row mappers, all under 45 lines. The list shrinks; it never grows,
+and new code is held to 20 from day one.
 
 **Phase 15 — the web shells & route validation (open).**
 The remaining `+page.svelte` files over ~250 lines (`practice`, `settings`,

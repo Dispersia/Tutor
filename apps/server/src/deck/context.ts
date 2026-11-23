@@ -176,42 +176,61 @@ export function persistCards(
   db: Db,
   userId: string,
   deckId: string,
-  opts: {
-    targetLang: string
-    sourceLang: string
-    readingScript?: string
-    startStep: number
-    futureWords: Set<string>
-  },
+  opts: PersistOpts,
   planned: PlannedCard[],
 ): { newWords: string[]; cardCount: number } {
   let step = opts.startStep
   const newWords: string[] = []
   let cardCount = 0
   for (const c of planned) {
-    if (c.template === 'vocab') {
-      step++
-      newWords.push(c.back)
-      opts.futureWords.delete(c.back)
-    } else if (leapsAhead(c, opts.futureWords)) {
-      continue
-    }
-    addCard(db, userId, {
-      deckId,
-      type: cardTypeFor(c.template),
-      sourceLang: opts.sourceLang,
-      targetLang: opts.targetLang,
-      front: c.front,
-      back: c.back,
-      readings: readingsForPlanned(opts.targetLang, c.reading, opts.readingScript),
-      tags: [opts.targetLang, c.template],
-      payload: { ...(c.payload ?? {}), template: c.template, step: Math.max(step, 1) },
-      metadata: c.metadata,
-      origin: 'llm',
-    })
+    step = bookkeep(c, opts, step, newWords)
+    if (c.template !== 'vocab' && leapsAhead(c, opts.futureWords)) continue
+    persistOne({ db, userId, deckId, opts, card: c, step: Math.max(step, 1) })
     cardCount++
   }
   return { newWords, cardCount }
+}
+
+/** For a vocab card: advance the step, record the word, clear it from `future`. */
+function bookkeep(c: PlannedCard, opts: PersistOpts, step: number, newWords: string[]): number {
+  if (c.template !== 'vocab') return step
+  newWords.push(c.back)
+  opts.futureWords.delete(c.back)
+  return step + 1
+}
+
+interface PersistOpts {
+  targetLang: string
+  sourceLang: string
+  readingScript?: string
+  startStep: number
+  futureWords: Set<string>
+}
+
+interface PersistReq {
+  db: Db
+  userId: string
+  deckId: string
+  opts: PersistOpts
+  card: PlannedCard
+  step: number
+}
+
+function persistOne(req: PersistReq): void {
+  const { db, userId, deckId, opts, card: c, step } = req
+  addCard(db, userId, {
+    deckId,
+    type: cardTypeFor(c.template),
+    sourceLang: opts.sourceLang,
+    targetLang: opts.targetLang,
+    front: c.front,
+    back: c.back,
+    readings: readingsForPlanned(opts.targetLang, c.reading, opts.readingScript),
+    tags: [opts.targetLang, c.template],
+    payload: { ...(c.payload ?? {}), template: c.template, step },
+    metadata: c.metadata,
+    origin: 'llm',
+  })
 }
 
 /** Turns a `BuildDeckOptions` into the deck-wide context the planner needs. */

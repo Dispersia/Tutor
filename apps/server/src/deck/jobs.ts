@@ -42,37 +42,64 @@ export function startDeckBuild(
   deckId: string,
   request: StartDeckBuildRequest,
 ): void {
-  const { ctx, opts, planner, base = {} } = request
-  const start = base.cursorStart ?? 0
-  const total = base.total ?? opts.count
-  const run = (async () => {
-    try {
-      await fillDeck(db, userId, deckId, {
-        ctx,
-        opts: {
-          ...opts,
-          onProgress: (built, chunkTotal) => {
-            opts.onProgress?.(built, chunkTotal)
-            updateDeckSettings(db, deckId, userId, { cursor: start + built, buildTotal: total })
-          },
-        },
-        planner,
-      })
-      updateDeckSettings(db, deckId, userId, {
-        building: false,
-        cursor: start + opts.count,
-        buildTotal: total,
-        buildError: undefined,
-      })
-    } catch (err) {
-      updateDeckSettings(db, deckId, userId, {
-        building: false,
-        buildError: (err as Error).message,
-      })
-    } finally {
-      builds.delete(deckId)
-      base.onFinish?.()
-    }
-  })()
+  const base = request.base ?? {}
+  const range = { start: base.cursorStart ?? 0, total: base.total ?? request.opts.count }
+  const run = runBuild(db, userId, deckId, request, range).finally(() => {
+    builds.delete(deckId)
+    base.onFinish?.()
+  })
   builds.set(deckId, run)
+}
+
+interface Range {
+  start: number
+  total: number
+}
+
+/** The run itself: fill in batches, then clear the status flag. */
+async function runBuild(
+  db: Db,
+  userId: string,
+  deckId: string,
+  request: StartDeckBuildRequest,
+  range: Range,
+): Promise<void> {
+  const { ctx, opts, planner } = request
+  const onProgress = progressWriter({ db, deckId, userId, opts, ...range })
+  try {
+    await fillDeck(db, userId, deckId, { ctx, opts: { ...opts, onProgress }, planner })
+    updateDeckSettings(db, deckId, userId, builtSettings(range, opts.count))
+  } catch (err) {
+    updateDeckSettings(db, deckId, userId, { building: false, buildError: (err as Error).message })
+  }
+}
+
+/** The settings a finished run writes: the cursor settled, the flag cleared. */
+function builtSettings(range: Range, count: number) {
+  return {
+    building: false,
+    cursor: range.start + count,
+    buildTotal: range.total,
+    buildError: undefined,
+  }
+}
+
+interface ProgressReq {
+  db: Db
+  deckId: string
+  userId: string
+  opts: FillDeckOptions
+  start: number
+  total: number
+}
+
+/** Forwards progress to the caller and advances the deck's stored cursor. */
+function progressWriter(req: ProgressReq) {
+  return (built: number, chunkTotal: number) => {
+    req.opts.onProgress?.(built, chunkTotal)
+    updateDeckSettings(req.db, req.deckId, req.userId, {
+      cursor: req.start + built,
+      buildTotal: req.total,
+    })
+  }
 }

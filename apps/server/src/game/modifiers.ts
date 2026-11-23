@@ -30,38 +30,11 @@ interface Leveled {
  * (`mod.skill`) and boost every action under it.
  */
 export function computeBonuses(levels: Map<string, number>, talents: TalentDef[]): Bonuses {
-  const leveled: Leveled[] = []
-  for (const a of ACTIONS) {
-    const effect = SKILL_BY_ID.get(a.skillId)?.effect
-    if (!effect) continue
-    const value = effect.value * Math.max(0, (levels.get(a.id) ?? 1) - 1)
-    if (value === 0) continue
-    leveled.push({ actionId: a.id, skillId: a.skillId, mod: { ...effect, value } })
-  }
-  // A synergy talent's value scales with the *other* profession's derived level, so
-  // the derived levels have to be known before the talent mods are summed.
-  const derived = skillLevelsFrom(levels)
-  const talentMods = talents
-    .flatMap((t) => t.mods)
-    .map((m) => (m.synergy ? { ...m, value: m.value * (derived.get(m.synergy) ?? 1) } : m))
-
-  /** The action's own passive + talents scoped to its profession. */
-  const forAction = (actionId: string, kind: ModKind): number => {
-    const skillId = ACTION_BY_ID.get(actionId)?.skillId
-    const own = leveled
-      .filter((l) => l.actionId === actionId && l.mod.kind === kind)
-      .reduce((n, l) => n + l.mod.value, 0)
-    const fromTalents = talentMods
-      .filter((m) => m.kind === kind && m.skill === skillId)
-      .reduce((n, m) => n + m.value, 0)
-    return own + fromTalents
-  }
-
-  /** Kinds that are global (they ignore scope) sum across every action + talent. */
-  const global = (kind: ModKind): number =>
-    leveled.filter((l) => l.mod.kind === kind).reduce((n, l) => n + l.mod.value, 0) +
-    talentMods.filter((m) => m.kind === kind).reduce((n, m) => n + m.value, 0)
-
+  const leveled = leveledEffects(levels)
+  const talentMods = talentModsOf(talents, levels)
+  const forAction = (actionId: string, kind: ModKind) =>
+    actionBonus(leveled, talentMods, actionId, kind)
+  const global = (kind: ModKind) => globalBonus(leveled, talentMods, kind)
   return {
     globalXp: global('global_xp'),
     xp: (actionId) => forAction(actionId, 'xp'),
@@ -72,6 +45,55 @@ export function computeBonuses(levels: Map<string, number>, talents: TalentDef[]
     drop: global('drop'),
     hp: global('hp'),
   }
+}
+
+/** Each action's profession passive, scaled by the action's own level. */
+function leveledEffects(levels: Map<string, number>): Leveled[] {
+  const leveled: Leveled[] = []
+  for (const a of ACTIONS) {
+    const effect = SKILL_BY_ID.get(a.skillId)?.effect
+    if (!effect) continue
+    const value = effect.value * Math.max(0, (levels.get(a.id) ?? 1) - 1)
+    if (value === 0) continue
+    leveled.push({ actionId: a.id, skillId: a.skillId, mod: { ...effect, value } })
+  }
+  return leveled
+}
+
+/** Owned talent mods; a synergy's value scales with the other profession's level. */
+function talentModsOf(talents: TalentDef[], levels: Map<string, number>): Mod[] {
+  // A synergy talent's value scales with the *other* profession's derived level, so
+  // the derived levels have to be known before the talent mods are summed.
+  const derived = skillLevelsFrom(levels)
+  return talents
+    .flatMap((t) => t.mods)
+    .map((m) => (m.synergy ? { ...m, value: m.value * (derived.get(m.synergy) ?? 1) } : m))
+}
+
+/** The action's own passive + talents scoped to its profession. */
+function actionBonus(
+  leveled: Leveled[],
+  talentMods: Mod[],
+  actionId: string,
+  kind: ModKind,
+): number {
+  const skillId = ACTION_BY_ID.get(actionId)?.skillId
+  const own = leveled
+    .filter((l) => l.actionId === actionId && l.mod.kind === kind)
+    .reduce((n, l) => n + l.mod.value, 0)
+  const scoped = talentMods
+    .filter((m) => m.kind === kind && m.skill === skillId)
+    .reduce((n, m) => n + m.value, 0)
+  return own + scoped
+}
+
+/** Kinds that are global (they ignore scope) sum across every action + talent. */
+function globalBonus(leveled: Leveled[], talentMods: Mod[], kind: ModKind): number {
+  const fromActions = leveled
+    .filter((l) => l.mod.kind === kind)
+    .reduce((n, l) => n + l.mod.value, 0)
+  const fromTalents = talentMods.filter((m) => m.kind === kind).reduce((n, m) => n + m.value, 0)
+  return fromActions + fromTalents
 }
 
 /**
