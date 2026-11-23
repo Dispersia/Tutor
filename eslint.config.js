@@ -38,9 +38,7 @@ const legacyBig = [
   'apps/web/src/routes/(app)/chat/+page.svelte',
   'apps/web/src/routes/(app)/combat/+page.svelte',
   'apps/web/src/routes/(app)/practice/+page.svelte',
-  'apps/web/src/routes/(app)/settings/+page.svelte',
   'apps/web/src/routes/(app)/skills/+page.svelte',
-  'apps/web/src/routes/(app)/skills/\\[id\\]/+page.svelte',
   'scripts/sweep-cards.ts',
 ]
 

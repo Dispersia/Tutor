@@ -13,10 +13,12 @@
     type SkillPageResponse,
   } from '#lib/skills'
   import { CATEGORY, ACCENT, accentStyle, categoryAccent } from '#lib/theme'
-  import Icon from '#lib/components/Icon.svelte'
-  import ActionRow from '#lib/components/skill/ActionRow.svelte'
   import { peekCached } from '#lib/cache'
-  import { bandBuff, buildBandGroups, buildTalentRail, isBlocked, unmetOf } from '#lib/skillview'
+  import { buildBandGroups, buildTalentRail, distillablesOf } from '#lib/skillview'
+  import DistillPanel from '#lib/components/skill/DistillPanel.svelte'
+  import SkillLedger from '#lib/components/skill/SkillLedger.svelte'
+  import TalentRail from '#lib/components/skill/TalentRail.svelte'
+  import ActionList from '#lib/components/skill/ActionList.svelte'
 
   // Seed from the last fetch so returning to a profession renders at once.
   const initialId = page.params.id
@@ -38,7 +40,6 @@
   })
 
   const id = $derived(page.params.id)
-  const pct = (v: number) => `${Math.round(v * 100)}%`
   const skill = $derived(data?.skill ?? null)
   const accent = $derived(skill ? categoryAccent(skill.category) : ACCENT.azure)
   /** The live-rig cap readout (§13.5.1): how many machines may run, and how many are. */
@@ -55,19 +56,7 @@
   /** Distill panel state (Enchanting only, §13.5.3.2). */
   let distillNote = $state('')
   /** Inventory items you can burn to train Enchanting, richest first. */
-  const distillables = $derived.by(() => {
-    if (skill?.id !== 'enchanting') return []
-    return (data?.inventory ?? [])
-      .filter((r) => r.count > 0 && r.itemId !== 'coins')
-      .map((r) => ({
-        itemId: r.itemId,
-        count: r.count,
-        name: itemMap.get(r.itemId)?.name ?? r.itemId,
-        icon: itemMap.get(r.itemId)?.icon ?? '◆',
-        value: itemMap.get(r.itemId)?.value ?? 0,
-      }))
-      .sort((a, b) => b.value - a.value)
-  })
+  const distillables = $derived(distillablesOf(skill?.id, data?.inventory ?? [], itemMap))
 
   async function doDistill(itemId: string) {
     busy = true
@@ -227,40 +216,7 @@
   {#if skill.id === 'enchanting'}
     <!-- Distill (§13.5.3.2): burn an item from your inventory to train Enchanting
          and pull out its essence. -->
-    <section class="panel mt-4 p-3" style={accentStyle(accent)}>
-      <div class="flex items-center justify-between gap-2">
-        <h2 class="eyebrow" style="color: var(--accent)">Distill</h2>
-        <span class="text-[11px] text-ink-400">+XP by coin value · yields essence</span>
-      </div>
-      {#if distillables.length === 0}
-        <p class="mt-2 text-xs text-ink-400">
-          Nothing to distill — gather or craft something first.
-        </p>
-      {:else}
-        <ul class="mt-2 flex max-h-96 flex-col gap-1 overflow-auto">
-          {#each distillables as d (d.itemId)}
-            <li class="flex items-center justify-between gap-2 border-b border-ink-700 pb-1">
-              <span class="min-w-0 truncate text-xs text-ink-200">
-                {d.icon}
-                {d.name}
-                <span class="text-ink-500">×{d.count} · {d.value} coins</span>
-              </span>
-              <button
-                type="button"
-                class="btn btn-ghost shrink-0 px-2 py-0.5 text-[10px]"
-                disabled={busy}
-                onclick={() => doDistill(d.itemId)}
-              >
-                Distill
-              </button>
-            </li>
-          {/each}
-        </ul>
-        {#if distillNote}
-          <p class="mt-2 text-xs" style="color: var(--color-jade)">{distillNote}</p>
-        {/if}
-      {/if}
-    </section>
+    <DistillPanel {accent} {distillables} note={distillNote} {busy} onDistill={doDistill} />
   {/if}
 
   <!-- Mobile order is ledger → actions → talents: the thing you actually do comes
@@ -270,286 +226,36 @@
     class="flex flex-col xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] xl:items-start xl:gap-x-24"
   >
     <div class="order-1 xl:order-none xl:col-start-1 xl:row-start-1">
-      <!-- Ledger ---------------------------------------------------------------->
-      <section style={accentStyle(accent)}>
-        <div class="border-b border-ink-700 py-3">
-          <div class="flex items-baseline justify-between gap-2 text-sm">
-            <span class="text-ink-300"
-              >Level {skill.level}/100 · average of {skill.actions.length} action{skill.actions
-                .length === 1
-                ? ''
-                : 's'}</span
-            >
-            <span class="text-ink-400 tabular-nums">{pct(skill.progress)} avg</span>
-          </div>
-          <div class="bar mt-2"><i style="width: {skill.progress * 100}%"></i></div>
-        </div>
-        <div class="flex items-baseline justify-between gap-2 border-b border-ink-700 py-3 text-sm">
-          <span class="min-w-0 text-ink-300">{skill.effectLabel}</span>
-          <span class="display shrink-0 text-lg font-bold" style="color: {accent}"
-            >{pct(skill.effect.value)}/lv</span
-          >
-        </div>
-        <div class="flex items-baseline justify-between gap-2 border-b border-ink-700 py-3 text-sm">
-          <span class="text-ink-300">XP total</span>
-          <span class="display text-lg font-bold text-gold-200 tabular-nums">{skill.xp}</span>
-        </div>
-        <div class="flex items-baseline justify-between gap-2 border-b border-ink-700 py-3 text-sm">
-          <span class="text-ink-300">Rigs running</span>
-          <span class="display shrink-0 tabular-nums" style="color: {accent}"
-            >{rigs.live}/{rigs.maxLive}</span
-          >
-        </div>
-        {#if skill.category === 'combat'}
-          <a
-            href={href('/combat')}
-            class="flex items-center gap-2 border-b border-ink-700 py-3 text-sm"
-            style={accentStyle(accent)}
-          >
-            <Icon name="skull" size={17} />
-            <span class="flex-1 text-ink-100">Go to combat</span>
-            <span class="text-ink-400">→</span>
-          </a>
-        {/if}
-      </section>
-
-      <!-- Cross-training links, shown only once the talent is actually taken: the
-           talent rail is where a talent describes itself. ----------------------->
-      {#if skill.talent.synergy.taken.length}
-        <a
-          href={href(`/skills/${skill.talent.synergy.target}`)}
-          class="flex items-center gap-2.5 border-b border-ink-700 py-3 text-sm"
-          style={accentStyle(ACCENT.violet)}
-        >
-          <Icon name="link" size={16} cls="text-violet-300" />
-          <span class="min-w-0 flex-1 text-ink-300">
-            Feeds <span class="text-ink-100">{skill.talent.synergy.name}</span>
-            <span class="text-ink-400">· {skill.talent.synergy.label}</span>
-          </span>
-          <span class="text-ink-400">→</span>
-        </a>
-      {/if}
-
-      {#each (data?.fedBy ?? []).filter((f) => f.taken.length) as f (f.skillId)}
-        <a
-          href={href(`/skills/${f.skillId}`)}
-          class="flex items-center gap-2.5 border-b border-ink-700 py-3 text-sm"
-          style={accentStyle(ACCENT.violet)}
-        >
-          <Icon name="link" size={16} cls="text-violet-300" />
-          <span class="min-w-0 flex-1 text-ink-300">
-            Fed by <span class="text-ink-100">{f.name}</span>
-            <span class="text-ink-400">· {f.label}</span>
-          </span>
-          <span class="text-ink-400">←</span>
-        </a>
-      {/each}
+      <SkillLedger {skill} {accent} {rigs} fedBy={data?.fedBy ?? []} />
     </div>
 
     <div class="order-3 xl:order-none xl:col-start-1 xl:row-start-2">
-      <!-- Talents: one rail from Lv 10 to Lv 100 --------------------------------->
-      <h2 class="mt-6 eyebrow" style="color: {ACCENT.violet}">Talents</h2>
-      <p class="mt-2 border-b border-ink-700 pb-3 text-xs text-ink-400">
-        A choice every 10 levels. At <span class="text-violet-300">Lv 50</span> and
-        <span class="text-violet-300">Lv 100</span> a capstone also opens — each gated on a level in
-        {skill.talent.synergy.name}.
-      </p>
-
-      <ul style={accentStyle(ACCENT.violet)}>
-        {#each rail as r (`${r.kind}:${r.milestone}`)}
-          <li class="flex items-start gap-3 border-b border-ink-700 py-3">
-            <div
-              class="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] border tabular-nums {r.state ===
-              'locked'
-                ? 'border-ink-700 text-ink-400'
-                : 'border-violet-400/60 text-violet-300'}"
-            >
-              {#if r.kind === 'mastery'}
-                <Icon name="trophy" size={17} />
-              {:else}
-                <span class="display text-sm font-bold">{r.milestone}</span>
-              {/if}
-            </div>
-
-            <div class="min-w-0 flex-1">
-              {#if r.kind === 'mastery'}
-                <p class="eyebrow mb-1 text-violet-300">Capstone · Lv {r.milestone}</p>
-              {/if}
-
-              {#if r.state === 'done' && r.owned}
-                {@const t = r.owned}
-                <div class="flex items-baseline justify-between gap-2">
-                  <span class="display text-sm text-ink-100">{t.name}</span>
-                  {#if r.kind === 'choice'}
-                    <span class="text-xs text-ink-400 tabular-nums">Lv {t.milestone}</span>
-                  {/if}
-                </div>
-                <p class="mt-0.5 text-xs text-ink-400">{t.description}</p>
-                <button
-                  onclick={() => (changing = changing === t.id ? null : t.id)}
-                  class="mt-1 text-xs text-ink-400 underline hover:text-ink-200"
-                >
-                  {changing === t.id ? 'Cancel' : 'Change'}
-                </button>
-                {#if changing === t.id}
-                  <div class="mt-2">
-                    {#each t.options.filter((o) => o.id !== t.id) as o (o.id)}
-                      <button
-                        onclick={() => pick(o.id)}
-                        disabled={busy || isBlocked(o)}
-                        class="flex w-full items-center gap-3 border-t border-ink-700 py-2.5 text-left"
-                      >
-                        <span class="min-w-0 flex-1">
-                          <span class="display block text-sm text-ink-200">{o.name}</span>
-                          <span class="block text-xs text-ink-400">{o.description}</span>
-                        </span>
-                        <span
-                          class="shrink-0 text-xs {isBlocked(o)
-                            ? 'text-ember-300'
-                            : 'text-ink-400'}"
-                        >
-                          {isBlocked(o) ? unmetOf(o) : 'Pick'}
-                        </span>
-                      </button>
-                    {/each}
-                  </div>
-                {/if}
-              {:else if r.state === 'open'}
-                {#each r.options as o (o.id)}
-                  <button
-                    onclick={() => pick(o.id)}
-                    disabled={busy || isBlocked(o)}
-                    class="flex w-full items-center gap-3 py-2 text-left first:pt-0"
-                  >
-                    <span class="h-2 w-2 shrink-0 rounded-[2px] bg-violet-400"></span>
-                    <span class="min-w-0 flex-1">
-                      <span class="display block text-sm text-ink-100">{o.name}</span>
-                      <span class="mt-0.5 block text-xs text-ink-400">{o.description}</span>
-                    </span>
-                    <span
-                      class="shrink-0 text-xs {isBlocked(o) ? 'text-ember-300' : 'text-violet-300'}"
-                    >
-                      {isBlocked(o) ? unmetOf(o) : 'Choose'}
-                    </span>
-                  </button>
-                {/each}
-              {:else}
-                <p class="flex items-center gap-1.5 text-xs text-ink-400">
-                  <Icon name="lock" size={13} />
-                  Reach Lv {r.milestone}
-                </p>
-              {/if}
-            </div>
-          </li>
-        {/each}
-      </ul>
-
-      {#if !skill.talent.pendingChoice}
-        <p class="mt-2 pb-1 text-xs text-ink-400">
-          {#if skill.talent.nextMilestone}
-            Next talent choice at <span class="gold">Lv {skill.talent.nextMilestone}</span>.
-          {:else}
-            Every level-10 talent is taken.
-          {/if}
-        </p>
-      {/if}
+      <TalentRail
+        {skill}
+        {rail}
+        {changing}
+        {busy}
+        onPick={pick}
+        onChange={(talentId) => (changing = talentId)}
+      />
     </div>
-    <div class="order-2 xl:order-none xl:col-start-2 xl:row-start-1 xl:row-span-2">
-      <!-- Actions --------------------------------------------------------------->
-      <h2 class="mt-6 eyebrow xl:mt-0" style="color: {accent}">Actions</h2>
-      <p class="mt-1 border-b border-ink-700 pb-2 text-xs text-ink-400">
-        {skill.actions.length} action{skill.actions.length === 1 ? '' : 's'} · {skill.actions.filter(
-          (a) => a.unlocked,
-        ).length} unlocked
-      </p>
 
-      {#if bandGroups}
-        <!-- A metal is a band (§13.5.3): one shared score, a dropdown of the whole
-             set, and the next metal opening at Lv 40. -->
-        <div class="mt-3 flex flex-col gap-3">
-          {#each bandGroups.groups as g (g.band.id)}
-            {@const b = g.band}
-            {@const open = b.gearUnlocked < b.gearTotal || g.actions.some((a) => a.unlocked)}
-            <details class="panel px-2.5 py-2" {open}>
-              <summary
-                class="flex cursor-pointer flex-wrap items-center gap-x-2 gap-y-0.5 select-none"
-              >
-                <span class="text-base" aria-hidden="true">{b.icon}</span>
-                <span class="display text-sm font-semibold text-ink-100">{b.name}</span>
-                <span class="display text-sm font-bold tabular-nums" style="color: {accent}"
-                  >Lv {b.level}</span
-                >
-                <span class="text-[11px] text-ink-400">{b.gearUnlocked}/{b.gearTotal} gear</span>
-                <span class="ml-auto text-[11px]" style="color: {ACCENT.jade}"
-                  >{bandBuff(b) ? `now ${bandBuff(b)}` : b.buffLabel}</span
-                >
-              </summary>
-              <div class="bar mt-1.5 h-1.5"><i style="width: {b.progress * 100}%"></i></div>
-              <p class="mt-1 text-[11px] text-ink-400">
-                {#if b.nextUnlock}
-                  Next: {b.nextUnlock.name} at {b.name} {b.nextUnlock.level}.
-                {/if}
-                {#if b.level < b.gearUnlockLevel}
-                  All {b.name} gear by Lv {b.gearUnlockLevel}; the next metal opens then.
-                {:else}
-                  Gear unlocked · keeps giving {b.buffLabel} and {b.enchantLabel} reagents to Lv 100.
-                {/if}
-              </p>
-              <ul class="mt-2 flex flex-col gap-1.5">
-                {#each g.actions as a (a.id)}<ActionRow
-                    {a}
-                    {accent}
-                    {itemMap}
-                    {ownedMap}
-                    {sources}
-                    {firstTrainableId}
-                    {flash}
-                    {now}
-                    {busy}
-                    onTrain={train}
-                    onPickChoice={pickChoice}
-                    onCancelRig={cancelRig}
-                  />{/each}
-              </ul>
-            </details>
-          {/each}
-          {#if bandGroups.other.length}
-            <ul class="flex flex-col gap-1.5">
-              {#each bandGroups.other as a (a.id)}<ActionRow
-                  {a}
-                  {accent}
-                  {itemMap}
-                  {ownedMap}
-                  {sources}
-                  {firstTrainableId}
-                  {flash}
-                  {now}
-                  {busy}
-                  onTrain={train}
-                  onPickChoice={pickChoice}
-                  onCancelRig={cancelRig}
-                />{/each}
-            </ul>
-          {/if}
-        </div>
-      {:else}
-        <ul class="mt-2 flex flex-col gap-1.5">
-          {#each skill.actions as a (a.id)}<ActionRow
-              {a}
-              {accent}
-              {itemMap}
-              {ownedMap}
-              {sources}
-              {firstTrainableId}
-              {flash}
-              {now}
-              {busy}
-              onTrain={train}
-              onPickChoice={pickChoice}
-              onCancelRig={cancelRig}
-            />{/each}
-        </ul>
-      {/if}
+    <div class="order-2 xl:order-none xl:col-start-2 xl:row-start-1 xl:row-span-2">
+      <ActionList
+        {skill}
+        {bandGroups}
+        {accent}
+        {itemMap}
+        {ownedMap}
+        {sources}
+        {firstTrainableId}
+        {flash}
+        {now}
+        {busy}
+        onTrain={train}
+        onPickChoice={pickChoice}
+        onCancelRig={cancelRig}
+      />
       <div class="h-4"></div>
     </div>
   </div>

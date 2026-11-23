@@ -3,7 +3,7 @@
  * groupings. No runes, no DOM — the page owns the state, this owns the maths.
  */
 
-import type { ActionDTO, BandDTO, OwnedTalent, SkillDTO, TalentOption } from './skills'
+import type { ActionDTO, BandDTO, ItemDTO, OwnedTalent, SkillDTO, TalentOption } from './skills'
 import type { ModKind } from './types'
 
 /** Short labels for each passive kind, so a raw "18%" can't be read as progress. */
@@ -71,6 +71,37 @@ export function unmetOf(o: TalentOption): string {
 
 /** A capstone option carries a cross-profession gate; choice options never do. */
 export const isBlocked = (o: TalentOption): boolean => (o.requires ?? []).some((r) => !r.met)
+
+/** `42%` — a 0..1 fraction as a whole-percent label. */
+export const pct = (v: number): string => `${Math.round(v * 100)}%`
+
+/** One inventory item you can burn to train Enchanting. */
+export interface Distillable {
+  itemId: string
+  count: number
+  name: string
+  icon: string
+  value: number
+}
+
+/** Inventory items you can burn to train Enchanting, richest first (else none). */
+export function distillablesOf(
+  skillId: string | undefined,
+  inventory: { itemId: string; count: number }[],
+  itemMap: Map<string, ItemDTO>,
+): Distillable[] {
+  if (skillId !== 'enchanting') return []
+  return inventory
+    .filter((r) => r.count > 0 && r.itemId !== 'coins')
+    .map((r) => ({
+      itemId: r.itemId,
+      count: r.count,
+      name: itemMap.get(r.itemId)?.name ?? r.itemId,
+      icon: itemMap.get(r.itemId)?.icon ?? '◆',
+      value: itemMap.get(r.itemId)?.value ?? 0,
+    }))
+    .sort((a, b) => b.value - a.value)
+}
 
 /** One row of the talent rail: a choice milestone or a mastery capstone. */
 export interface TalentRow {

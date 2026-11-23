@@ -6,37 +6,29 @@
   import { getStats, listExercises } from '#lib/exercises'
   import { session, updateProfile } from '#lib/session.svelte'
   import { speechStatus, unloadSpeech, wakeSpeech } from '#lib/speech'
-  import { accentStyle } from '#lib/theme'
   import { ACCENT } from '#lib/theme'
   import type {
     ExerciseInfo,
     ModelInfo,
     PublicUser,
-    Role,
     Roles,
     SpeechStatus,
     StudyPrefs,
   } from '#lib/types'
-  import { LANG_NAMES, setVoicePrefs } from '#lib/voices'
-  import Spinner from '#lib/components/Spinner.svelte'
+  import { setVoicePrefs } from '#lib/voices'
+  import { EMPTY_ROLES } from '#lib/settingsview'
   import StudySettings from '#lib/components/settings/StudySettings.svelte'
   import RigAlertsSection from '#lib/components/settings/RigAlertsSection.svelte'
+  import OpenRouterKey from '#lib/components/settings/OpenRouterKey.svelte'
+  import ModelRoles from '#lib/components/settings/ModelRoles.svelte'
+  import VoiceSettings from '#lib/components/settings/VoiceSettings.svelte'
+  import SpeechSection from '#lib/components/settings/SpeechSection.svelte'
+  import NumberSetting from '#lib/components/settings/NumberSetting.svelte'
+  import AccountSection from '#lib/components/settings/AccountSection.svelte'
+  import AdminUsers from '#lib/components/settings/AdminUsers.svelte'
   import { peekCached } from '#lib/cache'
 
-  const ROLE_KEYS: Role[] = ['conversation', 'judge', 'generator', 'translator']
-  const ROLE_LABEL: Record<Role, string> = {
-    conversation: 'Conversation',
-    judge: 'Grading / judge',
-    generator: 'Card & exercise generator',
-    translator: 'Translator / lookups',
-  }
-
-  let roles = $state<Roles>({
-    conversation: '',
-    judge: '',
-    generator: '',
-    translator: '',
-  })
+  let roles = $state<Roles>({ ...EMPTY_ROLES })
   let roleDefaults = $state<Roles | null>(null)
   let models = $state<ModelInfo[]>([])
   let modelFilter = $state('')
@@ -213,40 +205,12 @@
     }
   }
 
-  async function saveDailyGoal() {
+  /** Puts one scalar knob and shows the note. */
+  async function saveScalar(patch: Record<string, number>, message: string) {
     note = ''
     try {
-      await api('/api/settings', {
-        method: 'PUT',
-        body: JSON.stringify({ dailyGoal: Number(dailyGoal) }),
-      })
-      note = 'Daily goal saved.'
-    } catch (e) {
-      error = (e as Error).message
-    }
-  }
-
-  async function saveFoodThreshold() {
-    note = ''
-    try {
-      await api('/api/settings', {
-        method: 'PUT',
-        body: JSON.stringify({ foodThreshold: Number(foodThreshold) }),
-      })
-      note = 'Combat auto-eat threshold saved.'
-    } catch (e) {
-      error = (e as Error).message
-    }
-  }
-
-  async function saveRetention() {
-    note = ''
-    try {
-      await api('/api/settings', {
-        method: 'PUT',
-        body: JSON.stringify({ desiredRetention: Number(desiredRetention) }),
-      })
-      note = 'Desired retention saved.'
+      await api('/api/settings', { method: 'PUT', body: JSON.stringify(patch) })
+      note = message
     } catch (e) {
       error = (e as Error).message
     }
@@ -327,242 +291,68 @@
   <p class="banner mb-3" style="--accent: {ACCENT.jade}">{note}</p>
 {/if}
 
-<!-- OpenRouter key ------------------------------------------------------->
 <div class="lg:columns-2 lg:gap-10 xl:gap-16 [&>section]:break-inside-avoid">
-  <section class="mb-5 panel panel-accent p-4" style={accentStyle(ACCENT.azure)}>
-    <h2 class="display text-sm text-ink-100">Your OpenRouter key</h2>
-    <p class="mt-1 text-xs text-ink-400">
-      Status:
-      {#if keyStatus === 'user'}<span class="text-jade-400">using your own key</span>
-      {:else if keyStatus === 'server'}<span class="text-brass-400">using the server's key</span>
-      {:else}<span class="text-ember-400">not set — chat is disabled</span>{/if}
-    </p>
-    <div class="mt-3 flex gap-2">
-      <input
-        type="password"
-        bind:value={keyInput}
-        placeholder={keyStatus === 'user' ? 'Replace key…' : 'sk-or-…'}
-        class="field flex-1"
-      />
-      <button onclick={saveKey} class="btn btn-ghost px-3 py-2 text-xs">Save</button>
-    </div>
-  </section>
+  <OpenRouterKey {keyStatus} bind:keyInput onSave={saveKey} />
 
-  <!-- Models --------------------------------------------------------------->
-  <section class="mb-5 panel panel-accent p-4" style={accentStyle(ACCENT.gold)}>
-    <h2 class="display text-sm text-ink-100">Models per role</h2>
-    <p class="mt-1 text-xs text-ink-400">
-      Pick any model your OpenRouter key can use. The list comes from the API and follows your
-      account's provider preferences, privacy settings and guardrails.
-    </p>
-    <input
-      bind:value={modelFilter}
-      onchange={loadModels}
-      placeholder="filter models (e.g. qwen, deepseek)"
-      class="field mt-3"
-    />
-    {#if modelsLoading}
-      <p class="mt-2 flex items-center gap-2 text-xs text-ink-400">
-        <Spinner size={12} label="Loading the model catalogue" /> Loading the model catalogue…
-      </p>
-    {/if}
-    <datalist id="models">
-      {#each models as m (m.id)}<option value={m.id}>{m.name}</option>{/each}
-    </datalist>
-    <div class="mt-3 space-y-2">
-      {#each ROLE_KEYS as role (role)}
-        <label class="block">
-          <span class="mb-1 block text-xs text-ink-400">{ROLE_LABEL[role]}</span>
-          <input list="models" bind:value={roles[role]} class="field" />
-        </label>
-      {/each}
-    </div>
-    <div class="mt-3 flex items-center justify-between">
-      <button onclick={saveRoles} class="btn btn-ghost px-3 py-2 text-xs">Save models</button>
-      {#if roleDefaults}
-        <button onclick={() => (roles = { ...roleDefaults! })} class="link link-btn text-xs"
-          >reset to defaults</button
-        >
-      {/if}
-    </div>
-  </section>
+  <ModelRoles
+    {models}
+    bind:modelFilter
+    {modelsLoading}
+    bind:roles
+    {roleDefaults}
+    onFilter={loadModels}
+    onSave={saveRoles}
+  />
 
-  <!-- Voice ---------------------------------------------------------------->
-  <section class="mb-5 panel panel-accent p-4" style={accentStyle(ACCENT.violet)}>
-    <h2 class="display text-sm text-ink-100">Voice</h2>
-    <div class="mt-2 flex gap-2">
-      <button
-        onclick={() => (voiceMode = 'preset')}
-        class="btn flex-1 px-3 py-2 text-xs {voiceMode === 'preset' ? 'btn-primary' : 'btn-ghost'}"
-        >Built-in voice</button
-      >
-      <button
-        onclick={() => (voiceMode = 'design')}
-        class="btn flex-1 px-3 py-2 text-xs {voiceMode === 'design' ? 'btn-primary' : 'btn-ghost'}"
-        >Voice design</button
-      >
-    </div>
-    <p class="mt-2 text-xs text-ink-400">
-      {voiceMode === 'preset'
-        ? 'VoxCPM2 ships one voice, styled as a calm teacher. Switch to Voice design to describe your own.'
-        : 'Describe a voice in the text box (e.g. "a warm, patient Mandarin teacher"). One per language; the model invents it.'}
-    </p>
-    {#if voiceMode === 'design'}
-      <div class="mt-3 space-y-2">
-        {#each Object.keys(LANG_NAMES) as lc (lc)}
-          <label class="block">
-            <span class="mb-1 block text-xs text-ink-400"
-              >{lc.toUpperCase()} · voice description</span
-            >
-            <input
-              bind:value={voices[lc]}
-              placeholder="a calm, professional teacher with a clear, warm voice"
-              class="field"
-            />
-          </label>
-        {/each}
-      </div>
-    {/if}
-    <button onclick={saveVoice} class="btn btn-ghost mt-3 px-3 py-2 text-xs">Save voice</button>
-  </section>
+  <VoiceSettings bind:voiceMode bind:voices onSave={saveVoice} />
 
-  <!-- Speech engine -------------------------------------------------------->
-  <section class="mb-5 panel panel-accent p-4" style={accentStyle(ACCENT.jade)}>
-    <div class="flex items-center justify-between gap-3">
-      <div>
-        <h2 class="display text-sm text-ink-100">Speech engine</h2>
-        <p class="text-xs text-ink-400">
-          {speech?.ready ? 'awake' : speech?.running ? 'starting' : 'asleep'}
-          {#if speech?.models?.length}· {speech.models.join(', ')}{/if}
-        </p>
-      </div>
-      <div class="flex gap-2">
-        {#if !speech?.ready}
-          <button
-            type="button"
-            onclick={wake}
-            disabled={waking || speech?.running}
-            aria-busy={waking || speech?.running}
-            class="btn btn-ghost px-3 py-1.5 text-xs"
-          >
-            {#if waking || speech?.running}<Spinner size={12} label="Waking the speech engine" /> Waking…{:else}Wake{/if}
-          </button>
-        {/if}
-        <button type="button" onclick={free} class="btn btn-ghost px-3 py-1.5 text-xs"
-          >Free memory</button
-        >
-      </div>
-    </div>
-    <p class="mt-2 text-xs text-ink-400">
-      Voice cards start the models on demand; they unload when idle.
-    </p>
-  </section>
+  <SpeechSection {speech} {waking} onWake={wake} onFree={free} />
 
-  <!-- Daily goal ----------------------------------------------------------->
-  <section class="mb-5 panel panel-accent p-4" style={accentStyle(ACCENT.gold)}>
-    <h2 class="display text-sm text-ink-100">Daily goal</h2>
-    <p class="mt-1 text-xs text-ink-400">XP to earn each UTC day to keep your streak.</p>
-    <div class="mt-3 flex gap-2">
-      <input
-        type="number"
-        min="10"
-        max="1000"
-        step="10"
-        bind:value={dailyGoal}
-        class="field w-28"
-      />
-      <button onclick={saveDailyGoal} class="btn btn-ghost px-3 py-2 text-xs">Save</button>
-    </div>
-  </section>
+  <NumberSetting
+    title="Daily goal"
+    help="XP to earn each UTC day to keep your streak."
+    min={10}
+    max={1000}
+    step={10}
+    inputWidth="w-28"
+    accent={ACCENT.gold}
+    bind:value={dailyGoal}
+    onSave={() => saveScalar({ dailyGoal: Number(dailyGoal) }, 'Daily goal saved.')}
+  />
 
-  <!-- Spaced repetition ----------------------------------------------------->
-  <section class="mb-5 panel panel-accent p-4" style={accentStyle(ACCENT.azure)}>
-    <h2 class="display text-sm text-ink-100">Spaced repetition</h2>
-    <p class="mt-1 text-xs text-ink-400">
-      Anki-style FSRS-6 scheduling. Desired retention is the chance you want to recall a card when
-      it comes up — higher means shorter intervals and more reviews.
-    </p>
-    <div class="mt-3 flex items-center gap-2">
-      <input
-        type="number"
-        min="70"
-        max="97"
-        step="1"
-        bind:value={desiredRetention}
-        class="field w-24"
-      />
-      <span class="text-sm text-ink-400">%</span>
-      <button onclick={saveRetention} class="btn btn-ghost px-3 py-2 text-xs">Save</button>
-    </div>
-  </section>
+  <NumberSetting
+    title="Spaced repetition"
+    help="Anki-style FSRS-6 scheduling. Desired retention is the chance you want to recall a card when it comes up — higher means shorter intervals and more reviews."
+    min={70}
+    max={97}
+    step={1}
+    suffix="%"
+    accent={ACCENT.azure}
+    bind:value={desiredRetention}
+    onSave={() =>
+      saveScalar({ desiredRetention: Number(desiredRetention) }, 'Desired retention saved.')}
+  />
 
-  <!-- Study ---------------------------------------------------------------->
   <StudySettings bind:study bind:stepsText {exercises} onsave={saveStudy} />
 
-  <!-- Combat ---------------------------------------------------------------->
-  <section class="mb-5 panel panel-accent p-4" style={accentStyle(ACCENT.ember)}>
-    <h2 class="display text-sm text-ink-100">Combat</h2>
-    <p class="mt-1 text-xs text-ink-400">
-      Food is auto-eaten when your HP drops below this percentage. Potions are auto-drunk at the
-      start of a fight.
-    </p>
-    <div class="mt-3 flex items-center gap-2">
-      <input
-        type="number"
-        min="10"
-        max="90"
-        step="5"
-        bind:value={foodThreshold}
-        class="field w-24"
-      />
-      <span class="text-sm text-ink-400">%</span>
-      <button onclick={saveFoodThreshold} class="btn btn-ghost px-3 py-2 text-xs">Save</button>
-    </div>
-  </section>
+  <NumberSetting
+    title="Combat"
+    help="Food is auto-eaten when your HP drops below this percentage. Potions are auto-drunk at the start of a fight."
+    min={10}
+    max={90}
+    step={5}
+    suffix="%"
+    accent={ACCENT.ember}
+    bind:value={foodThreshold}
+    onSave={() =>
+      saveScalar({ foodThreshold: Number(foodThreshold) }, 'Combat auto-eat threshold saved.')}
+  />
 
-  <!-- Rig alerts ----------------------------------------------------------->
   <RigAlertsSection />
 
-  <!-- Account -------------------------------------------------------------->
-  <section class="mb-5 panel panel-accent p-4" style={accentStyle(ACCENT.violet)}>
-    <h2 class="display text-sm text-ink-100">Account</h2>
-    <label class="mt-3 block">
-      <span class="mb-1 block text-xs text-ink-400">Display name</span>
-      <div class="flex gap-2">
-        <input bind:value={handle} class="field flex-1" />
-        <button onclick={saveProfile} class="btn btn-ghost px-3 py-2 text-xs">Save</button>
-      </div>
-    </label>
-    <p class="mt-3 text-xs text-ink-400">
-      @{session.user?.username} · {session.user?.role}
-    </p>
-    <button onclick={doLogout} class="btn btn-danger mt-3 px-3 py-2 text-xs">Sign out</button>
-  </section>
+  <AccountSection bind:handle onSave={saveProfile} onLogout={doLogout} />
 
-  <!-- Admin ---------------------------------------------------------------->
   {#if isAdmin}
-    <section class="mb-5 panel panel-accent p-4" style={accentStyle(ACCENT.brass)}>
-      <h2 class="display text-sm text-ink-100">Users ({users.length})</h2>
-      <ul class="mt-3 space-y-2">
-        {#each users as u (u.id)}
-          <li
-            class="flex items-center justify-between rounded-[12px] border border-ink-700 px-3 py-2"
-          >
-            <div>
-              <div class="text-sm">{u.handle}</div>
-              <div class="text-xs text-ink-400">@{u.username} · {u.role}</div>
-            </div>
-            {#if u.id !== session.user?.id}
-              <button onclick={() => removeUser(u.id)} class="btn btn-danger px-3 py-2 text-xs"
-                >Delete</button
-              >
-            {/if}
-          </li>
-        {/each}
-      </ul>
-      <p class="mt-3 text-xs text-ink-400">
-        Everyone's conversations, settings and keys are stored separately.
-      </p>
-    </section>
+    <AdminUsers {users} onRemove={removeUser} />
   {/if}
 </div>

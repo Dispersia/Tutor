@@ -514,14 +514,15 @@ too: `equipItem`/`applyEnchant`/`grantItems`/`awardXp`/`recordReview`/
 `band` table calls `bandDef(spec)` directly, so `eslint.config.js` drops its
 `wideSignatures` list (`max-params` is now on everywhere except the two legacy
 scopes). The page shells are next, smallest first: `home` (404 → 104 lines),
-`inventory` (462 → 240) and `learn` (490 → 360) are done — their pure maths live
-in `lib/<feature>view.ts` and their markup in `lib/components/<feature>/`, and all
-three are off the `legacyBig` list. Still open: `skills/[id]`, `settings`,
-`practice` (and `chat`/`combat`/`skills`, whose scripts still hold long
-functions) get the Phase 6 treatment — pure derivations into
-`lib/<feature>view.ts`, presentational pieces into `lib/components/<feature>/`,
-and `styles/components.css` split per feature. Then the `Deps`/per-request
-context (findings 3–4) gains one shared board/player loader.
+`inventory` (462 → 240), `learn` (490 → 360), `skills/[id]` (558 → 268) and
+`settings` (568 → 357) are done — their pure maths live in `lib/<feature>view.ts`
+and their markup in `lib/components/<feature>/`, and all five are off the
+`legacyBig` list. Still open: `practice` (and `chat`/`combat`/`skills`, whose
+scripts still hold long functions) get the Phase 6 treatment — pure derivations
+into `lib/<feature>view.ts`, presentational pieces into
+`lib/components/<feature>/`, and `styles/components.css` split per feature. Then
+the `Deps`/per-request context (findings 3–4) gains one shared board/player
+loader.
 
 ---
 
