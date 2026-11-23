@@ -29,8 +29,22 @@ const sizeRules = {
   'max-params': ['error', MAX_PARAMS],
 }
 
-/** Mega files awaiting decomposition: the size ceiling is off here, nothing else. */
-const legacyBig = ['apps/web/src/routes/**/*.svelte', 'scripts/sweep-cards.ts']
+/**
+ * The web pages still awaiting their Phase-15 split (and one script): the size
+ * ceiling is off here, nothing else. **Remove a page as it comes under budget**,
+ * so the exemption only shrinks. `home` is already off the list.
+ */
+const legacyBig = [
+  'apps/web/src/routes/(app)/chat/+page.svelte',
+  'apps/web/src/routes/(app)/combat/+page.svelte',
+  'apps/web/src/routes/(app)/inventory/+page.svelte',
+  'apps/web/src/routes/(app)/learn/+page.svelte',
+  'apps/web/src/routes/(app)/practice/+page.svelte',
+  'apps/web/src/routes/(app)/settings/+page.svelte',
+  'apps/web/src/routes/(app)/skills/+page.svelte',
+  'apps/web/src/routes/(app)/skills/\\[id\\]/+page.svelte',
+  'scripts/sweep-cards.ts',
+]
 
 /** `bun test` globals (the `globals` package has no bun preset). */
 const bunTest = {

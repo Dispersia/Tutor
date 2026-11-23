@@ -513,12 +513,15 @@ too: `equipItem`/`applyEnchant`/`grantItems`/`awardXp`/`recordReview`/
 `completeAction` fold their trailing arguments into one options object and the
 `band` table calls `bandDef(spec)` directly, so `eslint.config.js` drops its
 `wideSignatures` list (`max-params` is now on everywhere except the two legacy
-scopes). Still open: the remaining `+page.svelte` files over ~250 lines
-(`practice`, `settings`, `skills/[id]`, `learn`, `inventory`, `home`) get the
-Phase 6 treatment — pure derivations into `lib/<feature>view.ts`, presentational
-pieces into `lib/components/<feature>/`, and `styles/components.css` split per
-feature. Then the `Deps`/per-request context (findings 3–4) gains one shared
-board/player loader.
+scopes). The page shells are next, smallest first: `home` (404 lines) is done —
+its pure maths and heat map live in `lib/homeview.ts`, its header, progress list,
+rig list and bank strip in `lib/components/home/`, and it is off the `legacyBig`
+list (104 lines). Still open: `inventory`, `learn`, `skills/[id]`, `settings`,
+`practice` (and `chat`/`combat`/`skills`, whose scripts still hold long
+functions) get the Phase 6 treatment — pure derivations into
+`lib/<feature>view.ts`, presentational pieces into `lib/components/<feature>/`,
+and `styles/components.css` split per feature. Then the `Deps`/per-request
+context (findings 3–4) gains one shared board/player loader.
 
 ---
 
