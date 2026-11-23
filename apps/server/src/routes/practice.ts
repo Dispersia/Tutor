@@ -22,18 +22,19 @@ import {
   checkLessonCompletion,
   completeAction,
   knownWords,
-  recordActivity,
+  loadLearnerData,
+  touchActivity,
   recordReview,
   srsStateMap,
   studyBudget,
   summary,
-} from '../game/service'
+} from '../services'
 import { buildLessons } from '../game/curriculum'
 import { REINFORCE_LAPSES, reinforceLapsedCard } from '../deck/reinforce'
 import { quietState, setQuiet } from '../game/quiet'
 import { bumpDailyExtra, readStudyPrefs, showsReadings } from '../game/study'
 import { ACTION_BY_ID } from '../game/skills'
-import { selectCardId, selectStudyCardId } from '../game/srs'
+import { selectCardId, selectStudyCardId, type FsrsState } from '../game/srs'
 import { OpenRouter } from '../llm/openrouter'
 import { MANDARIN_RULE, NATIVE_FEEDBACK_REMINDER, NATIVE_FEEDBACK_RULE } from '../llm/prompts'
 import { resolveUserKey } from '../llm/userkey'
@@ -59,8 +60,12 @@ const SITTING_GAP_MS = 30 * 60_000
  * due date — that card's same-day review does not move the due date, so it would
  * come straight back again (and again).
  */
-function pickStudyCard(deps: Deps, userId: string, ids: string[]): Card | undefined {
-  const srs = srsStateMap(deps.db, userId)
+function pickStudyCard(
+  deps: Deps,
+  userId: string,
+  ids: string[],
+  srs: Map<string, FsrsState>,
+): Card | undefined {
   const now = Date.now()
 
   // A sitting opens with a few new words (in curriculum order), then the due
@@ -142,9 +147,10 @@ export function readingMap(
   db: Deps['db'],
   userId: string,
   targetLang: string,
+  cards?: Card[],
 ): Record<string, string> {
   const map: Record<string, string> = {}
-  for (const c of listCards(db, userId)) {
+  for (const c of cards ?? listCards(db, userId)) {
     if (c.targetLang !== targetLang) continue
     map[c.back] = displayReadingOf(c)
   }
@@ -283,7 +289,7 @@ function settleAction(
       talentUnlocked: null,
     }
   }
-  const award = awardActionXp(deps.db, deps.events, userId, action.id, action.xp)
+  const award = awardActionXp(deps.db, deps.events, userId, { actionId: action.id, amount: action.xp })
   // The drill powers the rig (docs/DESIGN.md §13.5.1): it pays every running rig up
   // to now, lands the strike, then makes this action's run faster and longer. What
   // `gained` reports is the whole windfall — the strike plus what the runs made —
@@ -386,10 +392,12 @@ export function registerPractice(app: App) {
     // Daily budget (Anki-style limits): new cards and reviews are capped per UTC
     // day; "study more" raises today's allowance. A new card is one with no SRS
     // state yet, everything else (learning + review) draws on the review budget.
-    const srsForBudget = srsStateMap(deps.db, user.id)
-    const deckIds = listCards(deps.db, user.id, deckId).map((c) => c.id)
+    const data = loadLearnerData(deps.db, user.id)
+    const srsForBudget = data.srs
+    const deckCards = deckId ? data.cards.filter((c) => c.deckId === deckId) : data.cards
+    const deckIds = deckCards.map((c) => c.id)
     const now = Date.now()
-    let budget = studyBudget(deps.db, user.id)
+    let budget = studyBudget(deps.db, user.id, now, data)
     // The daily budget is a goal, not a wall. If it blocks the very next card
     // while the deck still has one to give (a due card or a new word), raise
     // today's allowance and keep going — "done" waits for a deck with nothing
@@ -402,8 +410,12 @@ export function registerPractice(app: App) {
           ? !(budget.reviewsUnlimited || budget.reviewsRemaining > 0)
           : !(budget.newUnlimited || budget.newRemaining > 0))
       if (blocked) {
-        bumpDailyExtra(deps.db, user.id, srsForBudget.has(next) ? { reviewsExtra: 1 } : { newExtra: 1 })
-        budget = studyBudget(deps.db, user.id)
+        bumpDailyExtra(
+          deps.db,
+          user.id,
+          srsForBudget.has(next) ? { reviewsExtra: 1 } : { newExtra: 1 },
+        )
+        budget = studyBudget(deps.db, user.id, now, data)
       }
     }
     const allowNew = budget.newUnlimited || budget.newRemaining > 0
@@ -422,26 +434,25 @@ export function registerPractice(app: App) {
     // only ever serves what is due (or a new word).
     const card = body.cardId
       ? getCard(deps.db, body.cardId, user.id)
-      : pickStudyCard(deps, user.id, allowedIds)
+      : pickStudyCard(deps, user.id, allowedIds, data.srs)
     if (!card) return c.json({ instance: null, action: null, done: true, budget })
     // The queue moves along the path; the practice header follows the card.
     const servedLessonId = body.lessonId ? lessonOfCard(deps, user.id, card) : undefined
 
     const learner = learnerOf(user)
-    const srs = srsStateMap(deps.db, user.id)
+    const srs = data.srs
     const introduced = introducedCardIds(deps.db, user.id)
-    const known = knownWords(deps.db, user.id)
+    const known = knownWords(deps.db, user.id, data)
     // Words the learner has met (introduced or reviewed): the n+1 vocabulary for
     // a first-exposure example sentence.
     const seen = new Set(known)
-    for (const c of listCards(deps.db, user.id))
-      if (introduced.has(c.id) || srs.has(c.id)) seen.add(c.back)
+    for (const c of data.cards) if (introduced.has(c.id) || srs.has(c.id)) seen.add(c.back)
 
     const ctx = {
       card,
       learner,
       distractors: otherBacks(deps.db, user.id, card.targetLang, card.back, 3),
-      readings: readingMap(deps.db, user.id, card.targetLang),
+      readings: readingMap(deps.db, user.id, card.targetLang, data.cards),
       known: [...known, card.back],
       seen: [...seen, card.back],
       showReadings: showReadingsFor(deps, user.id, card, prefs),
@@ -586,7 +597,7 @@ export function registerPractice(app: App) {
       })
     }
     const { leveledUp } = awardXp(deps.db, deps.events, user.id, xp, 'review', def.id)
-    recordActivity(deps.db, deps.events, user.id)
+    touchActivity(deps.db, deps.events, user.id)
     deps.events.emit('review.completed', {
       userId: user.id,
       cardId: card.id,
@@ -704,7 +715,7 @@ export function registerPractice(app: App) {
         detail: result.detail,
       })
       const { leveledUp } = awardXp(deps.db, deps.events, user.id, xp, 'review', def.id)
-      recordActivity(deps.db, deps.events, user.id)
+      touchActivity(deps.db, deps.events, user.id)
       deps.events.emit('review.completed', {
         userId: user.id,
         cardId: card.id,

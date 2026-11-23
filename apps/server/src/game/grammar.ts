@@ -45,7 +45,6 @@ const placeClause = (w: FreqWord): string =>
 const FOOD = ['水', '茶', '米飯', '菜', '水果', '蘋果']
 const ITEMS = ['書', '電腦', '電話', '車', '錢', '手機', '電視', '衣服', '貓', '狗']
 const PEOPLE = [...PERSON_NOUNS]
-const CONCRETE = [...FOOD, ...ITEMS, ...PEOPLE, '中國', ...PLACE_NOUNS]
 const THING_SUBJECTS = [...FOOD, ...ITEMS, '中國', '家', '學校', '醫院', '商店', '飯館']
 
 /** What each transitive verb can reasonably take as its object. */

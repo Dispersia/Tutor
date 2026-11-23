@@ -14,14 +14,15 @@ import {
   combatLevel,
   combatResolve,
   currentHp,
-  getPlayerCombat,
+  loadPlayerCombat,
+  loadProgress,
   knownWords,
   monsterState,
   recordReview,
   srsStateMap,
   startEncounter,
   summary,
-} from '../game/service'
+} from '../services'
 import { readStudyPrefs, showsReadings } from '../game/study'
 import { pickNextExercise, pickReviewCard, readingMap } from './practice'
 import type { App, Deps } from '../context'
@@ -70,11 +71,11 @@ function countReviewCards(deps: Deps, userId: string): number {
   return listCards(deps.db, userId).filter((c) => srs.has(c.id)).length
 }
 
-function encounterView(deps: Deps, userId: string) {
+function encounterView(deps: Deps, userId: string, levels?: Map<string, number>) {
   const enc = getEncounter(deps.db, userId)
   if (!enc) return null
   const monster = MONSTER_BY_ID.get(enc.monsterId)
-  const player = getPlayerCombat(deps.db, userId)
+  const player = loadPlayerCombat(deps.db, userId, levels)
   return {
     monsterId: enc.monsterId,
     monsterName: monster?.name ?? enc.monsterId,
@@ -96,13 +97,14 @@ export function registerCombat(app: App) {
   app.get('/api/combat', async (c) => {
     const deps = c.get('deps')
     const user = c.get('user')!
-    const player = getPlayerCombat(deps.db, user.id)
-    const level = combatLevel(deps.db, user.id)
+    const progress = loadProgress(deps.db, user.id)
+    const player = loadPlayerCombat(deps.db, user.id, progress.levels)
+    const level = combatLevel(deps.db, user.id, progress.levels)
     const monsters = MONSTERS.map((m: MonsterDef) => ({
       ...m,
       ...monsterState(deps.db, user.id, m),
     }))
-    const view = encounterView(deps, user.id)
+    const view = encounterView(deps, user.id, progress.levels)
     // Resuming an in-progress fight needs a fresh drill too: the page only ever
     // gets one from `/start` or a `/hit`, so opening Combat mid-fight would sit
     // on "no drill available" with no way to continue.

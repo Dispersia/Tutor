@@ -1,7 +1,8 @@
 import type { AssessResult } from '@tutor/core'
 import type { Deps } from '../context'
+import type { AssessFn } from './types'
 
-export type AssessFn = (audio: Uint8Array, expected: string) => Promise<AssessResult>
+export type { AssessFn }
 
 function toWav(audio: Uint8Array): Blob {
   const buf = audio.buffer.slice(

@@ -21,16 +21,16 @@ import {
 } from './gear'
 import {
   applyGearSet,
-  baseGearInstance,
+  ensureBaseGearInstance,
   completeAction,
   equipItem,
   gearSetsView,
   gearView,
-  getPlayerCombat,
-  salvageGearInstance,
+  loadPlayerCombat,
+  salvageGear,
   saveGearSet,
   unequipItem,
-} from './service'
+} from '../services'
 
 function setup() {
   const { db, sqlite } = openDb(':memory:')
@@ -80,7 +80,7 @@ test('a craft creates a gear instance and equipping keeps the stack count', () =
   // worn gear stays in the inventory as "pieces owned"
   expect(getItemCount(db, user.id, 'bronze_helm')).toBe(1)
 
-  const pc = getPlayerCombat(db, user.id)
+  const pc = loadPlayerCombat(db, user.id)
   expect(pc.armour).toBeGreaterThan(0)
   expect(pc.stats.stamina).toBeGreaterThan(0)
   expect(pc.gearScore).toBeGreaterThan(0)
@@ -127,7 +127,7 @@ test('wearing two pieces of one armour family activates its set bonus', () => {
   equipItem(db, bus, user.id, 'bronze_helm')
   equipItem(db, bus, user.id, 'bronze_chest')
 
-  const pc = getPlayerCombat(db, user.id)
+  const pc = loadPlayerCombat(db, user.id)
   const vanguard = pc.setBonuses.find((set) => set.id === 'vanguard')
   expect(vanguard?.pieces).toBe(2)
   expect(vanguard?.active.map((tier) => tier.pieces)).toContain(2)
@@ -141,7 +141,7 @@ test('salvaging a piece returns its crafting material', () => {
   completeAction(db, bus, user.id, 'forge-bronze-helm')
 
   const piece = listGearInstances(db, user.id)[0]!
-  const res = salvageGearInstance(db, bus, user.id, piece.id)
+  const res = salvageGear(db, bus, user.id, piece.id)
   expect(res.ok).toBe(true)
   expect(res.materials?.[0]?.item).toBe('iron_ore')
   expect(res.materials?.[0]?.count).toBeGreaterThan(0)
@@ -181,7 +181,7 @@ test('equipping gear checks the combat stats it needs', () => {
   expect(equipItem(db, bus, user.id, 'bronze_sword').ok).toBe(true)
 
   // A locked piece still shows in the inventory, with what it needs.
-  baseGearInstance(db, user.id, ITEM_BY_ID.get('iron_sword')!)
+  ensureBaseGearInstance(db, user.id, ITEM_BY_ID.get('iron_sword')!)
   const piece = gearView(db, user.id).find((g) => g.itemId === 'iron_sword')
   expect(piece?.missing[0]).toMatchObject({ skill: 'attack', name: 'Attack', level: 5 })
   expect(meetsRequirements(ITEM_BY_ID.get('iron_sword')!, () => 5).ok).toBe(true)

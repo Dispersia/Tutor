@@ -1,4 +1,4 @@
-import { curriculumView, srsStats } from '../game/service'
+import { curriculumView, srsStats } from '../services'
 import type { App } from '../context'
 
 export function registerCurriculum(app: App) {

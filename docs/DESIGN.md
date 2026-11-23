@@ -651,10 +651,16 @@ interface ExerciseDef<Ctx = unknown, Inst = unknown, Res = unknown> {
 }
 ```
 
-- Registered in `packages/core/registry.ts`.
-- Backend resolves `id → generate/grade`; **frontend maps `id → Svelte component`**.
+- The contract lives in `packages/core` (`ExerciseDef`, `ExerciseRegistry`).
+- Each backend drill is one file under `apps/server/src/exercises/defs/`;
+  `apps/server/src/exercises/index.ts` registers them and resolves
+  `id → generate/grade`. The **frontend maps `id → Svelte component`** in
+  `apps/web/src/lib/components/exercises/`.
 - Adding an exercise = one file in each place + a registry line. Nothing in the
   core needs editing → this is _the_ extensibility promise.
+
+The full server layout (domain / data / services / routes, and the content
+tables) is in [`docs/REFACTOR_PLAN.md`](REFACTOR_PLAN.md) §3.
 
 ### 11.3 Built-in exercise kinds (roadmap)
 
@@ -850,7 +856,7 @@ of all 23 professions, out of 100 — a percent-complete figure, 1 at the start 
 rigs both feed the professions underneath it, and shipping a new profession (or a
 new action inside one) lowers it until that content is trained. Nothing levels the
 account directly — the review XP ledger drives the daily goal and the streak, not
-this number. `accountLevel()` in `game/service.ts` computes it on read.
+this number. `accountLevel()` in `apps/server/src/services/board.ts` computes it on read.
 
 **Talents** are still per profession, taken at milestones of the derived level:
 - **Every 10 levels** (10, 20, 30, …) → choose **one of three** talents:

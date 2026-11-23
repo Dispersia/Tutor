@@ -4,7 +4,6 @@
   "private": true,
   "type": "module",
   "imports": {
-    "#lib": "./src/lib/index.js",
     "#lib/*": "./src/lib/*"
   },
   "scripts": {
@@ -27,6 +26,7 @@
     "vite": "^8.3.0"
   },
   "dependencies": {
-    "@ricky0123/vad-web": "^0.0.31"
+    "@ricky0123/vad-web": "^0.0.31",
+    "@tutor/core": "workspace:*"
   }
 }

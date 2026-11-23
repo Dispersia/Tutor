@@ -97,8 +97,9 @@ function readModels(db: Database): Record<string, AnkiModel> {
   // legacy containers: a JSON blob in the `col` table
   let legacy: string | null = null
   try {
-    legacy = (db.query('SELECT models FROM col LIMIT 1').get() as { models?: string } | undefined)
-      ?.models ?? null
+    legacy =
+      (db.query('SELECT models FROM col LIMIT 1').get() as { models?: string } | undefined)
+        ?.models ?? null
   } catch {
     // no col table
   }
@@ -113,9 +114,11 @@ function readModels(db: Database): Record<string, AnkiModel> {
       name: string
     }[]
     for (const nt of notetypes) out[String(nt.id)] = { name: nt.name, fields: [] }
-    const fields = db
-      .query('SELECT ntid, ord, name FROM fields ORDER BY ntid, ord')
-      .all() as { ntid: number; ord: number; name: string }[]
+    const fields = db.query('SELECT ntid, ord, name FROM fields ORDER BY ntid, ord').all() as {
+      ntid: number
+      ord: number
+      name: string
+    }[]
     for (const f of fields) {
       const model = out[String(f.ntid)]
       if (model) model.fields[f.ord] = f.name
@@ -129,6 +132,8 @@ function readModels(db: Database): Record<string, AnkiModel> {
 /** Anki joins parent/child deck names with U+001F; make that readable. */
 function prettyDeckName(name: string | undefined): string | undefined {
   if (!name) return name
+  // \u001f is Anki's field separator — a control char by design.
+  // eslint-disable-next-line no-control-regex
   const cleaned = name.replace(/\u001f/g, ' / ').trim()
   return cleaned || undefined
 }
@@ -137,9 +142,9 @@ function prettyDeckName(name: string | undefined): string | undefined {
 function readDeckName(db: Database): string | undefined {
   // legacy containers: a JSON blob in `col`
   try {
-    const decksJson = (db.query('SELECT decks FROM col LIMIT 1').get() as
-      | { decks?: string }
-      | undefined)?.decks
+    const decksJson = (
+      db.query('SELECT decks FROM col LIMIT 1').get() as { decks?: string } | undefined
+    )?.decks
     if (decksJson) {
       const decks = JSON.parse(decksJson) as Record<string, { name?: string }>
       const top = db
@@ -159,8 +164,7 @@ function readDeckName(db: Database): string | undefined {
       .get() as { did: number } | undefined
     if (top) {
       const deck = db.query('SELECT name FROM decks WHERE id = ?').get(top.did) as
-        | { name?: string }
-        | undefined
+        { name?: string } | undefined
       if (deck?.name && deck.name !== 'Default') return deck.name
     }
     const first = db
@@ -195,9 +199,12 @@ export async function readApkg(bytes: Uint8Array): Promise<AnkiDeck> {
       }[]
       const order = new Map(orderRows.map((r) => [r.nid, r.due]))
 
-      const rows = db
-        .query('SELECT id, mid, flds, tags FROM notes')
-        .all() as { id: number; mid: number; flds: string; tags: string }[]
+      const rows = db.query('SELECT id, mid, flds, tags FROM notes').all() as {
+        id: number
+        mid: number
+        flds: string
+        tags: string
+      }[]
 
       const notes: AnkiNote[] = rows
         .map((r) => ({

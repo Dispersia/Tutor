@@ -16,13 +16,13 @@ import {
   awardXp,
   rebuildStats,
   recordReview,
-  recordActivity,
+  touchActivity,
   shiftDay,
   streakFromDays,
   summary,
   todayDay,
   weekStart,
-} from './service'
+} from '../services'
 
 test('streakFromDays counts consecutive days ending today or yesterday', () => {
   const today = '2026-11-12'
@@ -88,7 +88,7 @@ test('awardXp appends to the ledger, levels up and emits events', () => {
   sqlite.close()
 })
 
-test('recordActivity sets the streak and emits streak.updated', () => {
+test('touchActivity sets the streak and emits streak.updated', () => {
   const { db, sqlite } = openDb(':memory:')
   const bus = new EventBus()
   const user = createUser(db, { username: 'bob', passwordHash: 'x' })
@@ -97,7 +97,7 @@ test('recordActivity sets the streak and emits streak.updated', () => {
   bus.on('streak.updated', (e) => (streakEvent = e.days))
 
   awardXp(db, bus, user.id, 10, 'review')
-  const streak = recordActivity(db, bus, user.id)
+  const streak = touchActivity(db, bus, user.id)
   expect(streak).toBe(1)
   expect(streakEvent).toBe(1)
   expect(getStats(db, user.id).lastActiveDay).toBe(todayDay())
@@ -113,7 +113,6 @@ test('recordActivity sets the streak and emits streak.updated', () => {
 
 test('rebuildStats reconstructs everything from the XP ledger', () => {
   const { db, sqlite } = openDb(':memory:')
-  const bus = new EventBus()
   const user = createUser(db, { username: 'carol', passwordHash: 'x' })
 
   addXpEvent(db, user.id, 60, 'review')

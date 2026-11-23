@@ -20,7 +20,6 @@
   } from '#lib/exercises'
   import { getSkills, type SkillOutcome, type SkillsResponse } from '#lib/skills'
   import { activeDeck, loadActiveDeck, setActiveDeck } from '#lib/activeDeck.svelte'
-  import { fmtClock, fmtInterval } from '#lib/idle'
   import {
     getCurriculum,
     getSrsStats,
@@ -33,6 +32,9 @@
   import { ACCENT, categoryAccent } from '#lib/theme'
   import Icon from '#lib/components/Icon.svelte'
   import Spinner from '#lib/components/Spinner.svelte'
+  import RigReport from '#lib/components/practice/RigReport.svelte'
+  import ResultCard from '#lib/components/practice/ResultCard.svelte'
+  import { lessonLabel, nextLessonAfter, quietClock } from '#lib/practiceview'
   import { peekCached } from '#lib/cache'
 
   // Seed the header and deck picker from the last fetch, so entering Practice
@@ -95,10 +97,7 @@
   /** True while the "can't speak or listen" option is on. */
   const quietActive = $derived(quietUntil > now)
   /** mm:ss remaining in the quiet window. */
-  const quietClock = $derived.by(() => {
-    const s = Math.max(0, Math.ceil((quietUntil - now) / 1000))
-    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
-  })
+  const quietLeft = $derived(quietClock(quietUntil, now))
   const skillMap = $derived(new Map((ref?.skills ?? []).map((s) => [s.id, s])))
   const itemMap = $derived(new Map((ref?.items ?? []).map((i) => [i.id, i])))
   const actionName = $derived(
@@ -337,16 +336,7 @@
   function applyLesson(id: string) {
     const all = curriculum.flatMap((d) => d.lessons)
     lesson = all.find((l) => l.id === id) ?? null
-    nextLessonId = nextLessonAfter(id)
-  }
-
-  /** The next step of the path: the first unfinished lesson after this one. */
-  function nextLessonAfter(id: string): string | undefined {
-    const deck = curriculum.find((d) => d.lessons.some((l) => l.id === id))
-    if (!deck) return undefined
-    const idx = deck.lessons.findIndex((l) => l.id === id)
-    if (idx < 0) return undefined
-    return deck.lessons.slice(idx + 1).find((l) => !l.complete)?.id
+    nextLessonId = nextLessonAfter(curriculum, id)
   }
 
   /** A practice URL for a lesson that keeps the selected profession action. */
@@ -372,7 +362,7 @@
       // refresh the path so the lesson just finished counts as done
       const c = await getCurriculum().catch(() => null)
       if (c) curriculum = c.decks
-      const id = nextLessonAfter(lessonId ?? '')
+      const id = nextLessonAfter(curriculum, lessonId ?? '')
       if (!id) {
         await goto(href('/learn'))
         return
@@ -414,26 +404,6 @@
       primary.click()
     }
   }
-
-  const RATING_NAMES = { 1: 'Again', 2: 'Hard', 3: 'Good', 4: 'Easy' } as const
-
-  /** Short label for the lesson header (the frequency path reads as "Frequency"). */
-  function lessonLabel(l: LessonDTO): string {
-    if (l.level === 'zhfreq' || l.level === 'jafreq') return 'Frequency'
-    // generated decks address their lessons by deck id; show a plain label
-    return l.level.length > 12 ? 'Deck' : l.level.toUpperCase()
-  }
-
-  /** Human summary of the FSRS-6 scheduling decision. */
-  function reviewLabel(s: SrsOutcome): string {
-    const rating = RATING_NAMES[s.rating]
-    if (s.state === 'learning' || s.state === 'relearning') {
-      const mins = Math.max(1, Math.round((s.dueAt - Date.now()) / 60_000))
-      return `${rating} · again in ${mins} min`
-    }
-    const d = s.intervalDays
-    return `${rating} · next in ${d} day${d === 1 ? '' : 's'}`
-  }
 </script>
 
 <svelte:window onkeydown={onKeydown} />
@@ -473,7 +443,7 @@
         aria-pressed={quietActive}
       >
         <Icon name="mute" size={12} />
-        {quietActive ? quietClock : 'Can’t speak?'}
+        {quietActive ? quietLeft : 'Can’t speak?'}
       </button>
       <span
         class="chip"
@@ -507,7 +477,7 @@
     <div class="panel panel-accent mb-4 p-3 text-xs" style="--accent: {ACCENT.brass}">
       <span class="text-brass-300">Text-only mode</span>
       — listen &amp; speak cards are hidden for
-      <span class="gold">{quietClock}</span>.
+      <span class="gold">{quietLeft}</span>.
       <button type="button" onclick={() => applyQuiet(false)} class="cursor-pointer underline"
         >Turn off</button
       >
@@ -594,103 +564,19 @@
         {/if}
       </div>
       {#if skill.idle}
-        {@const rig = skill.idle}
-        {@const rigAccent = rig.maxed
-          ? ACCENT.jade
-          : categoryAccent(skillMap.get(skill.skillId)?.category ?? '')}
-        <!-- The drill powered a machine (§13.5.1): its rate and run length, plus
-             how far it is toward the run-length cap, so the learner can see when
-             a rig is about done — and when it is maxed and worth switching. -->
-        <div class="panel panel-accent mb-3 p-3" style="--accent: {rigAccent}">
-          <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-xs">
-            <span class="text-ink-300">
-              Rig powered ·
-              <span class="display tabular-nums" style="color: {rigAccent}"
-                >{fmtInterval(rig.intervalSec)}</span
-              >
-              ·
-              <span class="display tabular-nums" style="color: {rigAccent}"
-                >{fmtClock(rig.runSec)}</span
-              >
-              run · +{rig.xpPerCraft} xp/item
-            </span>
-            <span class="display tabular-nums text-ink-300">
-              {rig.maxed ? 'maxed' : `${rig.completions}/${rig.runFullAtCompletions}`}
-            </span>
-          </div>
-          <div
-            class="bar mt-2 h-1.5"
-            role="progressbar"
-            aria-label="Rig progress toward the {fmtClock(rig.maxRunSec)} run cap"
-            aria-valuenow={Math.round(rig.runProgress * 100)}
-            aria-valuemin="0"
-            aria-valuemax="100"
-          >
-            <i style="width: {rig.runProgress * 100}%; background: {rigAccent}"></i>
-          </div>
-          {#if rig.maxed}
-            <p class="mt-2 text-xs text-jade-300">
-              Maxed at {fmtClock(rig.maxRunSec)} — this rig runs as long and as fast as it ever will.
-              Switch to another action to power a fresh one.
-            </p>
-          {:else}
-            <p class="mt-2 text-xs text-ink-400">
-              {rig.runFullAtCompletions - rig.completions} more
-              {rig.runFullAtCompletions - rig.completions === 1 ? 'drill' : 'drills'} to the full
-              {fmtClock(rig.maxRunSec)} run.
-            </p>
-          {/if}
-          <!-- The live-rig cap (§13.5.1): only a couple of machines run at once, so
-               drilling a fresh action stops the rig closest to finishing. -->
-          <p class="mt-2 text-xs text-ink-400">
-            {skill.rigsRunning ?? 1}/{skill.maxLiveRigs ?? 2} rigs running — only two run at once.
-            {#if skill.stoppedRig}
-              This drill stopped {skill.stoppedRig.name}.
-            {/if}
-          </p>
-        </div>
+        <RigReport
+          idle={skill.idle}
+          accent={skill.idle.maxed
+            ? ACCENT.jade
+            : categoryAccent(skillMap.get(skill.skillId)?.category ?? '')}
+          rigsRunning={skill.rigsRunning ?? 1}
+          maxLiveRigs={skill.maxLiveRigs ?? 2}
+          stoppedName={skill.stoppedRig?.name}
+        />
       {/if}
     {/if}
 
-    <div
-      class="panel panel-accent p-5"
-      style="--accent: {result.correct ? ACCENT.jade : ACCENT.brass}"
-    >
-      <div class="flex items-baseline justify-between">
-        <span class="display text-lg {result.correct ? 'text-jade-300' : 'text-brass-300'}">
-          {result.correct ? '✓ Correct' : '✗ Not quite'}
-        </span>
-        <span class="text-sm text-ink-300">{result.score}/100</span>
-      </div>
-      {#if result.expected}
-        <p class="mt-2 text-sm text-ink-300">
-          Answer: <span class="display text-lg text-ink-100">{result.expected}</span>
-        </p>
-      {/if}
-      {#if result.feedback}
-        <p class="mt-1 text-sm text-ink-400">{result.feedback}</p>
-      {/if}
-      {#if words.length}
-        <div class="mt-3 flex flex-wrap gap-2">
-          {#each words as w (w.text)}
-            <span class="chip" style="--accent: {w.ok ? ACCENT.jade : ACCENT.ember}">
-              {w.text}{w.tip ? ` · ${w.tip}` : ''}
-            </span>
-          {/each}
-        </div>
-      {/if}
-      {#if srs}
-        <p class="mt-3 text-xs text-ink-400">
-          Next review <span class="gold">{reviewLabel(srs)}</span> · stability
-          {srs.stability.toFixed(1)}d · difficulty {srs.difficulty.toFixed(1)}
-        </p>
-      {/if}
-      {#if canRetry}
-        <p class="mt-3 text-xs text-ink-400">
-          Attempt {attempt} · say it again until it lands, or move on.
-        </p>
-      {/if}
-    </div>
+    <ResultCard {result} {words} {srs} {canRetry} {attempt} />
     {#if canRetry}
       <div class="mt-4 flex flex-col gap-2">
         <button onclick={retry} class="btn btn-primary w-full py-3">

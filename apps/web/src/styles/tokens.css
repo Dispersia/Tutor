@@ -1,0 +1,144 @@
+/* The Nightforge design tokens: palette, type scale and the per-script stacks. */
+
+@theme {
+  /* display voice: clean Latin grotesque, then a native CJK serif. Ordering is
+     what keeps Japanese kanji from taking Chinese glyph shapes. */
+  --font-display:
+    'Space Grotesk', 'Songti SC', 'Songti TC', STSong, 'Noto Serif CJK SC', 'Noto Serif SC',
+    'Source Han Serif SC', 'Noto Serif CJK TC', 'Noto Serif TC', 'Source Han Serif TC', 'Yu Mincho',
+    'Hiragino Mincho ProN', 'Noto Serif CJK JP', 'Noto Serif JP', 'Nanum Myeongjo',
+    'Noto Serif CJK KR', 'Noto Serif KR', serif;
+
+  /* body voice: clean Latin sans, then a native CJK sans */
+  --font-sans:
+    'Rubik', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'PingFang SC',
+    'PingFang TC', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', Meiryo,
+    'Microsoft YaHei', 'Microsoft JhengHei', 'Noto Sans CJK SC', 'Noto Sans SC',
+    'Source Han Sans SC', 'Noto Sans CJK TC', 'Noto Sans TC', 'Noto Sans CJK JP', 'Noto Sans JP',
+    'Noto Sans CJK KR', 'Noto Sans KR', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+
+  /* ink — a cool slate ladder, dark ground to bright text */
+  --color-ink-950: oklch(0.175 0.014 258);
+  --color-ink-900: oklch(0.21 0.016 258);
+  --color-ink-850: oklch(0.242 0.018 258);
+  --color-ink-800: oklch(0.288 0.02 258);
+  --color-ink-700: oklch(0.358 0.022 258);
+  --color-ink-600: oklch(0.465 0.022 258);
+  --color-ink-500: oklch(0.59 0.02 258);
+  --color-ink-400: oklch(0.7 0.018 258);
+  --color-ink-300: oklch(0.81 0.014 258);
+  --color-ink-200: oklch(0.9 0.01 258);
+  --color-ink-100: oklch(0.955 0.007 258);
+
+  /* gold — every number the player earned */
+  --color-gold-200: oklch(0.92 0.08 95);
+  --color-gold-300: oklch(0.85 0.13 93);
+  --color-gold-400: oklch(0.78 0.145 90);
+  --color-gold-500: oklch(0.68 0.135 88);
+  --color-gold-600: oklch(0.56 0.11 86);
+
+  /* seal — the one action that moves the session forward (indigo) */
+  --color-seal-300: oklch(0.79 0.11 268);
+  --color-seal-400: oklch(0.67 0.16 268);
+  --color-seal-500: oklch(0.57 0.16 267);
+  --color-seal-600: oklch(0.47 0.15 266);
+
+  /* jade — what grows: goal, health, gathering, success */
+  --color-jade-300: oklch(0.82 0.09 158);
+  --color-jade-400: oklch(0.73 0.1 158);
+  --color-jade-500: oklch(0.63 0.1 156);
+  --color-jade-950: oklch(0.24 0.04 158);
+
+  /* brass — artisan, streak, coins */
+  --color-brass-300: oklch(0.86 0.11 80);
+  --color-brass-400: oklch(0.79 0.125 78);
+  --color-brass-500: oklch(0.69 0.12 76);
+  --color-brass-950: oklch(0.26 0.045 76);
+
+  /* violet — support and talents */
+  --color-violet-300: oklch(0.8 0.09 300);
+  --color-violet-400: oklch(0.71 0.1 300);
+  --color-violet-500: oklch(0.61 0.1 300);
+
+  /* ember — combat, damage, danger */
+  --color-ember-300: oklch(0.78 0.14 20);
+  --color-ember-400: oklch(0.67 0.2 22);
+  --color-ember-500: oklch(0.59 0.2 21);
+  --color-ember-600: oklch(0.51 0.18 20);
+  --color-ember-800: oklch(0.33 0.1 20);
+  --color-ember-950: oklch(0.21 0.05 20);
+
+  /* azure — the academy, arcane, chat */
+  --color-azure-300: oklch(0.82 0.09 245);
+  --color-azure-400: oklch(0.73 0.1 245);
+  --color-azure-500: oklch(0.63 0.1 245);
+
+  /* profession aliases */
+  --color-gather-400: oklch(0.73 0.1 158);
+  --color-artisan-400: oklch(0.79 0.125 78);
+  --color-support-400: oklch(0.71 0.1 300);
+  --color-combat-400: oklch(0.67 0.2 22);
+  --color-arcane-400: oklch(0.73 0.1 245);
+
+  /* Type floor: nothing renders below 0.82rem (13px). Tailwind's `text-xs` is
+     the smallest step the app uses, so it is raised to the label size instead
+     of letting 12px body copy through. */
+  --text-xs: 0.82rem;
+  --text-xs--line-height: 1.4;
+
+  /* Tailwind's default families remapped onto the palette, so no utility
+     anywhere in the app can render an off-system colour. */
+  --color-emerald-300: oklch(0.82 0.09 158);
+  --color-emerald-400: oklch(0.73 0.1 158);
+  --color-emerald-500: oklch(0.63 0.1 156);
+  --color-emerald-600: oklch(0.55 0.1 156);
+  --color-emerald-950: oklch(0.24 0.04 158);
+  --color-amber-300: oklch(0.86 0.11 80);
+  --color-amber-400: oklch(0.79 0.125 78);
+  --color-amber-500: oklch(0.69 0.12 76);
+  --color-amber-950: oklch(0.26 0.045 76);
+  --color-red-200: oklch(0.87 0.09 20);
+  --color-red-300: oklch(0.78 0.14 20);
+  --color-red-400: oklch(0.67 0.2 22);
+  --color-red-500: oklch(0.59 0.2 21);
+  --color-red-600: oklch(0.51 0.18 20);
+  --color-red-800: oklch(0.33 0.1 20);
+  --color-red-950: oklch(0.21 0.05 20);
+  --color-sky-300: oklch(0.82 0.09 245);
+}
+
+:root {
+  color-scheme: dark;
+  --accent: var(--color-azure-400);
+  caret-color: var(--color-seal-400);
+}
+
+/* The display face carries Latin first, then a serif for the script the element
+   holds. Choosing the stack per script — via the element's `lang`, which the app
+   sets from `htmlLang` — is what keeps Japanese kanji out of a Chinese face and
+   Zhuyin on a Traditional-Chinese face. */
+:lang(zh) {
+  --font-display:
+    'Space Grotesk', 'Songti SC', 'Songti TC', STSong, 'Noto Serif CJK SC', 'Noto Serif SC',
+    'Noto Serif CJK TC', 'Noto Serif TC', serif;
+  --font-sans:
+    'Rubik', 'PingFang SC', 'PingFang TC', 'Hiragino Sans', 'Noto Sans CJK SC', 'Noto Sans SC',
+    'Noto Sans CJK TC', 'Noto Sans TC', system-ui, sans-serif;
+}
+:lang(ja) {
+  --font-display:
+    'Space Grotesk', 'Yu Mincho', 'Hiragino Mincho ProN', 'Noto Serif CJK JP', 'Noto Serif JP',
+    serif;
+  --font-sans:
+    'Rubik', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'Noto Sans CJK JP',
+    'Noto Sans JP', system-ui, sans-serif;
+}
+:lang(ko) {
+  --font-display: 'Space Grotesk', 'Nanum Myeongjo', 'Noto Serif CJK KR', 'Noto Serif KR', serif;
+  --font-sans:
+    'Rubik', 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans CJK KR', 'Noto Sans KR', system-ui,
+    sans-serif;
+}
+:lang(ru) {
+  --font-display: 'Space Grotesk', 'Noto Serif', serif;
+}

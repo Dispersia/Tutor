@@ -173,7 +173,7 @@ test('practice: next -> grade -> xp, and exercise catalog', async () => {
 })
 
 test('practice endpoints require a session', async () => {
-  const { app, db, sqlite } = makeApp()
+  const { app, sqlite } = makeApp()
   for (const [method, path] of [
     ['GET', '/api/decks'],
     ['POST', '/api/practice/next'],
@@ -506,7 +506,10 @@ test('the pronunciation card is never served, even when forced', async () => {
 
   // Forcing it swaps in an allowed kind instead.
   const forced = (await (
-    await app.request('/api/practice/next', auth(cookie, json({ deckId, exerciseId: 'speak_word' })))
+    await app.request(
+      '/api/practice/next',
+      auth(cookie, json({ deckId, exerciseId: 'speak_word' })),
+    )
   ).json()) as { instance: { exerciseId: string } }
   expect(forced.instance.exerciseId).not.toBe('speak_word')
   sqlite.close()
@@ -541,9 +544,9 @@ test('active deck: the profile choice drives free practice', async () => {
   expect(saved.study.activeDeckId).toBe(ja.id)
 
   // Free practice (no deck named) now serves a card from the chosen deck.
-  const next = (await (
-    await app.request('/api/practice/next', auth(cookie, json({})))
-  ).json()) as { instance: { cardId: string } | null }
+  const next = (await (await app.request('/api/practice/next', auth(cookie, json({})))).json()) as {
+    instance: { cardId: string } | null
+  }
   expect(next.instance).toBeTruthy()
   expect(jaIds.has(next.instance!.cardId)).toBe(true)
 

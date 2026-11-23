@@ -12,7 +12,6 @@ import {
   itemValue,
   skillXpForLevel,
   type ModKind,
-  type SkillDef,
   type SkillId,
 } from '../game/skills'
 import { SYNERGY } from '../game/talents'
@@ -20,32 +19,32 @@ import type { Bonuses } from '../game/modifiers'
 import {
   actionProgressView,
   actionState,
-  activeSetBonusesFor,
+  loadoutSetBonuses,
   aggregateBonuses,
   applyEnchant,
   applyGearSet,
-  bandBonusesFor,
+  accountBandBonuses,
   bandView,
   chooseTalent,
-  discardGearInstance,
+  discardGear,
   distillItem,
-  enchantOf,
   equipItem,
   gearSetsView,
   gearView,
   idleView,
   inventoryView,
+  loadProgress,
   removeGearSet,
-  salvageGearInstance,
+  salvageGear,
   saveGearSet,
   setRigChoice,
-  settleAll,
+  settleRigs,
   skillLevelOf,
   skillSummaries,
   stopRig,
   talentView,
   unequipItem,
-} from '../game/service'
+} from '../services'
 import { MAX_LIVE_RIGS, liveRigCount } from '../game/idle'
 import type { App, Deps } from '../context'
 
@@ -82,19 +81,25 @@ function currentEffect(kind: ModKind, b: Bonuses, actionId: string): number {
  */
 function boardSkills(deps: Deps, userId: string, now = Date.now()) {
   const db = deps.db
-  const settled = settleAll(db, deps.events, userId, now)
+  const settled = settleRigs(db, deps.events, userId, now)
   const progress = new Map(skillSummaries(db, userId).map((s) => [s.skillId, s]))
   const byAction = actionProgressView(db, userId)
   const talents = new Map(talentView(db, userId).map((t) => [t.skillId, t]))
-  const bonuses = aggregateBonuses(db, userId)
+  // The action-level map the board already holds, reused for bonuses and gates.
+  const levels = new Map([...byAction].map(([id, p]) => [id, p.level]))
+  const bonuses = aggregateBonuses(db, userId, levels)
   const bands = bandView(db, userId)
   const bandById = new Map(bands.map((b) => [b.id, b]))
+  const bandLevels = new Map(bands.map((b) => [b.id, b.level]))
+  const actionCtx = { levels, bandLevels }
   const skills = SKILLS.map((s) => {
     const p = progress.get(s.id)!
     const actions = actionsForSkill(s.id)
     // The bands this profession's actions belong to (Smithing, for now): the shared
     // score a whole metal's set feeds (§13.5.3).
-    const usedBands = [...new Set(actions.map((a) => a.band).filter((b): b is NonNullable<typeof b> => Boolean(b)))]
+    const usedBands = [
+      ...new Set(actions.map((a) => a.band).filter((b): b is NonNullable<typeof b> => Boolean(b))),
+    ]
       .map((b) => bandById.get(b))
       .filter((b): b is NonNullable<typeof b> => Boolean(b))
     return {
@@ -125,7 +130,7 @@ function boardSkills(deps: Deps, userId: string, now = Date.now()) {
           success: actionOdds(a, choiceId, ap?.level ?? 1),
           effect: { ...s.effect, value: currentEffect(s.effect.kind, bonuses, a.id) },
           idle: rig ? idleView(rig, a, now, bonuses.yield(a.id) + bonuses.double(a.id)) : null,
-          ...actionState(db, userId, a, choiceId),
+          ...actionState(db, userId, a, choiceId, actionCtx),
         }
       }),
     }
@@ -141,22 +146,23 @@ function bonusSummary(b: Bonuses) {
 
 /** The gear screen's payload: worn rows, rolled instances and saved sets. */
 function gearPayload(deps: Deps, userId: string) {
+  const progress = loadProgress(deps.db, userId)
   return {
     equipment: listEquipment(deps.db, userId).map((e) => ({
       slot: e.slot,
       itemId: e.itemId,
       instanceId: e.instanceId ?? null,
     })),
-    gear: gearView(deps.db, userId),
+    gear: gearView(deps.db, userId, progress.levels),
     sets: gearSetsView(deps.db, userId),
-    setBonuses: activeSetBonusesFor(deps.db, userId),
+    setBonuses: loadoutSetBonuses(deps.db, userId),
     bands: bandView(deps.db, userId),
     /** the enchant catalog, grouped by slot (§13.5.3.2) */
     enchants: ENCHANTS,
     /** the player's Enchanting level, to gate enchants in the UI */
-    enchantingLevel: skillLevelOf(deps.db, userId, 'enchanting'),
+    enchantingLevel: skillLevelOf(deps.db, userId, 'enchanting', progress.levels),
     /** the account-wide passive from tier bands (§13.5.3) */
-    buffs: { band: bandBonusesFor(deps.db, userId) },
+    buffs: { band: accountBandBonuses(deps.db, userId) },
     items: ITEMS.map((i) => ({ ...i, value: itemValue(i) })),
     inventory: inventoryView(deps.db, userId),
   }
@@ -315,7 +321,7 @@ export function registerSkills(app: App) {
     const user = c.get('user')!
     const { instanceId } = (await c.req.json().catch(() => ({}))) as { instanceId?: string }
     if (!instanceId) return c.json({ error: 'instanceId required' }, 400)
-    const res = discardGearInstance(deps.db, user.id, instanceId)
+    const res = discardGear(deps.db, user.id, instanceId)
     if (!res.ok) return c.json({ error: res.error }, 400)
     return c.json(gearPayload(deps, user.id))
   })
@@ -326,7 +332,7 @@ export function registerSkills(app: App) {
     const user = c.get('user')!
     const { instanceId } = (await c.req.json().catch(() => ({}))) as { instanceId?: string }
     if (!instanceId) return c.json({ error: 'instanceId required' }, 400)
-    const res = salvageGearInstance(deps.db, deps.events, user.id, instanceId)
+    const res = salvageGear(deps.db, deps.events, user.id, instanceId)
     if (!res.ok) return c.json({ error: res.error }, 400)
     return c.json({ materials: res.materials, ...gearPayload(deps, user.id) })
   })
@@ -340,7 +346,8 @@ export function registerSkills(app: App) {
       instanceId?: string
       enchantId?: string
     }
-    if (!instanceId || !enchantId) return c.json({ error: 'instanceId and enchantId required' }, 400)
+    if (!instanceId || !enchantId)
+      return c.json({ error: 'instanceId and enchantId required' }, 400)
     const res = applyEnchant(deps.db, deps.events, user.id, instanceId, enchantId)
     if (!res.ok) return c.json({ error: res.error }, 400)
     return c.json(gearPayload(deps, user.id))

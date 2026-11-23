@@ -1,4 +1,4 @@
-import type { Card, Modality } from './index'
+import type { Card, Modality } from './types'
 
 /**
  * Card templates (docs/DESIGN.md §11).
@@ -100,7 +100,7 @@ export const CARD_TEMPLATES: readonly CardTemplate[] = [
   {
     kind: 'vocab',
     title: 'Vocabulary',
-    summary: "Recall what a word means and how to say it.",
+    summary: 'Recall what a word means and how to say it.',
     modality: 'text',
     fields: [meaningField, targetField, readingField],
     exercises: ['translate.front_to_back', 'translate.back_to_front', 'multiple_choice'],

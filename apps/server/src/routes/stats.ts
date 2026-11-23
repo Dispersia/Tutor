@@ -1,4 +1,4 @@
-import { activitySeries, rebuildStats, summary } from '../game/service'
+import { activitySeries, rebuildStats, summary } from '../services'
 import { quietState } from '../game/quiet'
 import type { App } from '../context'
 

@@ -1,0 +1,29 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    ".": {
+      "entry": ["scripts/*.{ts,mjs}"],
+      "project": ["scripts/**/*.{ts,mjs}"]
+    },
+    "apps/server": {
+      "entry": ["src/**/*.test.ts"],
+      "project": ["src/**/*.ts"]
+    },
+    "apps/web": {
+      "entry": ["src/routes/**/*.svelte", "src/routes/**/*.ts", "src/lib/components/**/*.svelte"],
+      "project": ["src/**/*.{ts,svelte}"]
+    },
+    "packages/core": {
+      "entry": ["src/**/*.test.ts"],
+      "project": ["src/**/*.ts"]
+    },
+    "packages/speech": { "project": ["src/**/*.ts"] },
+    "packages/ui": { "project": ["src/**/*.{ts,svelte}"] }
+  },
+  "ignoreDependencies": [
+    "dependency-cruiser",
+    "svelte-eslint-parser",
+    "drizzle-kit",
+    "tailwindcss"
+  ]
+}

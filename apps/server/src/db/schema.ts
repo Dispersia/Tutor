@@ -109,38 +109,50 @@ export const messages = sqliteTable(
   (t) => [index('idx_messages_session').on(t.sessionId)],
 )
 
-export const reviews = sqliteTable('reviews', {
-  id: text('id').primaryKey(),
-  cardId: text('card_id'),
-  userId: text('user_id'),
-  exerciseId: text('exercise_id'),
-  score: real('score'),
-  latencyMs: integer('latency_ms'),
-  detailJson: text('detail_json').notNull().default('{}'),
-  audioRef: text('audio_ref'),
-  createdAt: integer('created_at').notNull(),
-})
+export const reviews = sqliteTable(
+  'reviews',
+  {
+    id: text('id').primaryKey(),
+    cardId: text('card_id'),
+    userId: text('user_id'),
+    exerciseId: text('exercise_id'),
+    score: real('score'),
+    latencyMs: integer('latency_ms'),
+    detailJson: text('detail_json').notNull().default('{}'),
+    audioRef: text('audio_ref'),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('idx_reviews_user').on(t.userId), index('idx_reviews_card').on(t.cardId)],
+)
 
-export const attempts = sqliteTable('attempts', {
-  id: text('id').primaryKey(),
-  sessionId: text('session_id'),
-  cardId: text('card_id'),
-  userId: text('user_id'),
-  exerciseId: text('exercise_id'),
-  answerJson: text('answer_json').notNull().default('{}'),
-  gradeJson: text('grade_json').notNull().default('{}'),
-  score: real('score'),
-  createdAt: integer('created_at').notNull(),
-})
+export const attempts = sqliteTable(
+  'attempts',
+  {
+    id: text('id').primaryKey(),
+    sessionId: text('session_id'),
+    cardId: text('card_id'),
+    userId: text('user_id'),
+    exerciseId: text('exercise_id'),
+    answerJson: text('answer_json').notNull().default('{}'),
+    gradeJson: text('grade_json').notNull().default('{}'),
+    score: real('score'),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('idx_attempts_user').on(t.userId)],
+)
 
-export const xpEvents = sqliteTable('xp_events', {
-  id: text('id').primaryKey(),
-  userId: text('user_id'),
-  amount: integer('amount').notNull(),
-  reason: text('reason').notNull(),
-  sourceId: text('source_id'),
-  createdAt: integer('created_at').notNull(),
-})
+export const xpEvents = sqliteTable(
+  'xp_events',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id'),
+    amount: integer('amount').notNull(),
+    reason: text('reason').notNull(),
+    sourceId: text('source_id'),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('idx_xp_events_user').on(t.userId)],
+)
 
 export const stats = sqliteTable('stats', {
   userId: text('user_id').primaryKey(),
@@ -169,32 +181,36 @@ export const settings = sqliteTable('settings', {
  * are the fractional carry that keeps settlement exact. There is no timer — the
  * whole accrual is a closed-form function of these numbers and the clock.
  */
-export const actionProgress = sqliteTable('action_progress', {
-  userId: text('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  actionId: text('action_id').notNull(),
-  xp: integer('xp').notNull().default(0),
-  level: integer('level').notNull().default(1),
-  /** lifetime drill completions — drives the rig's interval and run length */
-  completions: integer('completions').notNull().default(0),
-  /** ms; the rig runs while `now < run_ends_at` (0 = still) */
-  runEndsAt: integer('run_ends_at').notNull().default(0),
-  /** ms; accrual has been credited up to here */
-  settledAt: integer('settled_at').notNull().default(0),
-  /** fractional crafts carried between settles (keeps `consumes` integral) */
-  crafts: real('crafts').notNull().default(0),
-  /** fractional produced items per item id, as JSON */
-  remainderJson: text('remainder_json').notNull().default('{}'),
-  /**
-   * ms; the run deadline whose "30 minutes left" alert was already sent. A drill
-   * that extends the run moves `run_ends_at`, re-arming the alert (§13.5.1).
-   */
-  notifiedEndsAt: integer('notified_ends_at').notNull().default(0),
-  /** the recipe choice this action's rig runs ('' = the first choice) */
-  lastChoice: text('last_choice').notNull().default(''),
-  updatedAt: integer('updated_at').notNull(),
-})
+export const actionProgress = sqliteTable(
+  'action_progress',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    actionId: text('action_id').notNull(),
+    xp: integer('xp').notNull().default(0),
+    level: integer('level').notNull().default(1),
+    /** lifetime drill completions — drives the rig's interval and run length */
+    completions: integer('completions').notNull().default(0),
+    /** ms; the rig runs while `now < run_ends_at` (0 = still) */
+    runEndsAt: integer('run_ends_at').notNull().default(0),
+    /** ms; accrual has been credited up to here */
+    settledAt: integer('settled_at').notNull().default(0),
+    /** fractional crafts carried between settles (keeps `consumes` integral) */
+    crafts: real('crafts').notNull().default(0),
+    /** fractional produced items per item id, as JSON */
+    remainderJson: text('remainder_json').notNull().default('{}'),
+    /**
+     * ms; the run deadline whose "30 minutes left" alert was already sent. A drill
+     * that extends the run moves `run_ends_at`, re-arming the alert (§13.5.1).
+     */
+    notifiedEndsAt: integer('notified_ends_at').notNull().default(0),
+    /** the recipe choice this action's rig runs ('' = the first choice) */
+    lastChoice: text('last_choice').notNull().default(''),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => [index('idx_action_progress_user').on(t.userId)],
+)
 
 /**
  * Web Push subscriptions (docs/DESIGN.md §13.5.1), one row per installed
@@ -239,26 +255,34 @@ export const gatherLog = sqliteTable(
 )
 
 /** Per-user materials bank. */
-export const inventory = sqliteTable('inventory', {
-  userId: text('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  itemId: text('item_id').notNull(),
-  count: integer('count').notNull().default(0),
-  updatedAt: integer('updated_at').notNull(),
-})
+export const inventory = sqliteTable(
+  'inventory',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    itemId: text('item_id').notNull(),
+    count: integer('count').notNull().default(0),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => [index('idx_inventory_user').on(t.userId)],
+)
 
 /** Per-user talents (one choice per 10-level milestone). */
-export const talents = sqliteTable('talents', {
-  userId: text('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  talentId: text('talent_id').notNull(),
-  skillId: text('skill_id').notNull(),
-  tier: text('tier').notNull(),
-  milestone: integer('milestone').notNull(),
-  grantedAt: integer('granted_at').notNull(),
-})
+export const talents = sqliteTable(
+  'talents',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    talentId: text('talent_id').notNull(),
+    skillId: text('skill_id').notNull(),
+    tier: text('tier').notNull(),
+    milestone: integer('milestone').notNull(),
+    grantedAt: integer('granted_at').notNull(),
+  },
+  (t) => [index('idx_talents_user').on(t.userId)],
+)
 
 /**
  * Crafted gear instances. A recipe produces a *piece*, not a stack: each row
@@ -278,22 +302,27 @@ export const gearInstances = sqliteTable(
     statsJson: text('stats_json').notNull().default('{}'),
     /** JSON array of band ids enchanted onto this piece (docs §13.5.3). */
     enchantJson: text('enchant_json').notNull().default('[]'),
-    armour: integer('armour').notNull().default(0),    power: integer('power').notNull().default(0),
+    armour: integer('armour').notNull().default(0),
+    power: integer('power').notNull().default(0),
     createdAt: integer('created_at').notNull(),
   },
   (t) => [index('idx_gear_instances_user').on(t.userId, t.itemId)],
 )
 
 /** Equipped gear, one item per slot. `instance_id` points at a crafted roll. */
-export const equipment = sqliteTable('equipment', {
-  userId: text('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  slot: text('slot').notNull(),
-  itemId: text('item_id').notNull(),
-  instanceId: text('instance_id'),
-  updatedAt: integer('updated_at').notNull(),
-})
+export const equipment = sqliteTable(
+  'equipment',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    slot: text('slot').notNull(),
+    itemId: text('item_id').notNull(),
+    instanceId: text('instance_id'),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => [index('idx_equipment_user').on(t.userId)],
+)
 
 /** Saved gear sets for quick loadout changes. */
 export const gearSets = sqliteTable(
@@ -327,23 +356,27 @@ export const playerState = sqliteTable('player_state', {
 })
 
 /** Per-user spaced-repetition state (FSRS-6, one row per card reviewed). */
-export const srs = sqliteTable('srs', {
-  userId: text('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  cardId: text('card_id').notNull(),
-  state: text('state').notNull().default('new'),
-  step: integer('step').notNull().default(0),
-  stability: real('stability').notNull().default(0),
-  difficulty: real('difficulty').notNull().default(0),
-  reps: integer('reps').notNull().default(0),
-  lapses: integer('lapses').notNull().default(0),
-  ease: real('ease').notNull().default(2.5),
-  intervalDays: real('interval_days').notNull().default(0),
-  dueAt: integer('due_at').notNull().default(0),
-  lastRating: integer('last_rating'),
-  lastReviewAt: integer('last_review_at'),
-})
+export const srs = sqliteTable(
+  'srs',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    cardId: text('card_id').notNull(),
+    state: text('state').notNull().default('new'),
+    step: integer('step').notNull().default(0),
+    stability: real('stability').notNull().default(0),
+    difficulty: real('difficulty').notNull().default(0),
+    reps: integer('reps').notNull().default(0),
+    lapses: integer('lapses').notNull().default(0),
+    ease: real('ease').notNull().default(2.5),
+    intervalDays: real('interval_days').notNull().default(0),
+    dueAt: integer('due_at').notNull().default(0),
+    lastRating: integer('last_rating'),
+    lastReviewAt: integer('last_review_at'),
+  },
+  (t) => [index('idx_srs_user').on(t.userId)],
+)
 
 /**
  * Append-only FSRS review log: every review that moved a schedule, practice and
@@ -380,13 +413,17 @@ export const srsReviews = sqliteTable(
 )
 
 /** Completed curriculum lessons. */
-export const lessonProgress = sqliteTable('lesson_progress', {
-  userId: text('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  lessonId: text('lesson_id').notNull(),
-  completedAt: integer('completed_at'),
-})
+export const lessonProgress = sqliteTable(
+  'lesson_progress',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    lessonId: text('lesson_id').notNull(),
+    completedAt: integer('completed_at'),
+  },
+  (t) => [index('idx_lesson_progress_user').on(t.userId)],
+)
 
 /** The player's active combat encounter (one at a time). */
 export const encounters = sqliteTable('encounters', {

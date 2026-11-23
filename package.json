@@ -11,13 +11,25 @@
     "build": "bun run --filter '*' build",
     "test": "bun test",
     "typecheck": "tsc -b",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "arch": "depcruise apps/server/src packages/core/src --config .dependency-cruiser.cjs",
+    "knip": "knip --no-exit-code",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/bun": "latest",
+    "dependency-cruiser": "^18.9.0",
+    "eslint": "^10.15.0",
+    "eslint-plugin-svelte": "^3.24.1",
+    "globals": "^17.14.0",
+    "knip": "^6.48.0",
     "prettier": "^3.4.2",
     "prettier-plugin-svelte": "^3.3.2",
-    "typescript": "^5.7.2"
+    "svelte-eslint-parser": "^1.11.0",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.73.0"
   }
 }

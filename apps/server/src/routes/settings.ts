@@ -18,14 +18,12 @@ export interface VoicePrefs {
   voices: Record<string, string>
 }
 
-const DEFAULT_VOICE: VoicePrefs = { mode: 'preset', voices: {} }
-
 export function readVoicePrefs(
   db: Parameters<typeof allUserSettings>[0],
   userId: string,
 ): VoicePrefs {
   const s = allUserSettings(db, userId)
-  let voices: Record<string, string> = {}
+  let voices: Record<string, string>
   try {
     voices = s.voices ? (JSON.parse(s.voices) as Record<string, string>) : {}
   } catch {

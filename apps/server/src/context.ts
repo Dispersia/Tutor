@@ -7,7 +7,7 @@ import type { PitchFetcher } from './deck/pitch'
 import type { EventBus } from './events'
 import type { Fetcher } from './frequency/source'
 import type { OpenRouter } from './llm/openrouter'
-import type { AssessFn } from './pronunciation/assess'
+import type { AssessFn } from './pronunciation/types'
 import type { SpeechSupervisor } from './speech/supervisor'
 import type { AudioService } from './audio/service'
 

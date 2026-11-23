@@ -41,7 +41,7 @@ export interface ModelInfo {
 
 export type Role = 'conversation' | 'judge' | 'generator' | 'translator'
 
-export interface Roles extends Record<Role, string> {}
+export type Roles = Record<Role, string>
 
 /** Per-user study preferences: reading display + which exercise kinds are offered. */
 export interface StudyPrefs {

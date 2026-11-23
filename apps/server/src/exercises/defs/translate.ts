@@ -1,0 +1,91 @@
+/** Translation drills in both directions. */
+
+import type { ExerciseDef } from '@tutor/core'
+import { feedbackFor, gradeText, meaningAlternatives } from '../grading'
+import { JUDGE_SCHEMA } from '../schemas'
+import { displayReading, label, readingsOf, wordView } from '../shared'
+
+// --- translate: native -> target ---------------------------------------------
+
+export const translateFrontToBack: ExerciseDef<string> = {
+  id: 'translate.front_to_back',
+  title: 'Translate to the target language',
+  modality: 'text',
+  supports: () => true,
+  async generate(ctx) {
+    return {
+      exerciseId: this.id,
+      cardId: ctx.card.id,
+      modality: 'text',
+      prompt: `How do you say “${ctx.card.front}” in ${label(ctx.card.targetLang)}?`,
+      // `answerLang` tells the client which language the learner types (hints the
+      // keyboard/IME; see docs/DESIGN.md §14.2). Here the answer is the target word.
+      data: { answerLang: ctx.card.targetLang },
+    }
+  },
+  async grade(ctx, _instance, answer) {
+    const g = gradeText(ctx.card.back, readingsOf(ctx), String(answer ?? ''))
+    const reading = displayReading(ctx)
+    return {
+      score: g.score,
+      correct: g.correct,
+      expected: ctx.card.back,
+      feedback: feedbackFor(g.score, `${ctx.card.back}${reading ? ` (${reading})` : ''}`),
+    }
+  },
+  xp: (r) => (r.correct ? 10 + (r.score === 100 ? 5 : 0) : 1),
+}
+
+// --- translate: target -> native ---------------------------------------------
+
+export const translateBackToFront: ExerciseDef<string> = {
+  id: 'translate.back_to_front',
+  title: 'Translate to your language',
+  modality: 'text',
+  supports: () => true,
+  async generate(ctx) {
+    return {
+      exerciseId: this.id,
+      cardId: ctx.card.id,
+      modality: 'text',
+      prompt: `What does this mean in ${label(ctx.card.sourceLang)}?`,
+      // The answer is in the learner's language, not the target — so hint that.
+      data: { ...wordView(ctx), answerLang: ctx.card.sourceLang },
+    }
+  },
+  async grade(ctx, _instance, answer) {
+    const typed = String(answer ?? '')
+    // A gloss can list several senses (“of / possessive particle / nominalizer”):
+    // knowing any one of them is knowing the word.
+    const alternatives = meaningAlternatives(ctx.card.front)
+    const g = gradeText(ctx.card.front, alternatives, typed)
+    // Deterministic grading can't know every acceptable paraphrase, so an
+    // unmatched answer goes to the LLM judge (when one is configured) before we
+    // call it wrong — see DESIGN §11.3.
+    if (g.score < 70 && typed.trim() && ctx.judge) {
+      const reading = displayReading(ctx)
+      const out = (await ctx.judge(
+        `The learner is studying ${label(ctx.card.targetLang)}. The card shows the word “${ctx.card.back}”${reading ? ` (${reading})` : ''}, whose meaning in ${label(ctx.card.sourceLang)} is given as “${ctx.card.front}” — a list of its senses separated by “/”. The learner answered with: “${typed}”. Decide whether the learner's answer is an acceptable meaning of the word. Accept any one of the listed senses or a standard synonym/paraphrase; reject answers that mean something else or are too vague. Give the feedback in the learner's native language (${label(ctx.card.sourceLang)}), not in ${label(ctx.card.targetLang)}.`,
+        JUDGE_SCHEMA,
+      )) as { score?: number; correct?: boolean; feedback?: string } | undefined
+      if (out && out.correct) {
+        return {
+          score: Math.max(out.score ?? 80, 80),
+          correct: true,
+          expected: ctx.card.front,
+          feedback: out.feedback,
+        }
+      }
+    }
+    const correct = g.score >= 70
+    return {
+      score: correct ? Math.max(g.score, 80) : g.score,
+      correct,
+      expected: ctx.card.front,
+      feedback: correct ? undefined : `It means “${ctx.card.front}”.`,
+    }
+  },
+  xp: (r) => (r.correct ? 10 + (r.score === 100 ? 5 : 0) : 1),
+}
+
+// --- multiple choice ---------------------------------------------------------

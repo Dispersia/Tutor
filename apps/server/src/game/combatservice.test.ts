@@ -14,11 +14,11 @@ import {
   combatResolve,
   equipItem,
   foodThreshold,
-  getPlayerCombat,
+  loadPlayerCombat,
   monsterState,
   startEncounter,
   unequipItem,
-} from './service'
+} from '../services'
 
 function setup() {
   const { db, sqlite } = openDb(':memory:')
@@ -43,7 +43,7 @@ test('a fight: hits damage the monster, a kill grants drops + XP', () => {
   addItems(db, user.id, 'bronze_sword', 1)
   equipItem(db, bus, user.id, 'bronze_sword')
 
-  const pc = getPlayerCombat(db, user.id)
+  const pc = loadPlayerCombat(db, user.id)
   expect(pc.skill).toBe('strength')
   expect(pc.power).toBe(8)
   expect(pc.weaponPower).toBe(3)
@@ -73,14 +73,14 @@ test('a fight: hits damage the monster, a kill grants drops + XP', () => {
 test('the weapon decides the skill the fight trains', () => {
   const { db, bus, user, sqlite } = setup()
   // no weapon → unarmed melee → Strength
-  expect(getPlayerCombat(db, user.id).skill).toBe('strength')
+  expect(loadPlayerCombat(db, user.id).skill).toBe('strength')
   addItems(db, user.id, 'oak_shortbow', 1)
   equipItem(db, bus, user.id, 'oak_shortbow')
-  expect(getPlayerCombat(db, user.id).skill).toBe('ranged')
+  expect(loadPlayerCombat(db, user.id).skill).toBe('ranged')
   unequipItem(db, user.id, 'weapon')
   addItems(db, user.id, 'oak_staff', 1)
   equipItem(db, bus, user.id, 'oak_staff')
-  expect(getPlayerCombat(db, user.id).skill).toBe('magic')
+  expect(loadPlayerCombat(db, user.id).skill).toBe('magic')
   sqlite.close()
 })
 
@@ -100,7 +100,7 @@ test('the monster hits you even when you strike it', () => {
   const { db, bus, user, sqlite } = setup()
   addItems(db, user.id, 'bronze_sword', 1)
   equipItem(db, bus, user.id, 'bronze_sword')
-  const pc = getPlayerCombat(db, user.id)
+  const pc = loadPlayerCombat(db, user.id)
 
   const start = startEncounter(db, bus, user.id, 'slime')
   expect(start.ok).toBe(true)
@@ -120,7 +120,7 @@ test('the monster hits you even when you strike it', () => {
 
 test('HP persists between fights — restarting is not a free heal', () => {
   const { db, bus, user, sqlite } = setup()
-  const pc = getPlayerCombat(db, user.id)
+  const pc = loadPlayerCombat(db, user.id)
 
   startEncounter(db, bus, user.id, 'slime') // damage 2
   const first = combatResolve(db, bus, user.id, true)!

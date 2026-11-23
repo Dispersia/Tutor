@@ -6,7 +6,11 @@
  * next fetch. These helpers are that extrapolation, nothing more.
  */
 
+import { craftsToItems, formatInterval } from '@tutor/core'
 import type { IdleRigDTO, SkillDTO } from './skills'
+
+/** `1 / 7s` — the compact rate label (shared with the server's curve). */
+export const fmtInterval = formatInterval
 
 /**
  * Extra items per produced item id made between `since` and `now`, clamped to
@@ -22,23 +26,13 @@ export function rigGainedSince(
   const end = Math.min(now, rig.runEndsAt)
   const dt = (end - since) / 1000
   if (dt <= 0 || rig.intervalSec <= 0) return {}
-  const out: Record<string, number> = {}
-  for (const p of rig.produces) {
-    const n = Math.floor((p.count * (1 + rig.yieldBonus) * dt) / rig.intervalSec)
-    if (n > 0) out[p.item] = n
-  }
-  return out
+  return craftsToItems(dt / rig.intervalSec, rig.produces, 1 + rig.yieldBonus)
 }
 
 /** Whole seconds left in the run, live from the clock. */
 export function rigSecondsLeft(rig: IdleRigDTO | null, now: number): number {
   if (!rig) return 0
   return Math.max(0, Math.round((rig.runEndsAt - now) / 1000))
-}
-
-/** `1 / 7s` — one decimal below 10s, none at or above. */
-export function fmtInterval(sec: number): string {
-  return `1 / ${sec >= 10 ? sec.toFixed(0) : sec.toFixed(1)}s`
 }
 
 /** `48m`, `1h 12m`, `6h`, `12s`. */

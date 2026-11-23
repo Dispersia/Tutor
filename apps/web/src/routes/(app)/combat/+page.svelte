@@ -1,7 +1,5 @@
 <script lang="ts">
-  import { href } from '#lib/paths'
   import { onMount } from 'svelte'
-  import { goto } from '$app/navigation'
   import { componentFor } from '#lib/components/exercises'
   import { api } from '#lib/api'
   import {
@@ -15,12 +13,16 @@
     type HitResult,
     type MonsterDTO,
   } from '#lib/combat'
-  import type { Grade, Instance } from '#lib/exercises'
+  import type { Instance } from '#lib/exercises'
   import { getSkills, type SkillsResponse } from '#lib/skills'
-  import { accentStyle, tierAccent } from '#lib/theme'
   import { ACCENT } from '#lib/theme'
   import Icon from '#lib/components/Icon.svelte'
   import Spinner from '#lib/components/Spinner.svelte'
+  import FightBoard from '#lib/components/combat/FightBoard.svelte'
+  import HitReport from '#lib/components/combat/HitReport.svelte'
+  import MonsterList from '#lib/components/combat/MonsterList.svelte'
+  import OutcomePanel from '#lib/components/combat/OutcomePanel.svelte'
+  import { countConsumables } from '#lib/combatview'
   import { peekCached } from '#lib/cache'
 
   // Seed from the last fetch so returning to Combat shows the board at once.
@@ -30,7 +32,6 @@
   let ref = $state<SkillsResponse | null>(cachedSkills ?? null)
   let encounter = $state<EncounterDTO | null>(cachedCombat?.encounter ?? null)
   let instance = $state<Instance | null>(cachedCombat?.instance ?? null)
-  let result = $state<Grade | null>(null)
   let hit = $state<HitResult | null>(null)
   let drank = $state<{ item: string; buff: { kind: string; value: number } } | null>(null)
   let foodThreshold = $state(50)
@@ -59,20 +60,12 @@
 
   const itemMap = $derived(new Map((ref?.items ?? []).map((i) => [i.id, i])))
   const skillMap = $derived(new Map((ref?.skills ?? []).map((s) => [s.id, s])))
-  const name = (id: string) => itemMap.get(id)?.name ?? id
-  const icon = (id: string) => itemMap.get(id)?.icon ?? ''
   // The fight trains whatever profession the equipped weapon is for.
   const fightSkill = $derived(skillMap.get(data?.player.skill ?? '')?.name ?? '')
   const fightSkillIcon = $derived(skillMap.get(data?.player.skill ?? '')?.icon ?? '')
-  const foodCount = $derived(
-    (ref?.inventory ?? []).reduce(
-      (n, i) => n + ((itemMap.get(i.itemId)?.heal ?? 0) > 0 ? i.count : 0),
-      0,
-    ),
-  )
-  const potionCount = $derived(
-    (ref?.inventory ?? []).reduce((n, i) => n + (itemMap.get(i.itemId)?.buff ? i.count : 0), 0),
-  )
+  const consumables = $derived(countConsumables(ref?.inventory ?? [], itemMap))
+  const foodCount = $derived(consumables.food)
+  const potionCount = $derived(consumables.potions)
 
   onMount(refresh)
 
@@ -138,7 +131,6 @@
       encounter = r.encounter
       instance = r.instance
       drank = r.drank
-      result = null
       hit = null
       justHit = false
     } catch (e) {
@@ -157,7 +149,6 @@
         answer,
         timedOut,
       })
-      result = r.result
       hit = r.hit
       justHit = r.hit.playerDamage > 0
       if (r.hit.playerDamage > 0) hitSeq += 1
@@ -185,7 +176,6 @@
     stopTimer()
     encounter = null
     instance = null
-    result = null
     hit = null
     drank = null
     justHit = false
@@ -310,121 +300,14 @@
     </p>
   {:else if encounter}
     <!-- active fight -->
-    <div class="panel panel-accent mb-3 p-4" style="--accent: {ACCENT.ember}">
-      {#if drank}
-        <p class="mb-2 flex items-center gap-1.5 text-xs text-sky-300">
-          <Icon name="potion" size={13} /> auto-drunk {name(drank.item)} at the start ({drank.buff
-            .kind === 'power'
-            ? `+${Math.round(drank.buff.value * 100)}% power`
-            : `+${Math.round(drank.buff.value * 100)}% max HP`})
-        </p>
-      {/if}
-      <div class="flex items-center justify-between text-sm">
-        <span class="display text-ink-200">{encounter.monsterIcon} {encounter.monsterName}</span>
-        <span class="text-ink-400">{encounter.monsterHp}/{encounter.monsterMaxHp}</span>
-      </div>
-      <div class="bar mt-1 mb-3" style="--accent: {ACCENT.ember}">
-        <i style="width: {(encounter.monsterHp / encounter.monsterMaxHp) * 100}%"></i>
-      </div>
-      {#key hitSeq}
-        <div class="relative" class:hit-shake={justHit}>
-          <div class="flex items-center justify-between text-sm">
-            <span class="display text-ink-200">You</span>
-            <span class="text-ink-400">{encounter.playerHp}/{encounter.playerMaxHp}</span>
-          </div>
-          <div class="bar mt-1" style="--accent: {justHit ? ACCENT.ember : ACCENT.jade}">
-            <i style="width: {(encounter.playerHp / encounter.playerMaxHp) * 100}%"></i>
-          </div>
-          {#if justHit}
-            <span
-              class="damage-float pointer-events-none absolute -top-4 right-0 text-sm font-semibold text-ember-300"
-            >
-              -{hit?.playerDamage ?? 0}
-            </span>
-          {/if}
-        </div>
-      {/key}
-      <div class="mt-3 flex justify-end">
-        <button onclick={flee} disabled={busy} class="btn btn-ghost px-3 py-1.5 text-xs">
-          Leave fight
-        </button>
-      </div>
-    </div>
+    <FightBoard {encounter} {hit} {justHit} {hitSeq} {drank} {itemMap} {busy} onFlee={flee} />
 
     {#if hit}
-      <div class="mb-3 flex flex-wrap gap-2">
-        {#if hit.correct}
-          <span class="chip gap-1" style="--accent: {ACCENT.jade}"
-            ><Icon name="sword" size={12} /> you hit for {hit.damage}</span
-          >
-          {#if hit.crit}
-            <span class="chip" style="--accent: {ACCENT.ember}">Critical!</span>
-          {/if}
-          {#if hit.haste}
-            <span class="chip" style="--accent: {ACCENT.azure}">Haste strike</span>
-          {/if}
-        {/if}
-        {#if hit.playerDamage > 0}
-          <span class="chip gap-1" style="--accent: {ACCENT.ember}"
-            ><Icon name="burst" size={12} /> it hit you for {hit.playerDamage}</span
-          >
-        {/if}
-        {#if hit.xp > 0}
-          <span class="chip" style="--accent: {ACCENT.azure}">
-            {skillMap.get(hit.skill)?.icon ?? ''} +{hit.xp}
-            {skillMap.get(hit.skill)?.name ?? hit.skill}
-          </span>
-        {/if}
-        {#if hit.defenceXp > 0}
-          <span class="chip gap-1" style="--accent: {ACCENT.jade}">
-            <Icon name="shield" size={12} /> +{hit.defenceXp} Defence
-          </span>
-        {/if}
-        {#if hit.constitutionXp > 0}
-          <span class="chip gap-1" style="--accent: {ACCENT.ember}">
-            <Icon name="heart" size={12} /> +{hit.constitutionXp} Constitution
-          </span>
-        {/if}
-        {#if hit.ate}
-          <span class="chip gap-1" style="--accent: {ACCENT.brass}">
-            <Icon name="food" size={12} /> auto-ate {name(hit.ate.item)} (+{hit.ate.heal})
-          </span>
-        {/if}
-        {#if hit.talentUnlocked}
-          <a href={href(`/skills/${hit.skill}`)} class="chip" style="--accent: {ACCENT.gold}">
-            Talent unlocked — choose one
-          </a>
-        {/if}
-      </div>
+      <HitReport {hit} {skillMap} {itemMap} />
     {/if}
 
     {#if hit && hit.outcome !== 'ongoing'}
-      <div
-        class="panel panel-accent p-5"
-        style="--accent: {hit.outcome === 'won' ? ACCENT.jade : ACCENT.ember}"
-      >
-        <p
-          class="display flex items-center gap-2 text-lg {hit.outcome === 'won'
-            ? 'text-jade-300'
-            : 'text-ember-300'}"
-        >
-          <Icon name={hit.outcome === 'won' ? 'trophy' : 'skull'} size={18} />
-          {hit.outcome === 'won' ? 'Victory!' : 'Defeated'}
-        </p>
-        {#if hit.drops.length}
-          <p class="mt-2 text-sm text-ink-300">Loot:</p>
-          <div class="mt-1 flex flex-wrap gap-2">
-            {#each hit.drops as d (d.item)}
-              <span class="chip" style={accentStyle(tierAccent(itemMap.get(d.item)?.tier))}>
-                +{d.count}
-                {icon(d.item)}
-                {name(d.item)}
-              </span>
-            {/each}
-          </div>
-        {/if}
-      </div>
-      <button onclick={leave} class="btn btn-primary mt-4 w-full py-3">Back to monsters</button>
+      <OutcomePanel {hit} {itemMap} onLeave={leave} />
     {:else if instance}
       {#if !timerStarted}
         <!-- The first drill of a fight waits for Start; after that each drill's
@@ -458,63 +341,7 @@
     {:else}
       <p class="text-sm text-ink-400">No drill available — try again.</p>
     {/if}
-  {:else}
-    <!-- monster list -->
-    {#if data && data.reviewCount === 0}
-      <div class="panel mb-3 p-4 text-sm text-ink-300">
-        Combat is review only — practise a few cards first, then come back to fight.
-      </div>
-    {/if}
-    <div class="space-y-2 lg:grid lg:grid-cols-2 lg:gap-6 lg:space-y-0">
-      {#each data?.monsters ?? [] as m (m.id)}
-        <div class="panel panel-accent p-3" style={accentStyle(ACCENT.ember)}>
-          <div class="flex items-center gap-3">
-            <span class="text-2xl">{m.icon}</span>
-            <div class="flex-1">
-              <div class="flex items-baseline justify-between">
-                <span class="display text-sm text-ink-200">{m.name}</span>
-                <span class="text-xs text-ink-400">Lv {m.level} · {m.hp} HP · {m.damage} dmg</span>
-              </div>
-              <div class="text-xs text-ink-400">
-                {m.description}
-              </div>
-              <div class="mt-1 flex flex-wrap gap-1">
-                {#each m.drops as d (d.item)}
-                  <span class="chip" style={accentStyle(tierAccent(itemMap.get(d.item)?.tier))}>
-                    {icon(d.item)}
-                    {name(d.item)}
-                    {Math.round(d.chance * 100)}%
-                  </span>
-                {/each}
-              </div>
-            </div>
-            <button
-              onclick={() => fight(m)}
-              disabled={!m.unlocked || (data?.reviewCount ?? 0) === 0}
-              class="btn btn-ghost min-h-11 shrink-0 px-3 py-2 text-xs"
-              style={accentStyle(ACCENT.ember)}
-            >
-              Fight
-            </button>
-          </div>
-          {#if !m.unlocked}
-            <p class="mt-1 text-xs text-brass-300">
-              locked — {m.missing
-                .map((r) => `${skillMap.get(r.skill)?.name ?? r.skill} ${r.level}`)
-                .join(', ')}
-              {m.equipMissing ? ` · equip a ${m.equipMissing.tag} ${m.equipMissing.slot}` : ''}
-            </p>
-          {/if}
-        </div>
-      {/each}
-    </div>
-    <div class="mt-4 grid grid-cols-2 gap-2">
-      <button onclick={() => goto(href('/skills'))} class="btn btn-ghost py-3 text-xs">
-        Gather & craft →
-      </button>
-      <button onclick={() => goto(href('/inventory'))} class="btn btn-ghost py-3 text-xs">
-        Inventory →
-      </button>
-    </div>
+  {:else if data}
+    <MonsterList {data} {skillMap} {itemMap} onFight={fight} />
   {/if}
 </div>

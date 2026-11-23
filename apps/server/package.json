@@ -10,7 +10,6 @@
   },
   "dependencies": {
     "@tutor/core": "workspace:*",
-    "@tutor/speech": "workspace:*",
     "drizzle-orm": "^0.45.4",
     "hono": "^4.13.18",
     "ts-fsrs": "6.0.0"

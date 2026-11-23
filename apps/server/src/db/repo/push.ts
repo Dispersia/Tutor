@@ -1,0 +1,116 @@
+/** Web-push subscriptions and the idle-rig alert scan. */
+
+import { and, eq, gt, lte, ne } from 'drizzle-orm'
+import type { Db } from '../client'
+import { actionProgress, pushSubscriptions } from '../schema'
+import { id, now } from './helpers'
+
+export interface PushSubscriptionRow {
+  endpoint: string
+  p256dh: string
+  auth: string
+}
+
+/**
+ * Stores a device's subscription. The endpoint identifies the device, so a
+ * re-subscribe (permission granted again, key rotated) replaces the old row
+ * instead of piling up dead ones.
+ */
+export function upsertPushSubscription(
+  db: Db,
+  sub: PushSubscriptionRow & { userId: string; userAgent?: string },
+): void {
+  db.insert(pushSubscriptions)
+    .values({
+      id: id(),
+      userId: sub.userId,
+      endpoint: sub.endpoint,
+      p256dh: sub.p256dh,
+      auth: sub.auth,
+      userAgent: sub.userAgent,
+      createdAt: now(),
+    })
+    .onConflictDoUpdate({
+      target: pushSubscriptions.endpoint,
+      set: {
+        userId: sub.userId,
+        p256dh: sub.p256dh,
+        auth: sub.auth,
+        userAgent: sub.userAgent,
+      },
+    })
+    .run()
+}
+
+export function deletePushSubscription(db: Db, endpoint: string): void {
+  db.delete(pushSubscriptions).where(eq(pushSubscriptions.endpoint, endpoint)).run()
+}
+
+export function listPushSubscriptions(db: Db, userId: string): PushSubscriptionRow[] {
+  return db.select().from(pushSubscriptions).where(eq(pushSubscriptions.userId, userId)).all()
+}
+
+export function touchPushSubscription(db: Db, endpoint: string): void {
+  db.update(pushSubscriptions)
+    .set({ lastOkAt: now() })
+    .where(eq(pushSubscriptions.endpoint, endpoint))
+    .run()
+}
+
+/** An active rig as the alert scan needs it. */
+export interface DueRigRow {
+  userId: string
+  actionId: string
+  completions: number
+  runEndsAt: number
+}
+
+/**
+ * Rigs whose run ends within `leadMs` and that have not been announced yet.
+ * Pure read: settling happens on the next board fetch, so this never writes.
+ */
+export function dueRigAlerts(db: Db, at: number, leadMs: number): DueRigRow[] {
+  return db
+    .select({
+      userId: actionProgress.userId,
+      actionId: actionProgress.actionId,
+      completions: actionProgress.completions,
+      runEndsAt: actionProgress.runEndsAt,
+    })
+    .from(actionProgress)
+    .where(
+      and(
+        gt(actionProgress.runEndsAt, at),
+        lte(actionProgress.runEndsAt, at + leadMs),
+        ne(actionProgress.notifiedEndsAt, actionProgress.runEndsAt),
+      ),
+    )
+    .all()
+}
+
+/** Records that this deadline has been announced (so a later scan skips it). */
+export function markRigAlerted(db: Db, userId: string, actionId: string, runEndsAt: number): void {
+  db.update(actionProgress)
+    .set({ notifiedEndsAt: runEndsAt })
+    .where(
+      and(
+        eq(actionProgress.userId, userId),
+        eq(actionProgress.actionId, actionId),
+        eq(actionProgress.runEndsAt, runEndsAt),
+      ),
+    )
+    .run()
+}
+
+/** Every rig still running right now, for the client's local timer. */
+export function listActiveRigs(db: Db, userId: string, at: number) {
+  return db
+    .select({
+      actionId: actionProgress.actionId,
+      completions: actionProgress.completions,
+      runEndsAt: actionProgress.runEndsAt,
+    })
+    .from(actionProgress)
+    .where(and(eq(actionProgress.userId, userId), gt(actionProgress.runEndsAt, at)))
+    .all()
+}

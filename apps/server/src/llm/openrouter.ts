@@ -238,7 +238,9 @@ export class OpenRouter {
     try {
       return { json: JSON.parse(content) as T, usage: mapUsage(json.usage) }
     } catch (err) {
-      throw new Error(`the model did not return valid JSON (${(err as Error).message})`)
+      throw new Error(`the model did not return valid JSON (${(err as Error).message})`, {
+        cause: err,
+      })
     }
   }
 }

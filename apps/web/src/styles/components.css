@@ -1,0 +1,527 @@
+/* Component classes: panels, cells, buttons, chips and the rest. */
+
+@layer components {
+  /* ---- surfaces ---------------------------------------------------------- */
+  .panel {
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid var(--color-ink-700);
+    background: var(--color-ink-850);
+    box-shadow: 0 1px 2px oklch(0 0 0 / 0.4);
+  }
+
+  /* a panel that belongs to a profession / section: tinted ground + accent edge */
+  .panel-accent {
+    border-color: color-mix(in oklab, var(--accent) 40%, var(--color-ink-700));
+    background: color-mix(in oklab, var(--accent) 9%, var(--color-ink-850));
+  }
+
+  /* a panel that acts as a button (a profession tile): same lift as a tile, on
+     the panel radius, and its accent edge brightens. */
+  .panel--press {
+    cursor: pointer;
+    transition:
+      transform 0.12s ease,
+      border-color 0.15s ease,
+      background 0.15s ease;
+  }
+  .panel--press:hover,
+  .panel--press:focus-visible {
+    transform: translateY(-1px);
+    border-color: color-mix(in oklab, var(--accent) 62%, var(--color-ink-700));
+    background: color-mix(in oklab, var(--accent) 16%, var(--color-ink-850));
+  }
+
+  .panel-hd {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid var(--color-ink-700);
+    background: var(--color-ink-800);
+    font-weight: 600;
+    color: var(--color-ink-100);
+  }
+
+  /* ---- typography -------------------------------------------------------- */
+  .display {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
+  }
+
+  .eyebrow {
+    font-size: 0.82rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--color-ink-400);
+  }
+
+  /* Page subtitle. The brief reserves uppercase for tracked labels; a sentence
+     stays in the body face so it reads as prose and does not shout. */
+  .sub {
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: var(--color-ink-400);
+  }
+
+  .gold {
+    color: var(--color-gold-300);
+  }
+
+  /* the character cell — the system's signature mark. It grows to fit a
+     multi-character word; it never clips. */
+  .cell {
+    position: relative;
+    display: grid;
+    place-items: center;
+    gap: 0.15rem;
+    min-width: 4.5rem;
+    min-height: 4.5rem;
+    padding: 0.85rem 1rem;
+    border: 1px solid color-mix(in oklab, var(--accent) 45%, var(--color-ink-700));
+    border-radius: 12px;
+    background: color-mix(in oklab, var(--accent) 10%, var(--color-ink-850));
+    text-align: center;
+  }
+  /* faint cross guides at 12% inset: two hairlines, no gradient */
+  .cell::before,
+  .cell::after {
+    content: '';
+    position: absolute;
+    background: color-mix(in oklab, var(--accent) 22%, transparent);
+    pointer-events: none;
+  }
+  .cell::before {
+    left: 12%;
+    right: 12%;
+    top: 50%;
+    height: 1px;
+  }
+  .cell::after {
+    top: 12%;
+    bottom: 12%;
+    left: 50%;
+    width: 1px;
+  }
+  .cell__glyph {
+    position: relative;
+    font-family: var(--font-display);
+    font-size: 2rem;
+    line-height: 1.3;
+    letter-spacing: 0;
+    white-space: nowrap;
+    color: var(--color-ink-100);
+  }
+  .cell__glyph rt {
+    font-size: 0.5em;
+    font-weight: 400;
+    letter-spacing: 0;
+    color: var(--color-ink-400);
+  }
+  /* the small cell cannot afford 0.5em of a 1.5rem glyph: keep ruby readable */
+  .cell--sm .cell__glyph rt {
+    font-size: 0.55em;
+  }
+  .cell__reading {
+    position: relative;
+    font-family: var(--font-display);
+    font-size: 0.9rem;
+    line-height: 1.4;
+    letter-spacing: 0;
+    color: var(--color-ink-400);
+  }
+  .cell--sm {
+    min-width: 3.5rem;
+    min-height: 3.5rem;
+    padding: 0.5rem 0.7rem;
+  }
+  .cell--sm .cell__glyph {
+    font-size: 1.5rem;
+  }
+  .cell--lg {
+    min-width: 6rem;
+    min-height: 6rem;
+  }
+  .cell--lg .cell__glyph {
+    font-size: 2.5rem;
+  }
+  .cell--word .cell__glyph {
+    font-size: 1.65rem;
+  }
+
+  /* a cell the player can press (a choice, a word chip) */
+  .cell--press {
+    cursor: pointer;
+    transition:
+      border-color 0.12s ease,
+      background 0.12s ease;
+  }
+  .cell--press:hover:not(:disabled) {
+    border-color: color-mix(in oklab, var(--accent) 70%, var(--color-ink-700));
+    background: color-mix(in oklab, var(--accent) 18%, var(--color-ink-850));
+  }
+  /* a control that cannot act goes neutral: surface fill, hairline, muted text.
+     Never a faded smear of its own accent. */
+  .cell--press:disabled,
+  .cell--off {
+    cursor: not-allowed;
+    border-color: var(--color-ink-700);
+    background: var(--color-ink-850);
+  }
+  .cell--press:disabled::before,
+  .cell--press:disabled::after,
+  .cell--off::before,
+  .cell--off::after {
+    background: color-mix(in oklab, var(--color-ink-400) 20%, transparent);
+  }
+  .cell--press:disabled .cell__glyph,
+  .cell--off .cell__glyph,
+  .cell--press:disabled .cell__reading,
+  .cell--off .cell__reading {
+    color: var(--color-ink-400);
+  }
+
+  /* ---- fields ------------------------------------------------------------ */
+  .field {
+    width: 100%;
+    min-height: 44px;
+    border-radius: 9px;
+    border: 1px solid var(--color-ink-600);
+    background: var(--color-ink-900);
+    padding: 0.6rem 0.75rem;
+    color: var(--color-ink-100);
+    font-family: var(--font-sans);
+    font-size: 0.95rem;
+    line-height: 1.4;
+  }
+  .field::placeholder {
+    color: var(--color-ink-400);
+  }
+  .field:focus-visible {
+    outline: none;
+    border-color: var(--color-seal-400);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-seal-400) 35%, transparent);
+  }
+  .field:disabled {
+    background: var(--color-ink-850);
+    border-color: var(--color-ink-700);
+    color: var(--color-ink-400);
+  }
+  .field-error {
+    margin-top: 0.35rem;
+    font-size: 0.82rem;
+    line-height: 1.4;
+    color: var(--color-ember-300);
+  }
+
+  /* ---- notices ----------------------------------------------------------- */
+  /* A flat, accent-tinted strip for loading / empty / error copy. No gradient,
+     no glow — the accent tints the fill and the hairline. */
+  .banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    border-radius: 12px;
+    border: 1px solid color-mix(in oklab, var(--accent) 40%, var(--color-ink-700));
+    background: color-mix(in oklab, var(--accent) 10%, var(--color-ink-850));
+    padding: 0.6rem 0.85rem;
+    color: var(--color-ink-200);
+    font-size: 0.92rem;
+    line-height: 1.45;
+  }
+  .banner__title {
+    font-weight: 600;
+    color: color-mix(in oklab, var(--accent) 75%, var(--color-ink-100));
+  }
+  .banner__text {
+    color: var(--color-ink-300);
+  }
+
+  /* ---- text link --------------------------------------------------------- */
+  .link {
+    color: var(--color-ink-200);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+  }
+  .link:hover {
+    color: var(--color-ink-100);
+  }
+  /* A link that stands alone as a control still needs a real touch target;
+     inline links inside prose keep their natural line height. */
+  .link-btn {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  /* ---- tiles ------------------------------------------------------------- */
+  .tile {
+    position: relative;
+    border-radius: 12px;
+    border: 1px solid color-mix(in oklab, var(--accent) 45%, var(--color-ink-700));
+    background: color-mix(in oklab, var(--accent) 14%, var(--color-ink-850));
+    transition:
+      transform 0.12s ease,
+      border-color 0.15s ease,
+      background 0.15s ease;
+  }
+  .tile:hover,
+  .tile:focus-visible {
+    transform: translateY(-1px);
+    border-color: color-mix(in oklab, var(--accent) 65%, var(--color-ink-700));
+    background: color-mix(in oklab, var(--accent) 20%, var(--color-ink-850));
+  }
+
+  /* ---- ruled entries ----------------------------------------------------- */
+  /* A list row that acts as a button: hairline top, flat hover, neutral when
+     it cannot act. */
+  .row-btn {
+    display: flex;
+    width: 100%;
+    min-height: 44px;
+    align-items: center;
+    gap: 0.75rem;
+    text-align: left;
+    transition: background 0.12s ease;
+  }
+  .row-btn:hover:not(:disabled) {
+    background: var(--color-ink-800);
+  }
+  .row-btn:disabled {
+    cursor: not-allowed;
+    background: var(--color-ink-850);
+    color: var(--color-ink-400);
+  }
+
+  /* ---- buttons ----------------------------------------------------------- */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    min-height: 44px;
+    border-radius: 10px;
+    padding: 0.6rem 1rem;
+    font-family: var(--font-display);
+    font-size: 0.92rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    line-height: 1;
+    cursor: pointer;
+    transition:
+      filter 0.12s ease,
+      transform 0.06s ease,
+      background 0.12s ease,
+      border-color 0.12s ease;
+  }
+  .btn:active {
+    transform: translateY(1px);
+  }
+  .btn:disabled {
+    cursor: not-allowed;
+    transform: none;
+    background: var(--color-ink-850);
+    border: 1px solid var(--color-ink-700);
+    color: var(--color-ink-400);
+  }
+  /* primary = the one action that moves the session forward */
+  .btn-primary {
+    color: var(--color-ink-950);
+    border: 1px solid color-mix(in oklab, var(--color-seal-400) 60%, black);
+    background: var(--color-seal-400);
+  }
+  .btn-primary:hover {
+    filter: brightness(1.08);
+  }
+  /* gold = spending, claiming, rewarding */
+  .btn-gold {
+    color: var(--color-ink-950);
+    border: 1px solid color-mix(in oklab, var(--color-gold-400) 55%, black);
+    background: var(--color-gold-300);
+  }
+  .btn-gold:hover {
+    filter: brightness(1.08);
+  }
+  .btn-ghost {
+    color: var(--color-ink-200);
+    border: 1px solid var(--color-ink-600);
+    background: transparent;
+  }
+  .btn-ghost:hover {
+    color: var(--color-ink-100);
+    background: var(--color-ink-800);
+    border-color: var(--color-ink-500);
+  }
+  .btn-accent {
+    color: var(--color-ink-950);
+    border: 1px solid color-mix(in oklab, var(--accent) 65%, black);
+    background: var(--accent);
+  }
+  /* A destructive action: same weight as ghost, but the border and label carry
+     the ember signal so it never reads as a normal secondary button. */
+  .btn-danger {
+    color: var(--color-ember-400);
+    border: 1px solid color-mix(in oklab, var(--color-ember-400) 45%, var(--color-ink-700));
+    background: transparent;
+  }
+  .btn-danger:hover {
+    color: var(--color-ember-300);
+    border-color: color-mix(in oklab, var(--color-ember-400) 70%, var(--color-ink-700));
+    background: color-mix(in oklab, var(--color-ember-400) 10%, transparent);
+  }
+  .btn-danger:disabled {
+    color: var(--color-ink-400);
+    border-color: var(--color-ink-700);
+    background: transparent;
+  }
+
+  /* ---- loading ----------------------------------------------------------- */
+  /* The one wait signal: an accent ring that reads on any surface, tinted from
+     the local --accent so it belongs wherever it stands. */
+  .spinner {
+    display: inline-block;
+    flex: none;
+    width: var(--spinner-size, 1rem);
+    height: var(--spinner-size, 1rem);
+    border-radius: 50%;
+    border: 2px solid color-mix(in oklab, var(--accent) 26%, transparent);
+    border-top-color: var(--accent);
+    animation: spin 0.7s linear infinite;
+    vertical-align: -0.15em;
+  }
+
+  /* ---- chips / bars ------------------------------------------------------ */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    border-radius: 999px;
+    padding: 0.22rem 0.55rem;
+    font-size: 0.82rem;
+    line-height: 1.3;
+    border: 1px solid color-mix(in oklab, var(--accent) 40%, var(--color-ink-700));
+    background: color-mix(in oklab, var(--accent) 12%, var(--color-ink-850));
+    color: color-mix(in oklab, var(--accent) 70%, var(--color-ink-100));
+  }
+
+  /* A compact chip for dense lists: same colour language, less vertical air. */
+  .chip--tight {
+    gap: 0.2rem;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.72rem;
+  }
+
+  /* The tail of a cost chip: how many the player already holds, split off by a
+     hairline so "−2 Copper ore" and "have 4" never read as one number. */
+  .chip__have {
+    margin-left: 0.1rem;
+    padding-left: 0.35rem;
+    border-left: 1px solid color-mix(in oklab, currentColor 30%, transparent);
+    font-variant-numeric: tabular-nums;
+    opacity: 0.8;
+  }
+
+  /* A chip that is also a control. The pill stays compact so a row of chips
+     still reads as one line, but the hit area grows to 44px vertically. */
+  .chip--press {
+    position: relative;
+    cursor: pointer;
+  }
+  .chip--press::after {
+    content: '';
+    position: absolute;
+    inset: -9px 0;
+  }
+
+  .bar {
+    position: relative;
+    height: 9px;
+    border-radius: 999px;
+    overflow: hidden;
+    border: 1px solid var(--color-ink-700);
+    background: var(--color-ink-900);
+  }
+  .bar > i {
+    display: block;
+    height: 100%;
+    border-radius: 999px;
+    background: var(--accent);
+    transition: width 0.4s ease;
+  }
+
+  /* A rig that is running: a small accent dot that breathes. The colour comes
+     from --accent, so it sits inside whatever surface owns it. */
+  .livedot {
+    display: inline-block;
+    flex: none;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 999px;
+    background: var(--accent);
+    animation: livedot 1.8s ease-in-out infinite;
+  }
+
+  /* rank badge — brass gold numerals in a stamped cell */
+  .level-badge {
+    min-width: 1.9rem;
+    border-radius: 7px;
+    padding: 0.12rem 0.4rem;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    color: var(--color-gold-300);
+    border: 1px solid color-mix(in oklab, var(--color-gold-500) 55%, transparent);
+    background: var(--color-ink-900);
+  }
+
+  /* The level seal — an indigo stamp for what you earned. The ring holds the
+     figure and nothing else: two lines of text inside a 64px circle left the
+     glyphs brushing the rim. The caption sits under the ring instead, so the
+     number has room to breathe and the label stays legible at any size. */
+  .seal {
+    --seal-accent: var(--color-seal-400);
+    display: grid;
+    place-items: center;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    border: 2px solid color-mix(in oklab, var(--seal-accent) 75%, var(--color-ink-700));
+    color: color-mix(in oklab, var(--seal-accent) 62%, var(--color-ink-100));
+    background: color-mix(in oklab, var(--seal-accent) 12%, var(--color-ink-850));
+    font-family: var(--font-display);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  /* the caption under a seal: quiet, so the figure stays the loud part */
+  .seal__label {
+    margin-top: 0.3rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--color-ink-400);
+  }
+
+  /* HUD stat: neutral panel with a serif figure */
+  .stat-card {
+    position: relative;
+    border-radius: 12px;
+    border: 1px solid var(--color-ink-700);
+    background: var(--color-ink-850);
+  }
+
+  /* the activity heat map: square cells that shrink so the grid fits a phone
+     instead of scrolling sideways */
+  .heat {
+    --heat-cell: 0.75rem;
+  }
+  @media (max-width: 430px) {
+    .heat {
+      --heat-cell: 0.6rem;
+    }
+  }
+}

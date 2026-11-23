@@ -20,7 +20,7 @@ import {
   actionSuccessChance,
   applyEnchant,
   awardActionXp,
-  bandBonusesFor,
+  accountBandBonuses,
   bandForItem,
   bandLevelMap,
   bandView,
@@ -28,11 +28,11 @@ import {
   craftGearInstance,
   distillItem,
   enchantOf,
-  getPlayerCombat,
-  salvageGearInstance,
+  loadPlayerCombat,
+  salvageGear,
   skillLevelOf,
   startEncounter,
-} from './service'
+} from '../services'
 
 /** XP needed to reach `level` from scratch. */
 function xpForLevel(level: number): number {
@@ -61,7 +61,7 @@ test('a band shares one score: XP on any item raises the whole metal (§13.5.3)'
 
   // Pumping ONE bronze action levels the whole bronze band — you do not have to
   // train every near-identical item to move on.
-  awardActionXp(db, bus, user.id, 'smelt-bronze', bandXpToLevel(10))
+  awardActionXp(db, bus, user.id, { actionId: 'smelt-bronze', amount: bandXpToLevel(10) })
   expect(bandLevelMap(db, user.id).get('bronze')).toBe(10)
   expect(actionState(db, user.id, BRONZE_FORGE).unlocked).toBe(true)
 
@@ -81,7 +81,7 @@ test('the next metal opens at band 40, not at a maxed band (§13.5.3)', () => {
   expect(state.missingBands.map((b) => b.id)).toEqual(['bronze'])
   expect(state.missingBands[0]!.level).toBe(40)
 
-  awardActionXp(db, bus, user.id, 'smelt-bronze', bandXpToLevel(40))
+  awardActionXp(db, bus, user.id, { actionId: 'smelt-bronze', amount: bandXpToLevel(40) })
   state = actionState(db, user.id, smeltIron)
   expect(state.missingBands).toEqual([])
   expect(state.unlocked).toBe(true)
@@ -92,10 +92,10 @@ test('the next metal opens at band 40, not at a maxed band (§13.5.3)', () => {
 
 test('a band grants an account-wide passive from level 2 up (§13.5.3)', () => {
   const { db, bus, user, sqlite } = setup()
-  expect(bandBonusesFor(db, user.id).crit).toBe(0)
+  expect(accountBandBonuses(db, user.id).crit).toBe(0)
 
-  awardActionXp(db, bus, user.id, 'smelt-bronze', bandXpToLevel(21)) // bronze 21
-  const bonus = bandBonusesFor(db, user.id)
+  awardActionXp(db, bus, user.id, { actionId: 'smelt-bronze', amount: bandXpToLevel(21) }) // bronze 21
+  const bonus = accountBandBonuses(db, user.id)
   expect(bonus.crit).toBeCloseTo(0.002 * 20) // value · (level − 1)
 
   const view = bandView(db, user.id).find((b) => b.id === 'bronze')!
@@ -113,7 +113,7 @@ test('salvage yields the band reagent; Distill yields essence (§13.5.3.2)', () 
   expect(bandForItem(helm)?.reagent).toBe('bronze_reagent')
 
   const id = craftGearInstance(db, user.id, helm)
-  const res = salvageGearInstance(db, bus, user.id, id)
+  const res = salvageGear(db, bus, user.id, id)
   expect(res.ok).toBe(true)
   expect(res.materials?.some((m) => m.item === 'bronze_reagent')).toBe(true)
   sqlite.close()
@@ -146,7 +146,7 @@ test('an enchant fits the slot, needs its level and reagents, and grants no XP (
   expect(applyEnchant(db, bus, user.id, piece, 'chest:stamina').ok).toBe(false)
   expect(applyEnchant(db, bus, user.id, piece, 'mainHand:strength').ok).toBe(false)
 
-  awardActionXp(db, bus, user.id, 'distill', bandXpToLevel(5))
+  awardActionXp(db, bus, user.id, { actionId: 'distill', amount: bandXpToLevel(5) })
   expect(skillLevelOf(db, user.id, 'enchanting')).toBe(5)
   // Still needs its reagents.
   expect(applyEnchant(db, bus, user.id, piece, 'mainHand:strength').ok).toBe(false)
@@ -167,7 +167,7 @@ test('monsters are fixed: gear and level never move their numbers (§13.5.3)', (
   const { db, bus, user, sqlite } = setup()
   const base = MONSTER_BY_ID.get('slime')!
   // A stacked player still meets the base definition.
-  awardActionXp(db, bus, user.id, 'train-attack', bandXpToLevel(50))
+  awardActionXp(db, bus, user.id, { actionId: 'train-attack', amount: bandXpToLevel(50) })
   const res = startEncounter(db, bus, user.id, 'slime')
   expect(res.ok).toBe(true)
   if (res.ok) {
@@ -187,7 +187,7 @@ test('every band has a reagent item and realms grow richer per material (§13.5.
   const bronze = ACTION_BY_ID.get('forge-bronze-chest')!
   const iron = ACTION_BY_ID.get('forge-iron-chest')!
   expect(iron.xp / 12).toBeGreaterThan(bronze.xp / 8)
-  expect(getPlayerCombat).toBeDefined()
+  expect(loadPlayerCombat).toBeDefined()
 })
 
 test('every line chains its tiers the same way (§13.5.3)', () => {
@@ -195,7 +195,7 @@ test('every line chains its tiers the same way (§13.5.3)', () => {
   // Hardened leather is shut until the leather band reaches 40 — same rule as plate.
   const hardened = ACTION_BY_ID.get('sew-hardened-helm')!
   expect(actionState(db, user.id, hardened).missingBands.map((b) => b.id)).toEqual(['leather'])
-  awardActionXp(db, bus, user.id, 'tan-hide', bandXpToLevel(40))
+  awardActionXp(db, bus, user.id, { actionId: 'tan-hide', amount: bandXpToLevel(40) })
   expect(actionState(db, user.id, hardened).missingBands).toEqual([])
   // Its own band gate (Hardened 10) still stands until the hardened band climbs.
   expect(actionState(db, user.id, hardened).band?.name).toBe('Hardened')
@@ -226,7 +226,7 @@ test('one level lifts every ore: the odds are per choice, the level is shared (�
   const a = ACTION_BY_ID.get('prospect')!
   expect(actionSuccessChance(db, user.id, a, 'copper')).toBeCloseTo(0.4)
   expect(actionSuccessChance(db, user.id, a, 'mythril')).toBeCloseTo(0.5)
-  awardActionXp(db, bus, user.id, 'prospect', xpForLevel(11))
+  awardActionXp(db, bus, user.id, { actionId: 'prospect', amount: xpForLevel(11) })
   expect(actionSuccessChance(db, user.id, a, 'copper')).toBeCloseTo(0.4 + 0.03 * 10)
   // One action, so the single level lifts mythril's odds too.
   expect(actionSuccessChance(db, user.id, a, 'mythril')).toBeCloseTo(0.5 + 0.03 * 10)
@@ -234,7 +234,7 @@ test('one level lifts every ore: the odds are per choice, the level is shared (�
 })
 
 test('Smithing forges the band; Jewellery sets a gem of that tier (§13.5.3.1)', () => {
-  const { db, sqlite } = setup()
+  const { sqlite } = setup()
   const band = ACTION_BY_ID.get('forge-bronze-band')!
   expect(band.band).toBe('bronze')
   expect(band.consumes).toEqual([{ item: 'bronze_bar', count: 2 }])

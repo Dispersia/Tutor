@@ -212,7 +212,7 @@ export const META_MARKERS =
 export function stripMetaCommentary(text: string): string {
   // A leading "Translate:" / "Meaning:" is the model echoing its instruction.
   let out = text.replace(/^\s*(?:translate|translation|meaning|gloss|english)\s*[::]\s*/i, '')
-  out = out.replace(/[（(\[][^)）\]]*[)）\]]/g, (m) => (META_MARKERS.test(m) ? ' ' : m))
+  out = out.replace(/[（([][^)）\]]*[)）\]]/g, (m) => (META_MARKERS.test(m) ? ' ' : m))
   out = out.replace(
     /\s*(?:[.。!！?？]\s*)?(?:note|wait|correction|revised|actually|hmm|oops)\b[\s\S]*$/i,
     '',
@@ -240,7 +240,7 @@ export function sanitizePlannedCard(card: PlannedCard): PlannedCard | undefined 
   // A blank belongs in a grammar prompt, never in the text a learner produces.
   if (back.includes('___')) return undefined
 
-  let payload = card.payload ? { ...card.payload } : undefined
+  const payload = card.payload ? { ...card.payload } : undefined
   if (payload) {
     for (const key of ['gloss', 'prompt', 'rule', 'explanation']) {
       const v = payload[key]

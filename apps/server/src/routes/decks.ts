@@ -23,7 +23,6 @@ import {
   startDeckBuild,
   startDeckGrowth,
 } from '../deck/generate'
-import { llmPlanner, type Planner } from '../deck/plan'
 import { plannerFor } from '../deck/planner'
 import {
   backfillDeckPitch,
@@ -302,7 +301,6 @@ export function registerDecks(app: App) {
    * of the server guessing.
    */
   app.post('/api/decks/inspect', async (c) => {
-    const deps = c.get('deps')
     const user = c.get('user')!
     const form = await c.req.formData()
     const file = form.get('file')
@@ -402,11 +400,8 @@ export function registerDecks(app: App) {
         cursor: 0,
         buildError: undefined,
       })
-      startDeckBuild(
-        deps.db,
-        user.id,
-        created.deckId,
-        {
+      startDeckBuild(deps.db, user.id, created.deckId, {
+        ctx: {
           instruction,
           targetLang,
           sourceLang,
@@ -414,10 +409,10 @@ export function registerDecks(app: App) {
           readingScript: rules.readingScript,
           hints,
         },
-        { words: list.words, count, knownWords: [], startStep: 0 },
+        opts: { words: list.words, count, knownWords: [], startStep: 0 },
         planner,
-        { onFinish: () => deps.audio?.enqueueDeck(user.id, created.deckId) },
-      )
+        base: { onFinish: () => deps.audio?.enqueueDeck(user.id, created.deckId) },
+      })
       return c.json(
         {
           deck: deckView(getDeck(deps.db, created.deckId, user.id)!),

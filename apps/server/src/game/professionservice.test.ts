@@ -31,12 +31,12 @@ import {
   completeAction,
   equipItem,
   grantItems,
-  settleAll,
+  settleRigs,
   skillLevelOf,
   stopRig,
   talentView,
   unequipItem,
-} from './service'
+} from '../services'
 /** XP needed to reach `level` from scratch. */
 function xpForLevel(level: number): number {
   let total = 0
@@ -48,7 +48,7 @@ function xpForLevel(level: number): number {
 function setSkill(db: Db, bus: EventBus, userId: string, skill: SkillId, to: number): void {
   for (const a of actionsForSkill(skill)) {
     const cur = skillLevelInfo(getActionXp(db, userId, a.id)).level
-    awardActionXp(db, bus, userId, a.id, xpForLevel(to) - xpForLevel(cur))
+    awardActionXp(db, bus, userId, { actionId: a.id, amount: xpForLevel(to) - xpForLevel(cur) })
   }
 }
 
@@ -69,7 +69,7 @@ test('awardActionXp levels the action up; the profession rounds the mean to 100'
   bus.on('skill.level.up', (e) => events.push(`lvl:${e.level}`))
 
   // one action alone does not max the profession: Mining is the mean of its actions
-  const first = awardActionXp(db, bus, user.id, 'mine-copper', xpForLevel(10))
+  const first = awardActionXp(db, bus, user.id, { actionId: 'mine-copper', amount: xpForLevel(10) })
   expect(first.level).toBe(10)
   expect(first.leveledUp).toBe(true)
   expect(first.talentUnlocked).toBeNull()
@@ -84,7 +84,7 @@ test('awardActionXp levels the action up; the profession rounds the mean to 100'
   expect(listTalents(db, user.id).length).toBe(0)
 
   // no new milestone between 10 and 20
-  expect(awardActionXp(db, bus, user.id, 'mine-copper', 10).talentUnlocked).toBeNull()
+  expect(awardActionXp(db, bus, user.id, { actionId: 'mine-copper', amount: 10 }).talentUnlocked).toBeNull()
 
   // levelling them all to 20 opens the next choice
   setMining(db, bus, user.id, 20)
@@ -105,12 +105,12 @@ test('a new action lowers the profession until it is trained', () => {
 test('per-action effects boost XP gains', () => {
   const { db, bus, user, sqlite } = setup()
   // Agility's drill at 11 gives +5% global XP.
-  awardActionXp(db, bus, user.id, 'agility-drill', xpForLevel(11))
+  awardActionXp(db, bus, user.id, { actionId: 'agility-drill', amount: xpForLevel(11) })
   const bonus = aggregateBonuses(db, user.id)
   expect(bonus.globalXp).toBeGreaterThan(0)
   // a fresh profession sits at 1 (the mean of its four level-1 actions)
   const before = skillLevelOf(db, user.id, 'mining')
-  const r = awardActionXp(db, bus, user.id, 'mine-copper', 100)
+  const r = awardActionXp(db, bus, user.id, { actionId: 'mine-copper', amount: 100 })
   expect(before).toBe(1)
   expect(r.gained).toBe(Math.round(100 * (1 + bonus.xp('mine-copper') + bonus.globalXp)))
   expect(r.gained).toBeGreaterThan(100)
@@ -236,7 +236,7 @@ test('grantItems applies yield + double bonuses', () => {
   expect(getItemCount(db, user.id, 'copper_ore')).toBe(1)
 
   // mine-copper 11 → +10% yield; rand=0 carries the fraction to +1
-  awardActionXp(db, bus, user.id, 'mine-copper', xpForLevel(11))
+  awardActionXp(db, bus, user.id, { actionId: 'mine-copper', amount: xpForLevel(11) })
   grantItems(db, bus, user.id, 'mine-copper', [{ item: 'copper_ore', count: 1 }], () => 0)
   expect(getItemCount(db, user.id, 'copper_ore')).toBe(3) // 1 + 1 (carry) + 2nd gather
   sqlite.close()
@@ -294,7 +294,7 @@ test('a drill lands the strike, then the rig keeps gathering while you are away'
   expect(first.idle?.intervalSec).toBeGreaterThan(2)
 
   // come back a minute later: the rig kept working
-  const settled = settleAll(db, bus, user.id, t0 + 60_000)
+  const settled = settleRigs(db, bus, user.id, t0 + 60_000)
   const ore = getItemCount(db, user.id, 'copper_ore')
   expect(ore).toBeGreaterThan(1)
   expect(settled.gained.find((g) => g.item === 'copper_ore')?.count).toBe(ore - 1)
@@ -305,8 +305,8 @@ test('settling twice over the same instant never double counts', () => {
   const { db, bus, user, sqlite } = setup()
   const t0 = 1_500_000_000_000
   completeAction(db, bus, user.id, 'mine-copper', t0)
-  const once = settleAll(db, bus, user.id, t0 + 30_000)
-  const twice = settleAll(db, bus, user.id, t0 + 30_000)
+  const once = settleRigs(db, bus, user.id, t0 + 30_000)
+  const twice = settleRigs(db, bus, user.id, t0 + 30_000)
   expect(once.gained.length).toBeGreaterThan(0)
   expect(twice.gained).toEqual([])
   expect(once.xp.get('mine-copper')).toBeGreaterThan(0)
@@ -322,7 +322,7 @@ test('a rig levels its action on its own, no drill required', () => {
   const before = getActionXp(db, user.id, 'mine-copper')
 
   // the first completion runs for 10 minutes; leave it be and it pays for itself
-  const settled = settleAll(db, bus, user.id, t0 + 600_000)
+  const settled = settleRigs(db, bus, user.id, t0 + 600_000)
   const gained = settled.xp.get('mine-copper') ?? 0
   expect(gained).toBeGreaterThan(1)
   expect(getActionXp(db, user.id, 'mine-copper')).toBe(before + gained)
@@ -339,7 +339,7 @@ test('an artisan rig turns stock into product and runs out when the bank does', 
   expect(first.gained.some((g) => g.item === 'bronze_bar')).toBe(true)
   expect(getItemCount(db, user.id, 'copper_ore')).toBeLessThan(20)
 
-  settleAll(db, bus, user.id, t0 + 60_000)
+  settleRigs(db, bus, user.id, t0 + 60_000)
   const bars = getItemCount(db, user.id, 'bronze_bar')
   expect(bars).toBeGreaterThan(1)
   // clamped by the bank: never negative, and the ore was really spent

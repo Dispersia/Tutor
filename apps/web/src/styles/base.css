@@ -1,0 +1,37 @@
+/* Base element styles and safe-area helpers. */
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  color: var(--color-ink-200);
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+  font-family: var(--font-sans);
+  /* the room: flat slate, no gradient */
+  background: var(--color-ink-950);
+}
+
+.pb-safe {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem);
+}
+.pt-safe {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 0.5rem);
+}
+
+::selection {
+  background: color-mix(in oklab, var(--color-seal-400) 45%, transparent);
+  color: #fff;
+}
+:focus-visible {
+  outline: 2px solid var(--color-seal-300);
+  outline-offset: 2px;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-ink-600) transparent;
+}

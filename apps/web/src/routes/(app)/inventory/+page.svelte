@@ -11,55 +11,26 @@
     salvageGear,
     saveGearSet,
     unequipSlot,
-    type BandBuffs,
     type GearInstanceDTO,
     type GearResponse,
-    type GearStatId,
-    type GearStats,
   } from '#lib/skills'
   import { ACCENT, accentStyle, qualityAccent, tierAccent } from '#lib/theme'
   import { href } from '#lib/paths'
   import Spinner from '#lib/components/Spinner.svelte'
+  import CraftedGearList from '#lib/components/inventory/CraftedGearList.svelte'
+  import {
+    SLOTS,
+    STAT_LABEL,
+    STAT_ORDER,
+    candidatesIn,
+    combatBuffsOf,
+    lockedText,
+    requiresText,
+    statsText,
+    totalsOf,
+    wornOf,
+  } from '#lib/inventoryview'
   import { peekCached } from '#lib/cache'
-
-  type SlotDef = { id: string; label: string; icon: string; family: string[] }
-
-  /** Paper-doll order. Rings and trinkets share a family. */
-  const SLOTS: SlotDef[] = [
-    { id: 'head', label: 'Head', icon: '⛑️', family: ['head'] },
-    { id: 'neck', label: 'Neck', icon: '📿', family: ['neck'] },
-    { id: 'chest', label: 'Chest', icon: '🛡️', family: ['chest'] },
-    { id: 'waist', label: 'Waist', icon: '🎗️', family: ['waist'] },
-    { id: 'legs', label: 'Legs', icon: '🦿', family: ['legs'] },
-    { id: 'feet', label: 'Feet', icon: '🥾', family: ['feet'] },
-    { id: 'hands', label: 'Hands', icon: '🧤', family: ['hands'] },
-    { id: 'ring1', label: 'Ring 1', icon: '💍', family: ['ring1', 'ring2'] },
-    { id: 'ring2', label: 'Ring 2', icon: '💍', family: ['ring1', 'ring2'] },
-    { id: 'trinket1', label: 'Trinket 1', icon: '🧿', family: ['trinket1', 'trinket2'] },
-    { id: 'trinket2', label: 'Trinket 2', icon: '🧿', family: ['trinket1', 'trinket2'] },
-    { id: 'mainHand', label: 'Main hand', icon: '🗡️', family: ['mainHand'] },
-    { id: 'offHand', label: 'Off hand', icon: '🛡️', family: ['offHand'] },
-  ]
-
-  const STAT_ORDER: GearStatId[] = [
-    'strength',
-    'agility',
-    'intellect',
-    'stamina',
-    'haste',
-    'crit',
-    'mastery',
-  ]
-
-  const STAT_LABEL: Record<GearStatId, string> = {
-    strength: 'Strength',
-    agility: 'Agility',
-    intellect: 'Intellect',
-    stamina: 'Stamina',
-    haste: 'Haste',
-    crit: 'Crit',
-    mastery: 'Mastery',
-  }
 
   // Seed from the last fetch so returning to Inventory shows the gear at once.
   const cachedGear = peekCached<GearResponse>('/api/skills/gear')
@@ -74,84 +45,20 @@
 
   const itemMap = $derived(new Map((data?.items ?? []).map((i) => [i.id, i])))
   const gear = $derived(data?.gear ?? [])
-  const gearById = $derived(new Map(gear.map((g) => [g.id, g])))
-  const equipped = $derived(new Map((data?.equipment ?? []).map((e) => [e.slot, e])))
-  const bands = $derived(data?.bands ?? [])
   const enchantCatalog = $derived(data?.enchants ?? [])
   const enchantById = $derived(new Map(enchantCatalog.map((e) => [e.id, e])))
   const enchantingLevel = $derived(data?.enchantingLevel ?? 1)
-  /** The catalog enchants that fit a piece's slot (§13.5.3.2). */
-  const enchantsFor = (slot: string) => enchantCatalog.filter((e) => e.slot === slot)
 
-  /** Account-wide combat buffs from tier bands + worn enchants (§13.5.3). */
-  const combatBuffs = $derived.by(() => {
-    const band = data?.buffs?.band
-    const sum = (k: keyof BandBuffs) => band?.[k] ?? 0
-    return (
-      [
-        { stat: 'crit' as const, v: sum('crit') },
-        { stat: 'haste' as const, v: sum('haste') },
-        { stat: 'mastery' as const, v: sum('mastery') },
-        { stat: 'lifesteal' as const, v: sum('lifesteal') },
-        { stat: 'stamina' as const, v: sum('stamina') },
-      ] as { stat: keyof BandBuffs; v: number }[]
-    ).filter((x) => x.v > 0)
-  })
+  /** Account-wide combat buffs from tier bands (§13.5.3). */
+  const combatBuffs = $derived(combatBuffsOf(data?.buffs?.band))
 
   /** Gear instances worn in each slot. */
-  const worn = $derived.by(() => {
-    const out = new Map<string, GearInstanceDTO>()
-    for (const [slot, row] of equipped) {
-      if (row.instanceId) {
-        const g = gearById.get(row.instanceId)
-        if (g) out.set(slot, g)
-      }
-    }
-    return out
-  })
+  const worn = $derived(wornOf(data?.equipment ?? [], new Map(gear.map((g) => [g.id, g]))))
 
-  const totals = $derived.by(() => {
-    const stats: GearStats = {
-      strength: 0,
-      agility: 0,
-      intellect: 0,
-      stamina: 0,
-      haste: 0,
-      crit: 0,
-      mastery: 0,
-    }
-    let armour = 0
-    let power = 0
-    for (const g of worn.values()) {
-      for (const id of STAT_ORDER) stats[id] += g.stats[id]
-      armour += g.armour
-      power += g.power
-    }
-    // Set bonuses are already part of the server's combat maths; mirror them
-    // here so the inventory totals match what the fight actually uses.
-    for (const set of data?.setBonuses ?? []) {
-      for (const tier of set.active) {
-        if (tier.stats) {
-          for (const id of STAT_ORDER) stats[id] += tier.stats[id] ?? 0
-        }
-        if (tier.armourPct) armour *= 1 + tier.armourPct
-        if (tier.powerPct) power *= 1 + tier.powerPct
-      }
-    }
-    armour = Math.round(armour)
-    power = Math.round(power)
-    const score = Math.round(
-      STAT_ORDER.reduce((sum, id) => sum + stats[id], 0) + armour * 2 + power * 2,
-    )
-    return { stats, armour, power, score }
-  })
+  /** The worn totals, mirroring the server's combat maths (set bonuses included). */
+  const totals = $derived(totalsOf(worn.values(), data?.setBonuses ?? []))
 
-  /** Which gear instances can fill a slot (rings/trinkets share families). */
-  function candidates(slot: string): GearInstanceDTO[] {
-    const def = SLOTS.find((s) => s.id === slot)
-    if (!def) return []
-    return gear.filter((g) => def.family.includes(g.slot))
-  }
+  const candidates = (slot: string) => candidatesIn(slot, gear)
 
   /** Equipment-tier bank items with no rolled instance (legacy crafts). */
   const baseEquipment = $derived.by(() => {
@@ -190,42 +97,9 @@
     }
   }
 
-  function statsText(stats: GearStats): string {
-    return STAT_ORDER.filter((id) => stats[id] > 0)
-      .map((id) => `+${stats[id]} ${STAT_LABEL[id]}`)
-      .join(' · ')
-  }
-
-  /** The skill levels a piece demands, e.g. `Attack 10 · Defence 4`. */
-  function requiresText(g: GearInstanceDTO): string {
-    const reqs = Object.entries(g.requirements ?? {})
-    if (!reqs.length) return ''
-    return reqs
-      .map(([skill, level]) => `${skill.charAt(0).toUpperCase() + skill.slice(1)} ${level}`)
-      .join(' · ')
-  }
-
-  /** What the player is still missing, e.g. `Attack 3/10`. */
-  function lockedText(g: GearInstanceDTO): string {
-    return g.missing.map((m) => `${m.name} ${m.current}/${m.level}`).join(' · ')
-  }
-
-  /** The enchant a piece carries, as `Name (+2 strength)` (§13.5.3.2). */
-  function enchantsText(g: GearInstanceDTO): string {
-    return (g.enchant ?? [])
-      .map((id) => {
-        const e = enchantById.get(id)
-        return e ? `${e.name} (+${e.value} ${e.stat})` : id
-      })
-      .join(' · ')
-  }
-
-  /** Apply the selected catalog enchant to this piece. */
-  function enchant(g: GearInstanceDTO) {
-    const options = enchantsFor(g.slot)
-    const id = enchantPick[g.id] ?? options[0]?.id
-    if (!id) return
-    void run(() => applyEnchant(g.id, id))
+  /** Apply the selected catalog enchant to a piece. */
+  function enchant(g: GearInstanceDTO, enchantId: string) {
+    void run(() => applyEnchant(g.id, enchantId))
   }
 
   function wornName(slot: string): string {
@@ -330,7 +204,8 @@
       Tier &amp; enchant bonuses
       {#each combatBuffs as b (b.stat)}
         <span style="color: var(--color-jade)"
-          >+{b.stat === 'stamina' ? Math.round(b.v) : Math.round(b.v * 1000) / 10}{b.stat === 'stamina'
+          >+{b.stat === 'stamina' ? Math.round(b.v) : Math.round(b.v * 1000) / 10}{b.stat ===
+          'stamina'
             ? ''
             : '%'}
           {b.stat}</span
@@ -383,7 +258,6 @@
       <div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
         {#each SLOTS as slot (slot.id)}
           {@const g = worn.get(slot.id)}
-          {@const item = g ? itemMap.get(g.itemId) : undefined}
           <button
             type="button"
             class="panel panel-accent flex min-h-20 flex-col items-start gap-1 p-2 text-left"
@@ -546,111 +420,18 @@
       </section>
 
       <!-- Crafted gear -->
-      <section class="mt-6" style={accentStyle(ACCENT.brass)}>
-        <div class="flex items-center justify-between border-b border-ink-700 pb-2">
-          <h2 class="eyebrow" style="color: var(--accent)">Crafted gear</h2>
-          <span class="text-xs text-ink-400">{gear.length} pieces</span>
-        </div>
-        {#if gear.length === 0}
-          <p class="mt-3 text-xs text-ink-400">
-            Craft armour and weapons with Smithing, Leatherworking, Tailoring or Crafting. Every
-            craft rolls its own stats.
-          </p>
-        {/if}
-        <div class="mt-3 space-y-2">
-          {#each gear as g (g.id)}
-            {@const item = itemMap.get(g.itemId)}
-            {@const locked = g.missing.length > 0}
-            {@const options = enchantsFor(g.slot)}
-            {@const sel = enchantPick[g.id] ?? options[0]?.id ?? ''}
-            {@const def = enchantById.get(sel)}
-            <div class="flex items-start justify-between gap-3 border-b border-ink-700 pb-2">
-              <div class="min-w-0">
-                <p class="display truncate text-sm" style="color: {qualityAccent(g.quality)}">
-                  {item?.icon ?? '◆'}
-                  {item?.name ?? g.itemId}
-                </p>
-                <p class="text-[11px] text-ink-300">{statsText(g.stats)}</p>
-                <p class="text-[10px] text-ink-500">
-                  {g.slot} · {g.quality} · score {g.gearScore}
-                </p>
-                {#if requiresText(g)}
-                  <p
-                    class="text-[10px]"
-                    style="color: {locked ? 'var(--color-ember)' : 'var(--color-ink-400)'}"
-                  >
-                    {locked ? `Locked — needs ${lockedText(g)}` : `Requires ${requiresText(g)}`}
-                  </p>
-                {/if}
-                {#if (g.enchant ?? []).length}
-                  <p class="text-[10px]" style="color: var(--color-jade)">✨ {enchantsText(g)}</p>
-                {/if}
-                {#if options.length}
-                  <span class="mt-1 flex flex-wrap items-center gap-1">
-                    <select
-                      class="field px-1 py-0.5 text-[10px]"
-                      value={sel}
-                      onchange={(e) =>
-                        (enchantPick[g.id] = (e.currentTarget as HTMLSelectElement).value)}
-                      aria-label="Enchant"
-                    >
-                      {#each options as e (e.id)}
-                        <option value={e.id} disabled={enchantingLevel < e.level}
-                          >{e.name} · +{e.value} {e.stat} · Lv {e.level}</option
-                        >
-                      {/each}
-                    </select>
-                    <button
-                      type="button"
-                      class="btn btn-ghost px-2 py-0.5 text-[10px]"
-                      disabled={!def || enchantingLevel < def.level}
-                      onclick={() => enchant(g)}
-                    >
-                      Enchant
-                    </button>
-                    {#if def}
-                      <span class="text-[10px] text-ink-500">
-                        {def.reagents
-                          .map((r) => `${r.count}× ${itemMap.get(r.item)?.name ?? r.item}`)
-                          .join(', ')}
-                      </span>
-                    {/if}
-                  </span>
-                {/if}
-              </div>
-              <div class="flex shrink-0 gap-1">
-                {#if g.equipped}
-                  <span class="chip text-[10px]" style={accentStyle(ACCENT.jade)}>Worn</span>
-                {:else}
-                  <button
-                    type="button"
-                    class="btn btn-primary px-2 py-1 text-[11px]"
-                    disabled={locked}
-                    title={locked ? `Needs ${lockedText(g)}` : 'Equip'}
-                    onclick={() => setEquip(g.slot, g.id)}
-                  >
-                    Equip
-                  </button>
-                  <button
-                    type="button"
-                    class="btn btn-ghost px-2 py-1 text-[11px]"
-                    onclick={() => salvage(g.id)}
-                  >
-                    Salvage
-                  </button>
-                {/if}
-                <button
-                  type="button"
-                  class="btn btn-ghost px-2 py-1 text-[11px]"
-                  onclick={() => discard(g.id)}
-                >
-                  Discard
-                </button>
-              </div>
-            </div>
-          {/each}
-        </div>
-      </section>
+      <CraftedGearList
+        {gear}
+        {itemMap}
+        {enchantCatalog}
+        {enchantById}
+        {enchantingLevel}
+        bind:enchantPick
+        onEquip={setEquip}
+        onSalvage={salvage}
+        onDiscard={discard}
+        onEnchant={enchant}
+      />
 
       <!-- Unrolled equipment -->
       {#if baseEquipment.length > 0}

@@ -28,7 +28,7 @@ import { decryptSecret } from '../apps/server/src/auth'
 import { OpenRouter } from '../apps/server/src/llm/openrouter'
 import { llmPlanner } from '../apps/server/src/deck/plan'
 import { createDeckForBuild, fillDeck } from '../apps/server/src/deck/generate'
-import { curriculumView } from '../apps/server/src/game/service'
+import { curriculumView } from '../apps/server/src/services'
 
 const deckId = process.argv[2]
 if (!deckId) throw new Error('usage: bun scripts/rebuild-deck-examples.ts <deckId>')

@@ -7,7 +7,7 @@ export function normalize(s: string): string {
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[\s\u3000]+/g, '')
-    .replace(/[.,!?;:'"“”‘’。，！？、；：（）()[\]…·\-]/g, '')
+    .replace(/[.,!?;:'"“”‘’。，！？、；：（）()[\]…·-]/g, '')
 }
 
 export function levenshtein(a: string, b: string): number {

@@ -14,83 +14,20 @@
  * the completion log alone is enough to reconstruct the bank.
  */
 
+import {
+  IDLE,
+  rigIntervalSec,
+  rigMaxed,
+  rigRateLabel,
+  rigRunProgress,
+  rigRunSec,
+  tierFactor,
+} from '@tutor/core'
 import type { Cost } from './skills'
 
-/**
- * The curve (docs/DESIGN.md §13.5.1). All values are seconds except `strike`.
- * Tune here — nothing else in the engine holds a magic number.
- */
-export const IDLE = {
-  /** seconds per item at zero completions */
-  firstIntervalSec: 10,
-  /** the fastest a rig ever runs */
-  floorIntervalSec: 2,
-  /** completions needed to halve the distance to `floorIntervalSec` */
-  intervalHalfLife: 15,
-  /** seconds a run lasts after the first completion */
-  firstRunSec: 10 * 60,
-  /** the longest a run ever gets — also the hard cap on how far ahead a run may end */
-  maxRunSec: 3 * 60 * 60,
-  /** completions at which a run reaches `maxRunSec`; the climb is linear before it */
-  runFullAtCompletions: 50,
-  /** each tier above 1 multiplies the interval by this much (deeper = rarer) */
-  tierStep: 0.35,
-  /** safety valve: never credit more than this much run in one settle (24 h) */
-  maxCreditSec: 24 * 60 * 60,
-  /**
-   * Action XP the rig earns for **every craft it completes on its own** (before
-   * talent bonuses). A drill hands over `action.xp`; a live run hands this per
-   * item, so a machine left running levels the profession the same way drilling
-   * does — just by the clock. Halved from `1` so a full 3 h maxed run is ~2.7k
-   * XP (about a twentieth of a cap) instead of ~5.4k (a tenth): the machines still
-   * do most of the leveling, but capping an action now takes ~22 runs, not ~11.
-   * See docs/DESIGN.md §13.5.1.
-   */
-  xpPerCraft: 0.5,
-} as const
+export { IDLE, rigIntervalSec, rigMaxed, rigRateLabel, rigRunProgress, rigRunSec, tierFactor }
 
 const clamp = (n: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, n))
-
-/** Higher-tier actions run slower: tier 1 ×1, tier 5 ×2.4. */
-export function tierFactor(tier: number): number {
-  return 1 + IDLE.tierStep * Math.max(0, tier - 1)
-}
-
-/** Drills → seconds between items for that rig (tier 1: 10 s → 2 s, saturating). */
-export function rigIntervalSec(completions: number, tier = 1): number {
-  const c = Math.max(0, completions)
-  const span = IDLE.firstIntervalSec - IDLE.floorIntervalSec
-  return tierFactor(tier) * (IDLE.floorIntervalSec + span * 2 ** (-c / IDLE.intervalHalfLife))
-}
-
-/**
- * Drills → how long one completion's run lasts. A **straight, equally-stepped
- * climb**: the first completion lands on 10 minutes, every completion after adds
- * the same slice, and the 50th reaches the full 3 hours — then it holds. `c − 1`
- * so the first completion is `firstRunSec`, matching "do just one and it gathers
- * for 10 minutes".
- */
-export function rigRunSec(completions: number): number {
-  const steps = IDLE.runFullAtCompletions - 1
-  const c = clamp(completions - 1, 0, steps)
-  const span = IDLE.maxRunSec - IDLE.firstRunSec
-  return IDLE.firstRunSec + (span * c) / steps
-}
-
-/**
- * How far a rig is toward the run-length cap: `0` at no drills, `1` once a
- * completion buys the full `maxRunSec`. It is the same equal-step climb as
- * `rigRunSec`, so it reads plainly as "drills done / drills to the ceiling" —
- * the client's progress bar and the "maxed" tell both come from it (§13.5.1).
- */
-export function rigRunProgress(completions: number): number {
-  return clamp(completions, 0, IDLE.runFullAtCompletions) / IDLE.runFullAtCompletions
-}
-
-/** Whether a rig's run has reached the cap — further drills buy no more time. */
-export function rigMaxed(completions: number): boolean {
-  return completions >= IDLE.runFullAtCompletions
-}
 
 /** The recorded state of one rig (mirrors the `action_progress` idle columns). */
 export interface RigState {
@@ -285,9 +222,7 @@ export function capLiveRigs(
   const kept = new Set(keep)
   const keepCount = live.reduce((n, [id]) => n + (kept.has(id) ? 1 : 0), 0)
   const slots = Math.max(0, MAX_LIVE_RIGS - keepCount)
-  const pool = live
-    .filter(([id]) => !kept.has(id))
-    .sort((a, b) => a[1].runEndsAt - b[1].runEndsAt)
+  const pool = live.filter(([id]) => !kept.has(id)).sort((a, b) => a[1].runEndsAt - b[1].runEndsAt)
   const losers = pool.slice(0, pool.length - slots)
   for (const [id, r] of losers) rigs.set(id, { ...r, runEndsAt: 0 })
   return losers.map(([id]) => id)
@@ -354,10 +289,4 @@ export function replayRig(
 
 function merge(into: Record<string, number>, from: Record<string, number>): void {
   for (const [k, v] of Object.entries(from)) into[k] = (into[k] ?? 0) + v
-}
-
-/** Human label for a rig's rate: `1 / 7s` (the web also formats its own). */
-export function rigRateLabel(completions: number, tier = 1): string {
-  const sec = rigIntervalSec(completions, tier)
-  return `1 / ${sec >= 10 ? sec.toFixed(0) : sec.toFixed(1)}s`
 }

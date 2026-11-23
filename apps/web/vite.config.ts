@@ -1,6 +1,7 @@
 import adapter from '@sveltejs/adapter-static'
 import { sveltekit } from '@sveltejs/kit/vite'
 import tailwindcss from '@tailwindcss/vite'
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 
 // Served at / by default; set TUTOR_BASE_PATH=/tutor to live under a
@@ -23,6 +24,13 @@ export default defineConfig({
       adapter: adapter({ fallback: 'index.html', strict: false }),
     }),
   ],
+  resolve: {
+    alias: {
+      // Resolve the shared workspace package straight from source: inside the
+      // Nix build the node_modules symlink is not guaranteed.
+      '@tutor/core': fileURLToPath(new URL('../../packages/core/src/index.ts', import.meta.url)),
+    },
+  },
   server: {
     // Dev: proxy the API to the Bun server so cookies are same-origin.
     proxy: { '/api': 'http://127.0.0.1:4318' },

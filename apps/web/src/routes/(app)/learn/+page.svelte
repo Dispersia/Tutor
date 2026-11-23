@@ -13,12 +13,20 @@
   import { getSkills, type SkillsResponse } from '#lib/skills'
   import { session } from '#lib/session.svelte'
   import { activeDeck, loadActiveDeck, setActiveDeck } from '#lib/activeDeck.svelte'
-  import { ACCENT, accentStyle } from '#lib/theme'
+  import { ACCENT } from '#lib/theme'
   import { autoGrow } from '#lib/grow'
   import Spinner from '#lib/components/Spinner.svelte'
-  import CharCell from '#lib/components/CharCell.svelte'
   import CardEditor from '#lib/components/CardEditor.svelte'
   import DeckSettings from '#lib/components/DeckSettings.svelte'
+  import PathDeck from '#lib/components/learn/PathDeck.svelte'
+  import {
+    LANGUAGES,
+    cell,
+    groupedActions,
+    langLabel,
+    orderDecks,
+    usableActions,
+  } from '#lib/learnview'
   import { peekCached } from '#lib/cache'
 
   // Seed from the last fetch so returning to Learn renders the path at once.
@@ -55,42 +63,14 @@
   let buildLang = $state('')
   let importLang = $state('')
 
-  const LANGUAGES = [
-    { code: 'zh', label: 'Mandarin Chinese' },
-    { code: 'ja', label: 'Japanese' },
-    { code: 'ko', label: 'Korean' },
-    { code: 'es', label: 'Spanish' },
-    { code: 'fr', label: 'French' },
-    { code: 'de', label: 'German' },
-    { code: 'it', label: 'Italian' },
-    { code: 'pt', label: 'Portuguese' },
-    { code: 'ru', label: 'Russian' },
-  ] as const
-
   const storageKey = $derived(`tutor.profession.${session.user?.id ?? 'anon'}`)
 
   /** Actions you can actually train: unlocked and with materials in the bank. */
-  const usable = $derived(
-    (ref?.skills ?? []).flatMap((skill) =>
-      skill.actions
-        .filter((action) => action.unlocked && action.affordable)
-        .map((action) => ({ skill, action })),
-    ),
-  )
+  const usable = $derived(usableActions(ref))
   const selected = $derived(usable.find((u) => u.action.id === actionId))
 
-  /** Decks still generating their cards in the background. */
-  const generating = $derived(decks.filter((d) => d.settings?.building))
-
   /** The same actions grouped by profession, for the selector. */
-  const groups = $derived(
-    (ref?.skills ?? [])
-      .map((skill) => ({
-        skill,
-        actions: skill.actions.filter((action) => action.unlocked && action.affordable),
-      }))
-      .filter((group) => group.actions.length > 0),
-  )
+  const groups = $derived(groupedActions(ref))
 
   onMount(async () => {
     try {
@@ -102,7 +82,7 @@
       ])
       // the active deck leads; then the frequency path — that is where you start
       await loadActiveDeck()
-      decks = orderDecks(c.decks)
+      decks = orderDecks(c.decks, activeDeck.id)
       stats = s
       ref = sk
       // the prompt you gave on an earlier deck follows you into every new one
@@ -140,26 +120,9 @@
     return href(`/practice?${query.toString()}`)
   }
 
-  const rank = (level: string | null) => (level === 'zhfreq' ? 0 : level === 'jafreq' ? 1 : 2)
-
-  /** The active deck first; then the frequency path before generated decks. */
-  function orderDecks(list: CurriculumDeck[]): CurriculumDeck[] {
-    const lead = (d: CurriculumDeck) => (d.deckId === activeDeck.id ? 0 : 1)
-    return list.sort((a, b) => lead(a) - lead(b) || rank(a.level) - rank(b.level))
-  }
-
-  const deckAccent = (level: string | null) =>
-    level === 'zhfreq' ? ACCENT.green : level === 'jafreq' ? ACCENT.level : ACCENT.arcane
-
-  /** The next step of the path: the first lesson not yet finished. */
-  const nextLesson = (d: CurriculumDeck) =>
-    d.lessons.find((l) => !l.complete) ?? d.lessons[d.lessons.length - 1]
-
-  const done = (d: CurriculumDeck) => d.cardCount > 0 && d.learned >= d.cardCount
-
   async function reload() {
     const [c, s] = await Promise.all([getCurriculum(), getSrsStats()])
-    decks = orderDecks(c.decks)
+    decks = orderDecks(c.decks, activeDeck.id)
     stats = s
     // A deck that was just built should reach the profile menu's picker too.
     void loadActiveDeck()
@@ -268,11 +231,6 @@
     inspection = null
     importError = ''
   }
-
-  /** A preview cell: the cleaned value of a field, trimmed for display. */
-  const cell = (value: string | undefined) => (value ?? '').slice(0, 40) || '—'
-
-  const langLabel = (code: string) => LANGUAGES.find((l) => l.code === code)?.label ?? code
 </script>
 
 <div class="border-b border-ink-700 pt-4 pb-4 mb-4">
@@ -499,153 +457,19 @@
         </section>
 
         {#each decks as d (d.deckId)}
-          {@const acc = deckAccent(d.level ?? '')}
-          {@const next = nextLesson(d)}
-          {@const progress = d.cardCount > 0 ? (d.learned / d.cardCount) * 100 : 0}
-          <section class="panel panel-accent mb-5 p-4" style={accentStyle(acc)}>
-            <div class="flex items-baseline justify-between gap-3">
-              <h2 class="display min-w-0 truncate text-lg" style="color: {acc}">{d.name}</h2>
-              <div class="flex shrink-0 items-center gap-2">
-                {#if d.deckId === activeDeck.id}
-                  <span class="chip" style="--accent: {ACCENT.jade}">Studying</span>
-                {/if}
-                <span class="text-xs text-ink-400">{d.learned}/{d.cardCount} learned</span>
-              </div>
-            </div>
-            <div class="bar mt-2">
-              <i style="width: {progress}%"></i>
-            </div>
-
-            {#if d.settings?.building}
-              {@const built = d.settings.cursor ?? 0}
-              {@const total = d.settings.buildTotal ?? 0}
-              <div class="mt-2">
-                <div class="flex items-baseline justify-between text-xs text-ink-400">
-                  <span class="flex items-center gap-1.5">
-                    <Spinner size={12} label="Generating cards" /> Generating cards…
-                  </span>
-                  <span>{built}{total > 0 ? ` / ${total}` : ''} words</span>
-                </div>
-                <div class="bar mt-1">
-                  <i style="width: {total > 0 ? (built / total) * 100 : 0}%"></i>
-                </div>
-              </div>
-            {:else if d.settings?.buildError}
-              <p class="banner mt-2" style="--accent: {ACCENT.ember}" role="alert">
-                Generation stopped: {d.settings.buildError}
-              </p>
-            {/if}
-
-            {#if d.settings?.instruction}
-              <p class="mt-2 line-clamp-2 text-xs text-ink-400" title={d.settings.instruction}>
-                Prompt · {d.settings.instruction}
-              </p>
-            {/if}
-
-            {#if next}
-              {#if next.newWord}
-                <div class="mt-3 flex justify-center">
-                  <CharCell
-                    word={next.newWord}
-                    reading={next.reading && next.reading !== next.newWord ? next.reading : ''}
-                    lang={d.targetLang}
-                    size="sm"
-                    wordish={next.newWord.length > 1}
-                    accent={acc}
-                  />
-                </div>
-              {/if}
-              {#if actionId}
-                <a
-                  href={practiceHref({ lesson: next.id })}
-                  onclick={() => void setActiveDeck(d.deckId)}
-                  class="btn btn-primary mt-3 w-full py-3"
-                >
-                  {d.learned > 0 ? 'Next' : 'Start'} · {next.newWord ?? next.title}
-                </a>
-              {:else}
-                <button disabled class="btn btn-ghost mt-3 w-full py-3">
-                  Select a profession to start
-                </button>
-              {/if}
-              {#if next.newWord}
-                <p class="mt-1.5 text-center text-xs text-ink-400">new word · {next.description}</p>
-              {:else if next.description}
-                <p class="mt-1.5 text-center text-xs text-ink-400">{next.description}</p>
-              {/if}
-              {#if next.cards > 1}
-                <p class="mt-1.5 text-center text-xs text-ink-400">
-                  {next.learned}/{next.cards} in this lesson
-                </p>
-              {/if}
-            {:else}
-              <p class="mt-3 text-center text-sm text-ink-400">Course complete</p>
-            {/if}
-
-            {#if d.due > 0}
-              {#if actionId}
-                <a
-                  href={practiceHref({ deck: d.deckId })}
-                  onclick={() => void setActiveDeck(d.deckId)}
-                  class="btn btn-ghost mt-2 w-full"
-                >
-                  Review {d.due} due
-                </a>
-              {:else}
-                <button disabled class="btn btn-ghost mt-2 w-full">
-                  Select a profession to review
-                </button>
-              {/if}
-            {/if}
-
-            {#if done(d)}
-              <p class="mt-2 text-center text-xs text-jade-400">All words learned ✓</p>
-            {/if}
-
-            {#if !d.settings?.building && (d.remaining ?? 0) > 0}
-              <button
-                type="button"
-                onclick={() => finish(d)}
-                disabled={Boolean(growing)}
-                class="btn btn-ghost mt-3 w-full py-3"
-              >
-                {#if growing === d.deckId}
-                  <Spinner size={13} label="Finishing the deck" /> Finishing…
-                {:else}
-                  Finish importing · {d.remaining} left
-                {/if}
-              </button>
-            {/if}
-
-            <div class="mt-3 flex items-center gap-2">
-              <input
-                bind:value={growTopic}
-                placeholder="grow on a topic (optional)"
-                class="field min-w-0 flex-1 text-xs"
-              />
-              <button
-                type="button"
-                onclick={() => grow(d)}
-                disabled={Boolean(growing) || Boolean(d.settings?.building)}
-                class="btn btn-ghost px-3 py-2 text-xs"
-              >
-                {#if growing === d.deckId}<Spinner size={13} label="Growing the deck" /> Growing…{:else}Grow
-                {/if}
-              </button>
-            </div>
-            <div class="mt-3 flex items-center justify-center gap-4">
-              <button
-                type="button"
-                onclick={() => (settingsDeck = d)}
-                class="link link-btn text-xs"
-              >
-                Deck settings
-              </button>
-              <button type="button" onclick={() => (editing = d)} class="link link-btn text-xs">
-                Card metadata
-              </button>
-            </div>
-          </section>
+          <PathDeck
+            {d}
+            {actionId}
+            activeDeckId={activeDeck.id}
+            {growing}
+            bind:growTopic
+            {practiceHref}
+            onSetActive={setActiveDeck}
+            onGrow={grow}
+            onFinish={finish}
+            onSettings={(x) => (settingsDeck = x)}
+            onEdit={(x) => (editing = x)}
+          />
         {/each}
       {/if}
       {#if deckError}

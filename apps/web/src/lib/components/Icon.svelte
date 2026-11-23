@@ -50,5 +50,8 @@
   width={size}
   height={size}
   class="inline-block shrink-0 {cls}"
-  aria-hidden="true">{@html PATHS[name] ?? ''}</svg
+  aria-hidden="true"
 >
+  <!-- eslint-disable-next-line svelte/no-at-html-tags -- PATHS is a local, trusted icon map -->
+  {@html PATHS[name] ?? ''}
+</svg>

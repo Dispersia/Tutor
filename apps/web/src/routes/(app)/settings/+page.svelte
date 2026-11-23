@@ -19,8 +19,8 @@
   } from '#lib/types'
   import { LANG_NAMES, setVoicePrefs } from '#lib/voices'
   import Spinner from '#lib/components/Spinner.svelte'
-  import { alertsEnabled, disableRigAlerts, enableRigAlerts, testRigAlert } from '#lib/rigAlerts'
-  import { pushSupported } from '#lib/push'
+  import StudySettings from '#lib/components/settings/StudySettings.svelte'
+  import RigAlertsSection from '#lib/components/settings/RigAlertsSection.svelte'
   import { peekCached } from '#lib/cache'
 
   const ROLE_KEYS: Role[] = ['conversation', 'judge', 'generator', 'translator']
@@ -66,12 +66,6 @@
   let users = $state<PublicUser[]>([])
   let note = $state('')
   let error = $state('')
-  /** Rig alerts are per device: the switch lives in localStorage, not the account. */
-  let alertsOn = $state(false)
-  let alertsBusy = $state(false)
-  let alertsMsg = $state('')
-  let alertsErr = $state('')
-  const canNotify = pushSupported()
 
   const isAdmin = $derived(session.user?.role === 'admin')
 
@@ -116,7 +110,6 @@
 
   onMount(async () => {
     handle = session.user?.handle ?? ''
-    alertsOn = alertsEnabled()
     try {
       applySettings(await api<SettingsPayload>('/api/settings'))
     } catch (e) {
@@ -168,52 +161,6 @@
     } catch {
       /* catalogue is best-effort */
     }
-  }
-
-  /** Drill exercises grouped by modality, for the Study checklist. */
-  const drillGroups = $derived.by(() => {
-    const order: string[] = []
-    const byMod = new Map<string, ExerciseInfo[]>()
-    for (const ex of exercises) {
-      if (ex.id === 'introduce') continue // first-exposure step, never a drill
-      if (!byMod.has(ex.modality)) {
-        byMod.set(ex.modality, [])
-        order.push(ex.modality)
-      }
-      byMod.get(ex.modality)!.push(ex)
-    }
-    return order.map((modality) => ({ modality, items: byMod.get(modality)! }))
-  })
-
-  const MODALITY_LABEL: Record<string, string> = {
-    text: 'Reading & writing',
-    voice: 'Listening & speaking',
-    mixed: 'Mixed / conversation',
-    chat: 'Conversation',
-  }
-
-  const isDisabled = (id: string) => study.disabledExercises.includes(id)
-
-  function setExercise(id: string, enabled: boolean) {
-    const next = new Set(study.disabledExercises)
-    if (enabled) next.delete(id)
-    else next.add(id)
-    study = { ...study, disabledExercises: [...next] }
-  }
-
-  /** Turn a whole modality group on or off at once (product-wide offs stay off). */
-  function setGroup(modality: string, enabled: boolean) {
-    const ids =
-      drillGroups
-        .find((g) => g.modality === modality)
-        ?.items.filter((i) => !i.disabled)
-        .map((i) => i.id) ?? []
-    const next = new Set(study.disabledExercises)
-    for (const id of ids) {
-      if (enabled) next.delete(id)
-      else next.add(id)
-    }
-    study = { ...study, disabledExercises: [...next] }
   }
 
   async function saveStudy() {
@@ -336,45 +283,6 @@
     await api('/api/auth/logout', { method: 'POST' }).catch(() => {})
     session.user = null
     void goto(href('/login'))
-  }
-
-  async function toggleAlerts() {
-    if (alertsBusy) return
-    alertsBusy = true
-    alertsMsg = ''
-    alertsErr = ''
-    try {
-      if (alertsOn) {
-        await disableRigAlerts()
-        alertsOn = false
-        alertsMsg = 'Rig alerts are off on this device.'
-      } else {
-        const res = await enableRigAlerts()
-        if (!res.ok) {
-          alertsErr = res.error ?? 'Could not enable notifications.'
-          alertsOn = false
-          return
-        }
-        alertsOn = true
-        alertsMsg = 'Rig alerts are on for this device.'
-      }
-    } catch (e) {
-      alertsErr = (e as Error).message
-      alertsOn = alertsEnabled()
-    } finally {
-      alertsBusy = false
-    }
-  }
-
-  async function sendTestAlert() {
-    alertsMsg = ''
-    alertsErr = ''
-    try {
-      await testRigAlert()
-      alertsMsg = 'Test notification sent.'
-    } catch (e) {
-      alertsErr = (e as Error).message
-    }
   }
 
   async function removeUser(id: string) {
@@ -589,88 +497,7 @@
   </section>
 
   <!-- Study ---------------------------------------------------------------->
-  <section class="mb-5 panel panel-accent p-4" style={accentStyle(ACCENT.brass)}>
-    <h2 class="display text-sm text-ink-100">Study</h2>
-    <p class="mt-1 text-xs text-ink-400">
-      Shape how decks are drilled. These apply to your account across every deck.
-    </p>
-
-    <div class="mt-3 space-y-2">
-      <label class="flex min-h-11 items-center justify-between gap-3 py-1">
-        <span class="text-sm">Show Zhuyin under Chinese</span>
-        <input type="checkbox" bind:checked={study.showZhuyin} class="h-4 w-4 accent-seal-400" />
-      </label>
-      <label class="flex min-h-11 items-center justify-between gap-3 py-1">
-        <span class="text-sm">Show furigana over Japanese kanji</span>
-        <input type="checkbox" bind:checked={study.showFurigana} class="h-4 w-4 accent-seal-400" />
-      </label>
-    </div>
-
-    <p class="mt-4 text-xs text-ink-400">Daily budget — how much you do before the goal is met.</p>
-    <div class="mt-2 grid grid-cols-2 gap-3">
-      <label class="block text-xs text-ink-400">
-        New cards / day <span class="text-ink-400">(0 = ∞)</span>
-        <input type="number" min="0" bind:value={study.newPerDay} class="field mt-1" />
-      </label>
-      <label class="block text-xs text-ink-400">
-        Max reviews / day <span class="text-ink-400">(0 = ∞)</span>
-        <input type="number" min="0" bind:value={study.maxReviewsPerDay} class="field mt-1" />
-      </label>
-    </div>
-    <label class="mt-3 block text-xs text-ink-400">
-      Learning steps (minutes, comma-separated)
-      <input bind:value={stepsText} placeholder="1, 10, 60, 240" class="field mt-1" />
-    </label>
-    <p class="mt-1 text-xs text-ink-400">
-      A new card repeats once per step before it graduates (Anki’s default is <code>1, 10</code>).
-    </p>
-
-    <label class="mt-3 flex min-h-11 items-center justify-between gap-3 py-1">
-      <span class="text-sm">Add a card automatically when a word keeps lapsing</span>
-      <input type="checkbox" bind:checked={study.autoReinforce} class="h-4 w-4 accent-seal-400" />
-    </label>
-
-    <p class="mt-4 text-xs text-ink-400">Exercise kinds offered when you practise.</p>
-    <div class="mt-2 space-y-3">
-      {#each drillGroups as group (group.modality)}
-        {@const enabledCount = group.items.filter((i) => !i.disabled && !isDisabled(i.id)).length}
-        <div class="rounded-[12px] border border-ink-700 p-3">
-          <div class="flex items-center justify-between">
-            <span class="eyebrow text-ink-300">
-              {MODALITY_LABEL[group.modality] ?? group.modality}
-            </span>
-            <button
-              type="button"
-              onclick={() => setGroup(group.modality, enabledCount === 0)}
-              class="link link-btn text-xs"
-            >
-              {enabledCount === 0 ? 'turn all on' : 'turn all off'}
-            </button>
-          </div>
-          <div class="mt-2 space-y-1.5">
-            {#each group.items as ex (ex.id)}
-              <label class="flex min-h-11 items-center justify-between gap-3 py-1">
-                <span class="text-sm {ex.disabled || isDisabled(ex.id) ? 'text-ink-400' : ''}">
-                  {ex.title}{#if ex.disabled}<span class="text-ink-500"> · off for now</span>{/if}
-                </span>
-                <input
-                  type="checkbox"
-                  checked={!ex.disabled && !isDisabled(ex.id)}
-                  disabled={ex.disabled}
-                  onchange={(e) => setExercise(ex.id, e.currentTarget.checked)}
-                  class="h-4 w-4 accent-seal-400"
-                />
-              </label>
-            {/each}
-          </div>
-        </div>
-      {/each}
-    </div>
-
-    <button onclick={saveStudy} class="btn btn-ghost mt-3 px-3 py-2 text-xs">
-      Save study options
-    </button>
-  </section>
+  <StudySettings bind:study bind:stepsText {exercises} onsave={saveStudy} />
 
   <!-- Combat ---------------------------------------------------------------->
   <section class="mb-5 panel panel-accent p-4" style={accentStyle(ACCENT.ember)}>
@@ -694,37 +521,7 @@
   </section>
 
   <!-- Rig alerts ----------------------------------------------------------->
-  <section class="mb-5 panel panel-accent p-4" style={accentStyle(ACCENT.jade)}>
-    <h2 class="display text-sm text-ink-100">Rig alerts</h2>
-    <p class="mt-1 text-xs text-ink-400">
-      A notification when a rig's run drops under 30 minutes, so you can drill once more and keep it
-      going. This switch is per device: turn it on for your phone and your computer separately.
-    </p>
-    {#if !canNotify}
-      <p class="mt-3 text-xs text-ink-400">This browser cannot show notifications.</p>
-    {:else}
-      <label class="mt-3 flex min-h-11 items-center justify-between gap-3">
-        <span class="text-sm">Notify me on this device</span>
-        <input
-          type="checkbox"
-          checked={alertsOn}
-          disabled={alertsBusy}
-          onchange={toggleAlerts}
-          class="h-4 w-4 accent-seal-400"
-        />
-      </label>
-      {#if alertsOn}
-        <button onclick={sendTestAlert} class="btn btn-ghost mt-2 px-3 py-2 text-xs">
-          Send a test
-        </button>
-      {/if}
-      <p class="mt-2 text-xs text-ink-500">
-        On Android, install the app to your home screen first; iOS needs it installed too.
-      </p>
-    {/if}
-    {#if alertsMsg}<p class="mt-2 text-xs text-jade-300">{alertsMsg}</p>{/if}
-    {#if alertsErr}<p class="mt-2 text-xs text-ember-300">{alertsErr}</p>{/if}
-  </section>
+  <RigAlertsSection />
 
   <!-- Account -------------------------------------------------------------->
   <section class="mb-5 panel panel-accent p-4" style={accentStyle(ACCENT.violet)}>

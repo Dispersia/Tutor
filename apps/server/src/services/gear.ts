@@ -1,0 +1,313 @@
+/** Crafted gear: instances, equipping, salvage and enchanting (docs/DESIGN.md §13.5.3). */
+
+import {
+  addItems,
+  deleteGearInstance,
+  getGearInstance,
+  getItemCount,
+  listEquipment,
+  listGearInstances,
+  setEquipment,
+  setGearInstanceEnchant,
+} from '../db/repo'
+import type { Db } from '../db/client'
+import type { EventBus } from '../events'
+import {
+  gearScore,
+  itemRequirements,
+  meetsRequirements,
+  parseStats,
+  type MissingRequirement,
+} from '../game/gear'
+import {
+  DISTILL_XP_PER_VALUE,
+  ENCHANT_BY_ID,
+  ITEM_BY_ID,
+  SKILL_BY_ID,
+  essenceFamily,
+  essenceId,
+  itemValue,
+  slotFamily,
+  type ArmourType,
+  type Cost,
+  type GearQuality,
+  type GearStats,
+  type SkillId,
+  type Slot,
+} from '../game/skills'
+import { bandForItem, parseEnchants } from './bands'
+import { ensureBaseGearInstance } from './gearInstances'
+import { consumeItems } from './items'
+import { awardActionXp, skillLevelOf } from './progress'
+
+export interface GearRequirementView extends MissingRequirement {
+  /** Human skill name, e.g. `Defence`. */
+  name: string
+}
+
+export interface GearInstanceView {
+  id: string
+  itemId: string
+  slot: Slot
+  quality: GearQuality
+  stats: GearStats
+  armour: number
+  power: number
+  gearScore: number
+  equipped: boolean
+  /** Enchant tokens on this piece: a band id, or `gem:<type>` (§13.5.3.1). */
+  enchant: string[]
+  /** Stat levels needed to wear this piece. */
+  requirements: Partial<Record<SkillId, number>>
+  /** Requirements the player does not meet yet (empty when wearable). */
+  missing: GearRequirementView[]
+}
+
+/** Adds the human skill name to a missing requirement for the inventory UI. */
+export function requirementView(missing: MissingRequirement[]): GearRequirementView[] {
+  return missing.map((m) => ({ ...m, name: SKILL_BY_ID.get(m.skill)?.name ?? m.skill }))
+}
+
+/**
+ * Older equipment rows predate gear instances. Give every worn piece a base
+ * instance once, so the paper doll and saved sets can show its stats.
+ */
+export function ensureWornGear(db: Db, userId: string): void {
+  for (const row of listEquipment(db, userId)) {
+    if (row.instanceId) continue
+    const item = ITEM_BY_ID.get(row.itemId)
+    if (!item?.slot) continue
+    const id = ensureBaseGearInstance(db, userId, item)
+    setEquipment(db, userId, row.slot, row.itemId, id)
+  }
+}
+
+/** Every crafted piece the player owns, with its rolled stats and wear state. */
+export function gearView(db: Db, userId: string, levels?: Map<string, number>): GearInstanceView[] {
+  ensureWornGear(db, userId)
+  const worn = new Set(
+    listEquipment(db, userId)
+      .map((e) => e.instanceId)
+      .filter((id): id is string => Boolean(id)),
+  )
+  const levelOf = (skill: SkillId) => skillLevelOf(db, userId, skill, levels)
+  return listGearInstances(db, userId).map((row) => {
+    const stats = parseStats(row.statsJson)
+    const item = ITEM_BY_ID.get(row.itemId)
+    return {
+      id: row.id,
+      itemId: row.itemId,
+      slot: row.slot as Slot,
+      quality: row.quality as GearQuality,
+      stats,
+      armour: row.armour,
+      power: row.power,
+      gearScore: gearScore(stats, row.armour, row.power),
+      equipped: worn.has(row.id),
+      enchant: parseEnchants(row.enchantJson),
+      requirements: item ? itemRequirements(item) : {},
+      missing: item ? requirementView(meetsRequirements(item, levelOf).missing) : [],
+    }
+  })
+}
+
+/** The first unequipped instance of an item, if one exists. */
+function findFreeGear(db: Db, userId: string, itemId: string): string | undefined {
+  const worn = new Set(
+    listEquipment(db, userId)
+      .map((e) => e.instanceId)
+      .filter((id): id is string => Boolean(id)),
+  )
+  return listGearInstances(db, userId).find((g) => g.itemId === itemId && !worn.has(g.id))?.id
+}
+
+/**
+ * Equips a piece. Crafted gear equips by instance so its rolled stats follow it;
+ * legacy gear (or a bare item id) equips the first free instance, or creates one
+ * from the base definition. The inventory count stays as "pieces owned".
+ */
+export function equipItem(
+  db: Db,
+  bus: EventBus,
+  userId: string,
+  itemId: string,
+  instanceId?: string,
+  targetSlot?: string,
+  levels?: Map<string, number>,
+): { ok: boolean; error?: string; instanceId?: string; missing?: GearRequirementView[] } {
+  const item = ITEM_BY_ID.get(itemId)
+  if (!item?.slot) return { ok: false, error: 'not equippable' }
+
+  // RuneScape-style gate: the piece's stat requirements must be met first.
+  const gate = meetsRequirements(item, (skill) => skillLevelOf(db, userId, skill, levels))
+  if (!gate.ok) {
+    const missing = requirementView(gate.missing)
+    return {
+      ok: false,
+      error: `requires ${missing.map((m) => `${m.name} ${m.level}`).join(', ')}`,
+      missing,
+    }
+  }
+
+  const slot =
+    targetSlot && slotFamily(item.slot).includes(targetSlot as Slot)
+      ? (targetSlot as Slot)
+      : item.slot
+
+  let instance = instanceId ? getGearInstance(db, userId, instanceId) : undefined
+  if (instance && instance.itemId !== itemId) return { ok: false, error: 'wrong item' }
+  if (!instance) {
+    const owned = listGearInstances(db, userId).filter((g) => g.itemId === itemId)
+    if (owned.length > 0) {
+      const free = findFreeGear(db, userId, itemId)
+      if (!free) return { ok: false, error: 'every piece is already worn' }
+      instance = getGearInstance(db, userId, free)
+    } else {
+      if (getItemCount(db, userId, itemId) < 1) return { ok: false, error: 'not in your bank' }
+      const id = ensureBaseGearInstance(db, userId, item)
+      instance = getGearInstance(db, userId, id)
+    }
+  }
+
+  setEquipment(db, userId, slot, itemId, instance?.id ?? null)
+  bus.emit('item.equipped', { userId, itemId, slot })
+  return { ok: true, instanceId: instance?.id }
+}
+
+export function unequipItem(db: Db, userId: string, slot: string): void {
+  const normalized = slot === 'weapon' ? 'mainHand' : slot === 'body' ? 'chest' : slot
+  setEquipment(db, userId, normalized, null)
+}
+
+/** Removes a single crafted piece (not while worn). */
+export function discardGear(
+  db: Db,
+  userId: string,
+  instanceId: string,
+): { ok: boolean; error?: string } {
+  const worn = listEquipment(db, userId).some((e) => e.instanceId === instanceId)
+  if (worn) return { ok: false, error: 'unequip it first' }
+  const instance = getGearInstance(db, userId, instanceId)
+  if (!instance) return { ok: false, error: 'not found' }
+  deleteGearInstance(db, userId, instanceId)
+  addItems(db, userId, instance.itemId, -1)
+  return { ok: true }
+}
+
+/** Materials returned by salvaging a piece, by armour family. */
+const SALVAGE_MATERIAL: Record<ArmourType, string> = {
+  plate: 'iron_ore',
+  leather: 'hide',
+  cloth: 'cloth',
+  jewelry: 'cut_gem',
+}
+
+/** Salvage yield by quality: better pieces break into more material. */
+const SALVAGE_YIELD: Record<GearQuality, number> = {
+  common: 1,
+  uncommon: 2,
+  rare: 3,
+  epic: 5,
+}
+
+/**
+ * Breaks a crafted piece back into crafting materials. The piece must be
+ * unequipped. Higher quality rolls return more material.
+ */
+export function salvageGear(
+  db: Db,
+  bus: EventBus,
+  userId: string,
+  instanceId: string,
+): { ok: boolean; error?: string; materials?: Cost[] } {
+  const worn = listEquipment(db, userId).some((e) => e.instanceId === instanceId)
+  if (worn) return { ok: false, error: 'unequip it first' }
+  const instance = getGearInstance(db, userId, instanceId)
+  if (!instance) return { ok: false, error: 'not found' }
+  const item = ITEM_BY_ID.get(instance.itemId)
+  if (!item) return { ok: false, error: 'unknown item' }
+  const material = SALVAGE_MATERIAL[item.armourType ?? 'plate']
+  const count = SALVAGE_YIELD[instance.quality as GearQuality] ?? 1
+  const materials: Cost[] = [{ item: material, count }]
+  // Deep salvage also yields the band's reagent (§13.5.3): the feedstock
+  // Enchanting spends to put that band's signature stat on a higher-tier piece.
+  const band = bandForItem(item)
+  if (band) materials.push({ item: band.reagent, count })
+  deleteGearInstance(db, userId, instanceId)
+  addItems(db, userId, instance.itemId, -1)
+  for (const m of materials) {
+    addItems(db, userId, m.item, m.count)
+    bus.emit('item.gained', {
+      userId,
+      itemId: m.item,
+      count: m.count,
+      total: getItemCount(db, userId, m.item),
+    })
+  }
+  return { ok: true, materials }
+}
+
+/**
+ * Distill an item (§13.5.3.2): burn it to learn from it and pull out its family
+ * essence. Enchanting XP is a **percentage of the item's coin value**, so an endgame
+ * piece levels it faster but never instantly.
+ */
+export function distillItem(
+  db: Db,
+  bus: EventBus,
+  userId: string,
+  itemId: string,
+  count = 1,
+): { ok: boolean; error?: string; xp?: number; essence?: string } {
+  const item = ITEM_BY_ID.get(itemId)
+  if (!item) return { ok: false, error: 'unknown item' }
+  const n = Math.max(1, Math.floor(count))
+  if (getItemCount(db, userId, itemId) < n) return { ok: false, error: 'not in your bank' }
+  consumeItems(db, bus, userId, [{ item: itemId, count: n }])
+  const xp = Math.max(1, Math.round(itemValue(item) * DISTILL_XP_PER_VALUE)) * n
+  awardActionXp(db, bus, userId, { actionId: 'distill', amount: xp })
+  const essence = essenceId(essenceFamily(item))
+  addItems(db, userId, essence, n)
+  bus.emit('item.gained', {
+    userId,
+    itemId: essence,
+    count: n,
+    total: getItemCount(db, userId, essence),
+  })
+  return { ok: true, xp, essence }
+}
+
+/**
+ * Apply an enchant to a crafted piece (§13.5.3.2). The enchant fits the piece's slot,
+ * needs its Enchanting level, and costs its own essence reagents. It grants **no** XP
+ * — the training is Distill; this is the payoff. One enchant per piece (replace).
+ */
+export function applyEnchant(
+  db: Db,
+  bus: EventBus,
+  userId: string,
+  instanceId: string,
+  enchantId: string,
+  levels?: Map<string, number>,
+): { ok: boolean; error?: string; enchantingLevel?: number } {
+  const def = ENCHANT_BY_ID.get(enchantId)
+  if (!def) return { ok: false, error: 'unknown enchant' }
+  const instance = getGearInstance(db, userId, instanceId)
+  if (!instance) return { ok: false, error: 'not found' }
+  const item = ITEM_BY_ID.get(instance.itemId)
+  if (!item?.slot || !(def.slot === item.slot || slotFamily(def.slot).includes(item.slot))) {
+    return { ok: false, error: `${def.name} does not fit ${item?.slot ?? 'that piece'}` }
+  }
+  const level = skillLevelOf(db, userId, 'enchanting', levels)
+  if (level < def.level) {
+    return { ok: false, error: `requires Enchanting ${def.level}`, enchantingLevel: level }
+  }
+  const missing = def.reagents.filter((r) => getItemCount(db, userId, r.item) < r.count)
+  if (missing.length) {
+    return { ok: false, error: `needs ${missing.map((m) => m.item).join(', ')}` }
+  }
+  consumeItems(db, bus, userId, def.reagents)
+  setGearInstanceEnchant(db, userId, instanceId, JSON.stringify([def.id]))
+  bus.emit('item.enchanted', { userId, instanceId, band: def.id })
+  return { ok: true }
+}
