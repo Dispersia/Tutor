@@ -121,49 +121,69 @@ export function actionState(
   // Cost depends on the chosen recipe (prospect this ore, cut that gem).
   const consumes = actionConsumes(action, choiceId)
   const missing = consumes.filter((c) => getItemCount(db, userId, c.item) < c.count)
-  const bandLevels = ctx.bandLevels ?? bandLevelMap(db, userId)
-  let band: BandGate | null = null
-  const missingBands: BandGate[] = []
-  if (action.band) {
-    const def = BAND_BY_ID.get(action.band)
-    band = {
-      id: action.band,
-      name: def?.name ?? action.band,
-      level: action.bandLevel ?? 1,
-      current: bandLevels.get(action.band) ?? 1,
-    }
-    // A tier's whole band stays shut until the tier below reached 40 (§13.5.3).
-    if (def?.after) {
-      const current = bandLevels.get(def.after.band) ?? 1
-      if (current < def.after.level) {
-        missingBands.push({
-          id: def.after.band,
-          name: BAND_BY_ID.get(def.after.band)?.name ?? def.after.band,
-          level: def.after.level,
-          current,
-        })
-      }
-    }
-  }
-  let equipOk = true
-  let equipMissing: { slot: string; tag: string } | null = null
-  if (action.equip) {
-    const eq = listEquipment(db, userId).find((e) => e.slot === action.equip!.slot)
-    const item = eq ? ITEM_BY_ID.get(eq.itemId) : undefined
-    equipOk = Boolean(item?.tags?.includes(action.equip.tag))
-    if (!equipOk) equipMissing = action.equip
-  }
-  const bandOk = !band || band.current >= band.level
+  const { band, missingBands } = bandGate(action, ctx.bandLevels ?? bandLevelMap(db, userId))
+  const { equipOk, equipMissing } = equipGate(db, userId, action)
+  return buildState({ missingUnlocksList, missing, band, missingBands, equipOk, equipMissing })
+}
+
+interface StateParts {
+  missingUnlocksList: UnlockReq[]
+  missing: Cost[]
+  band: BandGate | null
+  missingBands: BandGate[]
+  equipOk: boolean
+  equipMissing: { slot: string; tag: string } | null
+}
+
+function buildState(p: StateParts): ActionState {
+  const bandOk = !p.band || p.band.current >= p.band.level
   return {
-    unlocked: missingUnlocksList.length === 0 && bandOk && missingBands.length === 0 && equipOk,
-    missingUnlocks: missingUnlocksList,
-    affordable: missing.length === 0,
-    missing,
-    equipOk,
-    equipMissing,
-    band,
-    missingBands,
+    unlocked:
+      p.missingUnlocksList.length === 0 && bandOk && p.missingBands.length === 0 && p.equipOk,
+    missingUnlocks: p.missingUnlocksList,
+    affordable: p.missing.length === 0,
+    missing: p.missing,
+    equipOk: p.equipOk,
+    equipMissing: p.equipMissing,
+    band: p.band,
+    missingBands: p.missingBands,
   }
+}
+
+/** This action's band and the prerequisite tier that still blocks it. */
+function bandGate(
+  action: ActionDef,
+  bandLevels: Map<BandId, number>,
+): { band: BandGate | null; missingBands: BandGate[] } {
+  const def = action.band ? BAND_BY_ID.get(action.band) : undefined
+  if (!action.band || !def) return { band: null, missingBands: [] }
+  const band: BandGate = {
+    id: action.band,
+    name: def.name ?? action.band,
+    level: action.bandLevel ?? 1,
+    current: bandLevels.get(action.band) ?? 1,
+  }
+  return { band, missingBands: def.after ? afterGate(def.after, bandLevels) : [] }
+}
+
+/** A tier's whole band stays shut until the tier below reached its level (§13.5.3). */
+function afterGate(
+  after: { band: BandId; level: number },
+  bandLevels: Map<BandId, number>,
+): BandGate[] {
+  const current = bandLevels.get(after.band) ?? 1
+  if (current >= after.level) return []
+  const name = BAND_BY_ID.get(after.band)?.name ?? after.band
+  return [{ id: after.band, name, level: after.level, current }]
+}
+
+/** Whether the action's required gear tag is actually worn. */
+function equipGate(db: Db, userId: string, action: ActionDef) {
+  if (!action.equip) return { equipOk: true, equipMissing: null }
+  const eq = listEquipment(db, userId).find((e) => e.slot === action.equip!.slot)
+  const item = eq ? ITEM_BY_ID.get(eq.itemId) : undefined
+  const ok = Boolean(item?.tags?.includes(action.equip.tag))
+  return { equipOk: ok, equipMissing: ok ? null : action.equip }
 }
 
 /**

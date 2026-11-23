@@ -483,16 +483,22 @@ lines is doing more than one thing. Every module this pass wrote or rewrote
 (the two route splits, the grammar engine, the web skills client, the combat
 route) was split to fit, and its `legacyFunctions` entry removed. The files that
 were already over twenty lines before the bar moved are listed in
-`eslint.function-baseline.js` — a burn-down list that only ever shrinks (123
-paths after this pass, down from 127 files holding 164 functions over 25 lines).
+`eslint.function-baseline.js` — a burn-down list that only ever shrinks (127
+files holding 255 long functions when the bar moved).
 
-**Phase 14 — the function burn-down (open).**
-Work the `eslint.function-baseline.js` list to zero, worst first (the >40-line
-functions before the 20-line ones). Most are repository row mappers
-(`toCard`, `upsertSrs`, `upsertEncounter`) that list every column inline — the
-fix is a small `row → field` helper per table, not a schema change. Others are
-test bodies, which get a smaller allowance rather than none. The list shrinks;
-it never grows, and new code is held to 20 from day one.
+**Phase 14 — the function burn-down (in progress).**
+Work the `eslint.function-baseline.js` list to zero, worst first. Landed so far:
+the five remaining mega route modules (`skills`, `settings`, `chat`, `auth`,
+`push`) became folders of small handlers, `services/board.ts` (the action gate)
+and `services/talents.ts` (choice/mastery + the board) were split,
+`db/repo/encounters.ts`'s upsert gained its row helpers, and the web
+`lib/api.ts` gained its request/parse helpers. That took the list from 127 files
+/ 255 functions to **102 files / 229 functions**. The biggest left are the pure
+game maths (`game/srs.ts:schedule`, `game/idle.ts:settleRig`), the combat
+resolvers and the deck builder — the ones that need a real arithmetic split, not
+a row mapper helper. Most of the rest are repository row mappers (`toCard`,
+`upsertSrs`) that list every column inline. The list shrinks; it never grows, and
+new code is held to 20 from day one.
 
 **Phase 15 — the web shells & route validation (open).**
 The remaining `+page.svelte` files over ~250 lines (`practice`, `settings`,

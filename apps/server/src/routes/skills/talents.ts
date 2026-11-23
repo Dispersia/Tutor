@@ -1,0 +1,20 @@
+/** Picking a talent at a milestone (docs/DESIGN.md §13.5). */
+
+import type { Context } from 'hono'
+import { chooseTalent, talentView } from '../../services'
+import type { App, AppEnv } from '../../context'
+
+export function registerSkillTalents(app: App) {
+  app.post('/api/skills/talents', (c) => chooseTalentHandler(c))
+}
+
+/** Pick one of three talents at a 10-level milestone (or change an earlier one). */
+async function chooseTalentHandler(c: Context<AppEnv>) {
+  const deps = c.get('deps')
+  const user = c.get('user')!
+  const { talentId } = (await c.req.json().catch(() => ({}))) as { talentId?: string }
+  if (!talentId) return c.json({ error: 'talentId required' }, 400)
+  const res = chooseTalent(deps.db, deps.events, user.id, talentId)
+  if (!res.ok) return c.json({ error: res.error }, 400)
+  return c.json({ ok: true, talent: res.talent, talents: talentView(deps.db, user.id) })
+}
