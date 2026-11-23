@@ -1,17 +1,16 @@
 # Tutor — decomposition & architecture plan
 
-> Status: **phases 0–15 landed except the last web scripts.** A second pass
-> (Phases 9–13) split the two mega routes, the grammar tables, the schema and the
-> web skills client, lowered the function budget to 20 lines, and fixed the
-> action-level map rebuild. Phase 14 then worked the function burn-down to zero —
-> the exemption list is gone and every function fits. Phase 15 validated the
-> request bodies, folded the last wide signatures and split all six large web
-> `+page.svelte` shells; the long functions in the `chat`, `combat` and `skills`
-> scripts are split too. What remains is `scripts/sweep-cards.ts`, a per-feature
-> CSS split, and the shared board/player loader — see §8.2. Goal: no mega files,
-> no mega structs, no mega methods. Small files, small pure functions,
-> like‑with‑like, modern practices. §8 records each phase; §8.1 is the re-audit
-> that opened the second pass.
+> Status: **phases 0–15 landed.** A second pass (Phases 9–13) split the two mega
+> routes, the grammar tables, the schema and the web skills client, lowered the
+> function budget to 20 lines, and fixed the action-level map rebuild. Phase 14
+> then worked the function burn-down to zero. Phase 15 validated the request
+> bodies, folded the last wide signatures, split all six large web `+page.svelte`
+> shells, split the `chat`/`combat`/`skills`/`sweep-cards` scripts, and deleted
+> the last size exemption — **no `legacyBig`/`wideSignatures`/baseline lists
+> remain**. What is still open is a per-feature CSS split and the shared
+> board/player loader — see §8.2. Goal: no mega files, no mega structs, no mega
+> methods. Small files, small pure functions, like‑with‑like, modern practices.
+> §8 records each phase; §8.1 is the re-audit that opened the second pass.
 
 ---
 
@@ -504,7 +503,7 @@ production code and 60 for tests, enforced everywhere, with the only remaining
 relaxations being `legacyBig` (the web route shells) and `wideSignatures` (five
 services' parameter counts, Phase 15).
 
-**Phase 15 — the web shells & route validation (in progress).**
+**Phase 15 — the web shells & route validation (done apart from CSS/context).**
 Route validation is done: `routes/body.ts` holds `jsonBody(c)` (the parse never
 throws) plus typed field readers (`str`/`num`/`bool`/`obj`/`strArray`/
 `strRecord`/`oneOf`), and every `(await c.req.json()) as {…}` cast in the split
@@ -515,19 +514,20 @@ one would re-hash the nix dependency derivation. The wide signatures are done
 too: `equipItem`/`applyEnchant`/`grantItems`/`awardXp`/`recordReview`/
 `completeAction` fold their trailing arguments into one options object and the
 `band` table calls `bandDef(spec)` directly, so `eslint.config.js` drops its
-`wideSignatures` list (`max-params` is now on everywhere except the two legacy
-scopes). The page shells are done, smallest first: `home` (404 → 104 lines),
-`inventory` (462 → 240), `learn` (490 → 360), `skills/[id]` (558 → 268),
-`settings` (568 → 357) and `practice` (628 → 503 physical but inside the counted
-budget). Their pure maths live in `lib/<feature>view.ts` and their markup in
-`lib/components/<feature>/`. The long functions in the `chat`, `combat` and
+`wideSignatures` list. The page shells are done, smallest first: `home` (404 →
+104 lines), `inventory` (462 → 240), `learn` (490 → 360), `skills/[id]` (558 →
+268), `settings` (568 → 357) and `practice` (628 → 503 physical but inside the
+counted budget). Their pure maths live in `lib/<feature>view.ts` and their markup
+in `lib/components/<feature>/`. The long functions in the `chat`, `combat` and
 `skills` scripts split too (`chat`: `beginReply`/`replySink`/`speakDelta`/
 `flushSpeech`/`stopAndTranscribe`/`startRecording`; `combat`: `applyCombat`/
-`hitBody`/`applyHit`; `skills`: `runningRigs`/`runningIn`/`gainedSince`), so the
-only file left on `legacyBig` is `scripts/sweep-cards.ts` (`processDeck`,
-`runBatch` and `applyVerdict` are still oversized). Also open: a
-`styles/components.css` split per feature, and the `Deps`/per-request context
-(findings 3–4) gaining one shared board/player loader.
+`hitBody`/`applyHit`; `skills`: `runningRigs`/`runningIn`/`gainedSince`). The
+sweep script split last: its audit moves to `deck/sweep.ts`
+(`sweepDeck`/`deckContext`/`runPool`/`runBatch`/`applyVerdict` and the
+validation helpers) and `scripts/sweep-cards.ts` keeps only the CLI, so
+`eslint.config.js` deletes its `legacyBig` list too — **no size exemptions of any
+kind remain**. Also open: a `styles/components.css` split per feature, and the
+`Deps`/per-request context (findings 3–4) gaining one shared board/player loader.
 
 ---
 

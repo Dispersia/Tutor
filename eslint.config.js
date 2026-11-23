@@ -11,7 +11,7 @@ import tseslint from 'typescript-eslint'
  * function needs more than twenty lines it is doing more than one thing), no
  * signature over `MAX_PARAMS`. Every file is now inside the budget with no
  * exemption list (docs/REFACTOR_PLAN.md, phases 0–15); the only relaxations left
- * are `legacyBig` (the web route shells) and the data-table / test ceilings.
+ * are the data-table and test ceilings.
  *
  * Errors fail `bun run lint`; warnings are advisory (they name existing rough
  * edges that the phase plan works through).
@@ -28,12 +28,6 @@ const sizeRules = {
   ],
   'max-params': ['error', MAX_PARAMS],
 }
-
-/**
- * The one script still awaiting its split: the size ceiling is off here, nothing
- * else. Remove it once it is under budget, so the exemption only shrinks.
- */
-const legacyBig = ['scripts/sweep-cards.ts']
 
 /** `bun test` globals (the `globals` package has no bun preset). */
 const bunTest = {
@@ -90,12 +84,6 @@ export default tseslint.config(
         },
       ],
     },
-  },
-
-  // Legacy mega files: hold correctness, drop only the size ceiling.
-  {
-    files: legacyBig,
-    rules: { 'max-lines': 'off', 'max-lines-per-function': 'off', 'max-params': 'off' },
   },
 
   // Content tables (`*.data.ts`) are data, not logic: the budget is for code.
