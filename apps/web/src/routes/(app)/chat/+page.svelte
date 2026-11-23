@@ -91,104 +91,155 @@
     error = ''
     input = ''
     busy = true
+    const { idx, sp, sink } = beginReply(text)
+    try {
+      await streamChat(
+        { sessionId: sessionId ?? undefined, text, role: 'conversation' },
+        { onSession: sink.onSession, onDelta: sink.onDelta },
+      )
+      sink.flush()
+    } catch (e) {
+      failReply(idx, sp, e)
+    } finally {
+      busy = false
+      await reloadMessages()
+    }
+  }
+
+  /** Stops playback, appends the optimistic pair and opens the reply sink. */
+  function beginReply(text: string) {
     stopAudio()
     speaker?.cancel()
     speaker = null
     messages = [...messages, localMsg('user', text), localMsg('assistant', '')]
     const idx = messages.length - 1
     scrollDown()
-    let full = ''
-    let speakBuf = ''
-    let sp: Speaker | null = null
+    const sp = startSpeaking()
+    return { idx, sp, sink: replySink(idx, sp) }
+  }
+
+  /** Records the error, marks the empty reply and silences the speaker. */
+  function failReply(idx: number, sp: Speaker | null, e: unknown) {
+    error = (e as Error).message
+    messages[idx] = { ...messages[idx], text: messages[idx].text || '(no reply)' }
+    sp?.cancel()
+    if (speaker === sp) speaking = false
+  }
+
+  /** Re-reads the conversation after the stream (keeps the optimistic view on failure). */
+  async function reloadMessages() {
+    if (!sessionId) return
     try {
-      // Speak as the reply streams: push each sentence to the speaker the moment
-      // it is complete, so audio starts before the model has finished writing.
-      if (ttsOn) {
-        sp = createSpeaker(speechOpts(lang), (e) => (error = `Playback: ${e.message}`))
-        speaker = sp
-        speaking = true
-      }
-      await streamChat(
-        { sessionId: sessionId ?? undefined, text, role: 'conversation' },
-        {
-          onSession: (id) => (sessionId = id),
-          onDelta: (d) => {
-            full += d
-            messages[idx] = { ...messages[idx], text: full }
-            scrollDown()
-            if (sp) {
-              speakBuf += d
-              const { sentences, rest } = drainSentences(speakBuf)
-              speakBuf = rest
-              for (const sentence of sentences) sp.push(sentence)
-            }
-          },
-        },
+      messages = (await api<{ messages: Message[] }>(`/api/sessions/${sessionId}`)).messages.filter(
+        (m) => m.role !== 'system',
       )
-      if (sp) {
-        if (speakBuf.trim()) sp.push(speakBuf)
-        const done = sp
-        void done.close().finally(() => {
-          if (speaker === done) speaking = false
-        })
-      }
-    } catch (e) {
-      error = (e as Error).message
-      messages[idx] = { ...messages[idx], text: full || '(no reply)' }
-      sp?.cancel()
-      if (speaker === sp) speaking = false
-    } finally {
-      busy = false
-      if (sessionId) {
-        try {
-          messages = (
-            await api<{ messages: Message[] }>(`/api/sessions/${sessionId}`)
-          ).messages.filter((m) => m.role !== 'system')
-        } catch {
-          /* keep optimistic */
-        }
-      }
+    } catch {
+      /* keep optimistic */
     }
+  }
+
+  /**
+   * Opens the streaming speaker when replies are spoken. Push each sentence as
+   * it completes, so audio starts before the model has finished writing.
+   */
+  function startSpeaking(): Speaker | null {
+    if (!ttsOn) return null
+    const sp = createSpeaker(speechOpts(lang), (e) => (error = `Playback: ${e.message}`))
+    speaker = sp
+    speaking = true
+    return sp
+  }
+
+  interface ReplySink {
+    onSession: (id: string) => void
+    onDelta: (text: string) => void
+    flush: () => void
+  }
+
+  /** Streams a reply into message `idx`, speaking each finished sentence. */
+  function replySink(idx: number, sp: Speaker | null): ReplySink {
+    let buf = ''
+    return {
+      onSession: (id) => (sessionId = id),
+      onDelta: (d) => {
+        buf = speakDelta(idx, sp, buf, d)
+      },
+      flush: () => flushSpeech(sp, buf),
+    }
+  }
+
+  /** Appends a delta to the message (and the speaker), returning the new buffer. */
+  function speakDelta(idx: number, sp: Speaker | null, buf: string, d: string): string {
+    messages[idx] = { ...messages[idx], text: messages[idx].text + d }
+    scrollDown()
+    if (!sp) return buf
+    const next = buf + d
+    const { sentences, rest } = drainSentences(next)
+    for (const sentence of sentences) sp.push(sentence)
+    return rest
+  }
+
+  /** Pushes the tail sentence and closes the speaker when the stream ends. */
+  function flushSpeech(sp: Speaker | null, buf: string): void {
+    if (!sp) return
+    if (buf.trim()) sp.push(buf)
+    void sp.close().finally(() => {
+      if (speaker === sp) speaking = false
+    })
   }
 
   async function toggleRecord() {
     error = ''
-    if (recording) {
-      recording = false
-      const take = await recorder.stop()
-      if (take.durationMs < MIN_CLIP_MS) {
-        error = 'That was too quick — hold the mic and speak.'
-        return
-      }
-      if (!take.blob) {
+    if (recording) await stopAndTranscribe()
+    else await startRecording()
+  }
+
+  /** Stop the take, transcribe it and send when it says something. */
+  async function stopAndTranscribe() {
+    recording = false
+    const take = await recorder.stop()
+    if (take.durationMs < MIN_CLIP_MS) {
+      error = 'That was too quick — hold the mic and speak.'
+      return
+    }
+    if (!take.blob) {
+      error = "Didn't catch that — try again."
+      return
+    }
+    transcribing = true
+    try {
+      await transcribeIntoInput(take.blob)
+    } finally {
+      transcribing = false
+    }
+  }
+
+  /** Transcribes a clip into the box, then sends it. */
+  async function transcribeIntoInput(blob: Blob) {
+    try {
+      const text = await transcribe(blob, lang)
+      if (!text.trim()) {
         error = "Didn't catch that — try again."
         return
       }
-      transcribing = true
-      try {
-        const text = await transcribe(take.blob, lang)
-        if (text.trim()) {
-          input = text.trim()
-          await send()
-        } else {
-          error = "Didn't catch that — try again."
-        }
-      } catch (e) {
-        error = (e as Error).message
-      } finally {
-        transcribing = false
-      }
-    } else {
-      stopAudio()
-      speaker?.cancel()
-      speaker = null
-      speaking = false
-      try {
-        await recorder.start()
-        recording = true
-      } catch (e) {
-        error = `Microphone unavailable (needs HTTPS on the phone). ${(e as Error).message}`
-      }
+      input = text.trim()
+      await send()
+    } catch (e) {
+      error = (e as Error).message
+    }
+  }
+
+  /** Begin a recording, after stopping any playback. */
+  async function startRecording() {
+    stopAudio()
+    speaker?.cancel()
+    speaker = null
+    speaking = false
+    try {
+      await recorder.start()
+      recording = true
+    } catch (e) {
+      error = `Microphone unavailable (needs HTTPS on the phone). ${(e as Error).message}`
     }
   }
 

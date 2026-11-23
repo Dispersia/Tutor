@@ -6,11 +6,12 @@
 > action-level map rebuild. Phase 14 then worked the function burn-down to zero —
 > the exemption list is gone and every function fits. Phase 15 validated the
 > request bodies, folded the last wide signatures and split all six large web
-> `+page.svelte` shells; what remains is the long functions in the `chat`,
-> `combat` and `skills` scripts, a per-feature CSS split, and the shared
-> board/player loader — see §8.2. Goal: no mega files, no mega structs, no mega
-> methods. Small files, small pure functions, like‑with‑like, modern practices.
-> §8 records each phase; §8.1 is the re-audit that opened the second pass.
+> `+page.svelte` shells; the long functions in the `chat`, `combat` and `skills`
+> scripts are split too. What remains is `scripts/sweep-cards.ts`, a per-feature
+> CSS split, and the shared board/player loader — see §8.2. Goal: no mega files,
+> no mega structs, no mega methods. Small files, small pure functions,
+> like‑with‑like, modern practices. §8 records each phase; §8.1 is the re-audit
+> that opened the second pass.
 
 ---
 
@@ -519,10 +520,14 @@ scopes). The page shells are done, smallest first: `home` (404 → 104 lines),
 `inventory` (462 → 240), `learn` (490 → 360), `skills/[id]` (558 → 268),
 `settings` (568 → 357) and `practice` (628 → 503 physical but inside the counted
 budget). Their pure maths live in `lib/<feature>view.ts` and their markup in
-`lib/components/<feature>/`, and all six are off the `legacyBig` list. Still
-open: the long functions in the `chat`, `combat` and `skills` scripts (they stay
-on `legacyBig` until split), a `styles/components.css` split per feature, and the
-`Deps`/per-request context (findings 3–4) gaining one shared board/player loader.
+`lib/components/<feature>/`. The long functions in the `chat`, `combat` and
+`skills` scripts split too (`chat`: `beginReply`/`replySink`/`speakDelta`/
+`flushSpeech`/`stopAndTranscribe`/`startRecording`; `combat`: `applyCombat`/
+`hitBody`/`applyHit`; `skills`: `runningRigs`/`runningIn`/`gainedSince`), so the
+only file left on `legacyBig` is `scripts/sweep-cards.ts` (`processDeck`,
+`runBatch` and `applyVerdict` are still oversized). Also open: a
+`styles/components.css` split per feature, and the `Deps`/per-request context
+(findings 3–4) gaining one shared board/player loader.
 
 ---
 

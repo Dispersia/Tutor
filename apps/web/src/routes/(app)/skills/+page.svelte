@@ -1,7 +1,13 @@
 <script lang="ts">
   import { href } from '#lib/paths'
   import { onMount } from 'svelte'
-  import { EFFECT_SHORT, getSkills, type SkillsResponse } from '#lib/skills'
+  import {
+    EFFECT_SHORT,
+    getSkills,
+    type ActionDTO,
+    type SkillDTO,
+    type SkillsResponse,
+  } from '#lib/skills'
   import { fmtInterval, rigGainedSince, rigSecondsLeft } from '#lib/idle'
   import { ACCENT, CATEGORY, accentStyle, type SkillCategory } from '#lib/theme'
   import Icon from '#lib/components/Icon.svelte'
@@ -49,50 +55,55 @@
    * the run closest to finishing, and its rate. Drives both the summary strip at
    * the top of the board and the live tell on each tile.
    */
-  const running = $derived.by(() => {
-    const out: {
-      id: string
-      name: string
-      accent: string
-      gained: number
-      actionId: string
-      left: number
-      rate: string
-      count: number
-    }[] = []
-    for (const s of data?.skills ?? []) {
-      let gained = 0
-      let left = Infinity
-      let actionId = ''
-      let rate = ''
-      let count = 0
-      for (const a of s.actions) {
-        if (!a.idle?.active) continue
-        count++
-        const l = rigSecondsLeft(a.idle, now)
-        if (l < left) {
-          left = l
-          actionId = a.id
-          rate = fmtInterval(a.idle.intervalSec)
-        }
-        if (fetchedAt) {
-          for (const n of Object.values(rigGainedSince(a.idle, fetchedAt, now))) gained += n
-        }
-      }
-      if (count)
-        out.push({
-          id: s.id,
-          name: s.name,
-          accent: CATEGORY[s.category].accent,
-          gained,
-          actionId,
-          left,
-          rate,
-          count,
-        })
+  interface RunningRig {
+    id: string
+    name: string
+    accent: string
+    gained: number
+    actionId: string
+    left: number
+    rate: string
+    count: number
+  }
+
+  function runningRigs(d: SkillsResponse | null, fetchedAt: number, now: number): RunningRig[] {
+    const out: RunningRig[] = []
+    for (const s of d?.skills ?? []) {
+      const rig = runningIn(s, fetchedAt, now)
+      if (rig) out.push(rig)
     }
     return out.sort((a, b) => a.left - b.left)
-  })
+  }
+
+  /** One profession's running-rig tell, or undefined when nothing runs. */
+  function runningIn(s: SkillDTO, fetchedAt: number, now: number): RunningRig | undefined {
+    const active = s.actions.filter((a) => a.idle?.active)
+    if (!active.length) return undefined
+    const soonest = active.reduce((min, a) =>
+      rigSecondsLeft(a.idle!, now) < rigSecondsLeft(min.idle!, now) ? a : min,
+    )
+    return {
+      id: s.id,
+      name: s.name,
+      accent: CATEGORY[s.category].accent,
+      gained: fetchedAt ? gainedSince(active, fetchedAt, now) : 0,
+      actionId: soonest.id,
+      left: rigSecondsLeft(soonest.idle!, now),
+      rate: fmtInterval(soonest.idle!.intervalSec),
+      count: active.length,
+    }
+  }
+
+  /** Items made across a profession's active rigs since the last fetch. */
+  function gainedSince(actions: ActionDTO[], fetchedAt: number, now: number): number {
+    let gained = 0
+    for (const a of actions) {
+      for (const n of Object.values(rigGainedSince(a.idle!, fetchedAt, now))) gained += n
+    }
+    return gained
+  }
+
+  const running = $derived(runningRigs(data, fetchedAt, now))
 
   /** The running tell for one profession, by id. */
   const runningById = $derived(new Map(running.map((r) => [r.id, r])))

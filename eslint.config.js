@@ -30,16 +30,10 @@ const sizeRules = {
 }
 
 /**
- * The web pages still awaiting their Phase-15 split (and one script): the size
- * ceiling is off here, nothing else. **Remove a page as it comes under budget**,
- * so the exemption only shrinks. `home` is already off the list.
+ * The one script still awaiting its split: the size ceiling is off here, nothing
+ * else. Remove it once it is under budget, so the exemption only shrinks.
  */
-const legacyBig = [
-  'apps/web/src/routes/(app)/chat/+page.svelte',
-  'apps/web/src/routes/(app)/combat/+page.svelte',
-  'apps/web/src/routes/(app)/skills/+page.svelte',
-  'scripts/sweep-cards.ts',
-]
+const legacyBig = ['scripts/sweep-cards.ts']
 
 /** `bun test` globals (the `globals` package has no bun preset). */
 const bunTest = {

@@ -100,27 +100,30 @@
 
   async function refresh() {
     try {
-      const [c, s, set] = await Promise.all([
-        getCombat(),
-        getSkills().catch(() => null),
-        api<{ foodThreshold?: number }>('/api/settings').catch(() => null),
-      ])
-      data = c
-      ref = s
-      encounter = c.encounter
-      // Resuming a fight: adopt the drill the server rebuilt for this encounter
-      // so the fight keeps going after a reload. The clock waits for Start.
-      if (c.encounter) {
-        instance = c.instance
-        stopTimer()
-      }
-      justHit = false
-      if (set?.foodThreshold) foodThreshold = set.foodThreshold
+      const [c, s, set] = await Promise.all([getCombat(), getSkills().catch(() => null), prefs()])
+      applyCombat(c, s, set?.foodThreshold)
     } catch (e) {
       error = (e as Error).message
     } finally {
       loading = false
     }
+  }
+
+  const prefs = () => api<{ foodThreshold?: number }>('/api/settings').catch(() => null)
+
+  /** Applies a fresh combat + skills board, adopting any running encounter. */
+  function applyCombat(c: CombatResponse, s: SkillsResponse | null, food?: number) {
+    data = c
+    ref = s
+    encounter = c.encounter
+    // Resuming a fight: adopt the drill the server rebuilt for this encounter
+    // so the fight keeps going after a reload. The clock waits for Start.
+    if (c.encounter) {
+      instance = c.instance
+      stopTimer()
+    }
+    justHit = false
+    if (food) foodThreshold = food
   }
 
   async function fight(m: MonsterDTO) {
@@ -143,32 +146,41 @@
     busy = true
     error = ''
     try {
-      const r = await combatHit({
-        exerciseId: instance.exerciseId,
-        cardId: instance.cardId,
-        answer,
-        timedOut,
-      })
-      hit = r.hit
-      justHit = r.hit.playerDamage > 0
-      if (r.hit.playerDamage > 0) hitSeq += 1
-      encounter = r.encounter
-      instance = r.instance
-      if (r.hit.outcome !== 'ongoing') {
-        // fight over — refresh the monster list / bank
-        stopTimer()
-        void refresh()
-      } else if (r.instance) {
-        // time attack: the next drill starts its own clock straight away
-        startTimer()
-      } else {
-        stopTimer()
-      }
+      applyHit(await combatHit(hitBody(answer, timedOut)))
     } catch (e) {
       error = (e as Error).message
       stopTimer()
     } finally {
       busy = false
+    }
+  }
+
+  /** The server body for one exchange. */
+  function hitBody(answer: unknown, timedOut: boolean): Parameters<typeof combatHit>[0] {
+    return {
+      exerciseId: instance!.exerciseId,
+      cardId: instance!.cardId,
+      answer,
+      timedOut,
+    }
+  }
+
+  /** Applies one exchange: the hit, the next drill and the drill clock. */
+  function applyHit(r: Awaited<ReturnType<typeof combatHit>>) {
+    hit = r.hit
+    justHit = r.hit.playerDamage > 0
+    if (r.hit.playerDamage > 0) hitSeq += 1
+    encounter = r.encounter
+    instance = r.instance
+    if (r.hit.outcome !== 'ongoing') {
+      // fight over — refresh the monster list / bank
+      stopTimer()
+      void refresh()
+    } else if (r.instance) {
+      // time attack: the next drill starts its own clock straight away
+      startTimer()
+    } else {
+      stopTimer()
     }
   }
 
