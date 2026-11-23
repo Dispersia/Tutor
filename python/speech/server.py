@@ -16,6 +16,7 @@ import math
 import os
 import subprocess
 import tempfile
+import threading
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -24,7 +25,7 @@ from typing import Any
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from . import models
 from .models import Manager
@@ -42,6 +43,11 @@ manager = Manager()
 # clips keeps the cache bounded. Single interactive clips barely notice.
 _TTS_CLEAR_EVERY = max(1, int(os.environ.get("TUTOR_TTS_CLEAR_EVERY", "5")))
 _tts_since_clear = 0
+
+# A recorded take is seconds long; nothing legitimate is near this.
+_MAX_UPLOAD_BYTES = 25 * 1024 * 1024
+# The longest text one TTS call may be asked to speak (a card or one chat sentence).
+_MAX_TTS_CHARS = 2000
 
 # Peak level and gain ceiling for card-clip normalisation (see `tts`).
 _NORM_TARGET = 0.9
@@ -123,7 +129,13 @@ def _save_upload(file: UploadFile) -> Path:
     fd, name = tempfile.mkstemp(suffix=suffix)
     os.close(fd)
     path = Path(name)
-    path.write_bytes(file.file.read())
+    # Read one byte past the cap: enough to know the upload is too big without
+    # buffering all of it.
+    data = file.file.read(_MAX_UPLOAD_BYTES + 1)
+    if len(data) > _MAX_UPLOAD_BYTES:
+        path.unlink(missing_ok=True)
+        raise HTTPException(status_code=413, detail="audio upload is too large")
+    path.write_bytes(data)
     return path
 
 
@@ -171,6 +183,18 @@ def health() -> dict:
 @app.post("/admin/unload")
 def unload() -> dict:
     return manager.unload_all()
+
+
+@app.post("/admin/shutdown")
+def shutdown() -> dict:
+    """
+    Free the models and exit. For a gateway the app did not spawn itself (one
+    left running by a previous server process): the app has no PID to signal, so
+    it asks the gateway to stop. The exit is delayed a moment so this reply lands.
+    """
+    result = manager.unload_all()
+    threading.Timer(0.2, lambda: os._exit(0)).start()
+    return {"ok": True, **result}
 
 
 def _warm_clip(seconds: float = 0.6) -> Path:
@@ -306,7 +330,7 @@ def assess(
 
 
 class TtsRequest(BaseModel):
-    text: str
+    text: str = Field(max_length=_MAX_TTS_CHARS)
     voice: str | None = None
     language: str | None = None
     instruct: str | None = None
