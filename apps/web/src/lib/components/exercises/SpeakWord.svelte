@@ -39,37 +39,49 @@
     err = ''
     if (recording) {
       recording = false
-      const take = await recorder.stop()
-      if (take.durationMs < MIN_CLIP_MS) {
-        err = 'That was too quick — hold the mic and speak.'
-        return
-      }
-      if (!take.blob) {
-        err = "Didn't catch that — try again."
-        return
-      }
-      if (onspeak) {
-        onspeak(take.blob)
-        return
-      }
-      working = true
-      try {
-        const text = await transcribe(take.blob, language)
-        if (text.trim()) onsubmit(text.trim())
-        else err = "Didn't catch that — try again."
-      } catch (e) {
-        err = (e as Error).message
-      } finally {
-        working = false
-      }
-    } else {
-      stopAudio()
-      try {
-        await recorder.start()
-        recording = true
-      } catch (e) {
-        err = `Mic unavailable (needs HTTPS). ${(e as Error).message}`
-      }
+      await finishRecording()
+      return
+    }
+    await startRecording()
+  }
+
+  async function startRecording() {
+    stopAudio()
+    try {
+      await recorder.start()
+      recording = true
+    } catch (e) {
+      err = `Mic unavailable (needs HTTPS). ${(e as Error).message}`
+    }
+  }
+
+  async function finishRecording() {
+    const take = await recorder.stop()
+    if (take.durationMs < MIN_CLIP_MS) {
+      err = 'That was too quick — hold the mic and speak.'
+      return
+    }
+    if (!take.blob) {
+      err = "Didn't catch that — try again."
+      return
+    }
+    if (onspeak) {
+      onspeak(take.blob)
+      return
+    }
+    await gradeBlob(take.blob)
+  }
+
+  async function gradeBlob(blob: Blob) {
+    working = true
+    try {
+      const text = await transcribe(blob, language)
+      if (text.trim()) onsubmit(text.trim())
+      else err = "Didn't catch that — try again."
+    } catch (e) {
+      err = (e as Error).message
+    } finally {
+      working = false
     }
   }
 </script>

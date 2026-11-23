@@ -22,26 +22,31 @@
     alertsMsg = ''
     alertsErr = ''
     try {
-      if (alertsOn) {
-        await disableRigAlerts()
-        alertsOn = false
-        alertsMsg = 'Rig alerts are off on this device.'
-      } else {
-        const res = await enableRigAlerts()
-        if (!res.ok) {
-          alertsErr = res.error ?? 'Could not enable notifications.'
-          alertsOn = false
-          return
-        }
-        alertsOn = true
-        alertsMsg = 'Rig alerts are on for this device.'
-      }
+      if (alertsOn) await turnOff()
+      else await turnOn()
     } catch (e) {
       alertsErr = (e as Error).message
       alertsOn = alertsEnabled()
     } finally {
       alertsBusy = false
     }
+  }
+
+  async function turnOff() {
+    await disableRigAlerts()
+    alertsOn = false
+    alertsMsg = 'Rig alerts are off on this device.'
+  }
+
+  async function turnOn() {
+    const res = await enableRigAlerts()
+    if (!res.ok) {
+      alertsErr = res.error ?? 'Could not enable notifications.'
+      alertsOn = false
+      return
+    }
+    alertsOn = true
+    alertsMsg = 'Rig alerts are on for this device.'
   }
 
   async function sendTest() {

@@ -85,22 +85,41 @@
     if (!c || saving) return
     saving = true
     error = ''
-    let rest: Record<string, unknown> = {}
-    try {
-      const trimmed = extra.trim()
-      if (trimmed) rest = JSON.parse(trimmed) as Record<string, unknown>
-    } catch {
+    const rest = parseExtra()
+    if (!rest) {
       error = 'Other metadata must be valid JSON.'
       saving = false
       return
     }
+    await persistCard(c.id, mergeMeta(c.metadata as Record<string, unknown>, rest))
+  }
+
+  /** The free-form "other metadata" JSON, or undefined when it is invalid. */
+  function parseExtra(): Record<string, unknown> | undefined {
+    const trimmed = extra.trim()
+    if (!trimmed) return {}
     try {
-      // Metadata is merged by key, so removed JSON keys are cleared explicitly.
-      const metadata: Record<string, unknown> = { ...rest, pitch: preview ?? null }
-      for (const key of Object.keys(c.metadata ?? {})) {
-        if (key !== 'pitch' && !(key in rest)) metadata[key] = null
-      }
-      const { card } = await updateDeckCard(deck.id, c.id, { metadata })
+      return JSON.parse(trimmed) as Record<string, unknown>
+    } catch {
+      return undefined
+    }
+  }
+
+  /** Merge by key, clearing removed keys; pitch follows the live preview. */
+  function mergeMeta(
+    current: Record<string, unknown>,
+    rest: Record<string, unknown>,
+  ): Record<string, unknown> {
+    const metadata: Record<string, unknown> = { ...rest, pitch: preview ?? null }
+    for (const key of Object.keys(current)) {
+      if (key !== 'pitch' && !(key in rest)) metadata[key] = null
+    }
+    return metadata
+  }
+
+  async function persistCard(cardId: string, metadata: Record<string, unknown>) {
+    try {
+      const { card } = await updateDeckCard(deck.id, cardId, { metadata })
       cards = cards.map((x) => (x.id === card.id ? card : x))
       savedAt = Date.now()
     } catch (e) {
@@ -120,25 +139,33 @@
     adding = true
     error = ''
     try {
-      const step = Number(newStep)
-      const { card } = await addDeckCard(deck.id, {
-        front,
-        back,
-        reading: newReading.trim() || undefined,
-        step: newStep.trim() && Number.isFinite(step) ? step : undefined,
-      })
+      const { card } = await addDeckCard(deck.id, newCardBody(front, back))
       cards = [...cards, card]
       select(card)
-      newFront = ''
-      newBack = ''
-      newReading = ''
-      newStep = ''
-      showAdd = false
+      resetAddForm()
     } catch (e) {
       error = (e as Error).message
     } finally {
       adding = false
     }
+  }
+
+  function newCardBody(front: string, back: string) {
+    const step = Number(newStep)
+    return {
+      front,
+      back,
+      reading: newReading.trim() || undefined,
+      step: newStep.trim() && Number.isFinite(step) ? step : undefined,
+    }
+  }
+
+  function resetAddForm() {
+    newFront = ''
+    newBack = ''
+    newReading = ''
+    newStep = ''
+    showAdd = false
   }
 </script>
 
@@ -184,11 +211,7 @@
         </p>
       {:else}
         <div class="mt-4">
-          <button
-            type="button"
-            onclick={() => (showAdd = !showAdd)}
-            class="link link-btn text-xs"
-          >
+          <button type="button" onclick={() => (showAdd = !showAdd)} class="link link-btn text-xs">
             {showAdd ? 'Cancel' : '+ Add a card'}
           </button>
           {#if showAdd}
@@ -203,7 +226,11 @@
               </label>
               <label class="block text-xs text-ink-400">
                 Reading (optional)
-                <input bind:value={newReading} placeholder="kana, zhuyin or pinyin" class="field mt-1" />
+                <input
+                  bind:value={newReading}
+                  placeholder="kana, zhuyin or pinyin"
+                  class="field mt-1"
+                />
               </label>
               <label class="block text-xs text-ink-400">
                 Step (optional)
@@ -282,12 +309,7 @@
                 </label>
                 <label class="block text-xs text-ink-400">
                   Drop
-                  <input
-                    type="number"
-                    min="0"
-                    bind:value={drop}
-                    class="field mt-1"
-                  />
+                  <input type="number" min="0" bind:value={drop} class="field mt-1" />
                 </label>
               </div>
               <label class="mt-2 block text-xs text-ink-400">
@@ -314,7 +336,13 @@
               ></textarea>
 
               {#if error}
-                <p class="banner mt-2 text-xs" style="--accent: var(--color-ember-400)" role="alert">{error}</p>
+                <p
+                  class="banner mt-2 text-xs"
+                  style="--accent: var(--color-ember-400)"
+                  role="alert"
+                >
+                  {error}
+                </p>
               {/if}
 
               <div class="mt-3 flex items-center gap-2">

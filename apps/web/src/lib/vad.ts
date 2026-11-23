@@ -70,65 +70,58 @@ export async function trimToSpeech(blob: Blob): Promise<Trim> {
   const raw: Trim = { blob, durationMs: 0, speechMs: 0, vad: false }
   if (!blob.size) return { ...raw, blob: null }
 
-  let decoded: Decoded
-  try {
-    decoded = await decode(blob)
-  } catch {
-    return raw // the browser could not decode its own container — send it as-is
-  }
+  const decoded = await decodeOrNull(blob)
+  if (!decoded) return raw // the browser could not decode its own container — send it as-is
   const durationMs = (decoded.pcm.length / decoded.sampleRate) * 1000
   const pass = { ...raw, durationMs }
   if (!durationMs) return { ...pass, blob: null }
 
-  let segments: Segment[]
-  try {
-    segments = await findSpeech(decoded)
-  } catch {
-    return pass
-  }
-
+  const segments = await speechOrNull(decoded)
+  if (!segments) return pass
   const speechMs = spokenMs(segments)
-  if (speechMs < MIN_SPEECH_MS) {
-    // Detected silence, not a failure: nothing worth transcribing.
-    return { ...pass, speechMs, vad: true, blob: null }
-  }
+  // Detected silence, not a failure: nothing worth transcribing.
+  if (speechMs < MIN_SPEECH_MS) return { ...pass, speechMs, vad: true, blob: null }
 
+  const trimmed = await encodeTrimmed(decoded, segments, durationMs)
+  if (!trimmed) return pass
+  return { ...pass, speechMs, vad: true, blob: trimmed }
+}
+
+async function decodeOrNull(blob: Blob): Promise<Decoded | undefined> {
+  try {
+    return await decode(blob)
+  } catch {
+    return undefined
+  }
+}
+
+async function speechOrNull(decoded: Decoded): Promise<Segment[] | undefined> {
+  try {
+    return await findSpeech(decoded)
+  } catch {
+    return undefined
+  }
+}
+
+/** The trimmed WAV, or null when encoding failed (the caller keeps the original). */
+async function encodeTrimmed(
+  decoded: Decoded,
+  segments: Segment[],
+  durationMs: number,
+): Promise<Blob | null> {
   try {
     const windows = speechWindows(segments, durationMs)
     const kept = spliceWindows(decoded.pcm, decoded.sampleRate, windows)
     const pcm = await resample(kept, decoded.sampleRate)
-    return { ...pass, speechMs, vad: true, blob: encodeWav(pcm, TARGET_RATE) }
+    return encodeWav(pcm, TARGET_RATE)
   } catch {
-    return pass
+    return null
   }
 }
 
 async function loadVad(): Promise<NonRealTimeVAD> {
   if (broken) throw new Error('vad unavailable')
-  loaded ??= (async () => {
-    const assets = await vadAssets()
-    const mod = (await import('@ricky0123/vad-web')) as typeof import('@ricky0123/vad-web') & {
-      default?: typeof import('@ricky0123/vad-web')
-    }
-    // dist/ is CommonJS, so the named export can arrive either way depending on
-    // how the bundler ran the interop.
-    const NonRealTimeVAD = mod.NonRealTimeVAD ?? mod.default?.NonRealTimeVAD
-    if (!NonRealTimeVAD) throw new Error('vad module has no NonRealTimeVAD')
-    return NonRealTimeVAD.new({
-      modelURL: assets.model,
-      // Tuned for a language lesson: short words count as speech, and a pause in
-      // the middle of a sentence cuts the clip instead of dragging silence along.
-      minSpeechMs: MIN_SPEECH_MS,
-      preSpeechPadMs: 300,
-      redemptionMs: 700,
-      ortConfig: (ort) => {
-        // Single-threaded: threads need cross-origin isolation (SharedArrayBuffer),
-        // which we do not require just to trim a clip.
-        ort.env.wasm.numThreads = 1
-        ort.env.wasm.wasmPaths = { wasm: assets.wasm, mjs: assets.mjs }
-      },
-    })
-  })()
+  loaded ??= loadOnce()
   try {
     return await loaded
   } catch (err) {
@@ -136,6 +129,36 @@ async function loadVad(): Promise<NonRealTimeVAD> {
     loaded = null
     throw err
   }
+}
+
+async function loadOnce(): Promise<NonRealTimeVAD> {
+  const NonRealTimeVAD = await loadModule()
+  const assets = await vadAssets()
+  return NonRealTimeVAD.new({
+    modelURL: assets.model,
+    // Tuned for a language lesson: short words count as speech, and a pause in
+    // the middle of a sentence cuts the clip instead of dragging silence along.
+    minSpeechMs: MIN_SPEECH_MS,
+    preSpeechPadMs: 300,
+    redemptionMs: 700,
+    ortConfig: (ort) => {
+      // Single-threaded: threads need cross-origin isolation (SharedArrayBuffer),
+      // which we do not require just to trim a clip.
+      ort.env.wasm.numThreads = 1
+      ort.env.wasm.wasmPaths = { wasm: assets.wasm, mjs: assets.mjs }
+    },
+  })
+}
+
+async function loadModule() {
+  const mod = (await import('@ricky0123/vad-web')) as typeof import('@ricky0123/vad-web') & {
+    default?: typeof import('@ricky0123/vad-web')
+  }
+  // dist/ is CommonJS, so the named export can arrive either way depending on
+  // how the bundler ran the interop.
+  const NonRealTimeVAD = mod.NonRealTimeVAD ?? mod.default?.NonRealTimeVAD
+  if (!NonRealTimeVAD) throw new Error('vad module has no NonRealTimeVAD')
+  return NonRealTimeVAD
 }
 
 /** Reads the manifest `scripts/sync-vad-assets.mjs` writes next to the build. */
