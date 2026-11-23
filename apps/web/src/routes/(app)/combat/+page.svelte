@@ -228,7 +228,7 @@
   <div class="border-b border-ink-700 pt-4 pb-4 mb-4">
     <div class="flex items-start justify-between gap-4">
       <div class="min-w-0">
-        <h1 class="display text-3xl text-combat-400">Combat</h1>
+        <h1 class="display text-3xl text-ink-100">Combat</h1>
         <p class="sub mt-2">
           {encounter
             ? 'Answer drills to strike; it hits you every exchange.'

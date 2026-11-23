@@ -22,9 +22,14 @@
   /* ---- tiles ------------------------------------------------------------- */
   .tile {
     position: relative;
-    border-radius: 12px;
-    border: 1px solid color-mix(in oklab, var(--accent) 45%, var(--color-ink-700));
-    background: color-mix(in oklab, var(--accent) 14%, var(--color-ink-850));
+    border-radius: 16px;
+    border: 1px solid color-mix(in oklab, var(--accent) 30%, var(--color-ink-700));
+    background:
+      linear-gradient(180deg, color-mix(in oklab, var(--accent) 12%, transparent), transparent 70%),
+      var(--color-ink-850);
+    box-shadow:
+      inset 0 1px 0 oklch(1 0 0 / 0.05),
+      0 4px 12px -6px oklch(0.08 0.04 280 / 0.6);
     transition:
       transform 0.12s ease,
       border-color 0.15s ease,
@@ -32,9 +37,11 @@
   }
   .tile:hover,
   .tile:focus-visible {
-    transform: translateY(-1px);
-    border-color: color-mix(in oklab, var(--accent) 65%, var(--color-ink-700));
-    background: color-mix(in oklab, var(--accent) 20%, var(--color-ink-850));
+    transform: translateY(-2px);
+    border-color: color-mix(in oklab, var(--accent) 60%, var(--color-ink-700));
+    background:
+      linear-gradient(180deg, color-mix(in oklab, var(--accent) 18%, transparent), transparent 70%),
+      var(--color-ink-800);
   }
 
   /* ---- ruled entries ----------------------------------------------------- */
@@ -59,76 +66,92 @@
   }
 
   /* ---- buttons ----------------------------------------------------------- */
+  /* A game button: chunky, rounded, with a darker lip underneath (--btn-edge)
+     that it presses down into. Sentence case in the display face, so labels
+     read as friendly rather than shouted. */
   .btn {
+    --btn-edge: oklch(0.12 0.03 280 / 0.7);
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 0.45rem;
     min-height: 44px;
-    border-radius: 10px;
-    padding: 0.6rem 1rem;
+    border-radius: 12px;
+    padding: 0.6rem 1.05rem;
     font-family: var(--font-display);
-    font-size: 0.92rem;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
     line-height: 1;
     cursor: pointer;
+    box-shadow: 0 3px 0 var(--btn-edge);
     transition:
       filter 0.12s ease,
       transform 0.06s ease,
+      box-shadow 0.06s ease,
       background 0.12s ease,
       border-color 0.12s ease;
   }
-  .btn:active {
-    transform: translateY(1px);
+  .btn:active:not(:disabled) {
+    transform: translateY(2px);
+    box-shadow: 0 1px 0 var(--btn-edge);
   }
   .btn:disabled {
     cursor: not-allowed;
     transform: none;
-    background: var(--color-ink-850);
-    border: 1px solid var(--color-ink-700);
-    color: var(--color-ink-400);
+    box-shadow: none;
+    background: var(--color-ink-800);
+    border: 1px solid transparent;
+    color: var(--color-ink-500);
   }
   /* primary = the one action that moves the session forward */
   .btn-primary {
-    color: var(--color-ink-950);
-    border: 1px solid color-mix(in oklab, var(--color-seal-400) 60%, black);
-    background: var(--color-seal-400);
+    --btn-edge: var(--color-seal-600);
+    color: #fff;
+    border: 1px solid color-mix(in oklab, var(--color-seal-300) 40%, var(--color-seal-500));
+    background: linear-gradient(180deg, var(--color-seal-400), var(--color-seal-500));
+    text-shadow: 0 1px 0 oklch(0.3 0.12 288 / 0.5);
   }
-  .btn-primary:hover {
-    filter: brightness(1.08);
+  .btn-primary:hover:not(:disabled) {
+    filter: brightness(1.07);
   }
   /* gold = spending, claiming, rewarding */
   .btn-gold {
-    color: var(--color-ink-950);
-    border: 1px solid color-mix(in oklab, var(--color-gold-400) 55%, black);
-    background: var(--color-gold-300);
+    --btn-edge: var(--color-gold-600);
+    color: oklch(0.25 0.05 80);
+    border: 1px solid color-mix(in oklab, var(--color-gold-200) 50%, var(--color-gold-400));
+    background: linear-gradient(180deg, var(--color-gold-300), var(--color-gold-400));
   }
-  .btn-gold:hover {
-    filter: brightness(1.08);
+  .btn-gold:hover:not(:disabled) {
+    filter: brightness(1.06);
   }
+  /* secondary: a raised neutral key, so it never reads as an empty hole */
   .btn-ghost {
-    color: var(--color-ink-200);
-    border: 1px solid var(--color-ink-600);
-    background: transparent;
-  }
-  .btn-ghost:hover {
     color: var(--color-ink-100);
+    border: 1px solid
+      color-mix(in oklab, var(--accent, var(--color-ink-500)) 22%, var(--color-ink-700));
     background: var(--color-ink-800);
-    border-color: var(--color-ink-500);
+  }
+  .btn-ghost:hover:not(:disabled) {
+    background: color-mix(in oklab, var(--color-ink-700) 70%, var(--color-ink-800));
+    border-color: color-mix(
+      in oklab,
+      var(--accent, var(--color-ink-500)) 40%,
+      var(--color-ink-600)
+    );
   }
   .btn-accent {
+    --btn-edge: color-mix(in oklab, var(--accent) 55%, black);
     color: var(--color-ink-950);
-    border: 1px solid color-mix(in oklab, var(--accent) 65%, black);
+    border: 1px solid color-mix(in oklab, var(--accent) 70%, white);
     background: var(--accent);
   }
   /* A destructive action: same weight as ghost, but the border and label carry
      the ember signal so it never reads as a normal secondary button. */
   .btn-danger {
-    color: var(--color-ember-400);
-    border: 1px solid color-mix(in oklab, var(--color-ember-400) 45%, var(--color-ink-700));
-    background: transparent;
+    color: var(--color-ember-300);
+    border: 1px solid color-mix(in oklab, var(--color-ember-400) 40%, var(--color-ink-700));
+    background: color-mix(in oklab, var(--color-ember-400) 8%, var(--color-ink-850));
   }
   .btn-danger:hover {
     color: var(--color-ember-300);
@@ -136,8 +159,8 @@
     background: color-mix(in oklab, var(--color-ember-400) 10%, transparent);
   }
   .btn-danger:disabled {
-    color: var(--color-ink-400);
-    border-color: var(--color-ink-700);
-    background: transparent;
+    color: var(--color-ink-500);
+    border-color: transparent;
+    background: var(--color-ink-800);
   }
 }

@@ -11,8 +11,21 @@ body {
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior-y: none;
   font-family: var(--font-sans);
-  /* the room: flat slate, no gradient */
-  background: var(--color-ink-950);
+  /* the room: twilight indigo with two soft pools of light at the top, fixed
+     so long pages never band. Cards sit one step lighter on top of it. */
+  background-color: var(--color-ink-950);
+  background-image:
+    radial-gradient(
+      60rem 32rem at 15% -8rem,
+      color-mix(in oklab, var(--color-seal-500) 16%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      48rem 28rem at 95% -6rem,
+      color-mix(in oklab, var(--color-azure-500) 10%, transparent),
+      transparent 70%
+    );
+  background-attachment: fixed;
 }
 
 .pb-safe {

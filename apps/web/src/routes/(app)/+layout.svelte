@@ -91,13 +91,14 @@
 <div class="flex min-h-dvh flex-col lg:pl-64">
   <!-- desktop rail: the spine of the book, all destinations in one column -->
   <aside
-    class="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex lg:w-64 lg:flex-col lg:border-r lg:border-ink-700 lg:bg-ink-950"
+    class="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex lg:w-64 lg:flex-col lg:border-r lg:border-ink-700/70 lg:bg-ink-950/70 lg:backdrop-blur-xl"
     aria-label="Primary"
   >
     <div class="px-5 pt-6 pb-5">
       <a
         href={href('/home')}
-        class="display inline-flex min-h-11 items-center text-xl leading-none text-ink-100">Tutor</a
+        class="display inline-flex min-h-11 items-center text-2xl leading-none font-bold text-ink-100"
+        >Tutor</a
       >
     </div>
 
@@ -109,9 +110,9 @@
             <a
               href={href(t.href)}
               aria-current={on ? 'page' : undefined}
-              class="flex min-h-11 items-center gap-3 rounded-[10px] px-3 py-2 text-sm font-medium transition-colors {on
-                ? 'bg-seal-400/12 text-seal-300'
-                : 'text-ink-300 hover:bg-ink-900 hover:text-ink-100'}"
+              class="flex min-h-11 items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors {on
+                ? 'bg-seal-400/15 text-seal-300 shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--color-seal-400)_25%,transparent)]'
+                : 'text-ink-300 hover:bg-ink-800/70 hover:text-ink-100'}"
             >
               <Icon name={t.icon} size={17} cls={on ? '' : 'text-ink-400'} />
               {t.label}
@@ -127,9 +128,9 @@
             <a
               href={href(m.href)}
               aria-current={on ? 'page' : undefined}
-              class="flex min-h-11 items-center gap-3 rounded-[10px] px-3 py-2 text-sm font-medium transition-colors {on
-                ? 'bg-seal-400/12 text-seal-300'
-                : 'text-ink-300 hover:bg-ink-900 hover:text-ink-100'}"
+              class="flex min-h-11 items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors {on
+                ? 'bg-seal-400/15 text-seal-300 shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--color-seal-400)_25%,transparent)]'
+                : 'text-ink-300 hover:bg-ink-800/70 hover:text-ink-100'}"
             >
               <Icon name={m.icon} size={17} cls={on ? '' : 'text-ink-400'} />
               {m.label}
@@ -176,11 +177,14 @@
   </aside>
 
   <!-- title bar (phone): the app mark, and the account behind a personal stamp -->
-  <header class="sticky top-0 z-20 border-b border-ink-700 bg-ink-950 pt-safe lg:hidden">
+  <header
+    class="sticky top-0 z-20 border-b border-ink-700/60 bg-ink-950/75 pt-safe backdrop-blur-xl lg:hidden"
+  >
     <div class="mx-auto flex w-full max-w-2xl items-center justify-between gap-3 px-4 pb-1.5">
       <a
         href={href('/home')}
-        class="display inline-flex min-h-11 items-center text-lg leading-none text-ink-200">Tutor</a
+        class="display inline-flex min-h-11 items-center text-xl leading-none font-bold text-ink-100"
+        >Tutor</a
       >
 
       <div class="relative">
@@ -261,19 +265,19 @@
   </main>
 
   <nav
-    class="sticky bottom-0 z-10 border-t border-ink-700 bg-ink-950 pb-safe lg:hidden"
+    class="sticky bottom-0 z-10 border-t border-ink-700/60 bg-ink-950/80 pb-safe backdrop-blur-xl lg:hidden"
     aria-label="Primary"
   >
-    <ul class="mx-auto grid max-w-2xl grid-cols-3">
+    <ul class="mx-auto grid max-w-2xl grid-cols-3 gap-1 px-2 pt-1.5">
       {#each tabs as t (t.href)}
         {@const on = active.startsWith(t.href)}
         <li>
           <a
             href={href(t.href)}
             aria-current={on ? 'page' : undefined}
-            class="flex min-h-12 flex-col items-center justify-center gap-1 py-1.5 text-xs leading-none font-medium transition-colors {on
-              ? 'bg-seal-400/12 text-seal-300'
-              : 'text-ink-400 hover:bg-ink-900 hover:text-ink-200'}"
+            class="flex min-h-12 flex-col items-center justify-center gap-1 rounded-2xl py-1.5 text-xs leading-none font-medium transition-colors {on
+              ? 'bg-seal-400/15 text-seal-300'
+              : 'text-ink-400 hover:bg-ink-800/60 hover:text-ink-200'}"
           >
             <Icon name={t.icon} size={22} />
             <span>{t.label}</span>

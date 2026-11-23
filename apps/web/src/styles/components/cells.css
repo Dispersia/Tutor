@@ -11,9 +11,14 @@
     min-width: 4.5rem;
     min-height: 4.5rem;
     padding: 0.85rem 1rem;
-    border: 1px solid color-mix(in oklab, var(--accent) 45%, var(--color-ink-700));
-    border-radius: 12px;
-    background: color-mix(in oklab, var(--accent) 10%, var(--color-ink-850));
+    border: 1px solid color-mix(in oklab, var(--accent) 35%, var(--color-ink-700));
+    border-radius: 16px;
+    background:
+      linear-gradient(180deg, color-mix(in oklab, var(--accent) 12%, transparent), transparent),
+      var(--color-ink-850);
+    box-shadow:
+      inset 0 1px 0 oklch(1 0 0 / 0.05),
+      0 3px 0 oklch(0.12 0.03 280 / 0.55);
     text-align: center;
   }
   /* faint cross guides at 12% inset: two hairlines, no gradient */
@@ -86,12 +91,20 @@
   .cell--press {
     cursor: pointer;
     transition:
+      transform 0.06s ease,
+      box-shadow 0.06s ease,
       border-color 0.12s ease,
       background 0.12s ease;
   }
   .cell--press:hover:not(:disabled) {
-    border-color: color-mix(in oklab, var(--accent) 70%, var(--color-ink-700));
-    background: color-mix(in oklab, var(--accent) 18%, var(--color-ink-850));
+    border-color: color-mix(in oklab, var(--accent) 65%, var(--color-ink-700));
+    background:
+      linear-gradient(180deg, color-mix(in oklab, var(--accent) 20%, transparent), transparent),
+      var(--color-ink-800);
+  }
+  .cell--press:active:not(:disabled) {
+    transform: translateY(2px);
+    box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.05);
   }
   /* a control that cannot act goes neutral: surface fill, hairline, muted text.
      Never a faded smear of its own accent. */
@@ -100,6 +113,7 @@
     cursor: not-allowed;
     border-color: var(--color-ink-700);
     background: var(--color-ink-850);
+    box-shadow: none;
   }
   .cell--press:disabled::before,
   .cell--press:disabled::after,
