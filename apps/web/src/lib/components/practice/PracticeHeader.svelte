@@ -1,6 +1,4 @@
 <script lang="ts">
-  /** The practice header: title, the skill/quiet/XP/queue chips and the quiet banner. */
-
   import type { LessonDTO, SrsStats } from '#lib/curriculum'
   import type { SkillOutcome, SkillsResponse } from '#lib/skills'
   import type { Stats } from '#lib/exercises'

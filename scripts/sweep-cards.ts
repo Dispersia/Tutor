@@ -1,24 +1,3 @@
-/**
- * Hard sweep over a deck's example cards (sentence + grammar).
- *
- *   TUTOR_DATA_DIR=~/.local/share/tutor bun scripts/sweep-cards.ts <deck-id-or-name|all> [--dry] [--concurrency N]
- *
- * Generated decks drift: the model is asked for strict n+1 and often satisfies
- * the shape with a sentence nobody would say ("我的你。", "Daddy is one year old?
- * No.") or leaks its reasoning into a gloss ("My you. (grammatically valid…)").
- * This audits every example card in a deck and, for each one:
- *
- *   - strips the meta-commentary the deterministic pass can catch, and
- *   - asks the generator to rewrite it into a natural, grammatical, n+1 card, or
- *     to drop it when no natural sentence is possible with the words the learner
- *     has met.
- *
- * Vocabulary cards and their ids are never touched, so SRS scheduling, review
- * history and lesson progress survive. Only example cards can change or be
- * removed. Run with `--dry` to see the report without writing anything.
- *
- * The audit itself lives in `apps/server/src/deck/sweep.ts`.
- */
 import { env } from '../apps/server/src/env'
 import { openDb } from '../apps/server/src/db/client'
 import { getRoles, getUserSetting } from '../apps/server/src/db/repo'
@@ -36,14 +15,12 @@ const modelFlag = args.indexOf('--model')
 const modelOverride = modelFlag >= 0 ? args[modelFlag + 1] : undefined
 const target = args.find((a, i) => !a.startsWith('--') && !isFlagValue(args[i - 1]))
 
-/** A `--flag <n>` CLI value, clamped to at least 1; `fallback` when absent. */
 function flagNumber(flag: string, fallback: number): number {
   const i = args.indexOf(flag)
   if (i < 0) return fallback
   return Math.max(1, Number(args[i + 1]) || fallback)
 }
 
-/** True for the value positions of the flags that take one, so they aren't the target. */
 function isFlagValue(prev: string | undefined): boolean {
   return prev === '--concurrency' || prev === '--limit' || prev === '--model'
 }
@@ -51,7 +28,6 @@ function isFlagValue(prev: string | undefined): boolean {
 const { db, sqlite } = openDb(`${env.dataDir.replace(/\/+$/, '')}/tutor.db`)
 const run: SweepRun = (sql, params) => sqlite.run(sql, params ?? [])
 
-// listDecks needs a user id, so read the decks straight from the table instead.
 const deckRows = sqlite
   .query(
     'select id, user_id as userId, name, source_lang as sourceLang, target_lang as targetLang, settings_json as settingsJson from decks',
@@ -88,7 +64,6 @@ if (chosen.length === 0) {
   process.exit(1)
 }
 
-// Pick the generator key: the deck owner's own key, else the server key.
 async function keyFor(userId: UserId): Promise<string | undefined> {
   const own = await decryptSecret(
     getUserSetting(db, userId, 'openrouter_key') || undefined,

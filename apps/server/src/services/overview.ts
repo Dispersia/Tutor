@@ -1,5 +1,3 @@
-/** Global XP, streak and the account summary (docs/DESIGN.md §13). */
-
 import type { UserId } from '../ids'
 import { addXpEvent, getStats, sumXp, upsertStats, xpByDay, xpForDay } from '../db/repo'
 import type { Db } from '../db/client'
@@ -9,12 +7,10 @@ import { accountLevel } from './board'
 import { dayOf, userDay, userOffsetMin } from './clock'
 import { aggregateBonuses } from './progress'
 
-/** UTC calendar day as YYYY-MM-DD: the day for a member with no time zone stored. */
 export function todayDay(ts: number = Date.now()): string {
   return dayOf(ts)
 }
 
-/** The member's active days (their own calendar days), newest first. */
 export function activeDays(db: Db, userId: UserId): string[] {
   return xpByDay(db, userId, userOffsetMin(db, userId))
     .map((r) => r.day)
@@ -33,10 +29,9 @@ export function shiftDay(day: string, delta: number): string {
   return dt.toISOString().slice(0, 10)
 }
 
-/** Monday of the UTC week containing `day` (the activity map's column start). */
 export function weekStart(day: string): string {
   const dt = new Date(`${day}T00:00:00Z`)
-  const dow = (dt.getUTCDay() + 6) % 7 // Monday = 0
+  const dow = (dt.getUTCDay() + 6) % 7
   return shiftDay(day, -dow)
 }
 
@@ -45,11 +40,6 @@ export interface ActivityDay {
   xp: number
 }
 
-/**
- * Daily XP for the last `weeks` weeks as a heat-map grid: columns are weeks
- * (Monday first), the last column is the current week, oldest day first. One
- * pass over the ledger — never one query per day (docs/DESIGN.md §13).
- */
 export function activitySeries(
   db: Db,
   userId: UserId,
@@ -114,11 +104,8 @@ export function touchActivity(db: Db, bus: EventBus, userId: UserId): number {
 }
 
 export interface GameSummary {
-  /** lifetime review XP (the daily-goal / heat-map metric, not the level) */
   xp: number
-  /** the account level: the mean of every profession's level, out of 100 */
   level: number
-  /** how far the average profession is toward its next level (0..1) */
   progress: number
   streak: number
   dailyGoal: number
@@ -141,8 +128,6 @@ export function summary(db: Db, userId: UserId): GameSummary {
     xp: s.xpTotal,
     level: account.level,
     progress: account.progress,
-    // The stored streak is only rewritten by a review: after a missed day it is
-    // stale until then, so a gap reads as broken straight away.
     streak: streakAlive(s.lastActiveDay, today) ? s.streakDays : 0,
     dailyGoal: goal,
     dailyXp: daily,

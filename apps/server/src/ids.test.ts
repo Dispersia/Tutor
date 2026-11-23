@@ -20,7 +20,6 @@ interface Ids {
 }
 
 function misuse(db: Db, ids: Ids): void {
-  // The shipped bug: the user id passed where the deck id goes.
   // @ts-expect-error a UserId is not a DeckId
   updateDeckSettings(db, ids.user, { showReadings: true })
   // @ts-expect-error a UserId is not a DeckId
@@ -33,7 +32,6 @@ function misuse(db: Db, ids: Ids): void {
   setEquipment(db, ids.user, 'head', 'bronze_helm', ids.deck)
   // @ts-expect-error a plain string (a slot name, say) is not a GearInstanceId
   setEquipment(db, ids.user, 'head', 'bronze_helm', 'head')
-  // The right way round compiles.
   updateDeckSettings(db, ids.deck, { showReadings: true })
   getCard(db, ids.card, ids.user)
   setEquipment(db, ids.user, 'head', 'bronze_helm', ids.piece)

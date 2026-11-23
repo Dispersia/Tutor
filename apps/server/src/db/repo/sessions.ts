@@ -1,5 +1,3 @@
-/** Per-user chat sessions and their messages (append-only). */
-
 import type { UserId, DeckId, SessionId } from '../../ids'
 import { desc, eq } from 'drizzle-orm'
 import type { Db } from '../client'
@@ -29,7 +27,6 @@ export function createSession(db: Db, userId: UserId, s: NewSession = {}) {
   return row
 }
 
-/** Returns the session only if it belongs to this user. */
 export function getOwnedSession(db: Db, sid: SessionId, userId: UserId) {
   const row = db.select().from(sessions).where(eq(sessions.id, sid)).get()
   if (!row || row.userId !== userId) return undefined

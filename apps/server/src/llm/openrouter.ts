@@ -1,14 +1,5 @@
-/**
- * OpenRouter client (docs/DESIGN.md §10): streaming chat, structured JSON, usage
- * accounting, and the live model catalogue used by the per-role model picker.
- */
-
 const DEFAULT_BASE = 'https://openrouter.ai/api/v1'
 
-/**
- * A JSON completion with no caller-supplied signal is cut off after this long:
- * a hung provider would otherwise hold a deck build (or a grade) open forever.
- */
 export const JSON_TIMEOUT_MS = 120_000
 
 export interface Usage {
@@ -36,11 +27,6 @@ export interface ModelInfo {
 export type ChatEvent =
   { type: 'delta'; text: string } | { type: 'usage'; usage: Usage } | { type: 'done' }
 
-/**
- * How much hidden reasoning a model may spend before answering. Thinking models
- * (Qwen 3.8, …) default to a model-chosen budget, which can be hundreds of
- * tokens the learner never sees; pick `none` for latency-sensitive roles.
- */
 export type ReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh'
 
 export interface ChatOptions {
@@ -50,7 +36,6 @@ export interface ChatOptions {
   maxTokens?: number
   signal?: AbortSignal
   title?: string
-  /** Defaults to `none` — see `ReasoningEffort`. */
   reasoning?: ReasoningEffort
 }
 
@@ -64,7 +49,6 @@ function mapUsage(u: Record<string, unknown> | undefined): Usage {
   }
 }
 
-/** Splits a byte stream into lines (SSE). */
 async function* lines(body: ReadableStream<Uint8Array>): AsyncGenerator<string> {
   const reader = body.getReader()
   const dec = new TextDecoder()
@@ -82,7 +66,6 @@ async function* lines(body: ReadableStream<Uint8Array>): AsyncGenerator<string> 
     }
     if (buf) yield buf
   } finally {
-    // Runs when the consumer stops early or throws too: release the connection.
     await reader.cancel().catch(() => {})
   }
 }
@@ -93,18 +76,12 @@ interface StreamChunk {
   error?: { message?: string; code?: unknown } | string
 }
 
-/** The message of a mid-stream `{"error": …}` chunk, or undefined. */
 function streamError(json: StreamChunk): string | undefined {
   if (!json.error) return undefined
   if (typeof json.error === 'string') return json.error
   return json.error.message ?? `code ${String(json.error.code ?? 'unknown')}`
 }
 
-/**
- * Parses one SSE `data:` payload into a ChatEvent, or null to skip. A provider
- * failure after the stream opened arrives as an `error` chunk under HTTP 200: it
- * is thrown, so the half reply is never taken for a finished message.
- */
 export function parseSseData(data: string): ChatEvent | null {
   if (data === '[DONE]') return { type: 'done' }
   let json: StreamChunk | null
@@ -148,12 +125,6 @@ export class OpenRouter {
     return h
   }
 
-  /**
-   * Live OpenRouter catalogue. `{ user: true }` uses `/models/user`, which the
-   * key filters by provider preferences, privacy settings and guardrails — so a
-   * user picks from exactly the models their own key can call (§10.1). Without
-   * it we hit the public `/models`. Cached per client instance.
-   */
   async listModels(opts: { user?: boolean } = {}): Promise<ModelInfo[]> {
     const path = opts.user ? '/models/user' : '/models'
     if (opts.user && !this.#key) throw new Error('OPENROUTER_API_KEY is not set')
@@ -189,7 +160,6 @@ export class OpenRouter {
     return { text, usage }
   }
 
-  /** Structured output validated against a JSON schema (used by graders). */
   async chatJSON<T>(opts: ChatOptions & { schema: object; schemaName?: string }): Promise<{
     json: T
     usage: Usage
@@ -198,14 +168,10 @@ export class OpenRouter {
     const res = await sendJson(this.baseUrl, this.#headers(), opts)
     const json = (await res.json()) as JsonResponse
     const choice = json.choices?.[0]
-    // A response cut off by the output cap is not recoverable JSON — say so
-    // plainly so a caller (the deck builder) can retry with a smaller batch.
     if (choice?.finish_reason === 'length') {
       throw new Error('the model ran out of output space before its JSON was complete')
     }
     const content = choice?.message?.content
-    // A 200 can still carry a provider error or a refusal with no content. Passing
-    // that off as `{}` made a failed batch look like an empty, finished one.
     if (typeof content !== 'string' || !content.trim()) {
       throw new Error(
         `the model returned no content${json.error?.message ? `: ${json.error.message}` : ''}`,
@@ -215,7 +181,6 @@ export class OpenRouter {
   }
 }
 
-/** The streaming request, through the shared completions endpoint. */
 async function sendStream(
   baseUrl: string,
   headers: Record<string, string>,
@@ -248,7 +213,6 @@ function streamBody(opts: ChatOptions) {
 
 type JsonOptions = ChatOptions & { schema: object; schemaName?: string }
 
-/** The JSON-schema request, through the shared completions endpoint. */
 async function sendJson(
   baseUrl: string,
   headers: Record<string, string>,
@@ -298,7 +262,6 @@ function parseJson<T>(content: string, usage: Record<string, unknown> | undefine
   }
 }
 
-/** One catalogue entry as the raw OpenRouter API returns it. */
 interface RawModel {
   id: string
   name: string

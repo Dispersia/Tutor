@@ -1,8 +1,3 @@
-/**
- * `POST /api/decks/:id/grow` — grow a deck another n+1 batch, or (with
- * `{ all: true }`) finish it, resuming after a stopped build (docs/DESIGN.md §13.7).
- */
-
 import { toDeckId, type UserId, type DeckId } from '../../ids'
 import type { Context } from 'hono'
 import type { App, AppEnv, Deps } from '../../context'
@@ -20,7 +15,6 @@ interface GrowBody {
   all: boolean
 }
 
-/** Reads a grow request: a topic, a batch size, and whether to finish the deck. */
 function growBody(body: Record<string, unknown>): GrowBody {
   return { topic: str(body, 'topic'), count: num(body, 'count'), all: bool(body, 'all') === true }
 }
@@ -33,7 +27,6 @@ interface GrowReq {
   planner: Planner
 }
 
-/** Decks with a grow request in flight (a background build is tracked by `deck/jobs`). */
 const growing = new Set<DeckId>()
 
 export function registerDeckGrow(app: App) {
@@ -48,7 +41,6 @@ async function growHandler(c: Context<AppEnv>) {
   const body = growBody(await jsonBody(c))
   const planner = await plannerFor(deps, user.id)
   if (!planner) return needKey(c)
-  // Two runs over one deck plan the same words twice and race the cursor.
   if (growing.has(deckId) || isDeckBuilding(deckId)) {
     return fail(c, 409, 'This deck is already being built.')
   }
@@ -61,7 +53,6 @@ async function growHandler(c: Context<AppEnv>) {
   }
 }
 
-/** One n+1 batch: a handful of new words and the sentences that weave them in. */
 async function growOnce(req: GrowReq) {
   const { deps, deckId, body, planner } = req
   const user = req.c.get('user')!
@@ -79,7 +70,6 @@ async function growOnce(req: GrowReq) {
   }
 }
 
-/** Every remaining word, generated in the background (resumes a stopped build). */
 async function finishDeck(req: GrowReq) {
   const { deps, deckId, body } = req
   const user = req.c.get('user')!

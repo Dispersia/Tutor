@@ -1,24 +1,3 @@
-/**
- * One-off deck repair for LLM generation defects (docs/DESIGN.md §11):
- *
- *  1. Pinyin stored where Zhuyin belongs (readings_json.zhuyin with Latin
- *     letters) — converted with the same pinyin→Zhuyin rule the seed uses.
- *  2. A leading "Translate:" (the model echoing its instruction) and leaked
- *     reasoning in front / gloss / rule / explanation — stripped or dropped.
- *  3. Word-by-word English on sentence cards ("I think you." for 我想你。) — with
- *     `--llm`, re-translated into one natural sentence by the translator role.
- *
- * The card id is kept, so SRS scheduling and review history survive.
- *
- *   TUTOR_DATA_DIR=~/.local/share/tutor \
- *     bun scripts/fix-deck-quality.ts <deck-id-or-name> [--llm] [--dry]
- *
- * Read this as a maintenance tool, not part of the request path. It opens the
- * database directly (WAL lets it run beside the live server) instead of building
- * the server's dependencies: that would clear the live server's `building` flags
- * and could start a second speech gateway from inside this script.
- */
-
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { Deps } from '../apps/server/src/context'
@@ -42,16 +21,12 @@ const needle = args.find((a) => !a.startsWith('--'))?.toLowerCase()
 const limit = Number(args.find((a) => a.startsWith('--limit='))?.slice(8) ?? 0)
 
 const { db, sqlite } = openDb(join(env.dataDir, 'tutor.db'))
-/** Just what `resolveUserKey` reads — no speech supervisor, no audio service. */
 const keyDeps = { db, secret: env.secret, serverKey: env.openrouterKey } as unknown as Deps
 
-/** Fields that are shown to the learner and must never hold model reasoning. */
 const TEXT_FIELDS = ['gloss', 'prompt', 'rule', 'explanation'] as const
 
-/** True when a Chinese reading is actually pinyin (Latin letters). */
 const looksPinyin = (s: string | undefined): boolean => Boolean(s && /[a-zA-Z]/.test(s))
 
-/** The card's sentence/grammar English that reads like a word-by-word gloss. */
 function looksLiteral(english: string): boolean {
   return /-(?:[a-z]{2,})|\b(?:classifier|particle|how-many|to-sleep)\b/i.test(english)
 }
@@ -73,26 +48,20 @@ function repairCardText(card: ReturnType<typeof listCards>[number]): RepairPatch
   return patch
 }
 
-/** Fixes a pinyin-as-Zhuyin reading, or fills a missing one. */
 function repairReadings(
   card: ReturnType<typeof listCards>[number],
 ): Record<string, string> | undefined {
-  // Mandarin only: Cantonese romanisation is not pinyin and must not be converted.
   if (card.targetLang === 'zh' && looksPinyin(card.readings.zhuyin)) {
-    // Tone digits or stray punctuation do not convert: use the dictionary then,
-    // and leave the reading alone when neither gives clean Zhuyin.
     const zhuyin = zhuyinFromPinyin(card.readings.zhuyin!) ?? mandarinSentenceZhuyin(card.back)
     return zhuyin ? { ...card.readings, zhuyin } : undefined
   }
   if (card.targetLang === 'zh' && !card.readings.zhuyin && !card.readings.pinyin) {
-    // Fill a missing Zhuyin reading from the Taiwan dictionary.
     const zhuyin = mandarinSentenceZhuyin(card.back)
     if (zhuyin) return { ...card.readings, zhuyin }
   }
   return undefined
 }
 
-/** Strips meta commentary from the payload text fields, or undefined when clean. */
 function cleanTextFields(current: Record<string, unknown>): Record<string, unknown> | undefined {
   const payload = { ...current }
   let changed = false
@@ -111,7 +80,6 @@ function cleanTextFields(current: Record<string, unknown>): Record<string, unkno
   return changed ? payload : undefined
 }
 
-/** Sentence cards whose English needs a real translation pass. */
 function needsEnglish(card: ReturnType<typeof listCards>[number]): boolean {
   if (card.payload?.template !== 'sentence') return false
   const gloss = typeof card.payload.gloss === 'string' ? card.payload.gloss : ''
@@ -171,7 +139,6 @@ for (const user of listUsers(db)) {
     const cards = listCards(db, user.id, deck.id)
     console.log(`[fix] ${deck.name} (${cards.length} cards)`)
 
-    // Pass 1 + 2: deterministic repairs.
     for (const card of cards) {
       const patch = repairCardText(card)
       if (Object.keys(patch).length === 0) continue
@@ -180,7 +147,6 @@ for (const user of listUsers(db)) {
       if (!dry) updateCard(db, card.id, patch)
     }
 
-    // Pass 3: word-by-word English -> one natural sentence.
     if (useLlm) {
       const key = await resolveUserKey(keyDeps, user.id)
       if (!key) {
@@ -189,8 +155,6 @@ for (const user of listUsers(db)) {
       }
       const model = getRoles(db, user.id, env.defaultRoles).translator
       const or = new OpenRouter(key)
-      // Re-read after the text pass, so a leaked rule/explanation we just
-      // dropped is not resurrected by the gloss update below.
       const live = dry ? cards : listCards(db, user.id, deck.id)
       const all = live.filter(needsEnglish)
       const targets = limit > 0 ? all.slice(0, limit) : all

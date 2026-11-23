@@ -31,7 +31,6 @@ test('the reminder is a short last-word instruction', () => {
 test('the script rule follows the deck, and says nothing for other languages', () => {
   expect(scriptRule('zh')).toContain('Traditional characters')
   expect(scriptRule('zh')).toContain('Zhuyin')
-  // a pinyin deck is never told to write Zhuyin
   const pinyin = scriptRule('zh', { variant: 'simplified', readingScript: 'pinyin' })
   expect(pinyin).toContain('Simplified characters')
   expect(pinyin).toContain('pinyin')
@@ -47,7 +46,6 @@ test('the conversation prompt names both languages and asks for speakable text',
   expect(prompt).toContain('native language is English')
   expect(prompt).toContain('text-to-speech')
   expect(prompt).toContain('no markdown')
-  // a Japanese learner is never told about Chinese scripts
   expect(prompt).not.toContain('Zhuyin')
   expect(prompt).not.toContain('Traditional')
 })

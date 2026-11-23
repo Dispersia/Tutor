@@ -1,25 +1,16 @@
-/**
- * Settling a completed action drill: the action gate and the idle-rig economy
- * (docs/DESIGN.md §13.5, §13.5.1). The route only hands the grade over.
- */
-
 import type { UserId } from '../../ids'
 import type { AppEnv, Deps } from '../../context'
 import { ACTION_BY_ID, type ActionDef } from '../../game/skills'
 import { actionState, awardActionXp, completeAction } from '../../services'
 import { guardError, type GuardError } from '../errors'
 
-/** The action/recipe a request names (a drill can settle one). */
 export interface ActionRequest {
   actionId?: string
-  /** the recipe choice for a choose-input action (prospect/cut) */
   choiceId?: string
 }
 
-/** Re-exported for the handlers that gate on an action (`routes/errors.ts` owns it). */
 export type { GuardError }
 
-/** The action the request names, gated for unlock and affordability. */
 export function actionGate(
   deps: Deps,
   userId: UserId,
@@ -57,7 +48,6 @@ function missingMaterials(state: ActionState): GuardError {
   return guardError(409, 'missing materials', { missing: state.missing })
 }
 
-/** Applies action XP + the idle-rig economy for a completed action. */
 export function settleAction(
   deps: AppEnv['Variables']['deps'],
   userId: UserId,
@@ -71,12 +61,10 @@ export function settleAction(
   return runRig(deps, userId, action, choiceId)
 }
 
-/** A drill only lands when it is correct and clears the action's quality bar. */
 function struckTrue(action: ActionDef, result: { correct: boolean; score: number }): boolean {
   return result.correct && result.score >= (action.minScore ?? 70)
 }
 
-/** The reply for a missed strike: no XP, no materials, no rig movement. */
 function failedAward(action: ActionDef) {
   return {
     actionId: action.id,
@@ -93,12 +81,6 @@ function failedAward(action: ActionDef) {
   }
 }
 
-/**
- * The drill powers the rig (docs/DESIGN.md §13.5.1): it pays every running rig
- * up to now, lands the strike, then makes this action's run faster and longer.
- * `gained` is the whole windfall — the strike plus what the runs made — and
- * `idleXp` is the XP those runs earned on their own while you were away.
- */
 function runRig(
   deps: AppEnv['Variables']['deps'],
   userId: UserId,

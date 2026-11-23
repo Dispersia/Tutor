@@ -1,5 +1,3 @@
-/** The active combat encounter and the player's persisted HP. */
-
 import type { UserId } from '../../ids'
 import { eq } from 'drizzle-orm'
 import type { Db } from '../client'
@@ -10,7 +8,6 @@ export function getEncounter(db: Db, userId: UserId) {
   return db.select().from(encounters).where(eq(encounters.userId, userId)).get()
 }
 
-/** The columns a fight update may carry (the rest keep their stored value). */
 export interface EncounterPatch {
   monsterId: string
   monsterHp: number
@@ -44,7 +41,6 @@ export function upsertEncounter(db: Db, userId: UserId, patch: EncounterPatch): 
     .run()
 }
 
-/** The insert values, with the columns the fight does not always set defaulted. */
 function encounterValues(userId: UserId, patch: EncounterPatch) {
   return {
     userId,
@@ -62,7 +58,6 @@ function encounterValues(userId: UserId, patch: EncounterPatch) {
   }
 }
 
-/** Only the optional columns the patch actually carries, for the update set. */
 function encounterExtras(patch: EncounterPatch) {
   return {
     ...(patch.playerMaxHp !== undefined ? { playerMaxHp: patch.playerMaxHp } : {}),
@@ -82,9 +77,6 @@ export function clearEncounter(db: Db, userId: UserId): void {
   db.delete(encounters).where(eq(encounters.userId, userId)).run()
 }
 
-// --- persistent player state (combat HP) -------------------------------------
-
-/** The player's persisted HP, or null when they have never fought (means "full"). */
 export function getPlayerHp(db: Db, userId: UserId): number | null {
   return db.select().from(playerState).where(eq(playerState.userId, userId)).get()?.hp ?? null
 }

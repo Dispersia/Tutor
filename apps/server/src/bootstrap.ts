@@ -20,13 +20,9 @@ export interface Built {
   close: () => void
 }
 
-/** Wires the concrete deps from config. Reused by tests with a temp db. */
 export function buildDeps(cfg: typeof env): Built {
   const { db, sqlite } = openDb(join(cfg.dataDir, 'tutor.db'))
-  // A background deck build cannot survive a restart: clear the flags it left
-  // behind so a half-built domain never looks busy forever.
   clearDeckBuilds(db)
-  // Equipment is its gear instances: fold any older bank stacks into pieces.
   const pieces = backfillGearInstances(db)
   if (pieces) console.log(`[gear] backfilled ${pieces} gear instances from legacy bank stacks`)
   const or = new OpenRouter(cfg.openrouterKey)
@@ -52,7 +48,6 @@ function speechSupervisor(cfg: typeof env): SpeechSupervisor {
   })
 }
 
-/** A full recording run lives in memory; when the flag is set, resume it on boot. */
 function resumeBackfill(db: Db, audio: AudioService): void {
   if (getSetting(db, AUDIO_BACKFILL_KEY) !== '1') return
   let queued = 0

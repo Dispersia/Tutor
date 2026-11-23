@@ -66,11 +66,9 @@ async function putJson<T>(app: App, cookie: string, path: string, body: unknown)
   ).json()) as T
 }
 
-/** Register a member and seed their curated decks. */
 async function signupUser(app: App, db: Db, username = 'alice') {
   const res = await app.request('/api/auth/register', json({ username, password: 'password123' }))
   const cookie = res.headers.getSetCookie()[0]!.split(';')[0]!
-  // Decks are no longer pre-seeded; tests drill the curated fixture decks.
   const { user } = (await res.json()) as { user: { id: UserId } }
   seedStarterDecks(db, user.id)
   return { cookie, user }
@@ -84,7 +82,6 @@ interface Step {
   instance: { exerciseId: string; cardId: string }
 }
 
-/** The next drill the server hands back, as a typed step. */
 function nextStep(app: App, cookie: string, body: unknown): Promise<Step> {
   return postJson<Step>(app, cookie, '/api/practice/next', body)
 }
@@ -108,7 +105,6 @@ test('GET /api/curriculum returns the frequency decks split into one-word steps'
   expect(freq.lessons[0]!.cards).toBe(1)
   expect(freq.lessons.every((l) => !l.complete)).toBe(true)
   expect(freq.learned).toBe(0)
-  // the Japanese path is there too, with no themed decks left
   expect(body.decks.some((d) => d.level === 'jafreq')).toBe(true)
   expect(body.decks.some((d) => d.level === 'hsk1' || d.level === 'n5')).toBe(false)
   sqlite.close()
@@ -127,17 +123,14 @@ test('practising a step stays inside it and records spaced repetition', async ()
   }
   const first = cards.cards[0]!
 
-  // a step drill only uses that step's card
   const next = (await (
     await app.request('/api/practice/next', auth(cookie, json({ lessonId: `${deckId}:1` })))
   ).json()) as { instance: { cardId: string } }
   expect(next.instance.cardId).toBe(first.id)
 
-  // grade the step's card correctly until it graduates through its learning steps
   let last: { lessonCompleted: boolean } = { lessonCompleted: false }
   const drill = { deckId, cardId: first.id, exerciseId: 'multiple_choice' }
   for (let pass = 0; pass < 8 && !last.lessonCompleted; pass++) {
-    // a grade is only taken for a drill the server handed out
     await app.request('/api/practice/next', auth(cookie, json(drill)))
     const res = (await (
       await app.request(
@@ -181,7 +174,6 @@ test('practising a step stays inside it and records spaced repetition', async ()
 test('the daily new-card limit no longer stops the path — pressing on serves new words', async () => {
   const { app, db, sqlite } = makeApp()
   const cookie = await signup(app, db)
-  // A tiny budget keeps the test quick: 2 new cards and 2 reviews today.
   await app.request(
     '/api/settings',
     auth(cookie, { ...json({ study: { newPerDay: 2, maxReviewsPerDay: 2 } }), method: 'PUT' }),
@@ -194,7 +186,6 @@ test('the daily new-card limit no longer stops the path — pressing on serves n
     cards: { id: string; back: string }[]
   }
 
-  // One answer each on two brand-new cards spends the whole day's budget.
   for (const card of cards.cards.slice(0, 2)) {
     await app.request(
       '/api/practice/grade',
@@ -205,21 +196,17 @@ test('the daily new-card limit no longer stops the path — pressing on serves n
     )
   }
 
-  // The budget is spent, but the deck still has new words: practice keeps
-  // serving them rather than showing the "done" screen.
   const resumed = (await (
     await app.request('/api/practice/next', auth(cookie, json({ deckId })))
   ).json()) as { instance: { exerciseId: string; cardId: string } | null; done?: boolean }
   expect(resumed.done).toBeFalsy()
   expect(resumed.instance?.cardId).toBeTruthy()
 
-  // The allowance was raised to cover it, so the header stays honest.
   const stats = (await (await app.request('/api/srs/stats', auth(cookie))).json()) as {
     budget: { newRemaining: number }
   }
   expect(stats.budget.newRemaining).toBeGreaterThan(0)
 
-  // "Study more" still works as the explicit escape hatch.
   const more = (await (
     await app.request('/api/study/more', auth(cookie, { method: 'POST' }))
   ).json()) as { budget: { newRemaining: number; reviewsRemaining: number } }
@@ -244,7 +231,6 @@ test('the frequency path introduces one word per step (n+1)', async () => {
   expect(freq.lessons[0]!.newWord).toBe('我')
   expect(freq.lessons[0]!.reading).toBe('ㄨㄛˇ')
 
-  // practising step 1 only ever uses its single new word
   const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
     decks: { id: string; level: string }[]
   }
@@ -262,7 +248,6 @@ test('the frequency path introduces one word per step (n+1)', async () => {
 test('sentence_build builds and grades an n+1 sentence once words are known', async () => {
   const { app, db, sqlite } = makeApp()
   const cookie = await signup(app, db)
-  // This test wants unlimited new cards so the budget never blocks the lesson.
   await putJson(app, cookie, '/api/settings', { study: { newPerDay: 0, maxReviewsPerDay: 0 } })
   const decks = await getJson<{ decks: { id: string; level: string }[] }>(app, cookie, '/api/decks')
   const freqDeck = decks.decks.find((d) => d.level === 'zhfreq')!
@@ -271,10 +256,8 @@ test('sentence_build builds and grades an n+1 sentence once words are known', as
     cookie,
     `/api/decks/${freqDeck.id}/cards`,
   )
-  // learn the first 35 words: grade each until it graduates through its steps
   await learnWords(app, cookie, cards.cards, 35)
 
-  // the step for 喝 should now be able to build "我 喝 茶"
   const idx = cards.cards.findIndex((c) => c.back === '喝')
   expect(idx).toBeGreaterThanOrEqual(0)
   const card = cards.cards[idx]!
@@ -300,7 +283,6 @@ test('sentence_build builds and grades an n+1 sentence once words are known', as
   sqlite.close()
 })
 
-/** Grade a card correct through its learning steps, `passes` times each. */
 async function learnWords(
   app: App,
   cookie: string,
@@ -332,16 +314,14 @@ test('a new card is taught before it is quizzed', async () => {
   ).json()) as { cards: { id: string; back: string }[] }
   const first = cards.cards[0]!
 
-  // first exposure: a teach step, never a quiz
   const taught = (await (
     await app.request('/api/practice/next', auth(cookie, json({ deckId: freqDeck.id })))
   ).json()) as { instance: { exerciseId: string; cardId: string; data: Record<string, unknown> } }
   expect(taught.instance.exerciseId).toBe('introduce')
   expect(taught.instance.cardId).toBe(first.id)
   expect(taught.instance.data.word).toBe(first.back)
-  expect(taught.instance.data.reading).toBe('ㄨㄛˇ') // Zhuyin, never pinyin
+  expect(taught.instance.data.reading).toBe('ㄨㄛˇ')
 
-  // the teach step is not a review: nothing has entered the SRS yet
   const before = (await (await app.request('/api/srs/stats', auth(cookie))).json()) as {
     new: number
     total: number
@@ -353,7 +333,6 @@ test('a new card is taught before it is quizzed', async () => {
     auth(cookie, json({ exerciseId: 'introduce', cardId: first.id, answer: 'ok' })),
   )
 
-  // once introduced, the same word comes back as a normal drill
   const drilled = (await (
     await app.request('/api/practice/next', auth(cookie, json({ deckId: freqDeck.id })))
   ).json()) as { instance: { exerciseId: string; cardId: string } }
@@ -379,8 +358,6 @@ test('the first-exposure teach step never powers an idle rig', async () => {
   ).json()) as { instance: { exerciseId: string; cardId: string } }
   expect(taught.instance.exerciseId).toBe('introduce')
 
-  // Grade the "Meet a new word" step while drilling an action. It is a prelude,
-  // not a drill: it must not power that action's rig (no completion, no run).
   await app.request(
     '/api/practice/grade',
     auth(
@@ -414,7 +391,6 @@ test('teach steps include an n+1 example built from words already met', async ()
   for (let i = 0; i < 8; i++) {
     const card = cards.cards[i]!
 
-    // first exposure teaches the word
     const taught = (await (
       await app.request('/api/practice/next', auth(cookie, json({ deckId: freqDeck.id })))
     ).json()) as {
@@ -427,11 +403,10 @@ test('teach steps include an n+1 example built from words already met', async ()
       { text: string; reading: string; target: string } | undefined
     if (ex) {
       sawExample = true
-      // n+1: every character comes from a word already met, or the new word
       const allowed = new Set([...seen, card.back].flatMap((b) => [...b]))
       for (const ch of ex.text) expect(allowed.has(ch)).toBe(true)
       expect(ex.target).toBe(card.back)
-      expect(ex.reading).toMatch(/[\u3100-\u312f]/) // Zhuyin, never pinyin
+      expect(ex.reading).toMatch(/[\u3100-\u312f]/)
     }
 
     await app.request(
@@ -440,13 +415,11 @@ test('teach steps include an n+1 example built from words already met', async ()
     )
     seen.push(card.back)
 
-    // then the same word is drilled
     const drilled = (await (
       await app.request('/api/practice/next', auth(cookie, json({ deckId: freqDeck.id })))
     ).json()) as { instance: { exerciseId: string; cardId: string } }
     expect(drilled.instance.exerciseId).not.toBe('introduce')
     expect(drilled.instance.cardId).toBe(card.id)
-    // a miss reschedules it, so the path advances to the next new word
     await app.request(
       '/api/practice/grade',
       auth(
@@ -481,8 +454,6 @@ test('a wrong answer schedules the card to come back soon', async () => {
     new: number
     total: number
   }
-  // a lapse reschedules the card ~10 minutes out (not due yet), and it is no
-  // longer "new"; nothing has been learned
   expect(stats.due).toBe(0)
   expect(stats.learned).toBe(0)
   expect(stats.new).toBe(stats.total - 1)
@@ -500,8 +471,6 @@ test('a sitting opens with a few new words before the due backlog', async () => 
     cookie,
     `/api/decks/${deckId}/cards`,
   )
-  // Put one word deep in the deck into review, due now: it is the card the
-  // due-first queue would serve immediately.
   const due = cards.cards.at(-1)!
   const now = Date.now()
   upsertSrs(db, user.id, toCardId(due.id), {
@@ -517,7 +486,6 @@ test('a sitting opens with a few new words before the due backlog', async () => 
     lastReviewAt: now - 86_400_000,
   })
 
-  // The sitting starts with three new words in a row, not the overdue review.
   const opened: string[] = []
   for (let i = 0; i < 3; i++) {
     const step = await nextStep(app, cookie, { deckId })
@@ -529,8 +497,6 @@ test('a sitting opens with a few new words before the due backlog', async () => 
       cardId: step.instance.cardId,
       answer: 'ok',
     })
-    // the same word comes back as its first graded drill (this is what gives it
-    // an SRS state; the teach step alone does not)
     const drill = await nextStep(app, cookie, { deckId })
     expect(drill.instance.cardId).toBe(step.instance.cardId)
     await postJson(app, cookie, '/api/practice/grade', {
@@ -541,7 +507,6 @@ test('a sitting opens with a few new words before the due backlog', async () => 
   }
   expect(new Set(opened).size).toBe(3)
 
-  // Once the sitting has had its new words, the due review comes back first.
   const after = await nextStep(app, cookie, { deckId })
   expect(after.instance.cardId).toBe(due.id)
   expect(after.instance.exerciseId).not.toBe('introduce')
@@ -560,7 +525,6 @@ test('a one-word lesson does not re-show its word before the next step is due', 
   }
   const first = cards.cards[0]!
 
-  // Learn the step's word: teach, then its first graded drill.
   const taught = (await (
     await app.request('/api/practice/next', auth(cookie, json({ lessonId: `${deckId}:1` })))
   ).json()) as { instance: { exerciseId: string; cardId: string } }
@@ -590,8 +554,6 @@ test('a one-word lesson does not re-show its word before the next step is due', 
     ),
   )
 
-  // Its next learning step is a minute out: the queue teaches the path's next
-  // word instead of showing the same word again and again.
   const after = (await (
     await app.request('/api/practice/next', auth(cookie, json({ lessonId: `${deckId}:1` })))
   ).json()) as { instance: { exerciseId: string; cardId: string } }

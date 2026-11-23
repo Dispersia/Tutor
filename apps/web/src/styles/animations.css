@@ -1,12 +1,9 @@
-/* Keyframes and reduced-motion fallbacks. */
-
 @keyframes spin {
   to {
     transform: rotate(360deg);
   }
 }
 
-/* A rig that is running breathes: opacity only, never a glow. */
 @keyframes livedot {
   0%,
   100% {
@@ -16,7 +13,6 @@
     opacity: 0.4;
   }
 }
-/* A wait state must stay legible: slow the ring rather than freeze it. */
 @media (prefers-reduced-motion: reduce) {
   .spinner {
     animation-duration: 1.6s;
@@ -55,8 +51,6 @@
   animation: float-up 0.25s ease both;
 }
 
-/* A monster's blow: the player's health block jolts, so even a small chip reads
-   as "I got hit". */
 @keyframes hit-shake {
   0%,
   100% {

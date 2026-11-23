@@ -1,16 +1,3 @@
-/**
- * One-off backfill: annotate a deck's existing cards with pitch-accent metadata.
- * The bundled Japanese dictionary answers first (offline); the generator fills
- * whatever it does not know. Same work as `POST /api/decks/:id/pitch`, run from a
- * shell against a database (e.g. the packaged app's).
- *
- * `--force` re-annotates every card that has a reading from the dictionary alone,
- * replacing wrong contours (the generator's guesses) and needing no API key.
- *
- * Usage:
- *   TUTOR_DATA_DIR=~/.local/share/tutor bun scripts/backfill-pitch.ts <deck-id-or-name> [--force]
- */
-
 import { join } from 'node:path'
 import type { Deps } from '../apps/server/src/context'
 import { openDb } from '../apps/server/src/db/client'

@@ -1,5 +1,3 @@
-/** Spaced-repetition state and its review log (FSRS). */
-
 import type { UserId, CardId } from '../../ids'
 import { and, asc, eq, sql } from 'drizzle-orm'
 import type { Db } from '../client'
@@ -38,7 +36,6 @@ export function upsertSrs(db: Db, userId: UserId, cardId: CardId, s: SrsWrite): 
     .run()
 }
 
-/** Appends one FSRS review to the log (docs/DESIGN.md §13.6). */
 export interface SrsReviewWrite {
   userId: UserId
   cardId: CardId
@@ -62,7 +59,6 @@ export function addSrsReview(db: Db, r: SrsReviewWrite): void {
     .run()
 }
 
-/** The review log for one user, or one card, oldest first. */
 export function listSrsReviews(db: Db, userId: UserId, cardId?: CardId) {
   const where = cardId
     ? and(eq(srsReviews.userId, userId), eq(srsReviews.cardId, cardId))
@@ -70,7 +66,6 @@ export function listSrsReviews(db: Db, userId: UserId, cardId?: CardId) {
   return db.select().from(srsReviews).where(where).orderBy(asc(srsReviews.createdAt)).all()
 }
 
-/** How many cards this member has a schedule for, counted in SQL. */
 export function countScheduledCards(db: Db, userId: UserId): number {
   const row = db
     .select({ n: sql<number>`count(*)` })

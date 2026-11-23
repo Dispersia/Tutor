@@ -1,47 +1,27 @@
-/**
- * The Mandarin lexicon: a frequency list (docs/DESIGN.md §13.7). It lives in
- * `text/` because the grammar engine and the sentence drills read it at runtime;
- * `seed/service.ts` also seeds the test-fixture deck from it.
- *
- * Ordered roughly by frequency, then trimmed for beginner usefulness: the head
- * of the list is the words you can actually build sentences with, so the path
- * can introduce grammar words (是, 不, 我 …) early and start combining them into
- * sentences almost immediately. Each entry carries the part of speech the
- * grammar engine (`game/grammar.ts`) needs to slot it into a pattern.
- *
- * This is the "spine" of the frequency curriculum: the deck is seeded in this
- * order and the path walks it one word at a time (strict n+1).
- */
-
 export type Pos =
-  | 'pron' // pronoun (我, 你, 他 …)
+  | 'pron'
   | 'noun'
-  | 'vt' // transitive verb (吃, 喝, 看 …)
-  | 'vi' // intransitive verb (睡覺, 走, 來 …)
-  | 'vadj' // stative verb / adjective (好, 大, 忙 …)
-  | 'aux' // modal / auxiliary (想, 要, 會, 能)
-  | 'adv' // adverb (很, 也, 都, 不, 太)
+  | 'vt'
+  | 'vi'
+  | 'vadj'
+  | 'aux'
+  | 'adv'
   | 'num'
   | 'measure'
   | 'time'
-  | 'part' // particle (的, 了, 嗎)
-  | 'qword' // question word (什麼, 誰 …)
-  | 'conj' // conjunction (和)
-  | 'prep' // preposition (在)
-  | 'greet' // set greeting (你好 …)
+  | 'part'
+  | 'qword'
+  | 'conj'
+  | 'prep'
+  | 'greet'
 
 export interface FreqWord {
-  /** target text (hanzi) */
   word: string
-  /** pinyin (space separated) */
   pinyin: string
-  /** short English gloss used in prompts */
   en: string
-  /** part of speech */
   pos: Pos
 }
 
-/** Ordered by frequency: the head doubles as the first lesson sequence. */
 export const FREQUENCY: FreqWord[] = [
   { word: '我', pinyin: 'wǒ', en: 'I, me', pos: 'pron' },
   { word: '你', pinyin: 'nǐ', en: 'you', pos: 'pron' },
@@ -183,5 +163,4 @@ export const FREQUENCY: FreqWord[] = [
   { word: '再見', pinyin: 'zàijiàn', en: 'goodbye', pos: 'greet' },
 ]
 
-/** word -> entry, for the grammar engine and support checks. */
 export const LEXICON: Map<string, FreqWord> = new Map(FREQUENCY.map((w) => [w.word, w]))

@@ -14,16 +14,13 @@ test('parsePitchContour normalises an explicit contour', () => {
 })
 
 test('parsePitchContour derives levels from an accent number + syllables', () => {
-  // 平板 heiban: low then high throughout
   expect(parsePitchContour({ accent: 0, syllables: ['か', 'み', 'さ', 'ま'] })?.levels).toEqual([
     'L',
     'H',
     'H',
     'H',
   ])
-  // 頭高 atamadaka: high then low
   expect(pitchFromAccent(1, 3)).toEqual(['H', 'L', 'L'])
-  // accent 3 of 4: only the tail falls
   expect(pitchFromAccent(3, 4)).toEqual(['L', 'H', 'H', 'L'])
 })
 
@@ -35,7 +32,6 @@ test('parsePitchContour drops unusable input', () => {
 })
 
 test('pitchOf reads a contour out of card metadata', () => {
-  // producers may hand us the shorthand; pitchOf normalises it
   expect(pitchOf({ pitch: 'HL' as unknown as CardMetadata['pitch'] })?.levels).toEqual(['H', 'L'])
   expect(pitchOf({ radical: '水' })).toBeUndefined()
   expect(pitchOf(undefined)).toBeUndefined()

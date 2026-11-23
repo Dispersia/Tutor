@@ -1,6 +1,4 @@
 <script lang="ts">
-  /** Admin only: the member list, with delete for everyone but yourself. */
-
   import { accentStyle, ACCENT } from '#lib/theme'
   import { session } from '#lib/session.svelte'
   import type { PublicUser } from '#lib/types'

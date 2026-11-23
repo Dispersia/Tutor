@@ -1,22 +1,12 @@
-/** Grammar cloze: apply a rule to a pattern (any language). */
-
 import type { ExerciseDef } from '@tutor/core'
 import { feedbackFor, gradeText } from '../grading'
 import { payloadString } from '../payload'
 import { displayReading, readingsOf, shuffle } from '../shared'
 
-/**
- * Generic grammar template. The card carries the practice in its payload, so the
- * same exercise serves every language: `prompt` (defaults to `front`), `answer`
- * (defaults to `back`), optional `options` for a choice card, plus `rule` and
- * `explanation` shown around the answer. With no options it is free typing.
- */
 export const grammarCloze: ExerciseDef<string> = {
   id: 'grammar_cloze',
   title: 'Apply the rule',
   modality: 'text',
-  // Gated on explicit grammar markers so a plain word card is never offered as
-  // grammar: the card must carry an answer, a rule or options.
   supports: (card) => {
     const options = card.payload?.options
     return Boolean(

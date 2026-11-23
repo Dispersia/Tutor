@@ -1,17 +1,3 @@
-/**
- * Audit + rewrite of a deck's example cards (sentence + grammar), driven by the
- * `scripts/sweep-cards.ts` CLI.
- *
- * Generated decks drift: the model is asked for strict n+1 and often satisfies
- * the shape with a sentence nobody would say ("我的你。") or leaks its reasoning
- * into a gloss. For each example card this either strips the meta-commentary the
- * deterministic pass can catch and asks the generator to rewrite it into a
- * natural, n+1 card, or drops it when no natural sentence is possible.
- *
- * Vocabulary cards and their ids are never touched, so SRS scheduling, review
- * history and lesson progress survive.
- */
-
 import type { UserId, DeckId } from '../ids'
 import type { Card } from '@tutor/core'
 import type { Db } from '../db/client'
@@ -25,7 +11,6 @@ import { stripMetaCommentary, tokensMatchBack, type PlannedCard } from './plan'
 import type { CharacterVariant } from '../frequency/source'
 import { withReading } from '../text/readings'
 
-/** How many example cards one model call audits. */
 const BATCH = 8
 
 const SWEEP_SCHEMA = {
@@ -63,7 +48,6 @@ interface AuditCard {
   reason?: string
 }
 
-/** The deck being swept, read straight from the `decks` table. */
 export interface DeckRow {
   id: DeckId
   userId: UserId
@@ -75,7 +59,6 @@ export interface DeckRow {
   readingScript?: string
 }
 
-/** Minimal `sqlite.run` surface the sweep needs (sql + array bindings). */
 export type SweepRun = (sql: string, params?: string[]) => unknown
 
 export interface SweepOptions {
@@ -86,7 +69,6 @@ export interface SweepOptions {
   deck: DeckRow
   dry: boolean
   concurrency: number
-  /** Audit at most this many example cards (0 = all). */
   limit: number
 }
 
@@ -96,14 +78,12 @@ export interface DeckSweep {
   kept: number
 }
 
-/** Everything one deck's audit needs, once its cards are loaded. */
 interface SweepCtx extends SweepOptions {
   examples: Card[]
   vocabByStep: Map<number, string>
   vocabSorted: string[]
 }
 
-/** A card the model proposed to change, ready to write. */
 interface Rewrite {
   front: string
   back: string
@@ -111,7 +91,6 @@ interface Rewrite {
   payload: Record<string, unknown>
 }
 
-/** Audits and rewrites one deck's example cards; returns the run's tally. */
 export async function sweepDeck(opts: SweepOptions): Promise<DeckSweep> {
   const ctx = deckContext(opts)
   if (!ctx) return { fixed: 0, dropped: 0, kept: 0 }
@@ -122,7 +101,6 @@ export async function sweepDeck(opts: SweepOptions): Promise<DeckSweep> {
   return tally
 }
 
-/** The audit context for one deck, or undefined when it has no example cards. */
 function deckContext(opts: SweepOptions): SweepCtx | undefined {
   const cards = listCards(opts.db, opts.deck.userId, opts.deck.id)
   const vocabByStep = vocabSteps(cards)
@@ -135,7 +113,6 @@ function deckContext(opts: SweepOptions): SweepCtx | undefined {
   return { ...opts, examples, vocabByStep, vocabSorted: sortedVocab(vocabByStep) }
 }
 
-/** The new word each step introduces (a card's `payload.step`). */
 function vocabSteps(cards: Card[]): Map<number, string> {
   const byStep = new Map<number, string>()
   for (const c of cards) {
@@ -149,7 +126,6 @@ function vocabSteps(cards: Card[]): Map<number, string> {
 const sortedVocab = (byStep: Map<number, string>): string[] =>
   [...byStep.values()].sort((a, b) => b.length - a.length)
 
-/** The deck's example cards, by step, capped by `limit`. */
 function exampleCards(cards: Card[], limit: number): Card[] {
   const examples = cards
     .filter((c) => c.type === 'phrase' || c.type === 'grammar')
@@ -157,7 +133,6 @@ function exampleCards(cards: Card[], limit: number): Card[] {
   return limit ? examples.slice(0, limit) : examples
 }
 
-/** Runs the batches with a fixed worker pool, returning the tally. */
 async function runPool(ctx: SweepCtx, queue: Card[][]): Promise<DeckSweep> {
   const tally: DeckSweep = { fixed: 0, dropped: 0, kept: 0 }
   const size = Math.min(ctx.concurrency, queue.length)
@@ -166,7 +141,6 @@ async function runPool(ctx: SweepCtx, queue: Card[][]): Promise<DeckSweep> {
   return tally
 }
 
-/** One worker: pull batches off the queue until it is empty. */
 async function drain(ctx: SweepCtx, queue: Card[][], tally: DeckSweep): Promise<void> {
   for (;;) {
     const batch = queue.shift()
@@ -175,14 +149,12 @@ async function drain(ctx: SweepCtx, queue: Card[][], tally: DeckSweep): Promise<
   }
 }
 
-/** Audits one batch and applies each verdict. */
 async function runBatch(ctx: SweepCtx, batch: Card[], tally: DeckSweep): Promise<void> {
   const verdicts = await auditBatch(ctx, batch)
   if (!verdicts) return
   for (let i = 0; i < batch.length; i++) applyOne(ctx, batch[i]!, verdicts.get(i), tally)
 }
 
-/** Asks the model to audit one batch; undefined when the call failed. */
 async function auditBatch(
   ctx: SweepCtx,
   batch: Card[],
@@ -209,7 +181,6 @@ function indexVerdicts(cards: AuditCard[] | undefined): Map<number, AuditCard> {
   return byIndex
 }
 
-/** The system + user messages for one audit batch. */
 function batchMessages(ctx: SweepCtx, batch: Card[]): ChatMessage[] {
   const system = systemFor(
     langName(ctx.deck.targetLang),
@@ -230,7 +201,6 @@ Cards to proofread:
 ${JSON.stringify(items)}`
 }
 
-/** One card as the model sees it: its content plus the words known at its step. */
 function auditItem(ctx: SweepCtx, c: Card, index: number) {
   return {
     index,
@@ -244,14 +214,12 @@ function auditItem(ctx: SweepCtx, c: Card, index: number) {
   }
 }
 
-/** The words the learner has met at a card's step (its lesson and before). */
 function knownAtStep(vocabByStep: Map<number, string>, step: number): string[] {
   const words: string[] = []
   for (const [s, w] of vocabByStep) if (s <= step) words.push(w)
   return words
 }
 
-/** Decides one card's fate: keep it, drop it, or apply a validated rewrite. */
 function applyOne(
   ctx: SweepCtx,
   card: Card,
@@ -266,7 +234,6 @@ function applyOne(
   else writeRewrite(ctx, card, next, tally)
 }
 
-/** Keeps a card the model left alone (no verdict, or a no-op one). */
 function keepOne(tally: DeckSweep): void {
   tally.kept++
 }
@@ -289,7 +256,6 @@ function writeRewrite(ctx: SweepCtx, card: Card, next: Rewrite, tally: DeckSweep
   if (!ctx.dry) updateCard(ctx.run, card.id, next)
 }
 
-/** The reason a rewrite cannot ship, or undefined when it is fine. */
 function rejection(ctx: SweepCtx, card: Card, next: Rewrite): string | undefined {
   const invalid =
     grammarRejection(card, next) ??
@@ -298,7 +264,6 @@ function rejection(ctx: SweepCtx, card: Card, next: Rewrite): string | undefined
   return invalid
 }
 
-/** A grammar fix must still carry an answer and a target-language prompt. */
 function grammarRejection(card: Card, next: Rewrite): string | undefined {
   if (card.type !== 'grammar') return undefined
   const answer = next.payload.answer ?? next.back
@@ -310,7 +275,6 @@ function grammarRejection(card: Card, next: Rewrite): string | undefined {
   return undefined
 }
 
-/** A sentence fix must keep its tokens and back in agreement. */
 function sentenceRejection(card: Card, next: Rewrite): string | undefined {
   if (card.type !== 'phrase') return undefined
   const tokens = next.payload.tokens
@@ -318,7 +282,6 @@ function sentenceRejection(card: Card, next: Rewrite): string | undefined {
   return tokensMatchBack(tokens, next.back) ? undefined : 'rewrite tokens no longer match its back'
 }
 
-/** A rewrite must not reach a word introduced after this card's step. */
 function nPlusOneRejection(ctx: SweepCtx, card: Card, next: Rewrite): string | undefined {
   const future = futureWords(ctx.vocabByStep, stepOf(card))
   const planned = plannedCard(card, next)
@@ -332,7 +295,6 @@ function futureWords(byStep: Map<number, string>, step: number): Set<string> {
   return new Set([...byStep.entries()].filter(([s]) => s > step).map(([, w]) => w))
 }
 
-/** A rewrite as the planner sees it, so `leapsAhead` can vet it. */
 function plannedCard(card: Card, next: Rewrite): PlannedCard {
   return {
     template: card.type === 'grammar' ? 'grammar' : 'sentence',
@@ -342,12 +304,10 @@ function plannedCard(card: Card, next: Rewrite): PlannedCard {
   }
 }
 
-/** Merges a verdict into the card, or undefined when nothing changed. */
 function applyVerdict(card: Card, verdict: AuditCard, script?: string): Rewrite | undefined {
   const sides = targetSides(card, verdict)
   if (!sides) return undefined
   if (!changedBy(card, verdict, sides)) return undefined
-  // The reading goes under the key the deck builder uses (`text/readings.ts`).
   const fallbackZhuyin = () => mandarinSentenceZhuyin(sides.back)
   const reading = { targetLang: card.targetLang, reading: verdict.reading, script, fallbackZhuyin }
   return {
@@ -358,12 +318,10 @@ function applyVerdict(card: Card, verdict: AuditCard, script?: string): Rewrite 
   }
 }
 
-/** The front/back with commentary stripped and the target language on `back`. */
 function targetSides(card: Card, verdict: AuditCard): { front: string; back: string } | undefined {
   const front = stripMetaCommentary(verdict.front ?? card.front)
   const back = stripMetaCommentary(verdict.back ?? card.back)
   if (!front || !back) return undefined
-  // The model sometimes swaps the sides; put the target language back in `back`.
   if (looksTarget(front, card.targetLang) && !looksTarget(back, card.targetLang)) {
     return { front: back, back: front }
   }
@@ -389,16 +347,10 @@ function mergedPayload(
   return payload
 }
 
-/** Han / kana / half-width katakana — the scripts a zh/ja target uses. */
 const CJK = /[\u3040-\u30ff\u3400-\u9fff\uff66-\uff9f]/
 const looksTarget = (text: string, lang: string): boolean =>
   (lang === 'zh' || lang === 'yue' || lang === 'ja') && CJK.test(text)
 
-/**
- * Greedy longest-match tokeniser over the deck's vocabulary, so a target sentence
- * can be checked word by word without a real segmenter. Words not in the list
- * fall back to single characters.
- */
 function tokenize(text: string, sortedWords: string[]): string[] {
   const out: string[] = []
   let i = 0
@@ -429,7 +381,6 @@ function describe(c: Card): string {
   return `${c.type} ${JSON.stringify(c.back)} / ${JSON.stringify(c.front)}`
 }
 
-/** One short line, so a model's rambling reason does not flood the report. */
 function short(text: string | undefined): string {
   const t = (text ?? 'invalid').replace(/\s+/g, ' ').trim()
   return t.length > 140 ? `${t.slice(0, 137)}…` : t
@@ -445,7 +396,6 @@ function updateCard(run: SweepRun, id: string, next: Rewrite): void {
   ])
 }
 
-/** Removes a dropped card and every trace of it (schedule, history, attempts). */
 function removeCard(run: SweepRun, id: string): void {
   run('delete from srs where card_id = ?', [id])
   run('delete from srs_reviews where card_id = ?', [id])

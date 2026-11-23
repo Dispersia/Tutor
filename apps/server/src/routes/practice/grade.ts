@@ -1,5 +1,3 @@
-/** `POST /api/practice/grade` — grade a submitted answer (docs/DESIGN.md §13.6). */
-
 import { toCardId, type CardId } from '../../ids'
 import type { ServerCard } from '../../db/repo'
 import type { Card, ExerciseContext, ExerciseDef, GradeResult } from '@tutor/core'
@@ -23,7 +21,6 @@ interface GradeBody extends ActionRequest {
   lessonId?: string
 }
 
-/** Reads a grade request: the exercise, the card and the learner's answer. */
 function readGradeBody(body: Record<string, unknown>): GradeBody {
   return {
     actionId: str(body, 'actionId'),
@@ -50,17 +47,11 @@ async function gradeHandler(c: Context<AppEnv>) {
   if (!def) return c.json({ error: 'exercise not found' }, 404)
   if (!fits(def, card, user)) return c.json({ error: 'that exercise does not fit this card' }, 400)
   if (!wasIssued(user.id, card.id, def.id)) return c.json({ error: NOT_ISSUED }, 409)
-  // An action must be unlocked and affordable before it can settle.
   const gate = actionGate(deps, user.id, body)
   if (gate.error) return c.json(gate.error.body, gate.error.status)
   return gradeAttempt({ c, deps, user, card, def, body })
 }
 
-/**
- * A grade is only taken for a drill the server could have served: the exercise
- * must support the card and not be switched off product-wide. The drill itself
- * must also be one that was handed to this member (`issued.ts`).
- */
 const NOT_ISSUED = 'that drill was not the one you were given — load the next card'
 
 function fits(def: ExerciseDef, card: Card, user: PublicUser): boolean {
@@ -68,7 +59,6 @@ function fits(def: ExerciseDef, card: Card, user: PublicUser): boolean {
   return !def.temporarilyDisabled && def.supports(card, learnerOf(user))
 }
 
-/** One validated attempt: generate, grade, and settle what it earned. */
 interface GradeCall {
   c: Context<AppEnv>
   deps: Deps
@@ -91,8 +81,6 @@ async function gradeAttempt(call: GradeCall) {
     result,
     latencyMs: body.latencyMs,
   })
-  // A first-exposure "teach" step records that the card was introduced, but is
-  // not a recall test: no XP, no schedule, no lesson completion.
   if (def.id === INTRODUCE_ID) return c.json(uncountedOutcome(deps, user.id, result))
   return c.json(settleGrade(call, result, xp))
 }

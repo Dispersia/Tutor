@@ -1,7 +1,6 @@
 import { beforeEach, expect, test } from 'bun:test'
 import { cachedAt, clearCache, isPersisted, peekCached, writeCache } from './cache'
 
-/** A localStorage stand-in that throws once `limit` characters are stored. */
 class FakeStorage {
   map = new Map<string, string>()
   limit = Infinity
@@ -53,7 +52,6 @@ test('a full quota evicts older entries instead of dropping the new one', () => 
   writeCache('/api/skills', { pad: 'z'.repeat(300) })
   expect(store.map.has('tutor.cache./api/skills')).toBe(true)
   expect(store.map.size).toBeLessThan(3)
-  // Evicted from disk only: this session still has every payload in memory.
   expect(peekCached('/api/stats')).toBeDefined()
 })
 

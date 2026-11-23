@@ -1,5 +1,3 @@
-/** Speak the word: pronunciation scoring (DESIGN §9.4). */
-
 import type {
   AssessResult,
   ExerciseContext,
@@ -14,7 +12,6 @@ import { gradingReading, label, readingsOf, wordView } from '../shared'
 
 type Features = ReturnType<typeof computeFeatures>
 
-/** The score a pronunciation attempt resolved to, before it is laid out. */
 interface PronScore {
   score: number
   correct: boolean
@@ -22,7 +19,6 @@ interface PronScore {
   words: WordFeedback[]
 }
 
-/** What the LLM judge may return, every field optional. */
 interface JudgeOut {
   score?: number
   correct?: boolean
@@ -35,8 +31,6 @@ export const speakWord: ExerciseDef<string> = {
   title: 'Say it out loud',
   modality: 'voice',
   needsAudio: true,
-  // Off for now: the pronunciation scoring is not reliable enough to drill yet.
-  // Flip this back off (or remove the line) to bring the card back.
   temporarilyDisabled: true,
   supports: () => true,
   async generate(ctx) {
@@ -52,7 +46,6 @@ export const speakWord: ExerciseDef<string> = {
       },
     }
   },
-  /** Text fallback (no audio): compare the transcript directly. */
   async grade(ctx, _instance, answer) {
     const transcript = String(answer ?? '').trim()
     if (!transcript) {
@@ -74,7 +67,6 @@ export const speakWord: ExerciseDef<string> = {
     }
   },
 
-  /** Real pronunciation path: ASR + forced alignment + optional LLM judge. */
   async gradeAudio(ctx, instance, audio) {
     const expected = ctx.card.back
     if (!ctx.assess) return speakWord.grade!(ctx, instance, '')
@@ -104,7 +96,6 @@ function noSpeechResult(expected: string): GradeResult {
   }
 }
 
-/** The deterministic features' score, upgraded by the judge when one is set. */
 async function refine(
   ctx: ExerciseContext,
   expected: string,
@@ -178,7 +169,6 @@ function judgePrompt(ctx: ExerciseContext, expected: string, a: AssessResult, f:
   ].join('\n')
 }
 
-/** How the judge should read the evidence, and what to return. */
 function pronGuide(ctx: ExerciseContext): string {
   const native = label(ctx.learner.nativeLang)
   return [

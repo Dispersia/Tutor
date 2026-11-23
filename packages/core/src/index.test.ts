@@ -48,7 +48,6 @@ test('registry: duplicate id throws', () => {
 })
 
 test('adding an exercise needs no core changes', () => {
-  // This is the whole extensibility promise: a new def + one register() line.
   const r = new ExerciseRegistry().register(makeDef('brand_new'))
   expect(r.get('brand_new')).toBeDefined()
   expect(r.forCard(card, learner).map((d) => d.id)).toContain('brand_new')

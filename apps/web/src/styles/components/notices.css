@@ -1,8 +1,4 @@
-/** Notices — the flat, accent-tinted strip for loading / empty / error copy. */
-
 @layer components {
-  /* A flat, accent-tinted strip for loading / empty / error copy. No gradient,
-     no glow — the accent tints the fill and the hairline. */
   .banner {
     display: flex;
     align-items: flex-start;
@@ -21,5 +17,20 @@
   }
   .banner__text {
     color: var(--color-ink-300);
+  }
+}
+
+@layer components {
+  .empty {
+    display: grid;
+    place-items: center;
+    min-height: 7rem;
+    border-radius: 18px;
+    border: 1.5px dashed var(--color-ink-700);
+    padding: 1.25rem;
+    text-align: center;
+    font-size: 0.92rem;
+    line-height: 1.5;
+    color: var(--color-ink-400);
   }
 }

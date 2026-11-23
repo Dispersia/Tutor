@@ -12,7 +12,6 @@ import { fail } from './errors'
 
 const SESSION_KINDS = ['chat', 'voice', 'mixed'] as const
 
-/** Reads the metadata a new session can carry. */
 function readNewSession(body: Record<string, unknown>): NewSession {
   return {
     id: idField(body, 'id', toSessionId),
@@ -24,7 +23,6 @@ function readNewSession(body: Record<string, unknown>): NewSession {
 }
 
 export function registerSessions(app: App) {
-  // Every query is scoped to the signed-in user — separate history per person.
   app.get('/api/sessions', (c) => {
     const user = c.get('user')!
     return c.json({ sessions: listSessions(c.get('deps').db, user.id) })

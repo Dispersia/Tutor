@@ -29,13 +29,11 @@
   } from '#lib/inventoryview'
   import { cachedResource } from '#lib/resource.svelte'
 
-  // Seed from the last fetch so returning to Inventory shows the gear at once.
   const loadout = cachedResource<GearResponse>('/api/skills/gear')
   const data = $derived(loadout.data ?? null)
   let busy = $state(false)
   let pickedSlot = $state<string | null>(null)
   let setName = $state('')
-  /** The enchant catalog id each gear instance's control currently has selected. */
   let enchantPick = $state<Record<string, string>>({})
 
   const itemMap = $derived(new Map((data?.items ?? []).map((i) => [i.id, i])))
@@ -44,18 +42,14 @@
   const enchantById = $derived(new Map(enchantCatalog.map((e) => [e.id, e])))
   const enchantingLevel = $derived(data?.enchantingLevel ?? 1)
 
-  /** Account-wide combat buffs from tier bands (§13.5.3). */
   const combatBuffs = $derived(combatBuffsOf(data?.buffs?.band))
 
-  /** Gear instances worn in each slot. */
   const worn = $derived(wornOf(data?.equipment ?? [], new Map(gear.map((g) => [g.id, g]))))
 
-  /** The worn totals, mirroring the server's combat maths (set bonuses included). */
   const totals = $derived(totalsOf(worn.values(), data?.setBonuses ?? []))
 
   const candidates = (slot: string) => candidatesIn(slot, gear)
 
-  /** Equipment-tier bank items with no rolled instance (legacy crafts). */
   const baseEquipment = $derived(baseEquipmentOf(data?.inventory ?? [], itemMap, gear))
 
   async function run(action: () => Promise<unknown>) {
@@ -72,7 +66,6 @@
     }
   }
 
-  /** Apply the selected catalog enchant to a piece. */
   function enchant(g: GearInstanceDTO, enchantId: string) {
     void run(() => applyEnchant(g.id, enchantId))
   }
@@ -179,7 +172,6 @@
         onRemove={removeSet}
       />
 
-      <!-- Crafted gear -->
       <CraftedGearList
         {gear}
         {itemMap}
@@ -193,7 +185,6 @@
         onEnchant={enchant}
       />
 
-      <!-- Unrolled equipment -->
       {#if baseEquipment.length > 0}
         <section class="mt-6" style={accentStyle(ACCENT.ink)}>
           <h3 class="eyebrow">Unrolled equipment</h3>

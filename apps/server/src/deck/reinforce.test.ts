@@ -34,7 +34,6 @@ function deckWithVocab() {
 
 test('a word that keeps lapsing gains one n+1 card, once', async () => {
   const { db, sqlite, userId, deckId, targetId } = deckWithVocab()
-  // Uses only 我 (known) + 喝 (the word) — strict n+1.
   const planner: Planner = async () => [
     {
       template: 'sentence',
@@ -48,10 +47,9 @@ test('a word that keeps lapsing gains one n+1 card, once', async () => {
   await reinforceLapsedCard(deps, userId, targetId)
   let added = listCards(db, userId, deckId).filter((c) => c.payload?.reinforces === targetId)
   expect(added.length).toBe(1)
-  expect(added[0]!.payload.step).toBe(2) // joins the word's lesson
+  expect(added[0]!.payload.step).toBe(2)
   expect(added[0]!.payload.template).toBe('sentence')
 
-  // A second lapse never adds a duplicate.
   await reinforceLapsedCard(deps, userId, targetId)
   added = listCards(db, userId, deckId).filter((c) => c.payload?.reinforces === targetId)
   expect(added.length).toBe(1)
@@ -60,7 +58,6 @@ test('a word that keeps lapsing gains one n+1 card, once', async () => {
 
 test('a reinforcement that reaches ahead to an unknown word is dropped', async () => {
   const { db, sqlite, userId, deckId, targetId } = deckWithVocab()
-  // 茶 is introduced later (step 3), so this sentence is not n+1 for 喝.
   const planner: Planner = async () => [
     {
       template: 'sentence',
@@ -80,7 +77,6 @@ test('a reinforcement that reaches ahead to an unknown word is dropped', async (
 test('a reinforcement is attempted once per card, even when nothing was added', async () => {
   const { db, sqlite, userId, deckId, targetId } = deckWithVocab()
   let calls = 0
-  // Reaches ahead to 茶 every time, so no card is ever added.
   const planner: Planner = async () => {
     calls++
     return [{ template: 'sentence', front: 'x', back: '我喝茶', payload: { tokens: ['茶'] } }]

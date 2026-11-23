@@ -20,7 +20,6 @@ import { registerSpeech } from './routes/speech'
 import { registerStats } from './routes/stats'
 import { registerStatic } from './static'
 
-/** Endpoints reachable without a session. */
 const PUBLIC_PREFIXES = ['/api/health', '/api/auth', '/api/models']
 
 function isPublic(path: string): boolean {
@@ -37,7 +36,6 @@ export function createApp(deps: Deps, opts: { staticDir: string; log?: boolean }
   return app
 }
 
-/** Puts the deps and an empty user on every request's context. */
 function contextMiddleware(deps: Deps) {
   return async (c: Context<AppEnv>, next: () => Promise<void>) => {
     c.set('deps', deps)
@@ -46,7 +44,6 @@ function contextMiddleware(deps: Deps) {
   }
 }
 
-/** Multi-user gate: everything under /api (except the public list) needs a session. */
 async function authMiddleware(c: Context<AppEnv>, next: () => Promise<void>) {
   if (isPublic(c.req.path)) return next()
   const user = currentUser(c)
@@ -57,7 +54,6 @@ async function authMiddleware(c: Context<AppEnv>, next: () => Promise<void>) {
 
 function errorHandler(err: Error, c: Context<AppEnv>) {
   console.error('[error]', err)
-  // A database error names tables and constraints: log it, never send it.
   const message = err.name === 'SQLiteError' ? 'internal error' : err.message
   return c.json({ error: message }, 500)
 }

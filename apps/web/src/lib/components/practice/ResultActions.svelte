@@ -1,6 +1,4 @@
 <script lang="ts">
-  /** The result card plus its forward action: retry, next card or next lesson. */
-
   import Icon from '#lib/components/Icon.svelte'
   import Spinner from '#lib/components/Spinner.svelte'
   import ResultCard from '#lib/components/practice/ResultCard.svelte'

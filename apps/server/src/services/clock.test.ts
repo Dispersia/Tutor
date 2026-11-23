@@ -3,7 +3,6 @@ import { openDb } from '../db/client'
 import { addXpEvent, createUser, xpByDay } from '../db/repo'
 import { dayOf, isTimeZone, setUserTimeZone, startOfDay, tzOffsetMin, userDay } from './clock'
 
-// 2026-01-15 01:30 UTC is still the evening of the 14th in Arizona (UTC-7, no DST).
 const TS = Date.UTC(2026, 0, 15, 1, 30)
 
 test('a zone’s offset comes from the IANA name; an unknown zone is UTC', () => {
@@ -18,7 +17,6 @@ test('a zone’s offset comes from the IANA name; an unknown zone is UTC', () =>
 test('a day starts at the member’s own midnight', () => {
   expect(dayOf(TS)).toBe('2026-01-15')
   expect(dayOf(TS, -420)).toBe('2026-01-14')
-  // midnight on the 14th in Arizona is 07:00 UTC on the 14th
   expect(startOfDay(TS, -420)).toBe(Date.UTC(2026, 0, 14, 7, 0))
   expect(startOfDay(TS)).toBe(Date.UTC(2026, 0, 15))
 })
@@ -26,7 +24,7 @@ test('a day starts at the member’s own midnight', () => {
 test('the stored zone decides which day an XP event belongs to', () => {
   const { db, sqlite } = openDb(':memory:')
   const user = createUser(db, { username: 'a', passwordHash: 'x' })
-  expect(userDay(db, user.id, TS)).toBe('2026-01-15') // no zone stored: UTC
+  expect(userDay(db, user.id, TS)).toBe('2026-01-15')
   setUserTimeZone(db, user.id, 'America/Phoenix')
   expect(userDay(db, user.id, TS)).toBe('2026-01-14')
 

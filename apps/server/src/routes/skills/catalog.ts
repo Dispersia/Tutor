@@ -1,5 +1,3 @@
-/** The profession board and a single profession's page (docs/DESIGN.md §13.5). */
-
 import type { Context } from 'hono'
 import { SKILLS, SKILL_BY_ID, type SkillId } from '../../game/skills'
 import { SYNERGY } from '../../game/talents'
@@ -13,7 +11,6 @@ export function registerSkillCatalog(app: App) {
   app.get('/api/skills/:id', (c) => skillPage(c))
 }
 
-/** The board: skills (+derived level), their actions, talents and bank. */
 function boardHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
@@ -27,7 +24,6 @@ function boardHandler(c: Context<AppEnv>) {
   })
 }
 
-/** One profession: its actions, the talent roadmap and the costs' sources. */
 function skillPage(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
@@ -45,11 +41,6 @@ function skillPage(c: Context<AppEnv>) {
   })
 }
 
-/**
- * The reverse edge of the talent web: professions whose synergy talent feeds this
- * one. A skill can be fed by more than one trade, so this is a list; `taken` tells
- * the page whether the player actually has that talent.
- */
 function fedBy(id: SkillId, board: Board) {
   return SKILLS.filter((s) => SYNERGY[s.id].target === id).map((s) => ({
     skillId: s.id,

@@ -1,6 +1,3 @@
-// Generates apps/server/src/db/migrations.gen.ts from the .sql migration files so
-// a `bun build --compile` binary can apply migrations without the source tree.
-// Run:  bun scripts/gen-migrations.mjs
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 

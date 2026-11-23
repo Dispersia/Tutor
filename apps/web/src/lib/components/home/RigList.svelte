@@ -1,6 +1,4 @@
 <script lang="ts">
-  /** The running idle rigs: what is accumulating right now, busiest first. */
-
   import { fmtClock } from '#lib/idle'
   import { href } from '#lib/paths'
   import { ACCENT, accentStyle } from '#lib/theme'

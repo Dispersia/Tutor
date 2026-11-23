@@ -1,5 +1,3 @@
-/** Account endpoints: register, log in, log out and the profile (docs/DESIGN.md §12.5). */
-
 import type { Context } from 'hono'
 import { getUserById, getUserByUsername, publicUser, registerUser, updateUser } from '../../db/repo'
 import { hashPassword, verifyPassword } from '../../auth'
@@ -18,7 +16,6 @@ interface RegisterBody {
   level?: string
 }
 
-/** Reads a registration request. */
 function readRegister(body: Record<string, unknown>): RegisterBody {
   return {
     username: str(body, 'username'),
@@ -48,7 +45,6 @@ async function registerHandler(c: Context<AppEnv>) {
   const password = body.password ?? ''
   const invalid = validateRegister(username, password)
   if (invalid) return failWith(c, invalid)
-  // Hash first: everything after it is one synchronous step (see `registerUser`).
   const account = newAccount(body, username!, await hashPassword(password))
   const made = registerUser(deps.db, account, deps.allowRegistration)
   if ('error' in made) return fail(c, STATUS[made.error], REGISTER_ERRORS[made.error])
@@ -90,8 +86,6 @@ async function loginHandler(c: Context<AppEnv>) {
   const wait = retryAfterSec(username)
   if (wait > 0) return tooManyAttempts(c, wait)
   const user = username ? getUserByUsername(deps.db, username) : undefined
-  // An unknown username is checked against a dummy hash, so a wrong name takes
-  // as long to reject as a wrong password and the timing reveals nothing.
   const hash = user?.passwordHash ?? (await dummyHash())
   const ok = await verifyPassword(str(body, 'password') ?? '', hash)
   if (!user?.passwordHash || !ok) {
@@ -104,7 +98,6 @@ async function loginHandler(c: Context<AppEnv>) {
 }
 
 let dummy: Promise<string> | undefined
-/** A real argon2id hash of a password nobody has, made once. */
 const dummyHash = (): Promise<string> => (dummy ??= hashPassword(crypto.randomUUID()))
 
 function tooManyAttempts(c: Context<AppEnv>, waitSec: number) {

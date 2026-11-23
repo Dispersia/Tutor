@@ -6,7 +6,7 @@ describe('speechWindows', () => {
     const out = speechWindows(
       [
         { start: 1000, end: 1500 },
-        { start: 1700, end: 2000 }, // 200ms pause: inside the merge gap
+        { start: 1700, end: 2000 },
         { start: 4000, end: 4200 },
       ],
       6000,
@@ -21,7 +21,7 @@ describe('speechWindows', () => {
     const out = speechWindows(
       [
         { start: 0, end: 100 },
-        { start: 600, end: 1200 }, // runs past the end of the clip
+        { start: 600, end: 1200 },
         { start: 5000, end: 5000 },
         { start: 800, end: 700 },
       ],
@@ -38,9 +38,9 @@ describe('speechWindows', () => {
 
 describe('spliceWindows', () => {
   test('concatenates whole windows at 16 kHz', () => {
-    const pcm = new Float32Array(16000) // 1s
+    const pcm = new Float32Array(16000)
     pcm.fill(0.5)
-    pcm.fill(0, 2000, 4000) // silence inside the first window
+    pcm.fill(0, 2000, 4000)
     const out = spliceWindows(pcm, 16000, [
       { start: 0, end: 250 },
       { start: 250, end: 500 },
@@ -75,10 +75,10 @@ describe('encodeWav', () => {
       new TextDecoder().decode(new Uint8Array(view.buffer, at, len))
     expect(ascii(0, 4)).toBe('RIFF')
     expect(ascii(8, 4)).toBe('WAVE')
-    expect(view.getUint16(22, true)).toBe(1) // mono
+    expect(view.getUint16(22, true)).toBe(1)
     expect(view.getUint32(24, true)).toBe(16000)
     expect(view.getUint16(34, true)).toBe(16)
-    expect(view.getUint32(40, true)).toBe(8) // payload bytes
+    expect(view.getUint32(40, true)).toBe(8)
     expect(view.getInt16(44, true)).toBe(0)
     expect(view.getInt16(46, true)).toBe(0x7fff)
     expect(view.getInt16(48, true)).toBe(-0x8000)

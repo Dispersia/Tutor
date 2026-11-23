@@ -42,7 +42,6 @@ test('every generated sentence is n+1: only the new word is unknown', () => {
     }
     known.add(w.word)
   }
-  // the path should be able to build sentences for a good chunk of the list
   expect(built).toBeGreaterThan(40)
 })
 

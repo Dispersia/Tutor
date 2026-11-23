@@ -1,6 +1,4 @@
 <script lang="ts">
-  /** A profession's actions: banded (Smithing) or a flat list, each an ActionRow. */
-
   import { ACCENT } from '#lib/theme'
   import { bandBuff } from '#lib/skillview'
   import ActionRow from '#lib/components/skill/ActionRow.svelte'
@@ -67,8 +65,6 @@
 </p>
 
 {#if bandGroups}
-  <!-- A metal is a band (§13.5.3): one shared score, a dropdown of the whole
-       set, and the next metal opening at Lv 40. -->
   <div class="mt-3 flex flex-col gap-3">
     {#each bandGroups.groups as g (g.band.id)}
       {@const b = g.band}

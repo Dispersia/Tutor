@@ -1,8 +1,3 @@
-/**
- * Speech supervisor (docs/DESIGN.md §8): owns the Python/MLX gateway's lifetime —
- * lazy start on first use, idle stop to give RAM back to the Mac, health polling.
- */
-
 import { withGateway } from './gateway'
 
 export interface SpeechStatus {
@@ -22,11 +17,9 @@ export interface SupervisorConfig {
   modelsDir: string
   idleTimeoutMs: number
   autostart: boolean
-  /** injectable for tests */
   spawn?: (cmd: string[], opts: Record<string, unknown>) => SubprocessLike
 }
 
-/** The environment the gateway child needs, from the supervisor's config. */
 function gatewayEnv(
   cfg: { port: number; idleTimeoutMs: number; modelsDir: string },
   base: NodeJS.ProcessEnv,
@@ -35,7 +28,6 @@ function gatewayEnv(
     ...base,
     TUTOR_SPEECH_PORT: String(cfg.port),
     TUTOR_SPEECH_IDLE_TIMEOUT: String(Math.round(cfg.idleTimeoutMs / 1000)),
-    // the supervisor owns the process lifetime; child only unloads models
     TUTOR_SPEECH_EXIT_ON_IDLE: 'false',
     TUTOR_MODELS_DIR: cfg.modelsDir,
     HF_HOME: cfg.modelsDir,
@@ -45,15 +37,12 @@ function gatewayEnv(
 interface SubprocessLike {
   pid: number
   exitCode: number | null
-  /** Resolves when the process has exited (Bun's subprocess has it; fakes may not). */
   exited?: Promise<unknown>
   kill(signal?: number | string): void
 }
 
-/** How long a killed gateway gets to exit before it is killed outright. */
 const EXIT_GRACE_MS = 5000
 
-/** True when `p` settled within `ms`. */
 async function settledWithin(p: Promise<unknown>, ms: number): Promise<boolean> {
   let timer: ReturnType<typeof setTimeout> | undefined
   const timeout = new Promise<boolean>((resolve) => {
@@ -68,18 +57,12 @@ async function settledWithin(p: Promise<unknown>, ms: number): Promise<boolean> 
   return settled
 }
 
-/**
- * Kills the gateway and waits until it is really gone, so its port is free
- * before anything spawns a replacement. A process that ignores the first signal
- * is killed outright after the grace period.
- */
 async function killAndWait(proc: SubprocessLike, graceMs = EXIT_GRACE_MS): Promise<void> {
   try {
     proc.kill()
   } catch {
-    return // already gone
+    return
   }
-  // A fake without `exited` cannot be observed; treat the kill as the exit.
   if (!proc.exited || proc.exitCode !== null) return
   if (await settledWithin(proc.exited, graceMs)) return
   try {
@@ -90,14 +73,12 @@ async function killAndWait(proc: SubprocessLike, graceMs = EXIT_GRACE_MS): Promi
   await settledWithin(proc.exited, graceMs)
 }
 
-/** True when a `/health` body is this gateway's (not just any server on the port). */
 function isGatewayHealth(body: unknown): boolean {
   if (!body || typeof body !== 'object') return false
   const h = body as Record<string, unknown>
   return typeof h.idleTimeoutMs === 'number' && Array.isArray(h.models)
 }
 
-/** Pure decision function — unit-tested. */
 export function shouldStopSpeech(o: {
   running: boolean
   idleMs: number
@@ -112,9 +93,7 @@ export class SpeechSupervisor {
   #lastActivity = Date.now()
   #active = 0
   #starting?: Promise<void>
-  /** Set while a killed gateway is still exiting (its port is not free yet). */
   #stopping?: Promise<void>
-  /** A gateway this process did not spawn (left by a crashed server) but uses. */
   #adopted = false
   #watchdog?: ReturnType<typeof setInterval>
 
@@ -128,7 +107,6 @@ export class SpeechSupervisor {
     return this.#spawned() || this.#adopted
   }
 
-  /** True while the gateway this process spawned is alive. */
   #spawned(): boolean {
     return Boolean(this.#proc) && this.#proc!.exitCode === null
   }
@@ -155,11 +133,7 @@ export class SpeechSupervisor {
     return { idleForMs: this.idleMs(), activeStreams: this.#active }
   }
 
-  /** Starts the gateway if it isn't running. Safe to call concurrently. */
   async ensure(): Promise<void> {
-    // `running` is true from the moment of spawn, long before the gateway
-    // answers: a second caller during startup must wait for it too.
-    // A gateway that is still exiting holds the port: wait for it to go.
     if (this.#stopping) await this.#stopping
     if (this.#starting) return this.#starting
     if (this.#spawned()) return
@@ -171,11 +145,6 @@ export class SpeechSupervisor {
     }
   }
 
-  /**
-   * Uses a gateway that already answers on the port (one orphaned by a crashed
-   * server, or started by hand) instead of spawning a second that cannot bind.
-   * An adopted gateway is re-checked on every call, so one that died is replaced.
-   */
   async #adoptOrSpawn(): Promise<void> {
     this.#adopted = await this.#gatewayAnswers()
     if (this.#adopted) return this.touch()
@@ -220,19 +189,12 @@ export class SpeechSupervisor {
       try {
         const res = await fetch(`${this.cfg.url}/health`, { signal: AbortSignal.timeout(2000) })
         if (res.ok) return
-      } catch {
-        // not up yet
-      }
+      } catch {}
       await Bun.sleep(500)
     }
     throw new Error('speech gateway did not become healthy in time')
   }
 
-  /**
-   * Starts the gateway if needed, then loads the models a voice card needs
-   * (ASR + aligner + preset TTS) so the first "Hear it" / "Say it" tap skips the
-   * model-load latency (DESIGN §8.1). Idempotent: warm models load instantly.
-   */
   async warm(): Promise<void> {
     await withGateway(this, async (url) => {
       const res = await fetch(`${url}/v1/warm`, {
@@ -266,10 +228,6 @@ export class SpeechSupervisor {
     }
   }
 
-  /**
-   * Stops the gateway and resolves once it has exited, so an immediate
-   * `ensure()` never spawns a second one onto a port that is still bound.
-   */
   async stop(): Promise<void> {
     if (this.#stopping) return this.#stopping
     if (this.#adopted) await this.#releaseAdopted()
@@ -283,11 +241,6 @@ export class SpeechSupervisor {
     return this.#stopping
   }
 
-  /**
-   * An adopted gateway has no handle to kill, so it is asked to stop itself
-   * (`/admin/shutdown` frees the models and exits). A gateway from before that
-   * endpoint existed answers 404; it is asked to unload instead.
-   */
   async #releaseAdopted(): Promise<void> {
     this.#adopted = false
     console.log('[speech] stopping the adopted gateway')
@@ -296,9 +249,7 @@ export class SpeechSupervisor {
     try {
       const res = await post('/admin/shutdown')
       if (res.status === 404) await post('/admin/unload')
-    } catch {
-      // gone already, or busy — its own idle timer unloads it
-    }
+    } catch {}
   }
 
   startWatchdog(intervalMs = 15_000): void {

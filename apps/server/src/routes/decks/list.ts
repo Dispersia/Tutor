@@ -1,5 +1,3 @@
-/** `GET /api/decks` — the member's decks (docs/DESIGN.md §12.4). */
-
 import type { App } from '../../context'
 import { listDecks } from '../../db/repo'
 import { deckView } from './view'

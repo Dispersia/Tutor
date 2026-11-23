@@ -24,11 +24,9 @@ test('seeding gives a user the Mandarin and Japanese frequency decks, once', () 
   const total = decks.reduce((n, d) => n + Number(d.cardCount), 0)
   expect(total).toBeGreaterThan(200)
 
-  // idempotent: seeding again is a no-op
   expect(seedStarterDecks(db, user.id)).toBe(false)
   expect(listDecks(db).length).toBe(2)
 
-  // Mandarin cards carry Zhuyin only: no pinyin
   const zh = decks.find((d) => d.level === 'zhfreq')!
   const zhCards = listCards(db, user.id, zh.id)
   expect(zhCards[0]!.back).toBe('我')
@@ -36,7 +34,6 @@ test('seeding gives a user the Mandarin and Japanese frequency decks, once', () 
   expect(zhCards[0]!.readings.pinyin).toBeUndefined()
   expect(zhCards[0]!.payload.pos).toBe('pron')
 
-  // Japanese cards carry kana (furigana); no romaji is stored or shown
   const ja = decks.find((d) => d.level === 'jafreq')!
   const jaCards = listCards(db, user.id, ja.id)
   const kanji = jaCards.find((c) => c.back === '先生')!
@@ -53,9 +50,8 @@ test('reconcile repairs stale curated cards in place (Simplified -> Traditional)
   const before = listCards(db, user.id, zh.id)
   const rice = before.find((c) => c.back === '米飯')!
 
-  // Simulate the pre-2658b58 copy: Simplified hanzi + Latin pinyin readings.
   updateCard(db, rice.id, { back: '米饭', readings: { pinyin: 'mǐ fàn' } })
-  setUserSetting(db, user.id, 'seedVersion', '1') // mark as an older seed
+  setUserSetting(db, user.id, 'seedVersion', '1')
 
   reconcileStarterDecks(db, user.id)
 
@@ -63,7 +59,6 @@ test('reconcile repairs stale curated cards in place (Simplified -> Traditional)
   expect(after.back).toBe('米飯')
   expect(after.readings.zhuyin).toBeTruthy()
   expect(after.readings.pinyin).toBeUndefined()
-  // repaired in place: same id (SRS history kept), no duplicated cards
   expect(listCards(db, user.id, zh.id).length).toBe(before.length)
   sqlite.close()
 })
@@ -73,7 +68,6 @@ test('reconcile gives an existing user a deck they never received', () => {
   const user = createUser(db, { username: 'old2', passwordHash: 'x' })
   seedStarterDecks(db, user.id)
 
-  // Drop the Japanese deck, as if this account was seeded before it existed.
   const ja = listDecks(db).find((d) => d.level === 'jafreq')!
   db.delete(cards).where(eq(cards.deckId, ja.id)).run()
   db.delete(decks).where(eq(decks.id, ja.id)).run()
@@ -91,7 +85,6 @@ test('reconcile drops the retired themed decks', () => {
   const { db, sqlite } = openDb(':memory:')
   const user = createUser(db, { username: 'old3', passwordHash: 'x' })
   seedStarterDecks(db, user.id)
-  // Simulate a leftover HSK 1 deck from an older seed.
   const legacy = db
     .insert(decks)
     .values({
@@ -149,7 +142,6 @@ test('deleting a member keeps the shared decks, until the last member is gone', 
   const b = createUser(db, { username: 'b', passwordHash: 'x' })
   seedStarterDecks(db, a.id)
   expect(deleteUser(db, a.id)).toBe(true)
-  // the creator is gone, the decks are not
   expect(listDecks(db).length).toBe(2)
   expect(deleteUser(db, toUserId('nobody'))).toBe(false)
   expect(deleteUser(db, b.id)).toBe(true)

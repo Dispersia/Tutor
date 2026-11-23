@@ -1,6 +1,4 @@
 <script lang="ts">
-  /** The reward strip after a graded answer: the skill chip, gains, rig report. */
-
   import { href } from '#lib/paths'
   import { ACCENT, categoryAccent } from '#lib/theme'
   import RigReport from '#lib/components/practice/RigReport.svelte'

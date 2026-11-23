@@ -1,6 +1,4 @@
 <script lang="ts">
-  /** Rig alerts: a per-device web-push switch for "a rig is nearly done". */
-
   import { accentStyle, ACCENT } from '#lib/theme'
   import { alertsEnabled, disableRigAlerts, enableRigAlerts, testRigAlert } from '#lib/rigAlerts'
   import { pushSupported } from '#lib/push'

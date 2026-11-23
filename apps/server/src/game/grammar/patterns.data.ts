@@ -1,12 +1,3 @@
-/**
- * The hand-written Mandarin pattern grammar — data only (docs/DESIGN.md §13.7).
- *
- * `PATTERNS` is the list of sentence shapes the builder tries, in order. The
- * semantic sets (which noun is a person, which verb takes which object) are what
- * keep the generated sentences from being nonsense like "I drink computer".
- * `build.ts` is the engine that fills these slots; a content edit lives here.
- */
-
 import type { FreqWord, Pos } from '../../text/lexicon'
 
 export type NounClass = 'person' | 'place' | 'thing'
@@ -35,14 +26,11 @@ export function nounClass(word: string): NounClass {
 const placeClause = (w: FreqWord): string =>
   COUNTRY_NOUNS.has(w.word) ? `in ${gloss(w)}` : `at the ${gloss(w)}`
 
-// --- semantic classes ---------------------------------------------------------
-
 const FOOD = ['水', '茶', '米飯', '菜', '水果', '蘋果']
 const ITEMS = ['書', '電腦', '電話', '車', '錢', '手機', '電視', '衣服', '貓', '狗']
 const PEOPLE = [...PERSON_NOUNS]
 const THING_SUBJECTS = [...FOOD, ...ITEMS, '中國', '家', '學校', '醫院', '商店', '飯館']
 
-/** What each transitive verb can reasonably take as its object. */
 export const VERB_OBJECTS: Record<string, string[]> = {
   吃: ['米飯', '菜', '水果', '蘋果'],
   喝: ['水', '茶'],
@@ -64,41 +52,27 @@ export const VERB_OBJECTS: Record<string, string[]> = {
 
 export const OBJECT_VERBS = new Set(Object.keys(VERB_OBJECTS))
 
-/** Action verbs that read naturally after a modal (我會寫). */
 const ACTION_VERBS = ['吃', '喝', '看', '讀', '寫', '買', '用', '找', '做']
 
-/** Adjectives that read naturally with a person as the subject (我很忙). */
 const PERSON_ADJ = ['好', '忙', '累', '高興', '漂亮', '高']
-/** Adjectives that describe a thing (茶很熱). */
 const THING_ADJ = ['大', '小', '熱', '冷', '新', '舊', '貴', '便宜']
-/** Intensifiers read best with these. */
 const STRONG_ADJ = ['忙', '累', '高興', '漂亮']
-/** Nouns that work with 很 + THING_ADJ. */
 const THING_ADJ_NOUNS = [...THING_SUBJECTS]
 
 export interface Slot {
   pos: Pos[]
   role: string
-  /** prefer these words when filling the slot (still must be known) */
   prefer?: string[]
-  /** restrict the slot to these words only */
   only?: string[]
-  /** restrict a noun slot to a semantic class */
   nounClass?: NounClass
-  /** restrict a vt slot to the transitive verbs that take a simple object */
   objectVerb?: boolean
-  /** this slot's object must be compatible with the verb in another role */
   objectOf?: string
-  /** forbid these words in the slot */
   exclude?: string[]
 }
 
 export interface Pattern {
-  /** literal Chinese words and fillable slots, in order */
   parts: Array<string | Slot>
-  /** the new word may fill one of these roles */
   featureRoles?: Array<{ role: string; pos: Pos[] }>
-  /** the new word may be one of these literal words */
   featureLiterals?: string[]
   english: (v: Record<string, FreqWord>) => string
 }
@@ -153,13 +127,11 @@ const vrb = (o: Partial<Slot> = {}): Slot => ({
 const obj = (o: Partial<Slot> = {}): Slot => ({ pos: ['noun'], role: 'o', objectOf: 'v', ...o })
 
 export const PATTERNS: Pattern[] = [
-  // Subject + verb + object:  我喝茶
   {
     parts: [subj(), vrb(), obj()],
     featureRoles: [{ role: 'v', pos: ['vt'] }],
     english: (v) => `${gloss(v.s!)} ${verb(v.v!)} ${gloss(v.o!)}`,
   },
-  // Identity with 是:  我是學生
   {
     parts: [
       { pos: ['pron'], role: 's', prefer: ['我'] },
@@ -172,7 +144,6 @@ export const PATTERNS: Pattern[] = [
     ],
     english: (v) => `${gloss(v.s!)} ${beFor(v.s!)} ${article(gloss(v.o!))} ${gloss(v.o!)}`,
   },
-  // Possession 有:  我有茶
   {
     parts: [
       { pos: ['pron'], role: 's', prefer: ['我'] },
@@ -185,7 +156,6 @@ export const PATTERNS: Pattern[] = [
     ],
     english: (v) => `${gloss(v.s!)} ${haveFor(v.s!)} ${gloss(v.o!)}`,
   },
-  // Location 在:  我在學校
   {
     parts: [
       { pos: ['pron'], role: 's', prefer: ['我'] },
@@ -198,7 +168,6 @@ export const PATTERNS: Pattern[] = [
     ],
     english: (v) => `${gloss(v.s!)} ${beFor(v.s!)} ${placeClause(v.p!)}`,
   },
-  // Pronoun + 很 + adjective (person):  我很好
   {
     parts: [
       { pos: ['pron'], role: 's', prefer: ['我'] },
@@ -212,7 +181,6 @@ export const PATTERNS: Pattern[] = [
     featureLiterals: ['很'],
     english: (v) => `${gloss(v.s!)} ${beFor(v.s!)} very ${gloss(v.a!)}`,
   },
-  // Noun + 很 + adjective (thing):  茶很熱
   {
     parts: [
       { pos: ['noun'], role: 'n', only: THING_ADJ_NOUNS, prefer: ['茶'] },
@@ -225,7 +193,6 @@ export const PATTERNS: Pattern[] = [
     ],
     english: (v) => `${gloss(v.n!)} ${beFor(v.n!)} very ${gloss(v.a!)}`,
   },
-  // Subject + intransitive verb:  我睡覺
   {
     parts: [
       { pos: ['pron'], role: 's', prefer: ['我'] },
@@ -237,7 +204,6 @@ export const PATTERNS: Pattern[] = [
     ],
     english: (v) => `${gloss(v.s!)} ${verb(v.v!)}`,
   },
-  // Time + subject + verb + object:  今天我喝茶
   {
     parts: [{ pos: ['time'], role: 't', prefer: ['今天'] }, subj(), vrb(), obj()],
     featureRoles: [
@@ -246,7 +212,6 @@ export const PATTERNS: Pattern[] = [
     ],
     english: (v) => `${gloss(v.t!)}, ${gloss(v.s!)} ${verb(v.v!)} ${gloss(v.o!)}`,
   },
-  // Subject + modal + verb + object:  我想喝茶
   {
     parts: [
       { pos: ['pron'], role: 's', prefer: ['我'] },
@@ -260,7 +225,6 @@ export const PATTERNS: Pattern[] = [
     ],
     english: (v) => `${gloss(v.s!)} ${wantFor(v.m!)} ${verb(v.v!)} ${gloss(v.o!)}`,
   },
-  // Negation 不:  我不喝茶
   {
     parts: [
       { pos: ['pron'], role: 's', prefer: ['我'] },
@@ -272,7 +236,6 @@ export const PATTERNS: Pattern[] = [
     featureLiterals: ['不'],
     english: (v) => `${gloss(v.s!)} do not ${verb(v.v!)} ${gloss(v.o!)}`,
   },
-  // Yes/no question 嗎:  你喝茶嗎
   {
     parts: [
       { pos: ['pron'], role: 's', prefer: ['你'] },
@@ -288,7 +251,6 @@ export const PATTERNS: Pattern[] = [
     english: (v) =>
       `${DO_SUBJECT[v.s!.word] ?? `does ${gloss(v.s!)}`} ${verb(v.v!)} ${gloss(v.o!)}?`,
   },
-  // Adverb 也:  我也喝茶
   {
     parts: [
       { pos: ['pron'], role: 's', prefer: ['我們'] },
@@ -299,7 +261,6 @@ export const PATTERNS: Pattern[] = [
     featureRoles: [{ role: 'd', pos: ['adv'] }],
     english: (v) => `${gloss(v.s!)} also ${verb(v.v!)} ${gloss(v.o!)}`,
   },
-  // Intensifier 太 / 非常:  我太累了
   {
     parts: [
       { pos: ['pron'], role: 's', prefer: ['我'] },
@@ -313,7 +274,6 @@ export const PATTERNS: Pattern[] = [
     english: (v) =>
       `${gloss(v.s!)} ${beFor(v.s!)} ${v.d!.word === '太' ? 'too' : 'very'} ${gloss(v.a!)}`,
   },
-  // Possessive 的:  我的書
   {
     parts: [
       { pos: ['pron'], role: 's', prefer: ['我'] },
@@ -328,7 +288,6 @@ export const PATTERNS: Pattern[] = [
     featureLiterals: ['的'],
     english: (v) => `${possessive(v.s!)} ${gloss(v.o!)}`,
   },
-  // Conjunction 和:  茶和書
   {
     parts: [
       { pos: ['noun'], role: 'a', only: [...FOOD, ...ITEMS], prefer: ['茶'] },

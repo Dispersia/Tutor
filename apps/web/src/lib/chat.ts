@@ -1,5 +1,3 @@
-/** SSE chat streaming against POST /api/chat. */
-
 import { apiPath } from './paths'
 
 export interface StreamCallbacks {
@@ -73,9 +71,7 @@ function dispatch({ event, data }: { event: string; data: string }, cb: StreamCa
 function parseUsage(data: string, cb: StreamCallbacks): void {
   try {
     cb.onUsage?.(JSON.parse(data) as { totalTokens: number; costUsd: number })
-  } catch {
-    // ignore a malformed usage frame
-  }
+  } catch {}
 }
 
 function parseBlock(block: string): { event: string; data: string } {
@@ -88,7 +84,6 @@ function parseBlock(block: string): { event: string; data: string } {
   return { event, data: dataLines.join('\n') }
 }
 
-/** Splits text into sentence-ish chunks so TTS can start before the whole reply. */
 export function splitSentences(text: string): string[] {
   const parts = text.match(/[^.!?。！？\n]+[.!?。！？]?/g) ?? [text]
   return parts.map((p) => p.trim()).filter(Boolean)
@@ -96,11 +91,6 @@ export function splitSentences(text: string): string[] {
 
 const SENTENCE_END = /[.!?。！？\n]/
 
-/**
- * Streaming splitter: pulls every complete sentence off the front of the buffer
- * and returns the trailing fragment to carry into the next delta, so TTS can
- * start on sentence 1 while the model is still writing sentence 3.
- */
 export function drainSentences(buffer: string): { sentences: string[]; rest: string } {
   const sentences: string[] = []
   let start = 0

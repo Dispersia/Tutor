@@ -1,5 +1,3 @@
-/** Creating and filling a deck from an instruction (the synchronous path). */
-
 import type { UserId, DeckId } from '../ids'
 import { createDeck, updateDeckSettings } from '../db/repo'
 import type { Db } from '../db/client'
@@ -21,26 +19,17 @@ import { wordKey } from '../text/normalize'
 export interface CreateDeckResult {
   deckId: DeckId
   name: string
-  /** The ordered words the deck will introduce. */
   candidates: string[]
-  /** The provenance label, e.g. "uploaded deck" or the frequency source. */
   sourceLabel: string
-  /** How many words the caller asked for (already clamped). */
   count: number
 }
 
-/** Where a deck's words came from, and how many to introduce. */
 interface WordSource {
   candidates: string[]
   label: string
   kind: 'frequency' | 'anki'
 }
 
-/**
- * Creates the deck and stores its rules without generating a single card. The
- * synchronous build fills it right away; an import can return this to the
- * learner at once and then fill it in the background.
- */
 export async function createDeckForBuild(
   db: Db,
   userId: UserId,
@@ -59,7 +48,6 @@ export async function createDeckForBuild(
   return { deckId: deck.id, name, candidates: source.candidates, sourceLabel: source.label, count }
 }
 
-/** The words come either from an imported deck or from a pulled frequency list. */
 async function resolveWords(opts: BuildDeckOptions, count: number): Promise<WordSource> {
   if (opts.words?.length) {
     return { candidates: opts.words, label: opts.sourceLabel ?? 'uploaded deck', kind: 'anki' }
@@ -86,42 +74,32 @@ function deckSettings(opts: BuildDeckOptions, count: number, source: WordSource)
     batchSize: Math.min(count, PLAN_CHUNK),
     instruction: opts.instruction,
     wordSource: source.kind,
-    // keep the source list so an imported deck can keep growing without it
     words: source.kind === 'anki' ? source.candidates.slice(0, MAX_DECK_WORDS) : undefined,
   }
 }
 
 export interface FillDeckOptions {
-  /** The words to introduce, in order (frequency order or the deck's own). */
   words: string[]
-  /** How many of them to introduce (≤ words.length). */
   count: number
-  /** Words already in the deck, so example cards stay n+1. */
   knownWords?: string[]
-  /** The n+1 step to continue from. */
   startStep?: number
-  /** Called after every batch with (words introduced, total requested). */
   onProgress?: (built: number, total: number) => void
 }
 
 export interface FillDeckResult {
   newWords: string[]
   cardCount: number
-  /** How many words were actually introduced. */
   built: number
 }
 
-/** One fill run: the deck's rules, the words to introduce and the planner. */
 export interface FillDeckRequest {
   ctx: DeckContext
   opts: FillDeckOptions
   planner: Planner
 }
 
-/** The batch loop's running state. */
 interface FillState {
   known: string[]
-  /** Words waiting to be introduced, so no card reaches ahead (strict n+1). */
   future: Set<string>
   newWords: string[]
   cardCount: number
@@ -145,16 +123,6 @@ function fillState(opts: FillDeckOptions): FillState {
   }
 }
 
-/**
- * Plans and persists a deck's cards in {@link PLAN_CHUNK}-word batches. Each
- * batch carries the words already introduced, so the planner's sentence and
- * grammar cards only ever use what the learner has met. Persisting batch by
- * batch means a long build is durable: an interrupted import keeps what it made.
- *
- * A batch whose JSON came back truncated (the model hit its output cap) is
- * retried with half the words, down to a single word — the build shrinks around
- * a fussy batch rather than giving up on the whole deck, then widens again.
- */
 export async function fillDeck(
   db: Db,
   userId: UserId,
@@ -180,12 +148,6 @@ interface BatchReq {
   total: number
 }
 
-/**
- * Plans and persists one batch, shrinking the next size after a truncation.
- * Only the words the model really returned count as built: the batch advances
- * past the leading run it introduced, and the next one starts at the first word
- * it skipped, so a short answer is retried instead of silently losing words.
- */
 async function oneBatch(req: BatchReq) {
   const { state, total } = req
   const size = Math.min(state.chunkSize, total - state.built)
@@ -202,11 +164,6 @@ async function oneBatch(req: BatchReq) {
   accumulate(state, res, accepted.introduced, total, req.opts)
 }
 
-/**
- * A batch that introduced none of its words is retried smaller. A single word
- * the model still will not return is skipped: one word it refuses (or returns in
- * another script) must not stop the whole deck, on this run and every resume.
- */
 function stalled(state: FillState, words: string[]): void {
   if (words.length > 1) {
     state.chunkSize = Math.max(1, Math.floor(words.length / 2))
@@ -216,13 +173,6 @@ function stalled(state: FillState, words: string[]): void {
   state.built += 1
 }
 
-/**
- * Keeps what a batch may persist. A vocab card is kept only for a requested
- * word — anything else is the model inventing vocabulary — and only once, and
- * only inside the leading run of words it returned, so `introduced` is a true
- * prefix of `requested` and the words after a gap are asked for again rather
- * than duplicated. Sentence and grammar cards pass through to the n+1 checks.
- */
 export function acceptPlanned(
   planned: PlannedCard[],
   requested: string[],
@@ -242,7 +192,6 @@ export function acceptPlanned(
   return { cards, introduced }
 }
 
-/** Plans one batch; undefined when it failed and should be retried smaller. */
 async function planChunk(
   planner: Planner,
   ctx: DeckContext,
@@ -253,8 +202,6 @@ async function planChunk(
   try {
     return await planner(planArgs(ctx, words, state, size))
   } catch (err) {
-    // Retry the same words with a smaller batch. A single word that still fails
-    // is a real error — stop there, keeping everything already made.
     if (size > 1) return undefined
     throw err
   }
@@ -317,15 +264,9 @@ function accumulate(
   state.cardCount += res.cardCount
   state.built += introduced
   opts.onProgress?.(state.built, total)
-  // Recover the batch size one word at a time after a shrink.
   if (state.chunkSize < PLAN_CHUNK) state.chunkSize = Math.min(PLAN_CHUNK, state.chunkSize + 1)
 }
 
-/**
- * Builds a new deck from an instruction: pulls a frequency list, generates its
- * cards (n+1), and stores the deck with its own settings. Synchronous — the
- * import path uses {@link startDeckBuild} so the learner is not left waiting.
- */
 export async function buildDeck(
   db: Db,
   userId: UserId,

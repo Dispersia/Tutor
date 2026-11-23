@@ -130,9 +130,7 @@ test('model catalogue follows the key: /models/user when set, public otherwise',
     }
     return body.models.map((m) => m.id)
   }
-  // A key present (server or the user's own) → key-filtered catalogue.
   expect(await ids('test-key')).toContain('user/key-model')
-  // No key anywhere → public catalogue, no key required.
   expect(await ids(null)).toContain('qwen/test')
   expect(await ids(null)).not.toContain('user/key-model')
 })
@@ -203,7 +201,6 @@ test('chat streams SSE, persists per user, and isolates history', async () => {
   }
   expect(bobSessions.sessions.length).toBe(0)
 
-  // bob cannot read alice's session
   const forbidden = await app.request(`/api/sessions/${aliceSessions.sessions[0]!.id}`, {
     headers: { cookie: bob.cookie },
   })
@@ -286,11 +283,9 @@ test('sign-in is throttled after repeated wrong passwords, per username', async 
   for (let i = 0; i < 8; i++) {
     expect((await app.request('/api/auth/login', body('wrong-password'))).status).toBe(401)
   }
-  // even the right password is refused while the username is locked
   const locked = await app.request('/api/auth/login', body('password123'))
   expect(locked.status).toBe(429)
   expect(Number(locked.headers.get('retry-after'))).toBeGreaterThan(0)
-  // another username is unaffected, and an unknown one is a plain 401
   expect((await app.request('/api/auth/login', body('x', 'nobody'))).status).toBe(401)
   sqlite.close()
 })

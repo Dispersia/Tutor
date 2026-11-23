@@ -1,5 +1,3 @@
-/** Server-global settings, per-user settings and per-user LLM roles. */
-
 import type { UserId } from '../../ids'
 import { and, eq } from 'drizzle-orm'
 import type { Role } from '../../env'

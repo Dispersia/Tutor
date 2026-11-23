@@ -46,7 +46,6 @@
     learningSteps: [1, 10, 60, 240],
     autoReinforce: true,
   })
-  /** The learning steps as an editable comma list of minutes. */
   let stepsText = $state('1, 10, 60, 240')
   let exercises = $state<ExerciseInfo[]>([])
   let speech = $state<SpeechStatus | null>(null)
@@ -75,7 +74,6 @@
     desiredRetention?: number
   }
 
-  /** Applies a settings payload to the form — from the cache or the server. */
   function applySettings(s: SettingsPayload) {
     roles = s.roles
     roleDefaults = s.roleDefaults
@@ -88,7 +86,6 @@
     desiredRetention = s.desiredRetention ?? 90
   }
 
-  // Seed the form from the last fetch so fields don't pop in from defaults.
   const settings = cachedResource<SettingsPayload>('/api/settings', { auto: false })
   if (settings.data) applySettings(settings.data)
 
@@ -114,7 +111,6 @@
         )
       ).models
     } catch {
-      /* catalogue is best-effort */
     } finally {
       modelsLoading = false
     }
@@ -131,17 +127,13 @@
   async function loadUsers() {
     try {
       users = (await api<{ users: PublicUser[] }>('/api/users')).users
-    } catch {
-      /* not admin */
-    }
+    } catch {}
   }
 
   async function loadExercises() {
     try {
       exercises = (await listExercises()).exercises
-    } catch {
-      /* catalogue is best-effort */
-    }
+    } catch {}
   }
 
   async function saveStudy() {
@@ -154,8 +146,6 @@
       const r = await api<{ study: StudyPrefs }>('/api/settings', {
         method: 'PUT',
         body: JSON.stringify({
-          // The active deck belongs to the sidebar picker; sending the copy this
-          // page loaded with would revert a switch made since.
           study: { ...study, activeDeckId: undefined, learningSteps: steps },
         }),
       })
@@ -181,7 +171,6 @@
     }
   }
 
-  /** Puts one scalar knob and shows the note. */
   async function saveScalar(patch: Record<string, number>, message: string) {
     note = ''
     try {
@@ -202,7 +191,6 @@
       keyStatus = r.openrouter.key
       keyInput = ''
       note = keyStatus ? 'Key saved.' : 'Key cleared.'
-      // The model list is scoped to the key — refresh it.
       void loadModels()
     } catch (e) {
       error = (e as Error).message

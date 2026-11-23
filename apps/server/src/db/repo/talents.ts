@@ -1,5 +1,3 @@
-/** Chosen talents (per skill, per milestone). */
-
 import type { UserId } from '../../ids'
 import { and, eq } from 'drizzle-orm'
 import type { Db } from '../client'
@@ -24,7 +22,6 @@ export function addTalent(db: Db, userId: UserId, t: NewTalent): void {
     .run()
 }
 
-/** Swaps an owned talent for a different one (respec at the same milestone). */
 export function replaceTalent(db: Db, userId: UserId, oldTalentId: string, t: NewTalent): void {
   db.transaction((tx) => {
     tx.delete(talents)

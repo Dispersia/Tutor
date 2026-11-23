@@ -18,7 +18,6 @@ test('the frequency path introduces one word per step (n+1)', () => {
   expect(lessons[0]!.newWord).toBe('字0')
   expect(lessons[0]!.reading).toBe('zi0')
   expect(lessons[1]!.id).toBe('zhfreq:2')
-  // each card appears in exactly one step
   expect(new Set(lessons.flatMap((l) => l.cardIds)).size).toBe(3)
 })
 
@@ -36,7 +35,6 @@ test('a card inserted later still joins its lesson (grouping by step value)', ()
   const lessons = buildLessons('deck:1', [
     { id: 'a', front: 'one', back: '一', step: 1 },
     { id: 'b', front: 'two', back: '二', step: 2 },
-    // a reinforcement card appended at the end but tagged step 1
     { id: 'c', front: 'a sentence', back: '一です', step: 1 },
   ])
   expect(lessons.length).toBe(2)

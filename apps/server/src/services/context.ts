@@ -1,5 +1,3 @@
-/** The per-request state a board/player view reads (docs/ARCHITECTURE.md). */
-
 import type { UserId } from '../ids'
 import { listCards } from '../db/repo'
 import type { Db } from '../db/client'
@@ -12,35 +10,21 @@ import { bandView } from './bands'
 import { talentView } from './talents'
 import { aggregateBonuses } from './progress'
 
-/**
- * Loads the expensive per-user maps once for a request, so a handler that needs
- * cards + SRS state scans each store once instead of once per helper. Pass the
- * result to `studyBudget` / `knownWords`.
- */
 export function loadLearnerData(db: Db, userId: UserId): LoadedCards {
   return { cards: listCards(db, userId), srs: srsStateMap(db, userId) }
 }
 
-/** Every map a board or player view reads, loaded once for a request. */
 export interface PlayerCtx {
   now: number
   settled: ReturnType<typeof settleRigs>
   byAction: Map<string, ActionProgress>
   levels: Map<string, number>
   bands: ReturnType<typeof bandView>
-  /** profession summaries, by skill id */
   progress: Map<string, ReturnType<typeof skillSummaries>[number]>
-  /** talent trees, by skill id */
   talents: Map<string, ReturnType<typeof talentView>[number]>
   bonuses: Bonuses
 }
 
-/**
- * Loads the per-request player state once: the settled idle rigs, the action map,
- * the bands, the profession/talent views and the bonuses derived from that same
- * map. Board and gear handlers share one, so a render reads each store once
- * instead of once per view (docs/ARCHITECTURE.md).
- */
 export function loadPlayerCtx(db: Db, bus: EventBus, userId: UserId, now = Date.now()): PlayerCtx {
   const settled = settleRigs(db, bus, userId, now)
   const byAction = actionProgressView(db, userId)
@@ -58,7 +42,6 @@ export function loadPlayerCtx(db: Db, bus: EventBus, userId: UserId, now = Date.
   }
 }
 
-/** The action-level map, from an action-progress map already in hand. */
 export function actionLevels(byAction: Map<string, ActionProgress>): Map<string, number> {
   return new Map([...byAction].map(([id, p]) => [id, p.level]))
 }

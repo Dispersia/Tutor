@@ -5,7 +5,6 @@ import { MIGRATIONS } from './migrations.gen'
 
 const MIGRATIONS_DIR = join(import.meta.dir, '../../migrations')
 
-/** Reads migrations from disk (dev), falling back to the embedded copy (binary). */
 function load(): { name: string; sql: string }[] {
   try {
     if (existsSync(MIGRATIONS_DIR)) {
@@ -19,13 +18,10 @@ function load(): { name: string; sql: string }[] {
         }))
       }
     }
-  } catch {
-    // fall through to embedded
-  }
+  } catch {}
   return MIGRATIONS
 }
 
-/** Applies any unapplied migrations, in filename order. */
 export function migrate(sqlite: Database): string[] {
   sqlite.exec(
     'CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)',

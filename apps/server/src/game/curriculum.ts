@@ -1,21 +1,8 @@
-/**
- * Guided curriculum (docs/DESIGN.md §13.6, §13.7).
- *
- * Every course is the frequency path: a deck is split into one-word steps
- * (strict n+1), each titled by the word it introduces. A step is finished once
- * its card is "learned" (see srs.isLearned).
- */
-
 export interface StepCard<I extends string = string> {
   id: I
   front: string
   back: string
   reading?: string
-  /**
-   * The n+1 step this card belongs to. Cards sharing a step (a word and the
-   * example/grammar cards built from it) form one lesson. Undefined → one card
-   * per lesson (the curated path's behaviour).
-   */
   step?: number
 }
 
@@ -26,27 +13,16 @@ export interface Lesson<I extends string = string> {
   description: string
   level: string
   cardIds: I[]
-  /** the new word this step introduces */
   newWord?: string
-  /** native reading (Zhuyin / kana) for the new word */
   reading?: string
 }
 
-/** The frequency path introduces a single new word per step (n+1). */
 export const STEP_SIZE = 1
 
-/**
- * Splits a deck's cards (in syllabus order) into n+1 steps. Cards tagged with
- * the same `step` form one lesson, wherever they sit in the list, so a card can
- * be inserted into an existing lesson without renumbering the rest. `key` is the
- * deck's level (curated) or id (generated). Cards without a `step` are each their
- * own lesson (the curated path's behaviour).
- */
 export function buildLessons<I extends string>(key: string, cards: StepCard<I>[]): Lesson<I>[] {
   return groupByStep(cards).map((group, i) => lessonOf(key, group, i))
 }
 
-/** Cards sharing a `step` form one group, wherever they sit in the list. */
 function groupByStep<I extends string>(cards: StepCard<I>[]): StepCard<I>[][] {
   const groups: StepCard<I>[][] = []
   const index = new Map<number, number>()
@@ -65,7 +41,6 @@ function groupByStep<I extends string>(cards: StepCard<I>[]): StepCard<I>[][] {
   return groups
 }
 
-/** One lesson from its group: the head card names the step and glosses it. */
 function lessonOf<I extends string>(key: string, group: StepCard<I>[], i: number): Lesson<I> {
   const head = group[0]!
   return {

@@ -18,7 +18,6 @@ const defaults: Record<Role, string> = {
   translator: 'qwen/t',
 }
 
-/** No server key → no LLM judge, so grading is fully deterministic here. */
 function makeApp(assess?: Deps['assess']) {
   const { db, sqlite } = openDb(':memory:')
   const deps: Deps = {
@@ -53,7 +52,6 @@ const json = (body: unknown): RequestInit => ({
 async function signup(app: App, db: Db, username = 'alice') {
   const res = await app.request('/api/auth/register', json({ username, password: 'password123' }))
   const cookie = res.headers.getSetCookie()[0]!.split(';')[0]!
-  // Decks are no longer pre-seeded; tests drill the curated fixture decks.
   const { user } = (await res.json()) as { user: { id: UserId } }
   seedStarterDecks(db, user.id)
   return cookie
@@ -122,21 +120,18 @@ test('practice: next -> grade -> xp, and exercise catalog', async () => {
   )
   const deckId = decks.decks.find((d) => d.level === 'zhfreq')!.id
 
-  // a specific exercise type (requires auth)
   const next = await postJson<{
     instance: { exerciseId: string; cardId: string; data: { choices: string[] } }
   }>(app, cookie, '/api/practice/next', { deckId, exerciseId: 'multiple_choice' })
   expect(next.instance.exerciseId).toBe('multiple_choice')
   expect(Array.isArray(next.instance.data.choices)).toBe(true)
 
-  // fetch a card to grade against a known answer
   const cards = await getJson<{ cards: { id: string; back: string }[] }>(
     app,
     cookie,
     `/api/decks/${deckId}/cards`,
   )
   const card = cards.cards[0]!
-  // a grade is only taken for a drill the server handed out: ask for this one
   const drill = { deckId, cardId: card.id, exerciseId: 'translate.front_to_back' }
   await postJson(app, cookie, '/api/practice/next', drill)
 
@@ -252,8 +247,6 @@ test('practice/speak retry is graded but never counted', async () => {
   }
   const cardId = cards.cards[0]!.id
 
-  // A retry is graded like any other take (score + tips), but it must not touch
-  // XP or the SRS schedule — only the learner's first attempt counts.
   const form = audioForm(cardId, 'speak_word')
   form.set('retry', 'true')
   const res = await app.request('/api/practice/speak', auth(cookie, { method: 'POST', body: form }))
@@ -287,7 +280,6 @@ test('practice/speak rejects bad input', async () => {
     cards: { id: string }[]
   }
 
-  // no file
   const noFile = new FormData()
   noFile.set('cardId', cards.cards[0]!.id)
   noFile.set('exerciseId', 'speak_word')
@@ -296,7 +288,6 @@ test('practice/speak rejects bad input', async () => {
       .status,
   ).toBe(400)
 
-  // unknown card
   expect(
     (
       await app.request(
@@ -306,7 +297,6 @@ test('practice/speak rejects bad input', async () => {
     ).status,
   ).toBe(404)
 
-  // exercise that doesn't grade audio
   expect(
     (
       await app.request(
@@ -335,13 +325,11 @@ test('quiet mode hides listen/speak cards for 15 minutes (XP unaffected)', async
   }
   const card = cards.cards[0]!
 
-  // Turn the option on.
   const on = (await (
     await app.request('/api/practice/quiet', auth(cookie, json({ enabled: true })))
   ).json()) as { quietUntil: number }
   expect(on.quietUntil).toBeGreaterThan(Date.now())
 
-  // Auto-picked drills never come up as a listen/speak card.
   for (let i = 0; i < 30; i++) {
     const r = (await (
       await app.request('/api/practice/next', auth(cookie, json({ deckId })))
@@ -349,7 +337,6 @@ test('quiet mode hides listen/speak cards for 15 minutes (XP unaffected)', async
     expect(r.instance.modality).not.toBe('voice')
   }
 
-  // A forced voice exercise is swapped for a text one instead.
   const forced = (await (
     await app.request(
       '/api/practice/next',
@@ -359,7 +346,6 @@ test('quiet mode hides listen/speak cards for 15 minutes (XP unaffected)', async
   expect(forced.instance.exerciseId).not.toBe('type_listen')
   expect(forced.instance.modality).not.toBe('voice')
 
-  // Grading a text card still works and still earns its XP.
   const drill = { deckId, cardId: card.id, exerciseId: 'translate.front_to_back' }
   await app.request('/api/practice/next', auth(cookie, json(drill)))
   const graded = (await (
@@ -375,13 +361,11 @@ test('quiet mode hides listen/speak cards for 15 minutes (XP unaffected)', async
   expect(graded.result.xp).toBeGreaterThan(0)
   expect(graded.stats.xp).toBe(graded.result.xp)
 
-  // Stats reports the open window.
   const stats = (await (await app.request('/api/stats', auth(cookie))).json()) as {
     quietUntil: number
   }
   expect(stats.quietUntil).toBeGreaterThan(0)
 
-  // Turning it off clears the window.
   const off = (await (
     await app.request('/api/practice/quiet', auth(cookie, json({ enabled: false })))
   ).json()) as { quietUntil: number }
@@ -408,10 +392,8 @@ test('study preferences: readings can be hidden per user', async () => {
       ).json()) as { instance: { data: { reading?: string } } }
     ).instance.data.reading
 
-  // Zhuyin shows by default.
   expect(await nextReading()).toBeTruthy()
 
-  // Turning it off hides it from the prompt.
   const saved = (await (
     await app.request(
       '/api/settings',
@@ -421,7 +403,6 @@ test('study preferences: readings can be hidden per user', async () => {
   expect(saved.study.showZhuyin).toBe(false)
   expect(await nextReading()).toBe('')
 
-  // GET reflects the stored preference.
   const got = (await (await app.request('/api/settings', auth(cookie))).json()) as {
     study: { showZhuyin: boolean }
   }
@@ -453,7 +434,6 @@ test('study preferences: disabled exercise kinds are skipped', async () => {
     'type_listen',
   ])
 
-  // Auto-picked drills never come up as a disabled kind.
   for (let i = 0; i < 30; i++) {
     const r = (await (
       await app.request('/api/practice/next', auth(cookie, json({ deckId })))
@@ -461,7 +441,6 @@ test('study preferences: disabled exercise kinds are skipped', async () => {
     if (r.instance) expect(r.instance.exerciseId).not.toBe('multiple_choice')
   }
 
-  // Forcing a disabled kind swaps in one that is allowed.
   const forced = (await (
     await app.request(
       '/api/practice/next',
@@ -470,7 +449,6 @@ test('study preferences: disabled exercise kinds are skipped', async () => {
   ).json()) as { instance: { exerciseId: string } }
   expect(forced.instance.exerciseId).not.toBe('multiple_choice')
 
-  // Unknown ids (and the first-exposure teach step) are ignored by validation.
   const junk = (await (
     await app.request(
       '/api/settings',
@@ -493,7 +471,6 @@ test('the pronunciation card is never served, even when forced', async () => {
   }
   const deckId = decks.decks.find((d) => d.level === 'zhfreq')!.id
 
-  // Auto-picked drills never come up as a speaking card.
   for (let i = 0; i < 30; i++) {
     const r = (await (
       await app.request('/api/practice/next', auth(cookie, json({ deckId })))
@@ -501,7 +478,6 @@ test('the pronunciation card is never served, even when forced', async () => {
     if (r.instance) expect(r.instance.exerciseId).not.toBe('speak_word')
   }
 
-  // Forcing it swaps in an allowed kind instead.
   const forced = (await (
     await app.request(
       '/api/practice/next',
@@ -525,13 +501,11 @@ test('active deck: the profile choice drives free practice', async () => {
   }
   const jaIds = new Set(jaCards.cards.map((c) => c.id))
 
-  // Nothing chosen yet: free practice spans the member's decks.
   const before = (await (await app.request('/api/settings', auth(cookie))).json()) as {
     study: { activeDeckId: string | null }
   }
   expect(before.study.activeDeckId).toBeNull()
 
-  // Choosing a deck in the profile menu sets it for the account.
   const saved = (await (
     await app.request(
       '/api/settings',
@@ -540,27 +514,23 @@ test('active deck: the profile choice drives free practice', async () => {
   ).json()) as { study: { activeDeckId: string | null } }
   expect(saved.study.activeDeckId).toBe(ja.id)
 
-  // Free practice (no deck named) now serves a card from the chosen deck.
   const next = (await (await app.request('/api/practice/next', auth(cookie, json({})))).json()) as {
     instance: { cardId: string } | null
   }
   expect(next.instance).toBeTruthy()
   expect(jaIds.has(next.instance!.cardId)).toBe(true)
 
-  // GET reflects the stored choice.
   const got = (await (await app.request('/api/settings', auth(cookie))).json()) as {
     study: { activeDeckId: string | null }
   }
   expect(got.study.activeDeckId).toBe(ja.id)
 
-  // A deck that is not the member's own is rejected.
   const bad = await app.request(
     '/api/settings',
     auth(cookie, { ...json({ study: { activeDeckId: 'nope' } }), method: 'PUT' }),
   )
   expect(bad.status).toBe(400)
 
-  // Clearing it returns to free practice across decks.
   const cleared = (await (
     await app.request(
       '/api/settings',
@@ -589,9 +559,6 @@ test('practice: nothing due and no new words means done, never the same card aga
     cards: { id: string }[]
   }
 
-  // Every card is in review, due a week out: the due backlog and the new-word
-  // pool are both empty. The old "soonest card" fallback kept handing back the
-  // same not-due card (the "This is not that." loop the learner reported).
   const now = Date.now()
   for (const c of cards.cards) {
     upsertSrs(db, user.id, toCardId(c.id), {
@@ -624,7 +591,6 @@ test('practice keeps giving new words past the daily budget instead of stopping'
   }
   const deckId = decks.decks.find((d) => d.level === 'zhfreq')!.id
 
-  // Cap the day at a single new word.
   await app.request(
     '/api/settings',
     auth(cookie, { ...json({ study: { newPerDay: 1 } }), method: 'PUT' }),
@@ -638,7 +604,6 @@ test('practice keeps giving new words past the daily budget instead of stopping'
   const grade = async (exerciseId: string, cardId: string) =>
     app.request('/api/practice/grade', auth(cookie, json({ exerciseId, cardId, answer: '~' })))
 
-  // The day's one new word: teach, then its first graded drill.
   const taught = await next()
   expect(taught.instance!.exerciseId).toBe('introduce')
   await grade('introduce', taught.instance!.cardId)
@@ -646,14 +611,11 @@ test('practice keeps giving new words past the daily budget instead of stopping'
   expect(drilled.instance!.cardId).toBe(taught.instance!.cardId)
   await grade(drilled.instance!.exerciseId, drilled.instance!.cardId)
 
-  // The new-card budget is spent, but the deck still has words to give: pressing
-  // on serves the next new word rather than the "today's goal reached" screen.
   const again = await next()
   expect(again.done).toBeFalsy()
   expect(again.instance!.exerciseId).toBe('introduce')
   expect(again.instance!.cardId).not.toBe(taught.instance!.cardId)
 
-  // The allowance was raised to match, so the header stays honest.
   const stats = (await (await app.request('/api/srs/stats', auth(cookie))).json()) as {
     budget: { newRemaining: number }
   }
@@ -675,7 +637,6 @@ test('a grade is refused for a drill the server did not hand out', async () => {
   const issued = { deckId, cardId: first!.id, exerciseId: 'multiple_choice' }
   await postJson(app, cookie, '/api/practice/next', issued)
 
-  // another card, or another exercise on the same card, was never issued
   const grade = (body: object) => app.request('/api/practice/grade', auth(cookie, json(body)))
   const other = { exerciseId: 'multiple_choice', cardId: second!.id, answer: second!.back }
   expect((await grade(other)).status).toBe(409)

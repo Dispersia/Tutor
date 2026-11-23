@@ -1,5 +1,3 @@
-/** Action XP, idle rigs, the gather log and the materials bank. */
-
 import type { UserId } from '../../ids'
 import { and, asc, eq, inArray, sql } from 'drizzle-orm'
 import type { RigState } from '../../game/idle'
@@ -28,7 +26,6 @@ export function listActionProgress(db: Db, userId: UserId) {
   return db.select().from(actionProgress).where(eq(actionProgress.userId, userId)).all()
 }
 
-/** Every action's rig for a user, in one query (keyed by action id). */
 export function listRigStates(db: Db, userId: UserId): Map<string, RigState> {
   return new Map(
     listActionProgress(db, userId).map((r) => [
@@ -61,9 +58,6 @@ export function setActionXp(
     .run()
 }
 
-// --- idle rigs (docs/DESIGN.md §13.5.1) --------------------------------------
-
-/** The action's idle rig, or `undefined` if it has never been completed. */
 export function getRigState(db: Db, userId: UserId, actionId: string): RigState | undefined {
   const row = db
     .select()
@@ -81,7 +75,6 @@ export function getRigState(db: Db, userId: UserId, actionId: string): RigState 
   }
 }
 
-/** Writes only the rig columns, leaving xp/level (written by `setActionXp`) alone. */
 export function setRigState(db: Db, userId: UserId, actionId: string, rig: RigState): void {
   const cols = {
     completions: rig.completions,
@@ -107,7 +100,6 @@ function parseRemainder(json: string): Record<string, number> {
   }
 }
 
-/** Appends one completion to the rig log (the determinism contract's source). */
 export function addGatherLog(db: Db, userId: UserId, actionId: string, completions: number): void {
   db.insert(gatherLog).values({ id: id(), userId, actionId, completions, createdAt: now() }).run()
 }
@@ -121,14 +113,8 @@ export function listGatherLog(db: Db, userId: UserId, actionId: string) {
     .all()
 }
 
-// --- the bank ----------------------------------------------------------------
-// Materials are stacks in `inventory`. Equipment is not: the pieces a member
-// owns are their `gear_instances` rows, so every read and write below routes an
-// equipment item to them and a count can never disagree with the pieces.
-
 type InventoryRow = typeof inventory.$inferSelect
 
-/** The equipment definition behind an item id, or undefined for a material. */
 function gearItem(itemId: string): ItemDef | undefined {
   const item = ITEM_BY_ID.get(itemId)
   return item?.slot ? item : undefined
@@ -144,23 +130,16 @@ export function getItemCount(db: Db, userId: UserId, itemId: string): number {
   return row?.count ?? 0
 }
 
-/**
- * How many of an item a recipe, a rig or a drill may **spend**. For equipment
- * that is the spare pieces only — worn gear is owned (`getItemCount`) but never
- * consumed.
- */
 export function spendableCount(db: Db, userId: UserId, itemId: string): number {
   if (gearItem(itemId)) return spareGearPieces(db, userId, itemId).length
   return getItemCount(db, userId, itemId)
 }
 
-/** The whole bank: material stacks, plus one row per equipment item owned. */
 export function listInventory(db: Db, userId: UserId): InventoryRow[] {
   const stacks = db.select().from(inventory).where(eq(inventory.userId, userId)).all()
   return [...stacks.filter((r) => !gearItem(r.itemId)), ...gearStacks(db, userId)]
 }
 
-/** Owned equipment as bank rows: the count is the number of pieces. */
 function gearStacks(db: Db, userId: UserId): InventoryRow[] {
   const byItem = new Map<string, InventoryRow>()
   for (const g of listGearInstances(db, userId)) {
@@ -172,11 +151,6 @@ function gearStacks(db: Db, userId: UserId): InventoryRow[] {
   return [...byItem.values()]
 }
 
-/**
- * Adds (or removes, with a negative delta) items; never goes below zero. For
- * equipment that means pieces: each one added is rolled with `rand` (the plain
- * base piece without it); each one removed is a spare before a worn one.
- */
 export function addItems(
   db: Db,
   userId: UserId,
@@ -202,7 +176,6 @@ function addGearPieces(
 
 const GEAR_ITEM_IDS = ITEMS.filter((i) => i.slot).map((i) => i.id)
 
-/** Equipment stacks left in `inventory` from before pieces were instances. */
 export function listLegacyGearStacks(db: Db): InventoryRow[] {
   return db.select().from(inventory).where(inArray(inventory.itemId, GEAR_ITEM_IDS)).all()
 }

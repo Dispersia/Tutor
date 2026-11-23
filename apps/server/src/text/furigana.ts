@@ -1,22 +1,11 @@
-/**
- * Furigana splitting (docs/DESIGN.md §13.7).
- *
- * Japanese cards store the whole-word kana reading. To render real furigana we
- * need the ruby split: which kana belong to the kanji vs the okurigana. This is
- * derived by matching the shared kana prefix/suffix (お茶 → お + 茶[ちゃ],
- * 食べる → 食[た] + べる).
- */
-
 export interface FuriganaSegment {
   base: string
-  /** kana shown above the base (absent for plain okurigana / kana-only runs) */
   ruby?: string
 }
 
 const KANJI = /[\u4e00-\u9fff]/
 const KANA = /[\u3040-\u309f\u30a0-\u30ff\u30fc]/
 
-/** Splits `word` + whole-word `reading` into ruby segments. */
 export function furiganaSegments(word: string, reading: string): FuriganaSegment[] {
   if (!word) return []
   if (!reading || !KANJI.test(word)) return [{ base: word }]
@@ -26,7 +15,6 @@ export function furiganaSegments(word: string, reading: string): FuriganaSegment
   return segments.length ? segments : [{ base: word }]
 }
 
-/** How many leading kana the word and reading share (kana-only prefix). */
 function sharedPrefix(word: string, reading: string): number {
   let pre = 0
   while (
@@ -40,7 +28,6 @@ function sharedPrefix(word: string, reading: string): number {
   return pre
 }
 
-/** How many trailing kana they share (okurigana after the kanji run). */
 function sharedSuffix(word: string, reading: string, pre: number): number {
   let suf = 0
   const tail = (s: string, i: number) => s[s.length - 1 - i]
@@ -55,7 +42,6 @@ function sharedSuffix(word: string, reading: string, pre: number): number {
   return suf
 }
 
-/** The prefix, ruby-annotated middle and suffix segments of a split. */
 function middleSegments(
   word: string,
   reading: string,

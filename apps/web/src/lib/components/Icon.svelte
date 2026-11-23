@@ -1,5 +1,4 @@
 <script lang="ts">
-  /** One drawn icon set, single stroke and weight — never emoji. */
   let { name, size = 16, cls = '' }: { name: string; size?: number; cls?: string } = $props()
 
   const PATHS: Record<string, string> = {
@@ -9,7 +8,6 @@
     history: '<path d="M12 7v5l3.5 2M3.5 12a8.5 8.5 0 1 0 2.6-6.1M3.5 4v4h4" />',
     settings:
       '<path d="M4 6h5M13 6h7M4 12h11M19 12h1M4 18h7M15 18h5" /><circle cx="11" cy="6" r="2" /><circle cx="17" cy="12" r="2" /><circle cx="13" cy="18" r="2" />',
-    // the bank — a strongbox: lid, body and lock
     bank: '<path d="M4 9h16v11H4zM4 9V7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2M10 12h4v3h-4z" />',
     logout: '<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 8l4 4-4 4M14 12H3" />',
     chat: '<path d="M4 5h16v11H9l-5 4z" />',
@@ -31,11 +29,8 @@
       '<path d="M12 3a7 7 0 0 0-7 7v4l2 2v3h10v-3l2-2v-4a7 7 0 0 0-7-7zM9.5 11h.01M14.5 11h.01M10 17h4" />',
     dot: '<circle cx="12" cy="12" r="3" />',
     mark: '<path d="M5 12h14" />',
-    // the web: two links of a chain
     link: '<path d="M10.5 13.5a3.5 3.5 0 0 0 5 0l3-3a3.5 3.5 0 0 0-5-5l-1.4 1.4M13.5 10.5a3.5 3.5 0 0 0-5 0l-3 3a3.5 3.5 0 0 0 5 5l1.4-1.4" />',
-    // not yet earned
     lock: '<path d="M6.5 11h11v9h-11zM9 11V8.5a3 3 0 0 1 6 0V11" />',
-    // the flow between two trades
     arrow: '<path d="M4 12h15M15 8l4 4-4 4" />',
   }
 </script>

@@ -17,16 +17,8 @@
 
   const threadPath = (id: string) => `/api/sessions/${id}`
 
-  // Seed the latest conversation from the last fetch so reopening Chat shows it
-  // at once; the stream itself still goes to the server. Two steps: the cached
-  // session list names the latest session, whose cached messages seed the thread.
   const list = cachedResource<{ sessions: ChatSession[] }>('/api/sessions', { auto: false })
   const firstSession = list.data?.sessions[0]
-  /**
-   * The conversation on screen. A send writes it with `set` (the optimistic pair,
-   * then every streamed delta), and a `set` outdates any load still in flight —
-   * so a load that finishes late can never replace what the user just sent.
-   */
   const thread = cachedResource<{ messages: Message[] }>(
     () => (firstSession ? threadPath(firstSession.id) : undefined),
     { auto: false },
@@ -41,9 +33,7 @@
   let error = $state('')
   let speaking = $state(false)
   let speaker: Speaker | null = null
-  /** The reply being streamed, so leaving the screen can abort it. */
   let stream: AbortController | null = null
-  /** Set by the first send: from then on the mount load must not overwrite the view. */
   let touched = false
 
   const recorder = new Recorder()
@@ -51,8 +41,6 @@
   const canMic = micSupported()
 
   onMount(async () => {
-    // Replies are spoken here, so pre-warm the voice models on entry: the first
-    // reply should not also pay the 2-6 s model load (DESIGN §8.1).
     if (ttsOn) void wakeSpeech().catch(() => {})
     try {
       await openLatest()
@@ -61,8 +49,6 @@
     }
   })
 
-  // Leaving the screen must let go of everything live: the mic, the reply
-  // stream and whatever is being spoken.
   onDestroy(() => {
     stream?.abort()
     recorder.dispose()
@@ -70,12 +56,6 @@
     stopAudio()
   })
 
-  /**
-   * Opens the latest conversation (or starts one). A message sent while this is
-   * still loading owns the view from then on — `touched` — so a slow load never
-   * replaces the optimistic messages or points `sessionId` at an older session.
-   * Both loads reject (`load()`), so the caller shows the failure.
-   */
   async function openLatest() {
     const { sessions } = await list.load()
     const latest = sessions[0]
@@ -89,17 +69,12 @@
     if (!touched) sessionId = s.id
   }
 
-  /** Loads a session's messages; a send in the meantime (its `set`) keeps the view. */
   async function loadMessages(id: string) {
     follow(id)
     await thread.load()
     if (!touched) scrollDown()
   }
 
-  /**
-   * Points the thread at a session while keeping what is on screen: `open` alone
-   * would re-seed from the cache and drop the messages shown (the optimistic ones).
-   */
   function follow(id: string) {
     const path = threadPath(id)
     if (thread.path === path) return
@@ -108,7 +83,6 @@
     thread.set(shown)
   }
 
-  /** Rewrites one message by id — an index would go stale when the list is replaced. */
   function patchMessage(id: string, patch: (m: Message) => Message) {
     thread.set({ messages: messages.map((m) => (m.id === id ? patch(m) : m)) })
   }
@@ -152,7 +126,6 @@
     }
   }
 
-  /** Stops playback, appends the optimistic pair and opens the reply sink. */
   function beginReply(text: string) {
     stopAudio()
     speaker?.cancel()
@@ -164,7 +137,6 @@
     return { id: reply.id, sp, sink: replySink(reply.id, sp) }
   }
 
-  /** Records the error, marks the empty reply and silences the speaker. */
   function failReply(id: string, sp: Speaker | null, e: unknown) {
     error = (e as Error).message
     patchMessage(id, (m) => ({ ...m, text: m.text || '(no reply)' }))
@@ -172,21 +144,12 @@
     if (speaker === sp) speaking = false
   }
 
-  /**
-   * Re-reads the conversation after the stream. `refresh()` never rejects and
-   * keeps the optimistic view on failure; a newer send's `set` outdates it, so
-   * that send owns the view (and reloads when it is done).
-   */
   async function reloadMessages() {
     if (!sessionId) return
     follow(sessionId)
     await thread.refresh()
   }
 
-  /**
-   * Opens the streaming speaker when replies are spoken. Push each sentence as
-   * it completes, so audio starts before the model has finished writing.
-   */
   function startSpeaking(): Speaker | null {
     if (!ttsOn) return null
     const sp = createSpeaker(speechOpts(lang), (e) => (error = `Playback: ${e.message}`))
@@ -201,7 +164,6 @@
     flush: () => void
   }
 
-  /** Streams a reply into message `id`, speaking each finished sentence. */
   function replySink(id: string, sp: Speaker | null): ReplySink {
     let buf = ''
     return {
@@ -213,7 +175,6 @@
     }
   }
 
-  /** Appends a delta to the message (and the speaker), returning the new buffer. */
   function speakDelta(id: string, sp: Speaker | null, buf: string, d: string): string {
     patchMessage(id, (m) => ({ ...m, text: m.text + d }))
     scrollDown()
@@ -224,7 +185,6 @@
     return rest
   }
 
-  /** Pushes the tail sentence and closes the speaker when the stream ends. */
   function flushSpeech(sp: Speaker | null, buf: string): void {
     if (!sp) return
     if (buf.trim()) sp.push(buf)
@@ -239,7 +199,6 @@
     else await startRecording()
   }
 
-  /** Stop the take, transcribe it and send when it says something. */
   async function stopAndTranscribe() {
     recording = false
     const take = await recorder.stop()
@@ -259,7 +218,6 @@
     }
   }
 
-  /** Transcribes a clip into the box, then sends it. */
   async function transcribeIntoInput(blob: Blob) {
     try {
       const text = await transcribe(blob, lang)
@@ -274,7 +232,6 @@
     }
   }
 
-  /** Begin a recording, after stopping any playback. */
   async function startRecording() {
     stopAudio()
     speaker?.cancel()
@@ -290,7 +247,6 @@
 
   function onKey(e: KeyboardEvent) {
     if (e.key !== 'Enter' || e.shiftKey || e.repeat) return
-    // Don't send while an IME is confirming a candidate (typing Japanese).
     if (e.isComposing || e.keyCode === 229) return
     e.preventDefault()
     void send()

@@ -1,11 +1,3 @@
-/**
- * `POST /api/decks` — create a deck (docs/DESIGN.md §13.7, §12.4).
- *
- * Three paths: an `instruction` (the normal one) builds the deck from a pulled
- * frequency list with the card templates; a plain `topic` falls back to a
- * one-shot vocabulary generation; no body creates an empty deck.
- */
-
 import type { UserId, DeckId } from '../../ids'
 import type { Context } from 'hono'
 import type { App, AppEnv, Deps } from '../../context'
@@ -39,7 +31,6 @@ interface CreateBody {
   pitchAccent?: boolean
 }
 
-/** Reads a deck-creation request, dropping any wrong-typed field. */
 function readCreateBody(body: Record<string, unknown>): CreateBody {
   return {
     instruction: str(body, 'instruction'),
@@ -74,7 +65,6 @@ export function registerDeckCreate(app: App) {
   })
 }
 
-/** The normal path: build the deck from an instruction + a real frequency list. */
 async function createFromInstruction(c: Context<AppEnv>, deps: Deps, body: CreateBody) {
   const user = c.get('user')!
   const planner = await plannerFor(deps, user.id)
@@ -86,8 +76,6 @@ async function createFromInstruction(c: Context<AppEnv>, deps: Deps, body: Creat
       targetLang: body.targetLang ?? user.targetLang ?? 'zh',
       sourceLang: body.sourceLang ?? user.nativeLang ?? 'en',
     })
-    // The prompt is the deck's constitution: remember it so every later deck
-    // (including imports and growth batches) starts from it.
     setUserSetting(deps.db, user.id, DECK_INSTRUCTION_KEY, instruction)
     deps.audio?.enqueueDeck(user.id, built.deckId)
     return c.json({ deck: deckView(getDeck(deps.db, built.deckId)!), ...built }, 201)
@@ -105,7 +93,6 @@ interface ArgsInput {
   planner: Planner
 }
 
-/** The deck-building options, with the instruction parsed for its rules. */
 function instructionArgs(input: ArgsInput): Omit<DeckBuildArgs, 'targetLang' | 'sourceLang'> {
   const { body, instruction, deps, planner } = input
   const parsed = parseInstruction(instruction, body.targetLang ?? 'zh')
@@ -124,7 +111,6 @@ function instructionArgs(input: ArgsInput): Omit<DeckBuildArgs, 'targetLang' | '
   }
 }
 
-/** Legacy: one-shot vocabulary generation from a topic, no frequency list. */
 async function createFromTopic(c: Context<AppEnv>, deps: Deps, body: CreateBody) {
   const user = c.get('user')!
   const key = await resolveUserKey(deps, user.id)
@@ -142,7 +128,6 @@ async function createFromTopic(c: Context<AppEnv>, deps: Deps, body: CreateBody)
   }
 }
 
-/** The deck and its cards land together: a failure never leaves an empty deck. */
 function saveTopicDeck(deps: Deps, body: CreateBody, ctx: Omit<TopicCardsCtx, 'deps' | 'deckId'>) {
   return inTransaction(deps.db, (tx) => {
     const scoped = { ...deps, db: tx }
@@ -169,7 +154,6 @@ function createTopicDeck(
   })
 }
 
-/** Only cards with both sides filled in: the model's output is not trusted to be complete. */
 function usableCards(cards: unknown): TopicCard[] {
   if (!Array.isArray(cards)) return []
   return cards.filter(
@@ -230,7 +214,6 @@ const TOPIC_SYSTEM =
   'You write vocabulary cards for a language learner. Return only the JSON the schema asks for. ' +
   'Choose common, useful words at the requested level, one word or short set phrase per card, with no duplicates.'
 
-/** What the topic generator returns: plain vocabulary, no templates or payloads. */
 const TOPIC_SCHEMA = {
   type: 'object',
   properties: {
@@ -253,19 +236,16 @@ const TOPIC_SCHEMA = {
   additionalProperties: false,
 }
 
-/** The reading convention for the generated cards, by target language. */
 function readingRule(targetLang: string): string {
   if (targetLang === 'ja') {
     return '- kana: the reading in hiragana. reading: the same reading in romaji.'
   }
   if (targetLang === 'zh') {
-    // Pinyin on purpose: the server derives Zhuyin from it and never shows it.
     return '- back uses Traditional characters (繁體字). reading: pinyin with tone marks. kana: an empty string.'
   }
   return '- reading and kana: empty strings.'
 }
 
-/** Zhuyin for Mandarin, kana for Japanese; other languages carry no reading. */
 function topicReadings(targetLang: string, cd: TopicCard): Record<string, string> {
   if (targetLang !== 'zh' && targetLang !== 'ja') return {}
   return readingsFor(targetLang, cd.reading ?? '', cd.kana)

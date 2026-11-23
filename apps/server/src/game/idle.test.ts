@@ -26,7 +26,6 @@ describe('idle curves', () => {
     expect(rigIntervalSec(0)).toBe(10)
     expect(rigIntervalSec(15)).toBeCloseTo(6, 6)
     expect(rigIntervalSec(60)).toBeCloseTo(2.5, 6)
-    // never below the floor, monotone
     for (const c of [0, 1, 5, 30, 120, 1000]) expect(rigIntervalSec(c)).toBeGreaterThanOrEqual(2)
     expect(rigIntervalSec(500)).toBeCloseTo(IDLE.floorIntervalSec, 3)
   })
@@ -36,14 +35,12 @@ describe('idle curves', () => {
     expect(rigRunSec(1)).toBe(600)
     expect(rigRunSec(IDLE.runFullAtCompletions)).toBeCloseTo(IDLE.maxRunSec, 6)
 
-    // 50 completions = 3 hours, and every step before it is the same size.
     const step = rigRunSec(2) - rigRunSec(1)
     expect(step).toBeCloseTo((IDLE.maxRunSec - IDLE.firstRunSec) / 49, 6)
     for (let c = 1; c < IDLE.runFullAtCompletions; c++) {
       expect(rigRunSec(c + 1) - rigRunSec(c)).toBeCloseTo(step, 6)
     }
 
-    // saturates at the ceiling and never exceeds it
     expect(rigRunSec(10_000)).toBe(IDLE.maxRunSec)
     expect(rigRunSec(IDLE.runFullAtCompletions + 1)).toBe(IDLE.maxRunSec)
   })
@@ -52,7 +49,6 @@ describe('idle curves', () => {
     expect(rigRunProgress(0)).toBe(0)
     expect(rigRunProgress(IDLE.runFullAtCompletions / 2)).toBeCloseTo(0.5, 6)
     expect(rigRunProgress(IDLE.runFullAtCompletions)).toBe(1)
-    // clamped: beyond the cap it stays 1
     expect(rigRunProgress(10_000)).toBe(1)
 
     expect(rigMaxed(0)).toBe(false)
@@ -121,21 +117,17 @@ describe('settleRig', () => {
   })
 
   test('the run is re-based on the count, never stacked', () => {
-    // 50 drills at the same instant reach the 3 h ceiling exactly — no more.
     let rig = newRig()
     for (let i = 0; i < 50; i++) rig = extendRig(rig, 1_000)
     expect(rig.runEndsAt).toBe(1_000 + IDLE.maxRunSec * 1000)
     const past = extendRig(rig, 1_000)
     expect(past.runEndsAt).toBe(1_000 + IDLE.maxRunSec * 1000)
 
-    // 10 completions buy ~40 min, not the ceiling: the old sum hit 3 h here.
     let ten = newRig()
     for (let i = 0; i < 10; i++) ten = extendRig(ten, 1_000)
     expect(ten.runEndsAt).toBe(1_000 + Math.round(rigRunSec(10) * 1000))
     expect(ten.runEndsAt).toBeLessThan(1_000 + IDLE.maxRunSec * 1000)
 
-    // Two quick drills = one `rigRunSec(2)` run from the last drill, not
-    // `rigRunSec(1) + rigRunSec(2)`.
     let two = extendRig(newRig(), 1_000)
     two = extendRig(two, 2_000)
     expect(two.runEndsAt).toBe(2_000 + Math.round(rigRunSec(2) * 1000))
@@ -145,12 +137,10 @@ describe('settleRig', () => {
 describe('settleRig: stock and yield', () => {
   test('an artisan consumes stock and is clamped by the bank', () => {
     const forge = extendRig(newRig(), 0)
-    // empty bank → starved, nothing made, nothing eaten
     const starved = settleRig(forge, BAR, new Map(), forge.runEndsAt - 1)
     expect(starved.produced).toEqual({})
     expect(starved.consumed).toEqual({})
 
-    // 4 ore in the bank → at most 4 bars, and the ore is spent
     const bank = new Map([['copper_ore', 4]])
     const fed = settleRig(forge, BAR, bank, forge.runEndsAt - 1)
     expect(fed.produced.bronze_bar).toBe(4)
@@ -169,11 +159,9 @@ describe('settleRig: stock and yield', () => {
   test('reports the crafts the run completed on its own (the passive-XP basis)', () => {
     const powered = extendRig(newRig(), 0)
     const r = settleRig(powered, ORE, new Map(), 600_000)
-    // one item per craft here, so the craft count is the item count
     expect(r.crafted).toBe(r.produced.copper_ore!)
     expect(r.crafted).toBeGreaterThan(0)
 
-    // a still rig, and a starved artisan, craft nothing
     expect(settleRig(newRig(), ORE, new Map(), 10 ** 9).crafted).toBe(0)
     expect(settleRig(extendRig(newRig(), 0), BAR, new Map(), 1_000_000).crafted).toBe(0)
   })
@@ -181,8 +169,6 @@ describe('settleRig: stock and yield', () => {
 
 describe('determinism', () => {
   test('the completion log alone reconstructs the bank', () => {
-    // The contract docs/DESIGN.md §13.5.1 rests on: "just recording when things are
-    // completed tells you how many resources they gained in a set amount of time."
     const times = [0, 2_000, 5_000, 20_000, 61_000]
     let live = newRig()
     const liveTotal: Record<string, number> = {}
@@ -246,7 +232,6 @@ describe('live-rig cap', () => {
   })
 
   test('a kept rig survives even when it is closest to finishing', () => {
-    // The drill's own machine must always start, so it is never the one cut.
     const rigs = new Map([
       ['a', rig(1_000)],
       ['b', rig(5_000)],

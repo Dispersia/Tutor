@@ -1,17 +1,7 @@
-/**
- * Web Push subscriptions (docs/DESIGN.md §13.5.1). Part of the schema split
- * (docs/ARCHITECTURE.md).
- */
-
 import type { UserId } from '../../ids'
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 import { users } from './users'
 
-/**
- * One row per installed device that opted in to alerts. `endpoint` is the push
- * service URL; `p256dh`/`auth` are the subscription's public key and auth secret
- * (RFC 8291).
- */
 export const pushSubscriptions = sqliteTable(
   'push_subscriptions',
   {

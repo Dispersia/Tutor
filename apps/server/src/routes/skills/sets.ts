@@ -1,5 +1,3 @@
-/** Saved gear sets (docs/DESIGN.md §13.5.3). */
-
 import { toGearSetId } from '../../ids'
 import type { Context } from 'hono'
 import { applyGearSet, removeGearSet, saveGearSet } from '../../services'
@@ -13,10 +11,8 @@ export function registerSkillSets(app: App) {
   app.post('/api/skills/gear/sets/delete', (c) => deleteSetHandler(c))
 }
 
-/** The combat styles a saved set can be pinned to. */
 const COMBAT_STYLES = ['melee', 'ranged', 'magic', 'general'] as const
 
-/** Save the current loadout as a named set. */
 async function saveSetHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
@@ -27,7 +23,6 @@ async function saveSetHandler(c: Context<AppEnv>) {
   return c.json({ set, ...gearPayload(deps, user.id) })
 }
 
-/** Swap to a saved set. */
 async function applySetHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
@@ -38,7 +33,6 @@ async function applySetHandler(c: Context<AppEnv>) {
   return c.json({ ...gearPayload(deps, user.id), skipped: res.skipped })
 }
 
-/** Delete a saved set. */
 async function deleteSetHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!

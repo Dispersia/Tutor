@@ -1,17 +1,3 @@
-/**
- * One-off: regenerate a generated deck's example cards (sentence/grammar) with
- * the n+1-enforcing builder, while keeping every vocabulary card — and therefore
- * all SRS scheduling, review history and lesson progress — untouched.
- *
- *   bun scripts/rebuild-deck-examples.ts <deckId>
- *
- * It builds a throwaway deck from the deck's own stored word list, then copies
- * the (already n+1-validated) sentence/grammar cards onto the real deck, anchored
- * to the same vocabulary word each one was built from. The real deck's vocab
- * cards and their ids never change, so lesson ids stay stable.
- *
- * Set TUTOR_DATA_DIR to the live data dir (e.g. ~/.local/share/tutor).
- */
 import { join } from 'node:path'
 import { env, roleReasoning } from '../apps/server/src/env'
 import { openDb } from '../apps/server/src/db/client'
@@ -58,10 +44,6 @@ const words = (settings.words as string[] | undefined) ?? []
 if (words.length === 0) throw new Error('deck has no stored word list to rebuild from')
 console.log(`deck "${deckRow.name}" (${deckId}) — ${words.length} words`)
 
-// 1. Keep every lesson that is currently complete complete: the regenerated
-//    examples are new cards with no SRS state, so without this the learnt
-//    vocab would still count but the fresh examples would flip lessons back to
-//    "incomplete" and send the learner to step 1.
 const view = curriculumView(db, userId).find((d) => d.deckId === deckId)
 let keptComplete = 0
 for (const lesson of view?.lessons ?? []) {
@@ -72,8 +54,6 @@ for (const lesson of view?.lessons ?? []) {
 }
 console.log(`kept ${keptComplete} completed lessons complete`)
 
-// 2. The real deck's vocab, in step order, so an example built on word W lands
-//    in W's lesson.
 const realCards = listCards(db, userId, deckId)
 const stepByWord = new Map<string, number>()
 for (const c of realCards) {
@@ -86,8 +66,6 @@ const oldExamples = realCards.filter(
 )
 console.log(`real deck: ${stepByWord.size} vocab cards, ${oldExamples.length} old examples`)
 
-// 3. Generate a fresh set into a throwaway deck, reusing the production builder
-//    (same chunking, retry-on-truncation and n+1 validation the server uses).
 const key = await decryptSecret(
   getUserSetting(db, userId, 'openrouter_key') || undefined,
   env.secret,
@@ -145,7 +123,6 @@ try {
 }
 console.log(`generated in ${Math.round((Date.now() - started) / 1000)}s`)
 
-// 4. Collect the new examples, anchored to the word whose lesson they belong to.
 interface Pending {
   type: string
   front: string
@@ -187,7 +164,6 @@ if (pending.length === 0) {
   throw new Error('generation produced no examples — deck left untouched')
 }
 
-// 5. Swap the examples. Vocab cards are never touched.
 for (const c of oldExamples) {
   sqlite.run('delete from srs where card_id = ?', [c.id])
   sqlite.run('delete from srs_reviews where card_id = ?', [c.id])

@@ -34,7 +34,6 @@ test('wordKey is bareText with width folded', () => {
 
 test('lettersAndDigits keeps only letters and digits', () => {
   expect(lettersAndDigits('Ｈｅｌｌｏ, wörld 42!')).toBe('hellowörld42')
-  // NFKC composes an accent where it can; a mark with no composed form is dropped.
   expect(lettersAndDigits('e\u0301')).toBe('é')
   expect(lettersAndDigits('x\u20dd1')).toBe('x1')
   expect(wordKey('x\u20dd1')).toBe('x\u20dd1')

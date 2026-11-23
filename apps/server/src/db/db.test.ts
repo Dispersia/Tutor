@@ -44,7 +44,6 @@ test('users: create, lookup, per-user roles', () => {
   expect(getRoles(db, a.id, { ...defaults })).toEqual(defaults)
   setRole(db, a.id, { ...defaults }, 'judge', 'qwen/z')
   expect(getRoles(db, a.id, { ...defaults }).judge).toBe('qwen/z')
-  // bob's roles are untouched — settings are per user
   expect(getRoles(db, b.id, { ...defaults }).judge).toBe('j')
   sqlite.close()
 })
@@ -61,7 +60,7 @@ test('sessions + messages are scoped to their owner', () => {
   expect(listSessions(db, a.id).length).toBe(1)
   expect(listSessions(db, b.id).length).toBe(0)
   expect(getOwnedSession(db, sa.id, a.id)?.id).toBe(sa.id)
-  expect(getOwnedSession(db, sa.id, b.id)).toBeUndefined() // bob can't reach alice's session
+  expect(getOwnedSession(db, sa.id, b.id)).toBeUndefined()
   expect(listMessages(db, sa.id).length).toBe(2)
   sqlite.close()
 })
@@ -91,11 +90,9 @@ test('clearDeckBuilds lifts a build flag left behind by a restart', () => {
   expect(clearDeckBuilds(db)).toBe(1)
   const after = getDeck(db, deck.id)!.settings
   expect(after.building).toBe(false)
-  // the progress it reached is kept — only the flag is cleared
   expect(after.cursor).toBe(30)
   expect(after.buildTotal).toBe(1477)
 
-  // a deck that is not building is left alone
   updateDeckSettings(db, deck.id, { building: false })
   expect(clearDeckBuilds(db)).toBe(0)
   sqlite.close()
@@ -115,11 +112,8 @@ test('otherBacks only offers words the learner has already met', () => {
     })
   const [a, b, c, d] = ['一', '二', '三', '四'].map(mk)
 
-  // Nothing seen yet, so there is nothing to offer — a random unseen word would
-  // be a guess, not a choice.
   expect(otherBacks(db, user.id, 'zh', a!.back)).toEqual([])
 
-  // Two of the other cards have been met: the teach step and a graded review.
   addReview(db, { cardId: b!.id, userId: user.id, exerciseId: 'introduce', score: 100 })
   addReview(db, {
     cardId: c!.id,
@@ -130,8 +124,8 @@ test('otherBacks only offers words the learner has already met', () => {
 
   const backs = otherBacks(db, user.id, 'zh', a!.back).sort()
   expect(backs).toEqual([b!.back, c!.back].sort())
-  expect(backs).not.toContain(d!.back) // 四 has never been seen
-  expect(backs).not.toContain(a!.back) // the answer is never a distractor
+  expect(backs).not.toContain(d!.back)
+  expect(backs).not.toContain(a!.back)
   sqlite.close()
 })
 
@@ -155,9 +149,7 @@ test('a private card extends the deck for one member and nobody else', async () 
   expect(repo.listCards(db, b.id, deck.id).map((c) => c.back)).toEqual(['茶'])
   expect(repo.getCard(db, mine.id, a.id)?.back).toBe('我喝茶。')
   expect(repo.getCard(db, mine.id, b.id)).toBeUndefined()
-  // the shared deck's size is the same for everyone
   expect(repo.listDecks(db)[0]!.cardCount).toBe(1)
-  // a tool with no member sees everything; deleting the member takes their card along
   expect(repo.listCards(db).length).toBe(2)
   repo.deleteUser(db, a.id)
   expect(repo.listCards(db).map((c) => c.back)).toEqual(['茶'])

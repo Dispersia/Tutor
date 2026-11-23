@@ -15,13 +15,11 @@ const blank = <T>(): ResourceState<T> => ({
   fetchedAt: 9,
 })
 
-/** A cache holding one entry. */
 const cacheOf = (path: string, data: unknown, at: number): CacheReader => ({
   peek: <T>(p: string) => (p === path ? (data as T) : undefined),
   at: (p) => (p === path ? at : 0),
 })
 
-/** A promise the test settles by hand, to order a race. */
 function deferred<T>() {
   let resolve!: (value: T) => void
   let reject!: (err: Error) => void
@@ -189,7 +187,7 @@ test('loadOrThrow: a superseded request answers its caller but leaves the state'
   }
   const first = start(slow.promise)
   const second = start(late.promise)
-  seq.next() // a `set` (or a newer request) takes over
+  seq.next()
   slow.resolve('old')
   expect(await first).toBe('old')
   late.reject(new Error('late'))

@@ -82,8 +82,8 @@ test('timing anomalies are flagged and pauses reported', () => {
     expected: '妈妈',
     transcript: '妈妈',
     items: [
-      { text: '妈', start: 0.0, end: 0.02 }, // clipped
-      { text: '妈', start: 1.2, end: 1.6 }, // after a long pause
+      { text: '妈', start: 0.0, end: 0.02 },
+      { text: '妈', start: 1.2, end: 1.6 },
     ],
     duration: 1.8,
   })
@@ -110,7 +110,7 @@ test('latin phrases count syllables and differ from CJK handling', () => {
 test('a Taiwan-accent realisation (sh → s) is not a missing word', () => {
   const f = computeFeatures({
     expected: '是',
-    transcript: '四', // Whisper heard the merged s-initial
+    transcript: '四',
     items: [{ text: '是', start: 0.1, end: 0.5 }],
     duration: 0.6,
     lang: 'zh',
@@ -121,7 +121,6 @@ test('a Taiwan-accent realisation (sh → s) is not a missing word', () => {
 })
 
 test('accent tolerance is opt-in to Mandarin and still catches other words', () => {
-  // Without a language, characters are compared literally (unchanged behaviour).
   const literal = computeFeatures({
     expected: '是',
     transcript: '四',
@@ -130,7 +129,6 @@ test('accent tolerance is opt-in to Mandarin and still catches other words', () 
   })
   expect(literal.missing).toEqual(['是'])
 
-  // A genuinely different word is still missing even with tolerance on.
   const wrong = computeFeatures({
     expected: '是',
     transcript: '你好',

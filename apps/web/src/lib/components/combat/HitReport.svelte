@@ -1,6 +1,4 @@
 <script lang="ts">
-  /** The chips describing one exchange: your hit, its blow, and the XP each earned. */
-
   import { href } from '#lib/paths'
   import { ACCENT } from '#lib/theme'
   import Icon from '#lib/components/Icon.svelte'

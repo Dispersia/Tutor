@@ -1,6 +1,4 @@
 <script lang="ts">
-  /** Which model each LLM role uses, with the OpenRouter catalogue as a datalist. */
-
   import { accentStyle, ACCENT } from '#lib/theme'
   import { ROLE_KEYS, ROLE_LABEL } from '#lib/settingsview'
   import Spinner from '#lib/components/Spinner.svelte'

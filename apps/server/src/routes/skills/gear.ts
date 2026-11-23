@@ -1,5 +1,3 @@
-/** Gear actions: equip, discard, salvage, enchant, distill (docs/DESIGN.md §13.5.3). */
-
 import { toGearInstanceId, type GearInstanceId } from '../../ids'
 import type { Context } from 'hono'
 import {
@@ -15,7 +13,6 @@ import type { App, AppEnv } from '../../context'
 import { idField, jsonBody, num, str } from '../body'
 import { gearPayload } from './board'
 
-/** The piece to equip: an exact instance, a base item, and where it goes. */
 interface EquipPiece {
   itemId?: string
   instanceId?: GearInstanceId
@@ -31,17 +28,12 @@ export function registerSkillGear(app: App) {
   app.post('/api/skills/gear/distill', (c) => distillHandler(c))
 }
 
-/** The gear screen: worn rows, rolled instances and saved sets. */
 function gearHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
   return c.json(gearPayload(deps, user.id))
 }
 
-/**
- * Equip / unequip gear. An instanceId equips that exact rolled piece; an itemId
- * equips the first spare piece of that item.
- */
 async function equipHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
@@ -74,7 +66,6 @@ async function equipPiece(c: Context<AppEnv>, piece: EquipPiece) {
   return c.json(gearPayload(deps, user.id))
 }
 
-/** Discard a crafted piece (must be unequipped first). */
 async function discardHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
@@ -85,7 +76,6 @@ async function discardHandler(c: Context<AppEnv>) {
   return c.json(gearPayload(deps, user.id))
 }
 
-/** Salvage a crafted piece back into crafting materials. */
 async function salvageHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
@@ -96,10 +86,6 @@ async function salvageHandler(c: Context<AppEnv>) {
   return c.json({ materials: res.materials, ...gearPayload(deps, user.id) })
 }
 
-/**
- * Enchant a crafted piece (§13.5.3.2): pick a catalog enchant that fits its slot,
- * spend its essence reagents. Applying grants no XP — Distill is the training.
- */
 async function enchantHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
@@ -114,7 +100,6 @@ async function enchantHandler(c: Context<AppEnv>) {
   return c.json(gearPayload(deps, user.id))
 }
 
-/** Distill an item: burn it for Enchanting XP (by value) and its family essence. */
 async function distillHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!

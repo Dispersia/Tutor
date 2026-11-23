@@ -1,6 +1,4 @@
 <script lang="ts">
-  /** The "build a deck" composer and the Anki-import trigger that sits under it. */
-
   import { autoGrow } from '#lib/grow'
   import { ACCENT } from '#lib/theme'
   import { LANGUAGES } from '#lib/learnview'

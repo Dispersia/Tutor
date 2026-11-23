@@ -1,5 +1,3 @@
-/** Guided-curriculum lesson completion. */
-
 import type { UserId } from '../../ids'
 import { eq } from 'drizzle-orm'
 import type { Db } from '../client'

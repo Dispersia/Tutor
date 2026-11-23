@@ -1,10 +1,3 @@
-/**
- * `POST /api/decks/:id/pitch` — backfill pitch-accent metadata (docs/DESIGN.md
- * §11.1). The bundled dictionary answers first (offline); the generator fills the
- * rest. With `{ force: true }` every card with a reading is re-annotated from the
- * dictionary alone, replacing wrong contours without asking the model.
- */
-
 import { toDeckId, type UserId, type DeckId } from '../../ids'
 import type { Context } from 'hono'
 import type { App, AppEnv, Deps } from '../../context'
@@ -64,12 +57,6 @@ async function backfill(req: BackfillReq) {
   }
 }
 
-/**
- * The pitch annotator for this user: the bundled Japanese dictionary first, and
- * the generator model for whatever the dictionary does not know. With
- * `dictionaryOnly` the model is skipped entirely, so a re-annotation is
- * deterministic and needs no key.
- */
 async function pitchFetcherFor(
   deps: Deps,
   userId: UserId,

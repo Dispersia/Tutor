@@ -1,9 +1,3 @@
-/**
- * Append-only learner history: reviews, attempts, XP, stats and lesson
- * completion (docs/DESIGN.md §12). History tables are scoped by user_id. Part of
- * the schema split (docs/ARCHITECTURE.md).
- */
-
 import type { UserId, CardId } from '../../ids'
 import { index, integer, primaryKey, real, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 import { users } from './users'
@@ -63,7 +57,6 @@ export const stats = sqliteTable('stats', {
   updatedAt: integer('updated_at').notNull(),
 })
 
-/** Completed curriculum lessons. */
 export const lessonProgress = sqliteTable(
   'lesson_progress',
   {
@@ -77,7 +70,6 @@ export const lessonProgress = sqliteTable(
   (t) => [primaryKey({ columns: [t.userId, t.lessonId] })],
 )
 
-/** Server-global settings (registration policy, install metadata). */
 export const settings = sqliteTable('settings', {
   key: text('key').primaryKey(),
   value: text('value').notNull(),

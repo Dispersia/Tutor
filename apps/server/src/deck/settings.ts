@@ -1,77 +1,37 @@
-/**
- * Per-deck overrides (docs/DESIGN.md §13.8). A generated deck can pin its own
- * rules so it does not depend on the learner's global study preferences: the
- * script its readings are written in, whether those readings (ruby) are shown,
- * the character variant it was authored in, and which exercise kinds it offers.
- */
-
 export type CharacterVariant = 'traditional' | 'simplified'
 
-/**
- * Where the learner's remembered deck prompt lives in `user_settings`. The same
- * prompt is reused for every new deck (and for existing decks that only carry
- * the generic import wording), so a deck's rules never start over.
- */
 export const DECK_INSTRUCTION_KEY = 'deckInstruction'
 
 export type ReadingScript =
   'zhuyin' | 'pinyin' | 'kana' | 'romaji' | 'latin' | 'none' | (string & {})
 
-/** What an imported deck already says about one of its words. */
 export interface WordHint {
   reading?: string
   meaning?: string
 }
 
 export interface DeckSettings {
-  /** Override: show native readings (Zhuyin / furigana) for this deck. */
   showReadings?: boolean
-  /** The script the deck's readings are written in (zhuyin, kana, …). */
   readingScript?: ReadingScript
-  /** Character variant the deck was authored in (Chinese). */
   variant?: CharacterVariant
-  /** Exercise ids disabled for this deck (in addition to the user's own). */
   disabledExercises?: string[]
-  /** Ask the generator for pitch-accent metadata (Japanese, …). */
   pitchAccent?: boolean
-  /** Growth cursor: the frequency rank the deck has been generated up to. */
   cursor?: number
-  /** How many new words each organic-growth batch should add. */
   batchSize?: number
-  /** The instruction the deck was created from (for provenance + regrowth). */
   instruction?: string
-  /** Where the words came from: a frequency list, or an imported deck. */
   wordSource?: 'frequency' | 'anki'
-  /** The source word list (imported decks), so the deck can grow without it. */
   words?: string[]
-  /**
-   * The source deck's own reading/meaning per word (imported decks). Stored so
-   * a build resumed after a restart still follows the source, not the model.
-   */
   hints?: Record<string, WordHint>
-  /**
-   * True while a background build is still generating this deck's cards. The
-   * Learn tab watches it to show progress; a restart clears it (see
-   * `clearDeckBuilds`), so a half-built deck is never stuck.
-   */
   building?: boolean
-  /** How many words the running build will introduce in total (progress bar). */
   buildTotal?: number
-  /** The error that stopped a background build, so the UI can say why. */
   buildError?: string
 }
 
-/**
- * A deck's settings as sent to a client. The source `words` list and its
- * `hints` can hold thousands of entries and no client uses them, so they never
- * leave the server.
- */
 export function publicDeckSettings(settings: DeckSettings): DeckSettings {
   const { words: _words, hints: _hints, ...rest } = settings
   return rest
 }
 
-/** Parses a stored settings blob, ignoring anything malformed. */
 export function parseDeckSettings(json: string | null | undefined): DeckSettings {
   if (!json) return {}
   try {
@@ -83,7 +43,6 @@ export function parseDeckSettings(json: string | null | undefined): DeckSettings
   }
 }
 
-/** Merges a partial update onto existing settings. */
 export function mergeDeckSettings(
   current: DeckSettings,
   patch: Partial<DeckSettings>,

@@ -1,25 +1,7 @@
-/**
- * Japanese pitch accent, resolved from the bundled **Kanjium** dictionary.
- *
- * Cards ask the generator for a contour (`deck/plan.ts`, `deck/pitch.ts`), but a
- * language model guesses the accent and gets it wrong often — 毎日 comes back
- * heiban [0] instead of 頭高 [1]. This module answers the same question from a
- * real accent dictionary instead, so the contour is looked up, not invented.
- *
- * Data: `kanjium-accents.txt`, the `accents.txt` table from the Kanjium project
- * (https://github.com/mifunetoshiro/kanjium), licensed CC BY-SA 4.0. Each line is
- * `<headword>\t<reading>\t<accent[,accent]>`, where an accent is the mora *after*
- * which the pitch falls (0 = heiban 平板), the same numbering `pitchFromAccent`
- * and the card's `drop` use. The accents and mora split are computed here; only
- * the numbers come from the file.
- */
-
 import accentsTxt from './kanjium-accents.txt'
 import { pitchFromAccent, type PitchContour } from '@tutor/core'
 
-/** headword -> (reading | '') -> accents, in file order (kana-only words use ''). */
 type WordIndex = Map<string, Map<string, number[]>>
-/** reading -> accents across every headword, in file order. */
 type ReadingIndex = Map<string, number[]>
 
 interface AccentIndex {
@@ -29,14 +11,12 @@ interface AccentIndex {
 
 let cached: AccentIndex | undefined
 
-/** Adds accents to a list, keeping first-seen order and dropping duplicates. */
 function push(map: Map<string, number[]>, key: string, accents: number[]): void {
   let list = map.get(key)
   if (!list) map.set(key, (list = []))
   for (const a of accents) if (!list.includes(a)) list.push(a)
 }
 
-/** Parses the tab-separated dictionary into the two lookup maps (once). */
 function buildIndex(): AccentIndex {
   const word: WordIndex = new Map()
   const reading: ReadingIndex = new Map()
@@ -57,7 +37,6 @@ interface DictRow {
   accents: number[]
 }
 
-/** One `head<TAB>kana<TAB>accents` dictionary line, or undefined. */
 function parseLine(line: string): DictRow | undefined {
   if (!line) return undefined
   const tab = line.indexOf('\t')
@@ -80,23 +59,14 @@ function index(): AccentIndex {
   return (cached ??= buildIndex())
 }
 
-/** Every kana reading the dictionary lists for a headword (empty when it has none). */
 export function kanjiumReadings(word: string): string[] {
   return [...(index().word.get(word)?.keys() ?? [])].filter(Boolean)
 }
 
-/** Whether a spelling is written only in kana (so its headword may itself be the reading). */
 function isKanaWord(word: string): boolean {
   return /^[\u3040-\u30ff\u30fc]+$/.test(word)
 }
 
-/**
- * The standard accent number for a word, or `undefined` when the dictionary is
- * unsure. Tries the exact spelling + reading first, then a kana-only headword,
- * then a headword with a single reading. A word written only in kana is never
- * matched by reading alone: the demonstrative あれ is absent from the source,
- * and its reading would otherwise match 荒れ [0] — a different word.
- */
 export function accentFor(word: string, reading: string): number | undefined {
   const i = index()
   const byReading = i.word.get(word)
@@ -108,7 +78,6 @@ export function accentFor(word: string, reading: string): number | undefined {
   return undefined
 }
 
-/** The accent from the word's own readings: exact, kana-only, then the sole one. */
 function wordAccent(
   byReading: Map<string, number[]>,
   reading: string,
@@ -127,16 +96,13 @@ function wordAccent(
   return undefined
 }
 
-/** Only trust a reading that names a single accent; homophones differ (はし). */
 function singleReadingAccent(byKana: number[] | undefined): number | undefined {
   const distinct = byKana ? [...new Set(byKana)] : []
   return distinct.length === 1 ? distinct[0] : undefined
 }
 
-/** Small kana that bind to the preceding mora (ゅ in きゅ, etc.). */
 const SMALL_KANA = new Set('ぁぃぅぇぉゃゅょゎァィゥェォャュョヮ')
 
-/** Splits kana into morae: small kana join the mora before them. */
 export function splitMorae(reading: string): string[] {
   const morae: string[] = []
   for (const ch of reading) {
@@ -147,11 +113,6 @@ export function splitMorae(reading: string): string[] {
   return morae
 }
 
-/**
- * The pitch contour for a word from the dictionary, or `undefined` when it has
- * no confident answer. Levels are derived here so they always agree with the
- * accent number; morae come from the reading (never from the model).
- */
 export function kanjiumContour(word: string, reading: string): PitchContour | undefined {
   const accent = accentFor(word, reading)
   if (accent === undefined) return undefined

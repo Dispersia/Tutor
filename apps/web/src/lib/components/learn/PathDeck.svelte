@@ -1,6 +1,4 @@
 <script lang="ts">
-  /** One deck in the Learn path: its progress, next step, review and grow controls. */
-
   import { ACCENT, accentStyle } from '#lib/theme'
   import { deckAccent, isDeckDone, nextLesson } from '#lib/learnview'
   import CharCell from '#lib/components/CharCell.svelte'
@@ -14,7 +12,6 @@
     growing: string
     practiceHref: (params: { lesson?: string; deck?: string }) => string
     onSetActive: (deckId: string) => void
-    /** Both resolve true when the growth worked, so this deck can clear its topic. */
     onGrow: (d: CurriculumDeck, topic: string) => Promise<boolean>
     onFinish: (d: CurriculumDeck, topic: string) => Promise<boolean>
     onSettings: (d: CurriculumDeck) => void
@@ -38,7 +35,6 @@
   const next = $derived(nextLesson(d))
   const progress = $derived(d.cardCount > 0 ? (d.learned / d.cardCount) * 100 : 0)
 
-  /** This deck's own topic: typing here must not fill every other deck's field. */
   let growTopic = $state('')
 
   async function run(action: Props['onGrow']) {

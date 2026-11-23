@@ -1,13 +1,3 @@
-/**
- * Combat (docs/DESIGN.md §13.5).
- *
- * Active, language-driven fights: the monster lands a blow on every drill, and a
- * correct answer adds your own hit on top. Monster drops feed the professions.
- *
- * A fight uses whatever gear you have equipped: the weapon decides which combat
- * profession the hits train (sword → Strength, bow → Ranged, staff → Magic).
- */
-
 export interface DropDef {
   item: string
   chance: number
@@ -20,14 +10,10 @@ export interface MonsterDef {
   name: string
   icon: string
   description: string
-  /** monster combat level (flavour + rough difficulty) */
   level: number
   hp: number
-  /** damage per unanswered/missed drill, before your armour */
   damage: number
-  /** profession XP per landed hit */
   xp: number
-  /** drill difficulty (card deck level) */
   deckLevel: string
   drops: DropDef[]
 }
@@ -129,8 +115,6 @@ export const MONSTERS: MonsterDef[] = [
 
 export const MONSTER_BY_ID = new Map(MONSTERS.map((m) => [m.id, m]))
 
-// --- player + damage maths (pure) -------------------------------------------
-
 export function playerMaxHp(
   constitutionLevel: number,
   hpBonus: number,
@@ -155,22 +139,10 @@ export function playerPower(
   )
 }
 
-/**
- * Damage a monster deals to you, reduced by armour (never below 1).
- */
 export function incomingDamage(monsterDamage: number, armour: number): number {
   return Math.max(1, monsterDamage - armour)
 }
 
-/**
- * Monsters are **fixed** (docs/DESIGN.md §13.5): their numbers never move with the
- * player, so a buff you stack reads as power instead of being cancelled out.
- * Progression is a **ladder** — you climb to higher monsters and bosses — so
- * `MONSTERS` is ordered from weakest to strongest and the top is tuned against a
- * fully stacked player. There is deliberately no per-monster scaling.
- */
-
-/** Rolls a monster's drop table, applying the Slayer drop bonus. */
 export function rollDrops(
   drops: DropDef[],
   dropBonus: number,

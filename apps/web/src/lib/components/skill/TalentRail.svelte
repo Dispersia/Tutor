@@ -1,6 +1,4 @@
 <script lang="ts">
-  /** The talent rail: one row per milestone, Lv 10 to Lv 100, plus the capstones. */
-
   import { ACCENT, accentStyle } from '#lib/theme'
   import { isBlocked, unmetOf, type TalentRow } from '#lib/skillview'
   import Icon from '#lib/components/Icon.svelte'

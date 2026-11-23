@@ -42,8 +42,6 @@ test('catalog lists the built-in exercises', () => {
 })
 
 test('the pronunciation card is switched off product-wide for now', () => {
-  // `speak_word` is still registered (the audio route and its tests still use it)
-  // but must never be offered as a drill until its scoring is reliable.
   expect(registry.get('speak_word')?.temporarilyDisabled).toBe(true)
   expect(exerciseCatalog().find((e) => e.id === 'speak_word')?.disabled).toBe(true)
   for (const other of exerciseCatalog()) {
@@ -85,8 +83,6 @@ test('sentence_build stays Mandarin-only without payload tokens', () => {
 
 test('sentence_build never shows the whole sentence as the new-word hint', async () => {
   const def = registry.get('sentence_build')!
-  // A generated sentence card with no explicit `newWord` used to fall back to
-  // `back` — printing the answer under the tiles.
   const bare = ctx({
     targetLang: 'es',
     front: 'I drink tea',
@@ -96,7 +92,6 @@ test('sentence_build never shows the whole sentence as the new-word hint', async
   })
   expect((await def.generate(bare)).data.newWord).toBeUndefined()
 
-  // An explicit new word is still surfaced as the hint.
   const hinted = ctx({
     targetLang: 'es',
     front: 'I drink tea',
@@ -156,7 +151,7 @@ test('introduce teaches a new word and never quizzes or schedules', async () => 
   const c = ctx()
   const inst = await def.generate(c)
   expect(inst.data.word).toBe('你好')
-  expect(inst.data.reading).toBe('ㄋㄧˇ ㄏㄠˇ') // Zhuyin, never pinyin
+  expect(inst.data.reading).toBe('ㄋㄧˇ ㄏㄠˇ')
   expect(inst.data.meaning).toBe('hello')
   const r = await def.grade(c, inst, 'ok')
   expect(r.correct).toBe(true)
@@ -166,7 +161,6 @@ test('introduce teaches a new word and never quizzes or schedules', async () => 
 test('introduce example is n+1: only words already met plus the new one', async () => {
   const def = registry.get('introduce')!
 
-  // enough prior words -> a sentence is taught, using only those words
   const c = ctx({ back: '很', front: 'very', readings: { zhuyin: 'ㄏㄣˇ' } })
   c.seen = ['我', '好']
   c.known = []
@@ -174,9 +168,8 @@ test('introduce example is n+1: only words already met plus the new one', async 
   const ex = inst.data.example as { text: string; reading: string; target: string } | undefined
   expect(ex?.text).toBe('我很好')
   expect(ex?.target).toBe('很')
-  expect(ex?.reading).toContain('ㄏㄣˇ') // Zhuyin, never pinyin
+  expect(ex?.reading).toContain('ㄏㄣˇ')
 
-  // without the supporting words there is no sentence to teach (never guesses)
   const bare = ctx({ back: '很', front: 'very', readings: { zhuyin: 'ㄏㄣˇ' } })
   bare.seen = ['我']
   bare.known = []
@@ -190,7 +183,6 @@ test('readings are locale-aware: Zhuyin for Chinese, furigana for Japanese', asy
   const zhInst = await def.generate(zh)
   expect(zhInst.data.reading).toBe('ㄋㄧˇ ㄏㄠˇ')
 
-  // a legacy pinyin-only reading is converted to Zhuyin, never shown as Latin
   const legacy = ctx({ readings: { pinyin: 'nǐ hǎo' } })
   expect((await def.generate(legacy)).data.reading).toBe('ㄋㄧˇ ㄏㄠˇ')
 
@@ -211,7 +203,7 @@ test('translate.front_to_back: exact and via reading', async () => {
   const inst = await def.generate(c)
   expect(inst.prompt).toContain('hello')
   expect((await def.grade(c, inst, '你好')).correct).toBe(true)
-  expect((await def.grade(c, inst, 'ㄋㄧˇ ㄏㄠˇ')).score).toBe(100) // zhuyin reading accepted
+  expect((await def.grade(c, inst, 'ㄋㄧˇ ㄏㄠˇ')).score).toBe(100)
   const wrong = await def.grade(c, inst, '再見')
   expect(wrong.correct).toBe(false)
   expect(wrong.expected).toBe('你好')
@@ -224,7 +216,7 @@ test('translate.back_to_front', async () => {
   const c = ctx()
   const inst = await def.generate(c)
   expect(inst.data.word).toBe('你好')
-  expect(inst.data.reading).toBe('ㄋㄧˇ ㄏㄠˇ') // Zhuyin, never pinyin
+  expect(inst.data.reading).toBe('ㄋㄧˇ ㄏㄠˇ')
   expect((await def.grade(c, inst, 'hello')).correct).toBe(true)
 })
 
@@ -237,7 +229,6 @@ test('translate.back_to_front accepts any listed sense of a multi-sense gloss', 
     expect(r.correct).toBe(true)
     expect(r.score).toBe(100)
   }
-  // an unrelated answer is still wrong
   expect((await def.grade(c, inst, 'question particle')).correct).toBe(false)
 })
 
@@ -290,11 +281,9 @@ test('converse without a judge falls back to a heuristic', async () => {
   const def = registry.get('converse')!
   const c = ctx()
   const inst = await def.generate(c)
-  // Using the word is what counts, even when the sentence is not grammatical.
   const used = await def.grade(c, inst, '你好，我是學生。')
   expect(used.correct).toBe(true)
   expect(used.score).toBeGreaterThanOrEqual(60)
-  // A target-language sentence that never uses the word is not an attempt at it.
   const missed = await def.grade(c, inst, '我是學生。')
   expect(missed.correct).toBe(false)
   const english = await def.grade(c, inst, 'hello there')
@@ -308,23 +297,19 @@ test('converse rejects the bare word without a sentence', async () => {
   const bare = await def.grade(c, inst, '你好')
   expect(bare.correct).toBe(false)
   expect(bare.score).toBeLessThan(60)
-  // Punctuation around the word is still the word on its own.
   const padded = await def.grade(c, inst, '  你好。 ')
   expect(padded.correct).toBe(false)
 })
 
 test('converse is not offered for cards that already are a sentence', () => {
   const def = registry.get('converse')!
-  // A generated sentence card carries payload.tokens.
   const sentence = ctx({
     type: 'phrase',
     back: '你要什麼？',
     payload: { tokens: ['你', '要', '什麼'] },
   })
   expect(def.supports(sentence.card, learner)).toBe(false)
-  // Any phrase card teaches a whole utterance, not a word.
   expect(def.supports(ctx({ type: 'phrase', back: '你好嗎？' }).card, learner)).toBe(false)
-  // Single words keep the free-sentence drill.
   expect(def.supports(ctx().card, learner)).toBe(true)
 })
 
@@ -349,7 +334,6 @@ test("converse asks the judge for the tip in the learner's native language", asy
   const inst = await def.generate(c)
   await def.grade(c, inst, '我喜歡你好嗎')
   expect(prompt).toContain('feedback, in English')
-  // The tip must not recycle the learner's own sentence as the suggestion.
   expect(prompt).toContain("Never offer the learner's own sentence back")
 })
 
@@ -447,7 +431,6 @@ test('speak_word.gradeAudio prefers the judge result', async () => {
 
 test('speak_word.gradeAudio accepts a Taiwan-accent sh → s realisation', async () => {
   const def = registry.get('speak_word')!
-  // 是 (ㄕˋ) heard as 四 (ㄙˋ): only the retroflex/alveolar initial differs.
   const c = ctx({ back: '是', readings: { zhuyin: 'ㄕˋ' } })
   const inst = await def.generate(c)
   c.assess = async () => ({
@@ -482,11 +465,8 @@ test('speak_word.gradeAudio hands the judge the exact reading, not a Latin appro
 })
 
 test('every typing exercise names the language of its answer (keyboard hint)', async () => {
-  // The client spreads this onto the input's `lang` so the platform can hint the
-  // right keyboard / IME — it cannot switch it for us (docs/DESIGN.md §14.2).
   const cases: [string, Partial<Card>, string][] = [
     ['translate.front_to_back', { payload: {} }, 'zh'],
-    // the answer is in the learner's own language, not the target
     ['translate.back_to_front', {}, 'en'],
     ['type_listen', {}, 'zh'],
     ['converse', {}, 'zh'],
@@ -498,7 +478,6 @@ test('every typing exercise names the language of its answer (keyboard hint)', a
     expect(inst.data.answerLang).toBe(lang)
   }
 
-  // a non-Chinese target reports its own language
   const es = await registry.get('sentence_build')!.generate(
     ctx({
       targetLang: 'es',

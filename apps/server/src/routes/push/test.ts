@@ -1,7 +1,3 @@
-/**
- * The push test button and the active-rig readout (docs/DESIGN.md §13.5.1).
- */
-
 import type { Context } from 'hono'
 import type { App, AppEnv } from '../../context'
 import { deletePushSubscription, listActiveRigs, listPushSubscriptions } from '../../db/repo'
@@ -12,10 +8,7 @@ import { sendPush } from '../../push/webpush'
 import { fail } from '../errors'
 
 export function registerPushTest(app: App) {
-  // A settings-page button: proves the whole path works before a rig matters.
   app.post('/api/push/test', (c) => testHandler(c))
-  // The active rigs and the lead time, for the client's local timer. Pure read:
-  // settling happens on the next board fetch, so this is cheap to poll.
   app.get('/api/rigs', (c) => rigsHandler(c))
 }
 
@@ -31,7 +24,6 @@ async function testHandler(c: Context<AppEnv>) {
       body: 'You will get a nudge when a rig has 30 minutes left.',
       url: '/home',
       tag: 'rigs-test',
-      // The settings page is focused while testing; show it anyway.
       force: true,
     })
     if (res.ok) sent++

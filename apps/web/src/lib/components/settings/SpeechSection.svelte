@@ -1,6 +1,4 @@
 <script lang="ts">
-  /** The local speech engine: its status, and the wake / free-memory controls. */
-
   import { accentStyle, ACCENT } from '#lib/theme'
   import Spinner from '#lib/components/Spinner.svelte'
   import type { SpeechStatus } from '#lib/types'
@@ -9,7 +7,6 @@
     speech: SpeechStatus | null
     waking: boolean
     onWake: () => void
-    /** Stops the shared gateway — admin only, so absent for members. */
     onFree?: () => void
   }
 

@@ -1,6 +1,4 @@
 <script lang="ts">
-  /** The active set bonuses: what each armour family is granting right now. */
-
   import { ACCENT, accentStyle } from '#lib/theme'
   import type { GearResponse } from '#lib/skills'
 

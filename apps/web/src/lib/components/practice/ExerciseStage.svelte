@@ -1,6 +1,4 @@
 <script lang="ts">
-  /** The drill itself: the exercise component, its speech warm-up and the mute hint. */
-
   import { componentFor } from '#lib/components/exercises'
   import Icon from '#lib/components/Icon.svelte'
   import Spinner from '#lib/components/Spinner.svelte'

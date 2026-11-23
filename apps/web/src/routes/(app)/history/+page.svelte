@@ -6,7 +6,6 @@
   import Spinner from '#lib/components/Spinner.svelte'
   import { cachedResource } from '#lib/resource.svelte'
 
-  // Seed from the last fetch so returning to History lists at once.
   const list = cachedResource<{ sessions: ChatSession[] }>('/api/sessions')
   const sessions = $derived(list.data?.sessions ?? [])
 

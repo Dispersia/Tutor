@@ -17,7 +17,6 @@ function play(url: string): Promise<void> {
   })
 }
 
-/** Settle a clip's promise at most once, however `play()` ends. */
 function onceSettler(
   a: HTMLAudioElement,
   resolve: () => void,
@@ -30,8 +29,6 @@ function onceSettler(
     if (currentAudio === a) currentAudio = null
     resolve()
   }
-  // `pause` fires when we stop playback mid-clip (stopAudio); resolve so callers
-  // waiting on the clip do not hang forever.
   const fail = (err: unknown) => {
     if (settled) return
     settled = true
@@ -49,11 +46,9 @@ export function stopAudio(): void {
 
 export interface SpeakOptions {
   language?: string
-  /** The voice description sent to the TTS model (see `speechOpts`). */
   instruct?: string
 }
 
-/** Requests one chunk of TTS audio; resolves to the WAV blob. */
 async function fetchTts(text: string, opts: SpeakOptions, signal?: AbortSignal): Promise<Blob> {
   const res = await fetch(apiPath('/api/speech/tts'), {
     method: 'POST',
@@ -66,7 +61,6 @@ async function fetchTts(text: string, opts: SpeakOptions, signal?: AbortSignal):
   return res.blob()
 }
 
-/** Synthesises and plays one chunk of text via the local speech gateway. */
 export async function speak(
   text: string,
   opts: SpeakOptions = {},
@@ -75,12 +69,6 @@ export async function speak(
   await playBlob(await fetchTts(text, opts, signal))
 }
 
-/**
- * Plays a card's pre-recorded audio. The server holds ten recorded voices per
- * card and hands back a random one per request, so a listening card never wakes
- * the TTS model; a card whose clips are still being recorded is synthesized and
- * cached on the server the first time it is played.
- */
 export async function speakCard(cardId: string, signal?: AbortSignal): Promise<void> {
   const res = await fetch(apiPath(`/api/cards/${encodeURIComponent(cardId)}/audio`), {
     credentials: 'same-origin',
@@ -90,7 +78,6 @@ export async function speakCard(cardId: string, signal?: AbortSignal): Promise<v
   await playBlob(await res.blob())
 }
 
-/** Play a blob from an object URL, revoking it however playback ends. */
 async function playBlob(blob: Blob): Promise<void> {
   const url = URL.createObjectURL(blob)
   try {
@@ -101,20 +88,11 @@ async function playBlob(blob: Blob): Promise<void> {
 }
 
 export interface Speaker {
-  /** Queues a sentence; its audio is synthesised immediately, in the background. */
   push(text: string): void
-  /** Waits until everything queued so far has played. */
   close(): Promise<void>
-  /** Stops playback and drops anything still queued. */
   cancel(): void
 }
 
-/**
- * Speaks sentences in order while synthesising ahead. Playback starts as soon as
- * the first sentence is known, and each later sentence is already rendered by the
- * time the previous one finishes, so there is no gap between sentences and no
- * wait for the whole reply (DESIGN §9.2).
- */
 export function createSpeaker(opts: SpeakOptions = {}, onError?: (err: Error) => void): Speaker {
   const state = speakerState()
   const report = (e: unknown) => onError?.(e instanceof Error ? e : new Error(String(e)))
@@ -133,7 +111,6 @@ function speakerState(): SpeakerState {
   return { queue: [], cancelled: false, closed: false, wake: null }
 }
 
-/** Plays queued sentences in order, synthesising each while the last one plays. */
 async function runLoop(state: SpeakerState, report: (e: unknown) => void): Promise<void> {
   while (!state.cancelled) {
     if (state.queue.length === 0) {
@@ -166,20 +143,14 @@ function speakerApi(state: SpeakerState, started: Promise<void>, opts: SpeakOpti
   }
 }
 
-/** A bracketed reading after a word: Zhuyin, toned pinyin, or kana furigana. */
 const BRACKETED_READING =
   /[（(][^()（）]*[\u3100-\u312f\u02c7\u02ca\u02cb\u02d9āáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜ][^()（）]*[)）]|[（(][\u3040-\u309f\s]+[)）]/g
 
-/**
- * The text a speech model should read. A chat reply can carry markdown, emoji
- * or a reading in brackets; the model reads those out literally or stumbles on
- * them, so they are removed before synthesis. Empty when nothing is left to say.
- */
 export function speakable(text: string): string {
   const plain = text
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1') // [label](url) -> label
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
     .replace(BRACKETED_READING, '')
-    .replace(/^\s*(?:[-•]|\d+[.)])\s+/gm, '') // list markers
+    .replace(/^\s*(?:[-•]|\d+[.)])\s+/gm, '')
     .replace(/[*_`#>~|]+/g, ' ')
     .replace(/\p{Extended_Pictographic}|\ufe0f|\u200d/gu, '')
     .replace(/\s{2,}/g, ' ')
@@ -191,8 +162,6 @@ function pushText(state: SpeakerState, opts: SpeakOptions, text: string): void {
   const t = speakable(text)
   if (state.cancelled || state.closed || !t) return
   const audio = fetchTts(t, opts)
-  // If cancel() drops this item before the loop awaits it, the rejection must
-  // not surface as an unhandled promise rejection.
   audio.catch(() => {})
   state.queue.push({ text: t, audio })
   signal(state)
@@ -212,10 +181,8 @@ function cancelSpeaker(state: SpeakerState): void {
   stopAudio()
 }
 
-/** Transcribes a recorded clip with the local speech gateway. */
 export async function transcribe(blob: Blob, language?: string): Promise<string> {
   const fd = new FormData()
-  // Recorder hands us a trimmed 16 kHz WAV; keep the name honest for the gateway.
   const name = blob.type.includes('wav') ? 'clip.wav' : 'clip.webm'
   fd.set('file', blob, name)
   if (language) fd.set('language', language)

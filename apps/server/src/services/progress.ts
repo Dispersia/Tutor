@@ -1,5 +1,3 @@
-/** Action levels, profession levels and the aggregate bonuses (docs/DESIGN.md §13.5). */
-
 import type { UserId } from '../ids'
 import { getActionXp, listActionProgress, listTalents, setActionXp } from '../db/repo'
 import type { Db } from '../db/client'
@@ -14,7 +12,6 @@ import {
 } from '../game/skills'
 import { resolveTalents } from '../game/talents'
 
-/** Every action's level for a user; actions never trained sit at level 1. */
 export function actionLevelMap(db: Db, userId: UserId): Map<string, number> {
   return new Map(
     listActionProgress(db, userId).map((r) => [r.actionId, actionLevelInfo(r.xp).level]),
@@ -30,25 +27,16 @@ export function actionLevelOf(
   return (levels ?? actionLevelMap(db, userId)).get(actionId) ?? 1
 }
 
-/** The action-level map and the bonuses derived from it, loaded once per request. */
 export interface ProgressCtx {
   levels: Map<string, number>
   bonuses: Bonuses
 }
 
-/** Loads the action-level map once and derives the bonuses from that same map. */
 export function loadProgress(db: Db, userId: UserId): ProgressCtx {
   const levels = actionLevelMap(db, userId)
   return { levels, bonuses: aggregateBonuses(db, userId, levels) }
 }
 
-/**
- * A profession's level — the **mean** of its actions' levels, so it always reads
- * out of 100 however much content the profession has. Adding an action (a new ore,
- * say) raises the denominator and so lowers the level until you train it: that is
- * the point, a maxed profession stays 100 and old progress is "reduced by the new
- * available levels".
- */
 export function skillLevelOf(
   db: Db,
   userId: UserId,
@@ -62,7 +50,6 @@ export function skillLevelOf(
   return Math.round(total / acts.length)
 }
 
-/** The action a profession-awarded XP lands on (combat has one action per skill). */
 export function primaryActionId(skillId: SkillId): string {
   return actionsForSkill(skillId)[0]!.id
 }
@@ -77,38 +64,23 @@ export function aggregateBonuses(db: Db, userId: UserId, levels?: Map<string, nu
 export interface ActionAward {
   actionId: string
   skillId: SkillId
-  /** the action's total XP after the award */
   xp: number
-  /** the action's own level after the award */
   level: number
-  /** the profession's derived level after the award */
   skillLevel: number
-  /** the action levelled up */
   leveledUp: boolean
-  /** XP actually credited (after bonuses) */
   gained: number
-  /** the profession milestone whose talent choice just opened up (or null) */
   talentUnlocked: number | null
 }
 
-/** One XP award: which action, how much raw XP, and the shared request context. */
 export interface XpAward {
   actionId: string
   amount: number
-  /**
-   * From `loadProgress`, when awarding several actions in a row — the bonuses and
-   * the action-level map are then shared, and the map is updated in place with this
-   * action's new level.
-   */
   ctx?: ProgressCtx
 }
 
-/** Credits XP to one action. */
 export function awardActionXp(db: Db, bus: EventBus, userId: UserId, award: XpAward): ActionAward {
   const { actionId, amount, ctx } = award
   const action = ACTION_BY_ID.get(actionId)!
-  // The map is derived once and threaded through, so an award is one scan
-  // whether or not the caller passed a `ProgressCtx` (docs/ARCHITECTURE.md).
   const levels = ctx?.levels ?? actionLevelMap(db, userId)
   const bonuses = ctx?.bonuses ?? aggregateBonuses(db, userId, levels)
   const beforeXp = getActionXp(db, userId, actionId)
@@ -126,7 +98,6 @@ interface CreditReq {
   levels: Map<string, number>
 }
 
-/** Writes the new XP, emits the events and reports the levels it produced. */
 function creditXp(db: Db, bus: EventBus, req: CreditReq) {
   const { userId, actionId, action, beforeXp, gained, levels } = req
   const xp = beforeXp + gained
@@ -165,7 +136,6 @@ function emitXp(e: XpEvent): void {
   })
 }
 
-/** A profession level-up: announces it and reports the milestone it opened. */
 interface LevelUp {
   bus: EventBus
   userId: UserId

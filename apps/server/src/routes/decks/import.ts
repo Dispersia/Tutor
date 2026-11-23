@@ -1,11 +1,3 @@
-/**
- * Importing an Anki `.apkg` (docs/DESIGN.md §13.7).
- *
- * `/inspect` previews the file's fields so the learner says which field is the
- * word; `/import` then builds a deck from the learner's own words (the whole
- * deck by default), in the background because it is dozens of LLM calls.
- */
-
 import type { UserId } from '../../ids'
 import type { Context } from 'hono'
 import type { App, AppEnv, Deps } from '../../context'
@@ -72,7 +64,6 @@ async function importHandler(c: Context<AppEnv>) {
   }
 }
 
-/** Everything an import needs once the upload has been parsed. */
 interface ImportReq {
   deps: Deps
   user: { id: UserId; nativeLang: string }
@@ -83,13 +74,11 @@ interface ImportReq {
   planner: Planner
 }
 
-/** The deck's own script decides the language unless the caller picked one. */
 function targetLangOf(form: FormData, parsed: Parsed, userTarget: string | null): string {
   const requested = String(form.get('targetLang') ?? '').trim()
   return requested || detectLanguage(parsed) || userTarget || 'zh'
 }
 
-/** Creates the deck shell with its instruction and parsed rules. */
 interface ImportSetup {
   created: Built
   instruction: string
@@ -123,7 +112,6 @@ interface ShellArgs {
   name: string
 }
 
-/** The options `createDeckForBuild` takes for a fresh imported deck shell. */
 function shellArgs(req: ImportReq, a: ShellArgs): Parameters<typeof createDeckForBuild>[2] {
   return {
     instruction: a.instruction,
@@ -138,12 +126,9 @@ function shellArgs(req: ImportReq, a: ShellArgs): Parameters<typeof createDeckFo
   }
 }
 
-/** Marks the deck building and starts the background generation job. */
 async function startImport(req: ImportReq) {
   const setup = await prepareImport(req)
   const { deps, user, parsed, list } = req
-  // A full import is many LLM calls, well past Bun's request idle timeout. The UI
-  // watches `settings.building` + the growth cursor.
   updateDeckSettings(deps.db, setup.created.deckId, {
     building: true,
     buildTotal: setup.count,
@@ -155,12 +140,6 @@ async function startImport(req: ImportReq) {
   return importReply(deps, user.id, parsed, list, setup.created)
 }
 
-/**
- * The rules this import builds under, stored on the deck. The build runs in the
- * background and every deploy restarts the server, so a resumed build has only
- * the deck's settings to go on: the hints cover the whole word list, not just
- * the words this run introduces.
- */
 function importRules(setup: ImportSetup, list: AnkiList) {
   return {
     variant: setup.rules.variant,
@@ -203,7 +182,6 @@ function importReply(deps: Deps, userId: UserId, parsed: Parsed, list: AnkiList,
   }
 }
 
-/** Which Anki field is the word / reading / meaning, when the caller chose. */
 function fieldIndices(form: FormData) {
   const index = (name: string): number | undefined => {
     const raw = form.get(name)
@@ -216,7 +194,6 @@ function fieldIndices(form: FormData) {
   }
 }
 
-/** An explicit count takes that prefix; blank imports the whole word list. */
 function requestedCount(form: FormData, total: number): number {
   const raw = String(form.get('count') ?? '').trim()
   const requested = raw === '' ? NaN : Number(raw)
@@ -225,7 +202,6 @@ function requestedCount(form: FormData, total: number): number {
     : total
 }
 
-/** The word -> reading/meaning hints the generator weaves the cards from. */
 function buildHints(
   list: AnkiList,
   count: number,
@@ -239,11 +215,6 @@ function buildHints(
   return hints
 }
 
-/**
- * Every deck carries the learner's prompt — typed now, or the one they already
- * gave on an earlier deck. Otherwise the generic wording asks the generator to
- * weave sentences and grammar through the imported words.
- */
 function rememberInstruction(deps: Deps, userId: UserId, form: FormData, name: string): string {
   const typed = String(form.get('instruction') ?? '').trim()
   const remembered = rememberedDeckInstruction(deps.db, userId) ?? ''

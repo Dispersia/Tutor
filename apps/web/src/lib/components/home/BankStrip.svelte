@@ -1,6 +1,4 @@
 <script lang="ts">
-  /** The bank strip: what the player keeps, in one ruled line. The ledger is Bank. */
-
   import { href } from '#lib/paths'
   import { ACCENT, accentStyle } from '#lib/theme'
 

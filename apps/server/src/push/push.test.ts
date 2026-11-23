@@ -19,7 +19,6 @@ const unb64u = (text: string): string => {
   return atob(t + pad)
 }
 
-/** A real receiver-side keypair, so the payload can be decrypted in the test. */
 async function receiver() {
   const pair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, [
     'deriveBits',
@@ -59,7 +58,6 @@ test('VAPID keys are stable per database and stored once', async () => {
   const a = await vapidKeys(db)
   const b = await vapidKeys(db)
   expect(a.publicKey).toBe(b.publicKey)
-  // 65-byte uncompressed P-256 point → 87 base64url chars
   expect(a.publicKey).toHaveLength(87)
   expect(sqlite.query('select key from settings').all()).toEqual([{ key: 'push.vapid' }])
 })
@@ -92,7 +90,6 @@ test('sendPush encrypts an RFC 8291 payload the browser can read', async () => {
   expect(JSON.parse(unb64u(claims!)).aud).toBe('https://push.example')
   expect(sig!.length).toBe(86)
 
-  // Decrypt exactly as a browser would.
   const body = new Uint8Array(sent!.init.body as unknown as Uint8Array)
   const salt = body.slice(0, 16)
   const idLen = body[20]!
@@ -120,7 +117,6 @@ test('sendPush encrypts an RFC 8291 payload the browser can read', async () => {
   const plain = new Uint8Array(
     await crypto.subtle.decrypt({ name: 'AES-GCM', iv: nonce }, aes, ciphertext),
   )
-  // The last byte is the 0x02 padding delimiter.
   expect(plain.at(-1)).toBe(2)
   expect(JSON.parse(new TextDecoder().decode(plain.slice(0, -1)))).toEqual({
     title: 'Mine copper is running low',
@@ -186,7 +182,6 @@ test('announces a long rig once when it crosses the lead time', async () => {
   expect(calls).toHaveLength(1)
   expect(calls[0]!.payload).toMatchObject({ title: 'Mine copper is running low' })
 
-  // The deadline is recorded, so the next scan stays quiet.
   expect(await runRigAlerts({ db, send, now })).toEqual({ users: 0, rigs: 0 })
   expect(calls).toHaveLength(1)
 })
@@ -205,7 +200,6 @@ test('re-arms when a drill extends the run', async () => {
   const { calls, send } = stubSend()
   await runRigAlerts({ db, send, now })
 
-  // A drill moves the deadline forward; the old announcement no longer applies.
   const extended = now + 25 * 60_000
   db.update(actionProgress).set({ runEndsAt: extended }).run()
   expect(await runRigAlerts({ db, send, now })).toEqual({ users: 1, rigs: 1 })
@@ -216,9 +210,7 @@ test('ignores short runs and runs outside the lead window', async () => {
   const { db } = openDb(':memory:')
   const user = createUser(db, { username: 'alice' })
   const now = Date.now()
-  // 10-minute run: below the lead time, so there is nothing to warn about.
   rig(db, user.id, now + 5 * 60_000, 0, 'mine-copper')
-  // 40 minutes out: not yet inside the lead window.
   rig(db, user.id, now + 40 * 60_000, 50, 'mine-tin')
   upsertPushSubscription(db, {
     userId: user.id,
@@ -245,7 +237,6 @@ test('drops a dead subscription and leaves the deadline unannounced', async () =
   const send = (async () => ({ ok: false, gone: true })) as unknown as typeof sendPush
   expect(await runRigAlerts({ db, send, now })).toEqual({ users: 0, rigs: 0 })
   expect(sqlite.query('select count(*) as n from push_subscriptions').get()).toEqual({ n: 0 })
-  // The next drill/scan can still reach the member after they re-subscribe.
   const row = sqlite.query('select notified_ends_at as n from action_progress').get() as {
     n: number
   }
@@ -273,7 +264,6 @@ test('sendPush prunes on 401/403 and bounds the request with a timeout', async (
     })
     expect(signal).toBeInstanceOf(AbortSignal)
   }
-  // A server error is still transient: the row is kept and retried.
   const flaky = (async () => new Response('busy', { status: 503 })) as unknown as typeof fetch
   expect((await sendPush(db, target, { title: 'x' }, { fetchImpl: flaky })).gone).toBe(false)
 })
@@ -284,7 +274,6 @@ test('a device has one owner: the newest member to enable it takes it over', () 
   const bob = createUser(db, { username: 'bob' })
   const endpoint = 'https://fcm.googleapis.com/fcm/send/abc'
   upsertPushSubscription(db, { userId: alice.id, endpoint, p256dh: 'p', auth: 'a' })
-  // the same browser, another account ticks the box
   upsertPushSubscription(db, { userId: bob.id, endpoint, p256dh: 'p2', auth: 'a2' })
   expect(sqlite.query('select user_id as u, p256dh as k from push_subscriptions').all()).toEqual([
     { u: bob.id, k: 'p2' },

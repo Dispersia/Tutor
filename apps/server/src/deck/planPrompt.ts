@@ -1,11 +1,3 @@
-/**
- * The deck planner's prompt (docs/DESIGN.md §13.7): the system message that
- * defines the three card kinds, and the per-batch user message.
- *
- * The field contract here is what `plan.ts` validates and `context.ts` stores:
- * change a field's meaning in both places or not at all.
- */
-
 import { langName, scriptRule } from '../llm/prompts'
 import type { CharacterVariant } from '../frequency/source'
 
@@ -14,19 +6,13 @@ export interface PlanRequest {
   targetLang: string
   sourceLang: string
   topic?: string
-  /** Frequency words to turn into cards, most frequent first. */
   words: string[]
-  /** Words the learner already has (so example cards stay n+1). */
   knownWords: string[]
   variant?: CharacterVariant
   readingScript?: string
-  /** How many new words this batch should introduce. */
   count: number
-  /** Ask the planner for pitch-accent metadata (Japanese, …). */
   pitchAccent?: boolean
-  /** The batch is one word the learner keeps forgetting: ask for extra practice cards. */
   reinforce?: boolean
-  /** Per-word hints (reading/meaning) — used when importing an Anki deck. */
   hints?: Record<string, { reading?: string; meaning?: string }>
 }
 
@@ -61,7 +47,6 @@ For every card:
 - Translate what a sentence means, not its words in order: 我想你。 is "I miss you.", not "I think you."
 - Meanings, rules and explanations are in the learner's language. Words, sentences and prompts are in the target language.`
 
-/** The user message: the instruction, the batch and one worked example. */
 export function planPrompt(req: PlanRequest): string {
   return [
     `Instruction: ${req.instruction}`,
@@ -87,7 +72,6 @@ function knownLine(req: PlanRequest): string {
   return `Words already known (use freely, never as a new vocab card): ${req.knownWords.slice(-60).join(' ')}`
 }
 
-/** The learner's own deck hints for the batch's words, when there are any. */
 function hintBlock(req: PlanRequest): string | undefined {
   const batch = new Set(req.words)
   const hints = Object.entries(req.hints ?? {})
@@ -115,11 +99,6 @@ interface Example {
   json: string
 }
 
-/**
- * One worked batch in the deck's own language and reading script. Small models
- * copy the example's shape closely, so it must not show Zhuyin to a pinyin deck
- * or Chinese to a Japanese one.
- */
 function exampleFor(req: PlanRequest): Example {
   if (req.targetLang === 'zh' || req.targetLang === 'yue') return chineseExample(req)
   if (req.targetLang === 'ja') return JAPANESE_EXAMPLE

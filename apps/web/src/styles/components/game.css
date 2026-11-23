@@ -1,0 +1,161 @@
+@layer components {
+  .medal {
+    position: relative;
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 3.25rem;
+    height: 3.25rem;
+    border-radius: 14px;
+    border: 2px solid color-mix(in oklab, var(--accent) 60%, var(--color-ink-700));
+    background: color-mix(in oklab, var(--accent) 18%, var(--color-ink-900));
+    box-shadow: 0 3px 0 color-mix(in oklab, var(--accent) 35%, var(--color-ink-950));
+    font-size: 1.6rem;
+    line-height: 1;
+  }
+  .medal--lg {
+    width: 4rem;
+    height: 4rem;
+    border-radius: 16px;
+    font-size: 2rem;
+  }
+  .medal__lvl {
+    position: absolute;
+    right: -0.55rem;
+    bottom: -0.5rem;
+    min-width: 1.65rem;
+    padding: 0.2rem 0.38rem;
+    border-radius: 999px;
+    border: 2px solid var(--color-ink-850);
+    background: var(--accent);
+    color: var(--color-ink-950);
+    font-family: var(--font-display);
+    font-size: 0.8rem;
+    font-weight: 700;
+    line-height: 1;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .gcard {
+    position: relative;
+    display: block;
+    border-radius: 18px;
+    border: 1px solid color-mix(in oklab, var(--accent) 28%, var(--color-ink-700));
+    background: var(--color-ink-850);
+    box-shadow:
+      inset 0 3px 0 var(--accent),
+      0 4px 0 color-mix(in oklab, var(--accent) 22%, var(--color-ink-950));
+    transition:
+      transform 0.12s ease,
+      box-shadow 0.12s ease,
+      border-color 0.15s ease,
+      background 0.15s ease;
+  }
+  a.gcard:hover,
+  a.gcard:focus-visible {
+    transform: translateY(-2px);
+    border-color: color-mix(in oklab, var(--accent) 55%, var(--color-ink-700));
+    background: color-mix(in oklab, var(--accent) 6%, var(--color-ink-800));
+    box-shadow:
+      inset 0 3px 0 var(--accent),
+      0 6px 0 color-mix(in oklab, var(--accent) 28%, var(--color-ink-950));
+  }
+  a.gcard:active {
+    transform: translateY(2px);
+    box-shadow:
+      inset 0 3px 0 var(--accent),
+      0 1px 0 color-mix(in oklab, var(--accent) 22%, var(--color-ink-950));
+  }
+
+  .xpbar {
+    position: relative;
+    height: 0.6rem;
+    border-radius: 999px;
+    overflow: hidden;
+    background: var(--color-ink-950);
+  }
+  .xpbar > i {
+    display: block;
+    height: 100%;
+    min-width: 0.6rem;
+    border-radius: 999px;
+    background: var(--accent);
+    transition: width 0.4s ease;
+  }
+
+  .stile {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    min-width: 0;
+    padding: 0.75rem 0.85rem;
+    border-radius: 16px;
+    border: 1px solid color-mix(in oklab, var(--accent) 25%, var(--color-ink-700));
+    background: color-mix(in oklab, var(--accent) 6%, var(--color-ink-850));
+    box-shadow: 0 3px 0 color-mix(in oklab, var(--accent) 18%, var(--color-ink-950));
+  }
+  .stile__icon {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 2.4rem;
+    height: 2.4rem;
+    border-radius: 12px;
+    background: color-mix(in oklab, var(--accent) 20%, var(--color-ink-900));
+    color: var(--accent);
+    font-size: 1.2rem;
+    line-height: 1;
+  }
+  .stile__value {
+    font-family: var(--font-display);
+    font-size: 1.3rem;
+    font-weight: 700;
+    line-height: 1.1;
+    color: var(--color-ink-100);
+    font-variant-numeric: tabular-nums;
+  }
+  .stile__label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-ink-400);
+  }
+
+  .sbanner {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    margin-bottom: 0.85rem;
+  }
+  .sbanner__emblem {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 11px;
+    background: var(--accent);
+    box-shadow: 0 3px 0 color-mix(in oklab, var(--accent) 45%, var(--color-ink-950));
+    font-size: 1.1rem;
+    line-height: 1;
+  }
+  .sbanner__title {
+    font-family: var(--font-display);
+    font-size: 1.2rem;
+    font-weight: 700;
+    line-height: 1.1;
+    color: var(--color-ink-100);
+  }
+  .sbanner__meta {
+    font-size: 0.82rem;
+    color: var(--color-ink-400);
+  }
+  .sbanner__rule {
+    flex: 1;
+    height: 2px;
+    border-radius: 2px;
+    background: color-mix(in oklab, var(--accent) 22%, transparent);
+  }
+}

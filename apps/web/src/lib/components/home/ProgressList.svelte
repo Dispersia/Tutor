@@ -1,6 +1,4 @@
 <script lang="ts">
-  /** The earned-figures list: study XP, the day streak, the two progress bars. */
-
   import type { Stats } from '#lib/exercises'
   import { ACCENT, accentStyle } from '#lib/theme'
 
@@ -12,8 +10,8 @@
   let { stats, toGoal }: Props = $props()
 </script>
 
-<section class="mt-2 xl:mt-4" aria-label="Your progress">
-  <ul>
+<section class="panel mt-4 px-4" aria-label="Your progress">
+  <ul class="[&>li:last-child]:border-b-0">
     <li class="border-b border-ink-700 px-0 py-3">
       <div class="flex items-baseline justify-between gap-3">
         <span class="text-sm text-ink-300">Study XP</span>

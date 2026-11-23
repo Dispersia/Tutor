@@ -74,8 +74,8 @@ Conventions:
 - **Load once per request.** `services/context.ts` (`loadPlayerCtx`,
   `loadLearnerData`) carries the expensive maps; pass it down instead of
   re-querying.
-- Each module opens with a header comment: what it owns and the `DESIGN §` it
-  implements.
+- **No comments in code.** Names and small functions carry the meaning; the
+  why lives in `docs/DESIGN.md`. See `AGENTS.md`.
 
 ## Web (`apps/web/src`)
 

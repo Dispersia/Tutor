@@ -3,38 +3,14 @@ import type { Db } from '../db/client'
 import { allUserSettings, getUserSetting, setUserSetting } from '../db/repo'
 import { userDay } from './clock'
 
-/**
- * Per-user study preferences (docs/DESIGN.md §13.8). These shape how decks are
- * drilled without touching the decks themselves:
- *
- * - which native readings are shown (Zhuyin for Chinese, furigana for Japanese),
- * - which exercise kinds are offered at all (e.g. turn speaking/listening off),
- * - the daily budget (new cards / reviews per day) and the learning steps that
- *   decide how many times a brand-new card repeats before it graduates.
- *
- * Stored as plain `user_settings` key/value rows, so no migration is needed and
- * everything stays scoped to the signed-in user.
- */
 export interface StudyPrefs {
-  /** show Zhuyin under Chinese characters */
   showZhuyin: boolean
-  /** show furigana over Japanese kanji */
   showFurigana: boolean
-  /** exercise ids the learner turned off (empty = every kind is offered) */
   disabledExercises: string[]
-  /** New cards to introduce per UTC day (0 = unlimited). */
   newPerDay: number
-  /** Graded reviews allowed per UTC day (0 = unlimited). */
   maxReviewsPerDay: number
-  /** Learning steps in minutes; a new card repeats once per step. */
   learningSteps: number[]
-  /** Grow the deck automatically when a word keeps lapsing. */
   autoReinforce: boolean
-  /**
-   * The deck the learner is studying everywhere (null = every deck). Free
-   * practice and any caller that does not name a deck drill this one, so the
-   * choice made in the profile menu follows the member across the app.
-   */
   activeDeckId: DeckId | null
 }
 
@@ -44,8 +20,6 @@ export const DEFAULT_STUDY_PREFS: StudyPrefs = {
   disabledExercises: [],
   newPerDay: 20,
   maxReviewsPerDay: 200,
-  // Anki's default is two steps (1m, 10m). We keep four so a new word comes
-  // back a handful of times in a session instead of twice, then graduating.
   learningSteps: [1, 10, 60, 240],
   autoReinforce: true,
   activeDeckId: null,
@@ -63,7 +37,6 @@ const KEYS = {
   activeDeck: 'study.activeDeck',
 } as const
 
-/** Anki caps the steps at a day; anything longer is not a learning step. */
 const MAX_STEP_MINUTES = 24 * 60
 
 function bool(raw: string | undefined, fallback: boolean): boolean {
@@ -71,7 +44,6 @@ function bool(raw: string | undefined, fallback: boolean): boolean {
   return raw !== '0' && raw !== 'false'
 }
 
-/** A trimmed value, or null when the stored string is missing/empty. */
 function nonEmpty(raw: string | undefined): DeckId | null {
   const value = raw?.trim()
   return value ? toDeckId(value) : null
@@ -91,16 +63,13 @@ function parseSteps(raw: string | undefined, fallback: number[]): number[] {
     const steps = parsed
       .map((x) => Number(x))
       .filter((n) => Number.isFinite(n) && n > 0 && n <= MAX_STEP_MINUTES)
-    // An empty list is meaningful: graduate new cards immediately.
     return steps.map((n) => Math.round(n))
   } catch {
     return [...fallback]
   }
 }
 
-/** Reads a user's study preferences, falling back to the defaults. */
 export function readStudyPrefs(db: Db, userId: UserId): StudyPrefs {
-  // One query for the whole bag: this runs on every practice step.
   const all = allUserSettings(db, userId)
   const get = (key: string): string | undefined => all[key]
   const d = DEFAULT_STUDY_PREFS
@@ -116,7 +85,6 @@ export function readStudyPrefs(db: Db, userId: UserId): StudyPrefs {
   }
 }
 
-/** The exercise kinds the learner turned off, from the stored JSON list. */
 function readDisabled(raw: string | undefined): string[] {
   if (!raw) return []
   try {
@@ -127,7 +95,6 @@ function readDisabled(raw: string | undefined): string[] {
   }
 }
 
-/** Applies a partial update and returns the full, stored preferences. */
 export function writeStudyPrefs(db: Db, userId: UserId, patch: Partial<StudyPrefs>): StudyPrefs {
   const put = (key: string, value: string) => setUserSetting(db, userId, key, value)
   if (patch.showZhuyin !== undefined) put(KEYS.showZhuyin, patch.showZhuyin ? '1' : '0')
@@ -149,17 +116,12 @@ export function writeStudyPrefs(db: Db, userId: UserId, patch: Partial<StudyPref
   return readStudyPrefs(db, userId)
 }
 
-// --- today's "study more" overrides -----------------------------------------
-
 export interface DailyExtra {
-  /** The member's calendar day these overrides belong to; stale values are ignored. */
   day: string
-  /** Extra new cards and reviews the learner asked for today. */
   newExtra: number
   reviewsExtra: number
 }
 
-/** The learner's extra allowance for their current day (0 when none/stale). */
 export function readDailyExtra(db: Db, userId: UserId, ts: number = Date.now()): DailyExtra {
   const day = userDay(db, userId, ts)
   const raw = getUserSetting(db, userId, KEYS.extraToday)
@@ -177,7 +139,6 @@ export function readDailyExtra(db: Db, userId: UserId, ts: number = Date.now()):
   }
 }
 
-/** Adds to today's allowance ("study more", Anki's custom study). */
 export function bumpDailyExtra(
   db: Db,
   userId: UserId,
@@ -194,10 +155,6 @@ export function bumpDailyExtra(
   return next
 }
 
-/**
- * Whether native readings should be shown for a target language. Chinese shows
- * Zhuyin, Japanese shows furigana; any other language keeps its reading.
- */
 export function showsReadings(prefs: StudyPrefs, targetLang: string): boolean {
   if (targetLang === 'zh' || targetLang === 'yue') return prefs.showZhuyin
   if (targetLang === 'ja') return prefs.showFurigana

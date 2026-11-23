@@ -1,6 +1,4 @@
 <script lang="ts">
-  /** The monster list shown when no fight is active. */
-
   import { href } from '#lib/paths'
   import { goto } from '$app/navigation'
   import { ACCENT, accentStyle, tierAccent } from '#lib/theme'

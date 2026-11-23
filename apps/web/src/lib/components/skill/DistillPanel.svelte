@@ -1,6 +1,4 @@
 <script lang="ts">
-  /** Enchanting's Distill panel (§13.5.3.2): burn an item for XP and its essence. */
-
   import { accentStyle } from '#lib/theme'
   import type { Distillable } from '#lib/skillview'
 

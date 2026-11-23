@@ -1,16 +1,3 @@
-/**
- * The n+1 sentence builder engine (docs/DESIGN.md §13.7).
- *
- * Given the *new* word of the current step and the set of words the learner
- * already knows, this finds a short Mandarin sentence that uses the new word
- * exactly once and nothing else the learner has not met. That is the whole point
- * of the path: every card is "known words + exactly one new thing".
- *
- * It is deliberately a small hand-written pattern grammar, not an LLM call, so
- * it is instant, deterministic and works with no API key. The patterns and their
- * semantic tables live in `patterns.data.ts`.
- */
-
 import { FREQUENCY, LEXICON, type FreqWord, type Pos } from '../../text/lexicon'
 import {
   OBJECT_VERBS,
@@ -21,7 +8,6 @@ import {
   type Slot,
 } from './patterns.data'
 
-/** Positions of speech for which sentence_build can ever apply. */
 export const SENTENCE_POS: ReadonlySet<Pos> = new Set<Pos>([
   'pron',
   'noun',
@@ -36,19 +22,13 @@ export const SENTENCE_POS: ReadonlySet<Pos> = new Set<Pos>([
 ])
 
 export interface SentenceBuild {
-  /** the correct order, one token per word */
   tokens: string[]
-  /** shuffled tiles: the tokens plus a few distractors */
   bank: string[]
-  /** English prompt for the sentence */
   gloss: string
-  /** pinyin of the whole sentence */
   reading: string
-  /** the new word that this sentence introduces */
   target: string
 }
 
-/** The in-flight state while one pattern's slots are filled in order. */
 interface FillCtx {
   target: FreqWord
   targetRole?: string
@@ -58,10 +38,6 @@ interface FillCtx {
   rand: () => number
 }
 
-/**
- * Tries to place the new word into one pattern, filling every other part with
- * words the learner already knows. Returns the first match, or `undefined`.
- */
 export function buildSentence(
   target: FreqWord,
   known: Set<string>,
@@ -76,7 +52,6 @@ export function buildSentence(
   return undefined
 }
 
-/** Cheap feature check without building a full sentence (used for availability). */
 export function canBuildSentence(target: FreqWord, known: Set<string>): boolean {
   return buildSentence(target, known, () => 0) !== undefined
 }
@@ -98,7 +73,6 @@ function tryPattern(
   return undefined
 }
 
-/** Which roles the new word could fill here, and whether it is a literal feature. */
 function featureRolesOf(
   pattern: Pattern,
   target: FreqWord,
@@ -111,12 +85,10 @@ function featureRolesOf(
   return { roles, lit }
 }
 
-/** Every literal word in the pattern must already be known. */
 function literalWordsKnown(pattern: Pattern, target: FreqWord, knows: Set<string>): boolean {
   return pattern.parts.every((p) => typeof p !== 'string' || knows.has(p) || p === target.word)
 }
 
-/** Fills every slot of the pattern; false when a slot cannot be satisfied. */
 function fillParts(pattern: Pattern, ctx: FillCtx): boolean {
   for (const part of pattern.parts) {
     if (typeof part === 'string') continue
@@ -135,10 +107,8 @@ function placePart(part: Slot, ctx: FillCtx): boolean {
   return true
 }
 
-/** Places the new word itself, checking its slot and object compatibility. */
 function placeTarget(part: Slot, ctx: FillCtx): boolean {
   if (!matchesSlot(ctx.target, part)) return false
-  // object compatibility (the verb is already filled: patterns put it first)
   if (part.objectOf) {
     const allowed = VERB_OBJECTS[ctx.values[part.objectOf]?.word ?? '']
     if (!allowed || !allowed.includes(ctx.target.word)) return false
@@ -177,7 +147,6 @@ function candidatesFor(
   return pool
 }
 
-/** Turns a fully-filled pattern into the sentence, or nothing when too short. */
 function finalize(
   pattern: Pattern,
   values: Record<string, FreqWord>,

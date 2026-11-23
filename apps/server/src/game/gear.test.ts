@@ -47,7 +47,6 @@ function setup() {
   return { db, sqlite, user, bus: new EventBus() }
 }
 
-/** Deterministic PRNG so a roll is reproducible in tests. */
 function seeded(seed = 42) {
   let s = seed
   return () => {
@@ -61,11 +60,9 @@ test('crafted gear rolls quality and affixes deterministically', () => {
   const roll = rollGearStats(item, seeded())
   expect(['common', 'uncommon', 'rare', 'epic']).toContain(roll.quality)
   expect(roll.stats.stamina).toBeGreaterThanOrEqual(1)
-  // base stats are scaled by the quality multiplier
   expect(roll.stats.stamina).toBeGreaterThanOrEqual(
     Math.round((item.stats?.stamina ?? 0) * QUALITY_MULTIPLIER[roll.quality]),
   )
-  // at least one affix landed on top of the base
   expect(roll.stats).not.toEqual(EMPTY_STATS)
 })
 
@@ -86,7 +83,6 @@ test('a craft creates a gear instance and equipping keeps the stack count', () =
   expect(res.ok).toBe(true)
   expect(listEquipment(db, user.id)).toHaveLength(1)
   expect(listEquipment(db, user.id)[0]!.slot).toBe('head')
-  // worn gear is still a piece owned: the count is the number of instances
   expect(getItemCount(db, user.id, 'bronze_helm')).toBe(1)
 
   const pc = loadPlayerCombat(db, user.id)
@@ -118,11 +114,8 @@ test('saved gear sets swap the whole loadout', () => {
 })
 
 test('monsters are fixed and ordered as a ladder (§13.5.3)', () => {
-  // No scaling: a monster's numbers are constant whatever your gear or level, so a
-  // buff you stack reads as power instead of being cancelled out.
   const slime = MONSTER_BY_ID.get('slime')!
   expect(slime.hp).toBeGreaterThan(0)
-  // The ladder runs weakest → strongest (by hp), so there is always a harder fight.
   for (let i = 1; i < MONSTERS.length; i++) {
     expect(MONSTERS[i]!.level).toBeGreaterThanOrEqual(MONSTERS[i - 1]!.level)
     expect(MONSTERS[i]!.hp).toBeGreaterThan(MONSTERS[i - 1]!.hp)
@@ -168,10 +161,8 @@ test('gear requirements follow the slot and combat style', () => {
   expect(itemRequirements(ITEM_BY_ID.get('bronze_shield')!)).toEqual({ defence: 1 })
   expect(itemRequirements(ITEM_BY_ID.get('leather_quiver')!)).toEqual({ ranged: 1 })
   expect(itemRequirements(ITEM_BY_ID.get('cloth_tome')!)).toEqual({ magic: 1 })
-  // Jewellery is not stat-gated.
   expect(itemRequirements(ITEM_BY_ID.get('ring_ruby1')!)).toEqual({})
 
-  // Bronze is wearable from the start; adamant demands level 30.
   expect(requiredLevelFor(1)).toBe(1)
   expect(requiredLevelFor(5)).toBe(30)
   expect(requiredLevelFor(9)).toBe(45)
@@ -185,11 +176,9 @@ test('equipping gear checks the combat stats it needs', () => {
   expect(res.error).toContain('Attack 5')
   expect(res.missing?.[0]).toMatchObject({ skill: 'attack', level: 5, current: 1 })
 
-  // Bronze is wearable from the start.
   addItems(db, user.id, 'bronze_sword', 1)
   expect(equipItem(db, bus, user.id, 'bronze_sword').ok).toBe(true)
 
-  // A locked piece still shows in the inventory, with what it needs.
   const piece = gearView(db, user.id).find((g) => g.itemId === 'iron_sword')
   expect(piece?.missing[0]).toMatchObject({ skill: 'attack', name: 'Attack', level: 5 })
   expect(meetsRequirements(ITEM_BY_ID.get('iron_sword')!, () => 5).ok).toBe(true)
@@ -213,9 +202,6 @@ test('wearing a saved set skips pieces you cannot use yet', () => {
   sqlite.close()
 })
 
-// --- gear instances are the only record of equipment (§13.5.3) -----------------
-
-/** What the bank reports for an item, and how many pieces really exist. */
 function owned(db: Db, userId: UserId, itemId: string) {
   return {
     count: getItemCount(db, userId, itemId),
@@ -231,7 +217,6 @@ test('a granted piece is an instance: the count is the number of instances', () 
   addItems(db, user.id, 'bronze_helm', 2)
   grantFixedItems(db, bus, user.id, [{ item: 'bronze_helm', count: 1 }])
   expect(owned(db, user.id, 'bronze_helm')).toEqual(all(3))
-  // nothing is written to the materials table for equipment
   expect(db.select().from(inventory).all()).toEqual([])
   sqlite.close()
 })
@@ -257,7 +242,6 @@ test('discard, salvage and distill each take one piece and one off the count', (
   expect(distillItem(db, bus, user.id, 'bronze_helm').ok).toBe(true)
   expect(owned(db, user.id, 'bronze_helm')).toEqual(all(1))
 
-  // the last piece is worn: it cannot be distilled, and nothing is lost trying
   equipItem(db, bus, user.id, 'bronze_helm')
   expect(distillItem(db, bus, user.id, 'bronze_helm').ok).toBe(false)
   expect(owned(db, user.id, 'bronze_helm')).toEqual(all(1))
@@ -290,7 +274,6 @@ test('a piece being worn is never spent, only spare ones', () => {
   const { db, sqlite, user, bus } = setup()
   addItems(db, user.id, 'bronze_sword', 1)
   expect(equipItem(db, bus, user.id, 'bronze_sword').ok).toBe(true)
-  // owned, but nothing to spend: a recipe cannot take the sword off your hand
   expect(getItemCount(db, user.id, 'bronze_sword')).toBe(1)
   expect(spendableCount(db, user.id, 'bronze_sword')).toBe(0)
   consumeItems(db, bus, user.id, [{ item: 'bronze_sword', count: 1 }])
@@ -309,11 +292,9 @@ test('the backfill turns a legacy stack into instances, once', () => {
       { ...stamp, itemId: 'copper_ore', count: 5 },
     ])
     .run()
-  // a worn row from before instances: no piece behind it
   db.insert(equipment)
     .values({ ...stamp, slot: 'mainHand', itemId: 'bronze_sword', instanceId: null })
     .run()
-  // until the backfill runs, the bank reports only real pieces
   expect(getItemCount(db, user.id, 'bronze_helm')).toBe(0)
 
   expect(backfillGearInstances(db)).toBe(3)
@@ -324,7 +305,6 @@ test('the backfill turns a legacy stack into instances, once', () => {
   expect(helm.armour).toBe(ITEM_BY_ID.get('bronze_helm')!.armour ?? 0)
   const sword = listGearInstances(db, user.id).find((g) => g.itemId === 'bronze_sword')!
   expect(listEquipment(db, user.id)[0]!.instanceId).toBe(sword.id)
-  // only materials are left in the stacks table
   expect(db.select().from(inventory).all()).toEqual([
     expect.objectContaining({ itemId: 'copper_ore', count: 5 }),
   ])

@@ -15,26 +15,14 @@ import { FREQUENCY } from '../text/lexicon'
 import { FREQUENCY_JA } from './frequency-ja'
 import { storedReadings } from '../text/readings'
 
-/** Level id of the Mandarin frequency (n+1) path. */
 export const FREQUENCY_LEVEL = 'zhfreq'
-/** Level id of the Japanese frequency path. */
 export const JAPANESE_FREQUENCY_LEVEL = 'jafreq'
 
-/**
- * Bump when the curated seed data changes. Existing users keep their original
- * copy of the decks (seeding only runs once), so `reconcileStarterDecks` uses
- * this to know when a repair pass is due.
- *
- * v2: Simplified -> Traditional and pinyin -> Zhuyin.
- * v3: drop the themed HSK 1 / JLPT N5 decks; frequency paths only, plus Japanese.
- */
 export const SEED_VERSION = 3
 const SEED_VERSION_KEY = 'seedVersion'
 
-/** Themed decks that used to be seeded; removed in favour of the frequency path. */
 const LEGACY_LEVELS = ['hsk1', 'n5']
 
-/** One curated card in the shape the seeder/reconciler works with. */
 interface SeedContent {
   front: string
   back: string
@@ -89,23 +77,12 @@ function seedCard(
   return { front, back, readings, tags: [level, pos], payload: { pos } }
 }
 
-/**
- * **Test fixture only.** Decks are no longer pre-seeded: the product builds them
- * on demand from a pulled frequency list (`deck/generate.ts`). This gives a user
- * a copy of the curated frequency decks so the SRS / n+1 / sentence tests have a
- * deterministic deck to drill. Idempotent.
- */
 export function seedStarterDecks(db: Db, userId: UserId): boolean {
   const created = listDecks(db).length === 0
   reconcileStarterDecks(db, userId)
   return created
 }
 
-/**
- * Brings an existing user's decks in line with the current seed data: seeds any
- * frequency deck they never got, updates cards in place (so SRS history
- * survives) and drops the retired themed decks. Runs once per SEED_VERSION.
- */
 export function reconcileStarterDecks(db: Db, userId: UserId): void {
   if (getUserSetting(db, userId, SEED_VERSION_KEY) === String(SEED_VERSION)) return
   for (const level of LEGACY_LEVELS) {
@@ -142,7 +119,6 @@ function seedDeck(db: Db, userId: UserId, d: FrequencyDeck): void {
   }
 }
 
-/** Matches stored cards to the seed by position (curated decks are append-only). */
 function reconcileCards(
   db: Db,
   userId: UserId,
@@ -187,11 +163,6 @@ function sameReadings(a: Record<string, string>, b: Record<string, string>): boo
   return keys.length === Object.keys(b).length && keys.every((k) => a[k] === b[k])
 }
 
-/**
- * The readings a card carries — native phonetic script only, no Latin
- * transliteration: Chinese gets **Zhuyin**, Japanese gets **kana** (rendered as
- * furigana over the kanji). The pinyin/romaji source is used only to derive it.
- */
 export function readingsFor(
   targetLang: string,
   reading: string,

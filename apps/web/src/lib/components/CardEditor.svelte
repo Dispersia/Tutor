@@ -8,7 +8,6 @@
   import Spinner from './Spinner.svelte'
   import { focusTrap } from '#lib/focusTrap'
 
-  /** A card metadata editor (docs/DESIGN.md §11.1): annotate a deck's cards. */
   let {
     deck,
     onclose,
@@ -21,13 +20,11 @@
   let saving = $state(false)
   let savedAt = $state(0)
 
-  // editable draft for the selected card
   let levels = $state('')
   let drop = $state(0)
   let syllables = $state('')
   let extra = $state('')
 
-  // "add a card" draft
   let showAdd = $state(false)
   let newFront = $state('')
   let newBack = $state('')
@@ -37,11 +34,9 @@
 
   const selected = $derived(cards.find((c) => c.id === selectedId))
 
-  /** The reading a learner should see (kana / zhuyin / pinyin). */
   const readingOf = (c: Card): string =>
     c.readings.kana || c.readings.zhuyin || c.readings.pinyin || Object.values(c.readings)[0] || ''
 
-  /** The contour the draft builds, for the live preview and for saving. */
   const preview = $derived.by<PitchContour | undefined>(() => {
     const lv = levels.toUpperCase().replace(/[^HL]/g, '')
     if (!lv) return undefined
@@ -65,7 +60,6 @@
     }
   })
 
-  /** Loads a card's annotations into the editable draft. */
   function select(c: Card) {
     selectedId = c.id
     const pitch = c.metadata?.pitch
@@ -95,7 +89,6 @@
     await persistCard(c.id, mergeMeta(c.metadata as Record<string, unknown>, rest))
   }
 
-  /** The free-form "other metadata" JSON, or undefined when it is invalid. */
   function parseExtra(): Record<string, unknown> | undefined {
     const trimmed = extra.trim()
     if (!trimmed) return {}
@@ -106,7 +99,6 @@
     }
   }
 
-  /** Merge by key, clearing removed keys; pitch follows the live preview. */
   function mergeMeta(
     current: Record<string, unknown>,
     rest: Record<string, unknown>,
@@ -132,7 +124,6 @@
 
   const pitchCount = $derived(cards.filter((c) => c.metadata?.pitch).length)
 
-  /** Adds a hand-authored card; `step` places it in an existing lesson. */
   async function addCard() {
     const front = newFront.trim()
     const back = newBack.trim()
@@ -257,7 +248,6 @@
         </div>
 
         <div class="mt-4 grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-          <!-- card list -->
           <div class="max-h-[60vh] overflow-y-auto rounded-[12px] border border-ink-700">
             {#each cards as c (c.id)}
               <button
@@ -281,7 +271,6 @@
             {/each}
           </div>
 
-          <!-- editor -->
           <div>
             {#if selected}
               <div class="rounded-[12px] border border-ink-700 px-4 py-4 text-center">

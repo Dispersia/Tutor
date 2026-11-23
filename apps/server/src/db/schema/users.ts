@@ -1,8 +1,3 @@
-/**
- * Accounts, login sessions and per-user settings (docs/DESIGN.md §12.5).
- * Part of the schema split (docs/ARCHITECTURE.md).
- */
-
 import type { UserId } from '../../ids'
 import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 

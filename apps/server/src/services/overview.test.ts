@@ -30,11 +30,8 @@ test('streakFromDays counts consecutive days ending today or yesterday', () => {
   expect(streakFromDays([], today)).toBe(0)
   expect(streakFromDays([today], today)).toBe(1)
   expect(streakFromDays([today, '2026-11-11', '2026-11-10'], today)).toBe(3)
-  // active yesterday but not today → streak survives
   expect(streakFromDays(['2026-11-11', '2026-11-10'], today)).toBe(2)
-  // gap of a full day → reset
   expect(streakFromDays(['2026-11-09'], today)).toBe(0)
-  // ignores future/irrelevant days
   expect(streakFromDays(['2026-10-01', today], today)).toBe(1)
 })
 
@@ -45,7 +42,6 @@ test('shiftDay handles month/year boundaries', () => {
 })
 
 test('weekStart returns the Monday of the UTC week', () => {
-  // 2026-11-15 is a Sunday → its week starts on Monday 2026-11-09
   expect(weekStart('2026-11-15')).toBe('2026-11-09')
   expect(weekStart('2026-11-09')).toBe('2026-11-09')
   expect(weekStart('2026-11-10')).toBe('2026-11-09')
@@ -58,9 +54,7 @@ test('activitySeries lays out Monday-first weeks and buckets today', () => {
 
   const { today, days } = activitySeries(db, user.id, 4)
   expect(days.length).toBe(28)
-  // the grid opens on a Monday
   expect(new Date(`${days[0]!.day}T00:00:00Z`).getUTCDay()).toBe(1)
-  // today sits in the final week and carries the XP
   const idx = days.findIndex((d) => d.day === today)
   expect(idx).toBeGreaterThanOrEqual(21)
   expect(days[idx]!.xp).toBe(25)
@@ -81,7 +75,7 @@ test('awardXp appends to the ledger, levels up and emits events', () => {
   expect(sumXp(db, user.id)).toBe(60)
   expect(getStats(db, user.id).level).toBe(1)
 
-  const r = awardXp(db, bus, user.id, { amount: 60, reason: 'review', sourceId: 'ex2' }) // crosses 100 → level 2
+  const r = awardXp(db, bus, user.id, { amount: 60, reason: 'review', sourceId: 'ex2' })
   expect(r.total).toBe(120)
   expect(r.level).toBe(2)
   expect(r.leveledUp).toBe(true)
@@ -118,14 +112,12 @@ test('rebuildStats reconstructs everything from the XP ledger', () => {
 
   addXpEvent(db, user.id, 60, 'review')
   addXpEvent(db, user.id, 90, 'review')
-  // corrupt the cached row
   upsertStats(db, user.id, { xpTotal: 9999, level: 42, streakDays: 99, lastActiveDay: 'nope' })
 
   const rebuilt = rebuildStats(db, user.id)
   expect(rebuilt.xp).toBe(150)
-  // the account level is derived from the professions now, not this ledger
   expect(rebuilt.level).toBe(1)
-  expect(rebuilt.streak).toBe(1) // both events are today
+  expect(rebuilt.streak).toBe(1)
   expect(getStats(db, user.id).xpTotal).toBe(150)
   sqlite.close()
 })
@@ -143,7 +135,7 @@ test('recordReview appends an FSRS revlog row with the before/after state', () =
   const log = listSrsReviews(db, user.id, toCardId('card-1'))
   expect(log.length).toBe(1)
   const row = log[0]!
-  expect(row.rating).toBe(3) // 85 → Good
+  expect(row.rating).toBe(3)
   expect(row.stateBefore).toBe('new')
   expect(row.stateAfter).toBe('learning')
   expect(row.stabilityBefore).toBe(0)
@@ -162,14 +154,12 @@ test('a brand-new card never graduates on its first answer', () => {
   const bus = new EventBus()
   const user = createUser(db, { username: 'frank', passwordHash: 'x' })
 
-  // Every correct answer is a "Good" learning step (never "Easy"): the card
-  // takes the learning steps, then graduates. It must not graduate in one shot.
   const first = recordReview(db, bus, user.id, {
     cardId: toCardId('card-1'),
     score: 100,
     correct: true,
   })
-  expect(first.rating).toBe(3) // Good
+  expect(first.rating).toBe(3)
   expect(first.state).toBe('learning')
   expect(first.intervalDays).toBe(0)
   expect(first.dueAt).toBeLessThan(Date.now() + 11 * 60 * 1000)
@@ -184,7 +174,6 @@ test('a brand-new card never graduates on its first answer', () => {
   expect(cur.intervalDays).toBeGreaterThanOrEqual(1)
   expect(reviews).toBeGreaterThan(1)
 
-  // A wrong answer is Again, even on an established card.
   const wrong = recordReview(db, bus, user.id, {
     cardId: toCardId('card-1'),
     score: 0,
@@ -201,7 +190,6 @@ test('the revlog records fractional elapsed days and the review source', () => {
 
   recordReview(db, bus, user.id, { cardId: toCardId('card-1'), score: 85, correct: true })
   const prev = getSrs(db, user.id, toCardId('card-1'))!
-  // pretend the previous review happened two days ago
   upsertSrs(db, user.id, toCardId('card-1'), {
     state: prev.state,
     step: prev.step,
@@ -223,7 +211,7 @@ test('the revlog records fractional elapsed days and the review source', () => {
   })
   const last = listSrsReviews(db, user.id, toCardId('card-1')).at(-1)!
   expect(last.source).toBe('combat')
-  expect(last.rating).toBe(1) // wrong → Again
+  expect(last.rating).toBe(1)
   expect(last.stateBefore).toBe('learning')
   expect(last.elapsedDays).toBeGreaterThan(1.9)
   expect(last.elapsedDays).toBeLessThan(2.1)

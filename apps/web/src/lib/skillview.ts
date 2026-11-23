@@ -1,12 +1,6 @@
-/**
- * Pure derivations for the profession page: labels, gates and the band/talent
- * groupings. No runes, no DOM — the page owns the state, this owns the maths.
- */
-
 import type { ActionDTO, BandDTO, ItemDTO, OwnedTalent, SkillDTO, TalentOption } from './skills'
 import type { ModKind } from './types'
 
-/** Short labels for each passive kind, so a raw "18%" can't be read as progress. */
 export const EFFECT_LABEL: Record<ModKind, string> = {
   yield: 'yield',
   double: 'bonus product',
@@ -18,7 +12,6 @@ export const EFFECT_LABEL: Record<ModKind, string> = {
   hp: 'HP',
 }
 
-/** The band gate blocking an action, if any (e.g. `Bronze 40`). */
 export function bandGate(a: ActionDTO): string {
   const missing = a.missingBands ?? []
   if (missing.length) return missing.map((b) => `${b.name} ${b.level}`).join(', ')
@@ -26,7 +19,6 @@ export function bandGate(a: ActionDTO): string {
   return ''
 }
 
-/** The band's current total contribution, e.g. `+4.2% crit` or `+5 stamina`. */
 export function bandBuff(b: BandDTO): string {
   const v = b.buffValue ?? 0
   if (!v) return ''
@@ -35,11 +27,6 @@ export function bandBuff(b: BandDTO): string {
     : `+${Math.round(v * 1000) / 10}% ${b.buffStat}`
 }
 
-/**
- * The gate that blocks an action, without restating missing materials that the
- * cost chips already show. A level or equip gate is the only thing the chips
- * cannot explain.
- */
 export function actionGate(a: ActionDTO): string {
   const band = bandGate(a)
   if (band) return band
@@ -49,7 +36,6 @@ export function actionGate(a: ActionDTO): string {
   return ''
 }
 
-/** Why a "train" button is disabled: band, level, equip, then missing materials. */
 export function lockedReason(a: ActionDTO, nameOf: (itemId: string) => string): string {
   const band = bandGate(a)
   if (band) return band
@@ -61,7 +47,6 @@ export function lockedReason(a: ActionDTO, nameOf: (itemId: string) => string): 
   return ''
 }
 
-/** The unmet cross-profession requirements of a talent option, as text. */
 export function unmetOf(o: TalentOption): string {
   return (o.requires ?? [])
     .filter((r) => !r.met)
@@ -69,13 +54,10 @@ export function unmetOf(o: TalentOption): string {
     .join(', ')
 }
 
-/** A capstone option carries a cross-profession gate; choice options never do. */
 export const isBlocked = (o: TalentOption): boolean => (o.requires ?? []).some((r) => !r.met)
 
-/** `42%` — a 0..1 fraction as a whole-percent label. */
 export const pct = (v: number): string => `${Math.round(v * 100)}%`
 
-/** One inventory item you can burn to train Enchanting. */
 export interface Distillable {
   itemId: string
   count: number
@@ -84,7 +66,6 @@ export interface Distillable {
   value: number
 }
 
-/** Inventory items you can burn to train Enchanting, richest first (else none). */
 export function distillablesOf(
   skillId: string | undefined,
   inventory: { itemId: string; count: number }[],
@@ -103,7 +84,6 @@ export function distillablesOf(
     .sort((a, b) => b.value - a.value)
 }
 
-/** One row of the talent rail: a choice milestone or a mastery capstone. */
 export interface TalentRow {
   milestone: number
   kind: 'choice' | 'mastery'
@@ -112,11 +92,6 @@ export interface TalentRow {
   options: TalentOption[]
 }
 
-/**
- * The whole talent ladder in one rail: a choice every 10 levels, with a mastery
- * capstone alongside the Lv 50 and Lv 100 rows. Locked milestones stay visible,
- * so the ladder (and what is still coming) reads as a path.
- */
 export function buildTalentRail(s: SkillDTO): TalentRow[] {
   const rows: TalentRow[] = []
   for (let m = 10; m <= 100; m += 10) {
@@ -152,10 +127,6 @@ function masteryRow(s: SkillDTO, m: number): TalentRow | undefined {
   }
 }
 
-/**
- * Actions grouped under their material band. Only artisans with bands
- * (Smithing) get the grouped view; anything else renders the flat list.
- */
 export function buildBandGroups(
   s: SkillDTO,
 ): { groups: { band: BandDTO; actions: ActionDTO[] }[]; other: ActionDTO[] } | null {

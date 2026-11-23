@@ -21,11 +21,6 @@
     else if (session.user && onLogin) void goto(href('/home'))
   })
 
-  // Pick up new deploys: ask for a service-worker update. When the new worker
-  // takes over (and one was already controlling the page) the build on screen is
-  // stale — but a reload right then would throw away a half-typed answer or a
-  // live recording, so it waits for the next navigation or for the app to be
-  // put in the background.
   let stale = false
   beforeNavigate(({ willUnload, to }) => {
     if (stale && !willUnload && to?.url) location.href = to.url.href

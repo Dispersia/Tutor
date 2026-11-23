@@ -1,6 +1,4 @@
 <script lang="ts">
-  /** The graded-answer panel: score, expected answer, tips and the SRS decision. */
-
   import { ACCENT } from '#lib/theme'
   import { reviewLabel } from '#lib/practiceview'
   import type { Grade, SrsOutcome, WordFeedback } from '#lib/exercises'

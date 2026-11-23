@@ -2,10 +2,8 @@ import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 
-/** repo root: apps/server/src -> repo */
 export const repoRoot = resolve(import.meta.dir, '../../..')
 
-/** Minimal KEY=VALUE loader (Bun loads .env already; we add ~/.config/tutor/env). */
 function loadEnvFile(path: string): void {
   if (!existsSync(path)) return
   for (const line of readFileSync(path, 'utf8').split('\n')) {
@@ -26,11 +24,6 @@ loadEnvFile(join(homedir(), '.config/tutor/env'))
 export type Role = 'conversation' | 'judge' | 'generator' | 'translator'
 export const ROLES: Role[] = ['conversation', 'judge', 'generator', 'translator']
 
-/**
- * Thinking budget per role. Chat, translation and card generation must feel
- * instant, so they skip hidden reasoning entirely; the judge keeps a little so
- * its corrections stay defensible.
- */
 export const roleReasoning: Record<Role, 'none' | 'low' | 'medium' | 'high' | 'xhigh'> = {
   conversation: 'none',
   judge: 'low',
@@ -41,16 +34,9 @@ export const roleReasoning: Record<Role, 'none' | 'low' | 'medium' | 'high' | 'x
 const num = (v: string | undefined, fallback: number): number =>
   v === undefined || v === '' ? fallback : Number(v)
 
-/**
- * A directory setting, absolute. A relative value (`.env.example` ships
- * `./data`) is resolved against the repo root, not the process cwd: `just dev`
- * runs in `apps/server` and the speech gateway in `python/`, so a bare `./data`
- * used to mean a different folder to each of them.
- */
 const dir = (value: string | undefined, fallback: string): string =>
   resolve(repoRoot, value?.trim() || fallback)
 
-/** Normalises TUTOR_BASE_PATH to '' or '/prefix' (no trailing slash). */
 function normalizeBase(v: string | undefined): string {
   if (!v) return ''
   const trimmed = v.trim().replace(/\/+$/, '')
@@ -65,15 +51,12 @@ export const env = {
   dataDir: dir(process.env.TUTOR_DATA_DIR, 'data'),
   modelsDir: dir(process.env.TUTOR_MODELS_DIR, 'models'),
   staticDir: dir(process.env.TUTOR_STATIC_DIR, 'apps/web/build'),
-  /** Served under this prefix (e.g. /tutor behind a tailnet gateway). */
   basePath: normalizeBase(process.env.TUTOR_BASE_PATH),
   pythonDir: dir(process.env.TUTOR_PYTHON_DIR, 'python'),
 
   openrouterKey: process.env.OPENROUTER_API_KEY ?? process.env.TUTOR_OPENROUTER_KEY,
 
-  /** Optional server secret: encrypts per-user OpenRouter keys at rest. */
   secret: process.env.TUTOR_SECRET,
-  /** Allow new accounts to be created (first account is always the admin). */
   allowRegistration: (process.env.TUTOR_ALLOW_REGISTRATION ?? 'true').toLowerCase() === 'true',
   sessionTtlDays: num(process.env.TUTOR_SESSION_TTL_DAYS, 30),
 
@@ -86,7 +69,6 @@ export const env = {
   tlsCert: process.env.TUTOR_TLS_CERT,
   tlsKey: process.env.TUTOR_TLS_KEY,
 
-  /** VAPID contact for Web Push (a `mailto:` or `https:` URL). */
   pushSubject: process.env.TUTOR_PUSH_SUBJECT ?? 'mailto:push@localhost',
 
   defaultRoles: {

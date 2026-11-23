@@ -1,10 +1,3 @@
-/**
- * Worn equipment, crafted gear instances and saved gear sets.
- *
- * `gear_instances` is the only record of the equipment a member owns: how many
- * of a piece they have is how many instances of it exist (worn ones included).
- */
-
 import type { UserId, GearInstanceId, GearSetId } from '../../ids'
 import { and, count, eq, isNull } from 'drizzle-orm'
 import { rollGearStats, statsOf } from '../../game/gear'
@@ -40,8 +33,6 @@ function clearEquipment(db: Db, userId: UserId, slot: string): void {
     .run()
 }
 
-// --- crafted gear instances + saved sets -------------------------------------
-
 export interface GearInstanceRow {
   id: GearInstanceId
   userId: UserId
@@ -49,7 +40,6 @@ export interface GearInstanceRow {
   slot: string
   quality: string
   statsJson: string
-  /** JSON array of band ids enchanted onto the piece (docs §13.5.3). */
   enchantJson: string
   armour: number
   power: number
@@ -95,7 +85,6 @@ function gearValues(gearId: GearInstanceId, row: NewGearInstance) {
   }
 }
 
-/** Replaces a piece's enchant list (a JSON array of band ids). */
 export function setGearInstanceEnchant(
   db: Db,
   userId: UserId,
@@ -114,7 +103,6 @@ export function deleteGearInstance(db: Db, userId: UserId, id: GearInstanceId): 
     .run()
 }
 
-/** How many pieces of one equipment item the member owns, worn or not. */
 export function countGearPieces(db: Db, userId: UserId, itemId: string): number {
   const row = db
     .select({ n: count() })
@@ -124,10 +112,6 @@ export function countGearPieces(db: Db, userId: UserId, itemId: string): number 
   return row?.n ?? 0
 }
 
-/**
- * Adds one owned piece. With `rand` it is a crafted roll (quality and affixes);
- * without, the item's plain base piece (common, base stats).
- */
 export function addGearPiece(
   db: Db,
   userId: UserId,
@@ -150,24 +134,17 @@ export function addGearPiece(
 
 const QUALITY_ORDER: readonly string[] = ['common', 'uncommon', 'rare', 'epic']
 
-/**
- * Removes up to `n` owned pieces of an item: spare ones before worn ones, the
- * worst roll first. A worn piece that has to go leaves its slot empty.
- */
 export function removeGearPieces(db: Db, userId: UserId, itemId: string, n: number): void {
   const rank = (g: { quality: string }) => QUALITY_ORDER.indexOf(g.quality)
   const spare = spareGearPieces(db, userId, itemId).sort((a, b) => rank(a) - rank(b))
-  // Only spare pieces are ever spent: what a member is wearing is not material.
   for (const g of spare.slice(0, Math.max(0, n))) deleteGearInstance(db, userId, g.id)
 }
 
-/** The member's pieces of an item that are not being worn. */
 export function spareGearPieces(db: Db, userId: UserId, itemId: string) {
   const worn = new Set(listEquipment(db, userId).map((e) => e.instanceId))
   return listGearInstances(db, userId).filter((g) => g.itemId === itemId && !worn.has(g.id))
 }
 
-/** Worn rows that predate gear instances (every member's): no piece behind them. */
 export function listUnlinkedEquipment(db: Db) {
   return db.select().from(equipment).where(isNull(equipment.instanceId)).all()
 }

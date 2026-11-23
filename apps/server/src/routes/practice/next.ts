@@ -1,11 +1,3 @@
-/**
- * `POST /api/practice/next` — serve the next drill (docs/DESIGN.md §13.6, §13.7).
- *
- * The handler is orchestration only: the action gate, the deck the request
- * points at, the day's budget and the exercise pick each live in their own small
- * function below.
- */
-
 import { toDeckId, toCardId, type UserId, type DeckId, type CardId } from '../../ids'
 import type { ServerCard } from '../../db/repo'
 import type { Card, ExerciseContext, ExerciseDef, ExerciseInstance } from '@tutor/core'
@@ -37,16 +29,13 @@ import {
 } from './select'
 import { idField, jsonBody, str } from '../body'
 
-/** The request body of a "next drill" call. */
 interface NextBody extends ActionRequest {
   deckId?: DeckId
   exerciseId?: string
   lessonId?: string
-  /** Drill this card specifically (a targeted drill; the budget still applies). */
   cardId?: CardId
 }
 
-/** The budget, the chosen card and the lesson the header should follow. */
 interface Served {
   data: LoadedCards
   budget: StudyBudget
@@ -55,7 +44,6 @@ interface Served {
   error?: GuardError
 }
 
-/** Reads a "next drill" request: which action, lesson, deck or card to serve. */
 function readNextBody(body: Record<string, unknown>): NextBody {
   return {
     actionId: str(body, 'actionId'),
@@ -83,7 +71,6 @@ async function nextHandler(c: Context<AppEnv>) {
   return resolveAndServe(c, { deps, user, body, prefs, deckId: deck.deckId, action: gate.action })
 }
 
-/** A validated request, ready to resolve its card and drill. */
 interface NextCall {
   deps: Deps
   user: PublicUser
@@ -111,7 +98,6 @@ async function resolveAndServe(c: Context<AppEnv>, call: NextCall) {
   })
 }
 
-/** The deck the drill is scoped to: lesson > action > explicit > active deck. */
 function resolveDeck(
   deps: Deps,
   user: PublicUser,
@@ -140,13 +126,11 @@ function lessonDeck(
     : { error: { status: 404, body: { error: 'unknown lesson' } } }
 }
 
-/** The deck a choose-input action pins its drills to, if any. */
 function deckForAction(deps: Deps, userId: UserId, action?: ActionDef): DeckId | undefined {
   if (!action?.deckLevel) return undefined
   return listDecks(deps.db).find((d) => d.level === action.deckLevel)?.id
 }
 
-/** The budget for the deck's cards, and the card it still allows. */
 function resolveTarget(
   deps: Deps,
   user: PublicUser,
@@ -175,7 +159,6 @@ interface PickReq {
   deckIds: CardId[]
 }
 
-/** The card to serve, `'card not found'` for a bad target, else undefined (done). */
 function pickCard(req: PickReq): ServerCard | undefined | 'card not found' {
   const { deps, user, body, data, budget, deckIds } = req
   const allowed = allowedCardIds(deckIds, data, budget)
@@ -196,12 +179,6 @@ function deckCardIds(data: LoadedCards, deckId: DeckId | undefined): CardId[] {
   return cards.map((c) => c.id)
 }
 
-/**
- * Today's budget for the deck's cards. The budget is a goal, not a wall: if it
- * blocks the very next card while the deck still has one to give (a due card or
- * a new word), raise today's allowance and keep going — "done" waits for a deck
- * with nothing left. A targeted drill is exempt.
- */
 function budgetForDeck(
   deps: Deps,
   userId: UserId,
@@ -221,14 +198,12 @@ function budgetForDeck(
   return studyBudget(deps.db, userId, opts.now, data)
 }
 
-/** The cards the budget still allows: new cards draw new, the rest draw reviews. */
 function allowedCardIds(deckIds: CardId[], data: LoadedCards, budget: StudyBudget): CardId[] {
   const allowNew = budget.newUnlimited || budget.newRemaining > 0
   const allowReview = budget.reviewsUnlimited || budget.reviewsRemaining > 0
   return deckIds.filter((id) => (data.srs.has(id) ? allowReview : allowNew))
 }
 
-/** Everything the exercise pick needs once the request has been validated. */
 interface ServeCardReq {
   deps: Deps
   user: PublicUser
@@ -284,7 +259,6 @@ async function buildCtx(
   }
 }
 
-/** Words the learner has *met* (introduced or reviewed), for n+1 examples. */
 function metWords(deps: Deps, user: SessionUser, data: LoadedCards, card: Card): string[] {
   const introduced = introducedCardIds(deps.db, user.id)
   const met = new Set(knownWords(deps.db, user.id, data))
@@ -308,7 +282,6 @@ function actionSummary(action?: ActionDef) {
   }
 }
 
-/** The exercise pick, after the request has been validated. */
 interface DrillRequest {
   deps: Deps
   user: PublicUser
@@ -320,13 +293,6 @@ interface DrillRequest {
   disabled: ReadonlySet<string>
 }
 
-/**
- * Picks the exercise to serve. First exposure: a card with no SRS state that has
- * not been introduced yet gets the "meet the word" step; the learner taps
- * Continue, then the same card comes back as a normal drill. Only word cards get
- * that step — sentence and grammar cards are built from known words (n+1).
- * Returns no drill available as the message to show.
- */
 async function serveDrill(req: DrillRequest): Promise<ExerciseInstance | string> {
   const { deps, user, card, ctx } = req
   const pick = { ctx, quiet: req.quiet, disabled: req.disabled }
@@ -345,7 +311,6 @@ async function serveDrill(req: DrillRequest): Promise<ExerciseInstance | string>
   return chosen.generate(ctx)
 }
 
-/** A first-exposure word gets the "meet the word" step before any drill. */
 function needsIntro(req: DrillRequest): boolean {
   if (req.exerciseId) return false
   const teachable = !req.card.payload?.template || req.card.payload.template === 'vocab'
@@ -353,7 +318,6 @@ function needsIntro(req: DrillRequest): boolean {
   return !introducedCardIds(req.deps.db, req.user.id).has(req.card.id)
 }
 
-/** A voice card can't be forced while quiet, nor a kind the learner turned off. */
 function isBlocked(def: ExerciseDef<unknown>, req: DrillRequest): boolean {
   return (
     def.temporarilyDisabled || (req.quiet && def.modality === 'voice') || req.disabled.has(def.id)

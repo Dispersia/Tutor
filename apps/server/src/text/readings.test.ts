@@ -48,14 +48,11 @@ test('storedReadings agrees with the plain converter on the whole lexicon', () =
 })
 
 test('withReading replaces the reading under the right key', () => {
-  // A pinyin answer on a Zhuyin deck is converted, never stored as Latin letters.
   expect(withReading({ zhuyin: 'ㄏㄠˇ' }, { targetLang: 'zh', reading: 'nǐ hǎo' })).toEqual({
     zhuyin: 'ㄋㄧˇ ㄏㄠˇ',
   })
-  // A pinyin deck keeps pinyin under `pinyin`, not under `zhuyin`.
   const pinyin = { targetLang: 'zh', reading: 'nǐ hǎo', script: 'pinyin' }
   expect(withReading({ pinyin: 'hǎo' }, pinyin)).toEqual({ pinyin: 'nǐ hǎo' })
-  // Cantonese in a native script moves keys without leaving the old one behind.
   expect(withReading({ reading: 'nei5' }, { targetLang: 'yue', reading: 'ㄋㄟˇ' })).toEqual({
     zhuyin: 'ㄋㄟˇ',
   })

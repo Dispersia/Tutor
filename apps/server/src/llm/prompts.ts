@@ -1,14 +1,3 @@
-/**
- * The shared pieces of every prompt the app sends to a language model
- * (docs/DESIGN.md §10.3): language names, the script rule, and the system
- * prompts for chat and grading.
- *
- * Written for small models. Each prompt says who the model is, what it gets,
- * what to return, and the few rules that matter — once, as positive
- * instructions. A rule that only applies to some languages is only attached for
- * those languages: a model told about Zhuyin while teaching Japanese follows it.
- */
-
 import type { Role } from '../env'
 import type { ChatMessage } from './openrouter'
 
@@ -26,14 +15,11 @@ const LANG_NAMES: Record<string, string> = {
   ru: 'Russian',
 }
 
-/** Human-readable language name for a short code ('en' -> 'English'). */
 export const langName = (code: string | null | undefined): string =>
   (code && LANG_NAMES[code]) || code || 'English'
 
-/** How a deck (or, with no deck, the app's default) writes the target language. */
 export interface ScriptPrefs {
   variant?: 'traditional' | 'simplified'
-  /** `zhuyin` | `pinyin` for Chinese, `kana` | `romaji` for Japanese. */
   readingScript?: string
 }
 
@@ -44,11 +30,6 @@ const READING_NAMES: Record<string, string> = {
   romaji: 'romaji',
 }
 
-/**
- * The one script rule for a target language: which characters to write and what
- * a reading looks like. Empty for a language with nothing to pin down. The app's
- * defaults are Traditional characters with Zhuyin, and kana for Japanese.
- */
 export function scriptRule(targetLang: string | null | undefined, prefs: ScriptPrefs = {}): string {
   const script = readingScriptOf(targetLang, prefs)
   const reading = script
@@ -57,7 +38,6 @@ export function scriptRule(targetLang: string | null | undefined, prefs: ScriptP
   return [characterRule(targetLang, prefs), reading].filter(Boolean).join(' ')
 }
 
-/** Which characters to write — the half of the script rule that matters for prose. */
 export function characterRule(
   targetLang: string | null | undefined,
   prefs: ScriptPrefs = {},
@@ -70,7 +50,6 @@ export function characterRule(
   return `Write ${langName(targetLang)} in ${chars}.`
 }
 
-/** Cantonese has no default reading script: only a deck that names one gets the clause. */
 function readingScriptOf(
   targetLang: string | null | undefined,
   prefs: ScriptPrefs,
@@ -81,11 +60,6 @@ function readingScriptOf(
   return undefined
 }
 
-/**
- * Feedback policy for a grader: the learner has to be able to *read* the
- * correction, so it is written in their native language even when the practised
- * text is in the target language.
- */
 export const NATIVE_FEEDBACK_RULE = (
   nativeLang: string | null | undefined,
   targetLang?: string | null,
@@ -98,10 +72,6 @@ export const NATIVE_FEEDBACK_RULE = (
   )
 }
 
-/**
- * A one-line reminder appended to a grading request, so the language rule is the
- * last thing a small model reads (it otherwise drifts into the target language).
- */
 export const NATIVE_FEEDBACK_REMINDER = (
   nativeLang: string | null | undefined,
   targetLang?: string | null,
@@ -110,19 +80,12 @@ export const NATIVE_FEEDBACK_REMINDER = (
   (targetLang ? `, not in ${langName(targetLang)}` : '') +
   '.'
 
-/** Who the model is talking to and about, for the chat and grading prompts. */
 export interface Learner {
   nativeLang: string | null | undefined
   targetLang: string | null | undefined
-  /** Free text from the profile ("beginner", "HSK 2"); a beginner when unset. */
   level?: string | null
 }
 
-/**
- * The conversation tutor. Its reply is spoken aloud sentence by sentence, so the
- * prompt asks for plain speakable text: markup, emoji and bracketed readings are
- * read out literally (or garbled) by the speech model.
- */
 export function conversationSystem(learner: Learner): string {
   const target = langName(learner.targetLang)
   const native = langName(learner.nativeLang)
@@ -142,7 +105,6 @@ export function conversationSystem(learner: Learner): string {
   )
 }
 
-/** The system prompt for the answer graders (translate, converse, pronunciation). */
 export function judgeSystem(learner: Learner): string {
   return lines(
     'You grade one answer from a language learner. Return only the JSON the schema asks for.',
@@ -161,7 +123,6 @@ const ROLE_TASK: Record<Exclude<Role, 'conversation'>, string> = {
     'You translate for a language learner: give the natural meaning of the whole phrase, briefly.',
 }
 
-/** The system message for a chat-style call in a given role. */
 export function systemPrompt(role: Role, learner: Learner, extra?: string): ChatMessage[] {
   const base =
     role === 'conversation'
@@ -176,7 +137,6 @@ export function systemPrompt(role: Role, learner: Learner, extra?: string): Chat
 
 const bullet = (rule: string): string | undefined => (rule ? `- ${rule}` : undefined)
 
-/** Joins the parts that are present ('' keeps a blank line; false/undefined drop). */
 function lines(...parts: (string | false | undefined)[]): string {
   return parts.filter((p): p is string => typeof p === 'string').join('\n')
 }

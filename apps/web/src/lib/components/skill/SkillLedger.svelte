@@ -1,6 +1,4 @@
 <script lang="ts">
-  /** The profession ledger: level, effect, XP, rigs and the cross-training links. */
-
   import { href } from '#lib/paths'
   import { ACCENT, accentStyle } from '#lib/theme'
   import { pct } from '#lib/skillview'
@@ -59,8 +57,6 @@
   {/if}
 </section>
 
-<!-- Cross-training links, shown only once the talent is actually taken: the
-     talent rail is where a talent describes itself. ----------------------->
 {#if skill.talent.synergy.taken.length}
   <a
     href={href(`/skills/${skill.talent.synergy.target}`)}

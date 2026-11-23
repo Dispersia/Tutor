@@ -23,7 +23,6 @@ function forwardedHeaders(c: Context<AppEnv>): Headers {
   return headers
 }
 
-/** Only the response headers the client actually needs. */
 function responseHeaders(res: Response): Record<string, string> {
   const out: Record<string, string> = {}
   const type = res.headers.get('content-type')
@@ -34,8 +33,6 @@ function responseHeaders(res: Response): Record<string, string> {
 }
 
 export function registerSpeech(app: App) {
-  // Proxy the speech gateway through the app so the client only ever talks to us,
-  // and so every call keeps the sidecar awake (DESIGN §8).
   app.get('/api/speech/health', (c) => healthHandler(c))
   app.post('/api/speech/wake', (c) => wakeHandler(c))
   app.post('/api/speech/unload', (c) => unloadHandler(c))
@@ -50,13 +47,10 @@ async function healthHandler(c: Context<AppEnv>) {
 }
 
 async function wakeHandler(c: Context<AppEnv>) {
-  // Load the voice models too, not just the process: a healthy gateway with no
-  // models resident still pays the load cost on the first play/record.
   await c.get('deps').supervisor.warm()
   return c.json(await c.get('deps').supervisor.status())
 }
 
-/** Admin only: the gateway is shared, so stopping it cuts off every member mid-use. */
 async function unloadHandler(c: Context<AppEnv>) {
   const denied = adminOnly(c)
   if (denied) return denied
@@ -65,9 +59,7 @@ async function unloadHandler(c: Context<AppEnv>) {
   try {
     const r = await fetch(`${sup.url}/admin/unload`, { method: 'POST' })
     result = await r.json()
-  } catch {
-    // gateway may already be down
-  }
+  } catch {}
   await sup.stop()
   return c.json({ ok: true, result })
 }

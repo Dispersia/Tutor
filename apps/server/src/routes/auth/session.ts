@@ -1,5 +1,3 @@
-/** Auth sessions: the signed-in user and starting a session (docs/DESIGN.md §12.5). */
-
 import type { UserId } from '../../ids'
 import type { Context } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
@@ -8,15 +6,10 @@ import { deleteAuthSession, getAuthSessionUser, insertAuthSession } from '../../
 import type { AppEnv } from '../../context'
 import { env } from '../../env'
 
-/**
- * Scope the cookie to the app's mount: behind a shared gateway hostname
- * (`tailscale serve /tutor`) a `Path=/` cookie is sent to every other app there.
- */
 const COOKIE_PATH = env.basePath || '/'
 
 function isHttps(c: Context<AppEnv>): boolean {
   if (new URL(c.req.url).protocol === 'https:') return true
-  // behind a TLS-terminating proxy (Caddy / `tailscale serve`)
   return c.req.header('x-forwarded-proto')?.split(',')[0]?.trim() === 'https'
 }
 
@@ -44,6 +37,5 @@ export function endSession(c: Context<AppEnv>): void {
   const token = getCookie(c, SESSION_COOKIE)
   if (token) deleteAuthSession(c.get('deps').db, tokenId(token))
   deleteCookie(c, SESSION_COOKIE, { path: COOKIE_PATH })
-  // Sessions started before the cookie was scoped to the mount used `Path=/`.
   if (COOKIE_PATH !== '/') deleteCookie(c, SESSION_COOKIE, { path: '/' })
 }

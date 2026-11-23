@@ -1,6 +1,4 @@
 <script lang="ts">
-  /** The account panel: display name, the signed-in identity and sign-out. */
-
   import { accentStyle, ACCENT } from '#lib/theme'
   import { session } from '#lib/session.svelte'
 

@@ -8,7 +8,6 @@ test('readingsFor stores Zhuyin for Mandarin and kana for Japanese', () => {
 })
 
 test('readingsFor stores nothing rather than an empty or unreadable reading', () => {
-  // These used to come back as `{ zhuyin: '' }` and as Zhuyin with `?` marks in it.
   expect(readingsFor('zh', '')).toEqual({})
   expect(readingsFor('ja', '', '')).toEqual({})
   expect(readingsFor('zh', 'ni3 hao3')).toEqual({})

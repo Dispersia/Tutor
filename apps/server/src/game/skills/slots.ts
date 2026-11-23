@@ -1,7 +1,3 @@
-/**
- * Worn slots and the combat-style ↔ armour/stat mapping (docs/DESIGN.md §13.5).
- */
-
 import type { CombatStyle, Slot } from './types'
 
 export const SLOTS: { id: Slot; label: string; icon: string; family: Slot[] }[] = [
@@ -20,12 +16,10 @@ export const SLOTS: { id: Slot; label: string; icon: string; family: Slot[] }[] 
   { id: 'offHand', label: 'Off hand', icon: '🛡️', family: ['offHand'] },
 ]
 
-/** Which slots an item may be worn in (rings and trinkets share a family). */
 export function slotFamily(slot: Slot): Slot[] {
   return SLOTS.find((s) => s.id === slot)?.family ?? [slot]
 }
 
-/** The combat style a weapon tag trains. */
 export function combatStyleForTags(tags: string[] | undefined): CombatStyle {
   if (tags?.includes('bow')) return 'ranged'
   if (tags?.includes('staff')) return 'magic'

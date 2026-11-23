@@ -1,10 +1,6 @@
-/** Listen and type: transcribe the spoken word. */
-
 import type { ExerciseDef } from '@tutor/core'
 import { feedbackFor, gradeText } from '../grading'
 import { displayReading, readingsOf } from '../shared'
-
-// --- listen & type -----------------------------------------------------------
 
 export const typeListen: ExerciseDef<string> = {
   id: 'type_listen',

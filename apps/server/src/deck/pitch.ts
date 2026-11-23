@@ -1,10 +1,3 @@
-/**
- * Pitch-accent backfill (docs/DESIGN.md §11.1). A deck asks the generator for
- * pitch contours when it is built, but cards made before that — an Anki import,
- * an earlier batch — carry none. This asks the generator for the contour of the
- * cards that lack one, so an existing deck can be annotated without rebuilding.
- */
-
 import type { UserId, DeckId } from '../ids'
 import { parsePitchContour, pitchOf, type Card, type PitchContour } from '@tutor/core'
 import type { Db } from '../db/client'
@@ -12,22 +5,13 @@ import { listCards, updateCard, type ServerCard } from '../db/repo'
 import type { OpenRouter, ReasoningEffort } from '../llm/openrouter'
 import { kanjiumContour } from './kanjium'
 
-/** One word to annotate: the target-language text and its native reading. */
 export interface PitchWord {
-  /** The card's `back` (the target-language word). */
   word: string
-  /** Its reading (kana for Japanese, Zhuyin for Chinese) — helps the mora split. */
   reading: string
 }
 
-/** Resolves a pitch contour per word (keyed by `word`). Missing = unsure. */
 export type PitchFetcher = (words: PitchWord[]) => Promise<Map<string, PitchContour>>
 
-/**
- * A contour from the bundled Japanese dictionary (`kanjium.ts`) — offline, no
- * key, and authoritative where it has an entry. Other languages resolve nothing
- * here (their tone contours still come from the generator).
- */
 export function dictionaryFetcher(targetLang: string): PitchFetcher {
   return async (words) => {
     const out = new Map<string, PitchContour>()
@@ -40,7 +24,6 @@ export function dictionaryFetcher(targetLang: string): PitchFetcher {
   }
 }
 
-/** Runs fetchers in order; the first to resolve a word wins, later ones fill gaps. */
 export function composeFetchers(...fetchers: PitchFetcher[]): PitchFetcher {
   return async (words) => {
     const out = new Map<string, PitchContour>()
@@ -55,17 +38,11 @@ export function composeFetchers(...fetchers: PitchFetcher[]): PitchFetcher {
   }
 }
 
-/** A word card. Cards made outside the planner carry no template: the type decides. */
 function isWordCard(card: Card): boolean {
   const template = card.payload?.template
   return template === undefined ? card.type === 'vocab' : template === 'vocab'
 }
 
-/**
- * The cards a backfill should annotate: word cards with a reading, and (unless
- * `force`) only the ones that still lack a contour. A sentence or grammar card
- * has no single contour, so asking for one only spends tokens on a guess.
- */
 export function pitchTargets<C extends Card>(cards: C[], opts: { force?: boolean } = {}): C[] {
   return cards.filter(
     (card) =>
@@ -75,29 +52,14 @@ export function pitchTargets<C extends Card>(cards: C[], opts: { force?: boolean
   )
 }
 
-/** Words per annotator call: small enough to fit any model's output budget. */
 export const PITCH_BATCH = 40
 
 export interface PitchBackfillResult {
-  /** Cards that received a contour. */
   updated: number
-  /** Every card in the deck, so the caller can show progress. */
   total: number
-  /** Annotator batches that failed and were skipped (their cards stay unannotated). */
   failedBatches?: number
 }
 
-/**
- * Annotate a deck's cards that lack a pitch contour, keeping existing ones.
- * With `force`, re-annotates every card that has a reading (used to replace
- * wrong contours with dictionary-correct ones). Shared by the HTTP route and
- * the one-off backfill script.
- *
- * The dictionary's contours are written first, so nothing the annotator does
- * afterwards can lose them. The rest goes to `fetcher` in batches of
- * {@link PITCH_BATCH}, each written as it returns; a batch that fails is
- * skipped. Only when nothing at all could be annotated is the failure thrown.
- */
 export async function backfillDeckPitch(
   db: Db,
   userId: UserId,
@@ -123,7 +85,6 @@ interface BatchRun {
   error?: Error
 }
 
-/** Annotates the cards batch by batch, writing each batch as it returns. */
 async function annotateBatches(
   io: { db: Db; userId: UserId; fetcher: PitchFetcher },
   cards: ServerCard[],
@@ -209,7 +170,6 @@ function systemFor(targetLang: string): string {
   return targetLang === 'ja' ? JAPANESE_SYSTEM : TONE_SYSTEM
 }
 
-/** The user message: the batch of words, with their readings as hints. */
 export function pitchPrompt(words: PitchWord[]): string {
   const list = words
     .map((w) => (w.reading ? `- ${w.word} [${w.reading}]` : `- ${w.word}`))
@@ -217,7 +177,6 @@ export function pitchPrompt(words: PitchWord[]): string {
   return `Annotate these words:\n${list}`
 }
 
-/** An OpenRouter-backed pitch annotator for a deck's language. */
 export function llmPitchFetcher(
   or: OpenRouter,
   model: string,

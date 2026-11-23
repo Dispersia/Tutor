@@ -1,5 +1,3 @@
-/** Background deck builds: the in-flight map and the runner. */
-
 import type { UserId, DeckId } from '../ids'
 import { updateDeckSettings } from '../db/repo'
 import type { Db } from '../db/client'
@@ -7,34 +5,16 @@ import type { Planner } from './plan'
 import { fillDeck, type FillDeckOptions } from './build'
 import type { DeckContext } from './context'
 
-/**
- * In-flight background builds, keyed by deck id, so a caller (or a test) can
- * wait for the work the HTTP response did not. Entries clear when they finish.
- */
 const builds = new Map<DeckId, Promise<void>>()
 
-/** True while a background build is filling this deck. */
 export function isDeckBuilding(deckId: DeckId): boolean {
   return builds.has(deckId)
 }
 
-/** Waits for a deck's background build, resolving at once when none is running. */
 export function awaitDeckBuild(deckId: DeckId): Promise<void> {
   return builds.get(deckId) ?? Promise.resolve()
 }
 
-/**
- * Fills a deck in the background. The HTTP handler returns as soon as the deck
- * exists, and this keeps generating cards in batches, writing the growth cursor
- * after each one so the UI can watch the deck fill. The `building` flag is the
- * learner-visible status; it clears on success or error (and a restart clears
- * it too — see `clearDeckBuilds`).
- *
- * `base` places the run inside the deck's source list — an import starts at 0,
- * a resume continues from the cursor it stopped at. `base.onFinish` runs after
- * the run settles (success or error), e.g. to queue the deck's audio recording.
- */
-/** One background run: the deck's rules, the words to fill and its progress base. */
 export interface StartDeckBuildRequest {
   ctx: DeckContext
   opts: FillDeckOptions
@@ -62,7 +42,6 @@ interface Range {
   total: number
 }
 
-/** The run itself: fill in batches, then clear the status flag. */
 async function runBuild(
   db: Db,
   userId: UserId,
@@ -80,7 +59,6 @@ async function runBuild(
   }
 }
 
-/** The settings a finished run writes: the cursor settled, the flag cleared. */
 function builtSettings(range: Range, count: number) {
   return {
     building: false,
@@ -99,7 +77,6 @@ interface ProgressReq {
   total: number
 }
 
-/** Forwards progress to the caller and advances the deck's stored cursor. */
 function progressWriter(req: ProgressReq) {
   return (built: number, chunkTotal: number) => {
     req.opts.onProgress?.(built, chunkTotal)

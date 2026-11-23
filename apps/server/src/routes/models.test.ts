@@ -66,13 +66,10 @@ test('the catalogue is fetched once per base URL + key, not once per request', a
   const app = appWith('key-one')
   expect(await ids(app)).toEqual(['a/model', 'b/model'])
   expect(await ids(app, '?q=b')).toEqual(['b/model'])
-  // a filtered or sorted reply never changes what the next caller gets
   expect(await ids(app)).toEqual(['a/model', 'b/model'])
-  // a second app (a fresh client per request is the normal case) shares the cache
   expect(await ids(appWith('key-one'))).toEqual(['a/model', 'b/model'])
   expect(hits).toEqual(['/models/user Bearer key-one'])
 
-  // another key, or no key, is its own catalogue
   await ids(appWith('key-two'))
   await ids(appWith(undefined))
   expect(hits.slice(1)).toEqual(['/models/user Bearer key-two', '/models -'])

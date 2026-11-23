@@ -30,8 +30,6 @@ test('makeAssessor sends the language and expected text, without a hotword hint'
     expect(calls[0]!.url).toContain('/v1/assess')
     expect(calls[0]!.form.get('language')).toBe('ja')
     expect(calls[0]!.form.get('text')).toBe('なに')
-    // The deck vocabulary must never reach the decoder as hotwords: Whisper would
-    // read it back into the transcript on a short attempt.
     expect(calls[0]!.form.get('hint')).toBeNull()
   } finally {
     globalThis.fetch = orig

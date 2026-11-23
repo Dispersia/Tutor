@@ -13,7 +13,6 @@
   const newWord = $derived((instance.data.newWord as string) ?? '')
   const answerLang = $derived((instance.data.answerLang as string) ?? undefined)
 
-  // Which bank tiles are currently placed, by bank index (so repeats work).
   let picked = $state<number[]>([])
   let typing = $state(false)
   let typed = $state('')

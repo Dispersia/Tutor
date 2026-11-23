@@ -1,6 +1,4 @@
 <script lang="ts">
-  /** The active fight: the monster and player health bars, with the flee action. */
-
   import { ACCENT } from '#lib/theme'
   import Icon from '#lib/components/Icon.svelte'
   import type { EncounterDTO, HitResult } from '#lib/combat'

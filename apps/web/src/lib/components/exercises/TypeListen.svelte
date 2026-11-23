@@ -25,15 +25,11 @@
     err = ''
     playing = true
     try {
-      // Pre-recorded voices stream from the server (no TTS call). If that is
-      // unavailable, fall back to the live gateway so the card still speaks.
       if (cardId) {
         try {
           await speakCard(cardId)
           return
-        } catch {
-          // fall through to live TTS
-        }
+        } catch {}
       }
       await speak(audioText, speechOpts(language))
     } catch (e) {

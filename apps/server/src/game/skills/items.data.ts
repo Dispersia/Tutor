@@ -1,13 +1,7 @@
-/**
- * The item catalogue (docs/DESIGN.md §13.5) — content only.
- */
-
 import { BANDS } from '../bands'
 import type { ArmourType, CombatStyle, GearStats, ItemDef, Slot } from './types'
 import { GEM_TIERS, GEM_TYPES, dustId, gemId, gemRingStats, uncutGemId } from './gems'
 import { ESSENCES, essenceId } from './essences'
-
-// --- materials ---------------------------------------------------------------
 
 function item(
   id: string,
@@ -20,11 +14,6 @@ function item(
   return { id, name, icon, tier, description, ...extra }
 }
 
-/**
- * A craftable piece of gear. `stats` are the guaranteed base stats; crafting
- * rolls extra affixes on top (see `game/gear.ts`). `armour` and `power` are the
- * flat defensive/offensive values the older combat maths already used.
- */
 function gear(
   id: string,
   name: string,
@@ -46,7 +35,6 @@ function gear(
 }
 
 export const ITEMS: ItemDef[] = [
-  // ores + essence
   item('copper_ore', 'Copper ore', '🟠', 'raw'),
   item('tin_ore', 'Tin ore', '⚪', 'raw'),
   item('iron_ore', 'Iron ore', '🔘', 'raw'),
@@ -54,31 +42,24 @@ export const ITEMS: ItemDef[] = [
   item('mythril_ore', 'Mythril ore', '🔵', 'raw'),
   item('adamant_ore', 'Adamant ore', '🔷', 'raw'),
   item('rune_essence', 'Rune essence', '🔷', 'raw'),
-  // logs
   item('yew_log', 'Yew log', '🪵', 'raw'),
   item('oak_log', 'Oak log', '🪵', 'raw'),
   item('willow_log', 'Willow log', '🪵', 'raw'),
   item('maple_log', 'Maple log', '🪵', 'raw'),
-  // fish
   item('raw_shrimp', 'Raw shrimp', '🦐', 'raw'),
   item('raw_trout', 'Raw trout', '🐟', 'raw'),
   item('raw_lobster', 'Raw lobster', '🦞', 'raw'),
-  // herbs
   item('guam', 'Guam', '🌿', 'raw'),
   item('tarromin', 'Tarromin', '🌿', 'raw'),
   item('harralander', 'Harralander', '🌿', 'raw'),
   item('ranarr', 'Ranarr', '🌿', 'raw'),
-  // cloth fibres
   item('wool', 'Wool', '🧶', 'raw'),
   item('silk', 'Silk', '🕸️', 'raw'),
-  // refined
   item('bronze_bar', 'Bronze bar', '🟫', 'refined'),
   item('iron_bar', 'Iron bar', '⬜', 'refined'),
   item('steel_bar', 'Steel bar', '🔩', 'refined'),
   item('mythril_bar', 'Mythril bar', '🔹', 'refined'),
   item('adamant_bar', 'Adamant bar', '🔷', 'refined'),
-  // band reagents (§13.5.3): deep salvage yields one, Enchanting spends it to put
-  // the band's signature stat on a higher-tier piece.
   ...BANDS.map((b) =>
     item(
       b.reagent,
@@ -88,7 +69,6 @@ export const ITEMS: ItemDef[] = [
       `Enchants a piece with ${b.enchant.label}.`,
     ),
   ),
-  // ring bands (§13.5.3.1): Smithing forges the metal, Jewellery sets the gem.
   item('bronze_band', 'Bronze band', '💍', 'refined', 'A plain metal ring base.'),
   item('iron_band', 'Iron band', '💍', 'refined', 'A sturdier ring base.'),
   item('mythril_band', 'Mythril band', '💍', 'refined', 'A fine ring base for precious stones.'),
@@ -108,8 +88,6 @@ export const ITEMS: ItemDef[] = [
   item('nature_rune', 'Nature rune', '🍃', 'refined'),
   item('uncut_gem', 'Uncut gem', '💎', 'raw'),
   item('cut_gem', 'Cut gem', '💎', 'refined'),
-  // gems (§13.5.3.1): type = stat (ruby always crit), tier = ore. Rough → cut →
-  // set into a band or crushed to dust for Enchanting.
   ...GEM_TYPES.flatMap((g) =>
     GEM_TIERS.flatMap((t) => [
       item(
@@ -131,7 +109,6 @@ export const ITEMS: ItemDef[] = [
   ...GEM_TYPES.map((g) =>
     item(dustId(g.id), `${g.name} dust`, '✨', 'refined', `Enchants a piece with ${g.label}.`),
   ),
-  // essences (§13.5.3.2): what Distill yields, and what every enchant is built from.
   ...ESSENCES.map((e) =>
     item(essenceId(e.id), e.name, e.icon, 'refined', 'A distillation reagent.'),
   ),
@@ -143,7 +120,6 @@ export const ITEMS: ItemDef[] = [
   item('bones', 'Bones', '🦴', 'raw'),
   item('grace', 'Grace', '🕊️', 'other'),
   item('coins', 'Coins', '🪙', 'coin'),
-  // --- weapons (main hand) ---------------------------------------------------
   item('bronze_sword', 'Bronze sword', '🗡️', 'equipment', 'A melee weapon.', {
     slot: 'mainHand',
     tags: ['melee'],
@@ -226,7 +202,6 @@ export const ITEMS: ItemDef[] = [
     itemLevel: 2,
   }),
 
-  // --- plate armour (Smithing) ----------------------------------------------
   gear(
     'bronze_helm',
     'Bronze helm',
@@ -688,7 +663,6 @@ export const ITEMS: ItemDef[] = [
     },
   ),
 
-  // --- leather armour (Leatherworking) --------------------------------------
   gear(
     'leather_helm',
     'Leather hood',
@@ -874,7 +848,6 @@ export const ITEMS: ItemDef[] = [
     },
   ),
 
-  // --- cloth armour (Tailoring) ---------------------------------------------
   gear(
     'cloth_hood',
     'Cloth hood',
@@ -1073,8 +1046,6 @@ export const ITEMS: ItemDef[] = [
     },
   ),
 
-  // --- jewellery (Crafting + Enchanting) ------------------------------------
-  // A ring is a metal band + a gem; the gem's type sets the stat (§13.5.3.1).
   ...GEM_TYPES.flatMap((g) =>
     GEM_TIERS.map((t) =>
       item(

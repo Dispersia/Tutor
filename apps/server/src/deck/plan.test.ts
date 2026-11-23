@@ -12,7 +12,6 @@ test('stripMetaCommentary removes the model’s asides but keeps plain glosses',
   expect(stripMetaCommentary('I miss you. / I think about you.')).toBe(
     'I miss you. / I think about you.',
   )
-  // a leading "Translate:"/"Meaning:" is the model echoing its instruction
   expect(stripMetaCommentary('Translate: I guarantee.')).toBe('I guarantee.')
   expect(stripMetaCommentary('Meaning: to sleep')).toBe('to sleep')
 })
@@ -45,10 +44,8 @@ test('normalizePlan drops leaked reasoning and long rule dumps', () => {
       },
     ],
   })
-  // the leaked rule and the 300-char dump are dropped, the cards survive
   expect(cards[0]!.payload?.rule).toBeUndefined()
   expect(cards[1]!.payload?.explanation).toBeUndefined()
-  // a leading "Translate:" is stripped, the rest of the rule is kept
   expect(cards[2]!.front).toBe('to drink')
   expect(cards[2]!.payload?.rule).toBe('verb')
 })
@@ -56,7 +53,6 @@ test('normalizePlan drops leaked reasoning and long rule dumps', () => {
 test('normalizePlan drops cards whose text is only reasoning, or whose tokens do not match', () => {
   const cards = normalizePlan({
     cards: [
-      // clean vocab + sentence survive
       { template: 'vocab', front: 'I', back: '我', reading: 'ㄨㄛˇ' },
       {
         template: 'sentence',
@@ -64,14 +60,12 @@ test('normalizePlan drops cards whose text is only reasoning, or whose tokens do
         back: '我喝茶。',
         payload: { tokens: ['我', '喝', '茶'], gloss: 'I drink tea.' },
       },
-      // a front that is only the model's reasoning is not a translation
       {
         template: 'sentence',
         front: 'Note: skip this one',
         back: '我有。',
         payload: { tokens: ['我', '有'], gloss: 'I have it.' },
       },
-      // tokens that no longer rebuild the sentence are corrupt
       {
         template: 'sentence',
         front: 'I have it.',
@@ -113,7 +107,6 @@ test('stripMetaCommentary leaves ordinary words that happen to be markers', () =
   ]) {
     expect(stripMetaCommentary(plain)).toBe(plain)
   }
-  // a real trailing aside still goes, and the sentence keeps its full stop
   expect(stripMetaCommentary('He will come. Wait, 來 is not introduced yet')).toBe('He will come.')
   expect(stripMetaCommentary('to sleep - note: informal')).toBe('to sleep')
 })

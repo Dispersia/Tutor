@@ -1,9 +1,3 @@
-/**
- * The shared exercise context, assembled once. Practice's three surfaces and
- * combat all hand an `ExerciseContext` to an exercise definition; this is the one place that builds it, so a new
- * field (readings, known, distractors) is added once.
- */
-
 import type { UserId } from '../../ids'
 import type { ServerCard } from '../../db/repo'
 import type { Card, ExerciseContext } from '@tutor/core'
@@ -14,10 +8,6 @@ import { learnerOf, readingMap, type SessionUser } from './select'
 
 export { learnerOf, type SessionUser }
 
-/**
- * Whether to show native readings for a card. A deck-level override (set when
- * the deck was generated) wins over the learner's global study preference.
- */
 export function showReadingsFor(
   deps: Deps,
   userId: UserId,
@@ -29,19 +19,13 @@ export function showReadingsFor(
 }
 
 export interface ExerciseCtxOpts {
-  /** the words the learner knows (the card itself is appended) */
   known: Set<string>
-  /** a pre-loaded study-prefs row, when the handler already read it */
   prefs?: StudyPrefs
-  /** cards to build the reading map from (defaults to every card) */
   cardPool?: Card[]
-  /** a looser "met" set for first-exposure n+1 examples */
   seen?: string[]
-  /** how many same-language distractors to fetch for choice exercises */
   distractors?: number
 }
 
-/** Assembles the context every exercise definition reads (docs/DESIGN.md §11.2). */
 export function exerciseCtx(
   deps: Deps,
   user: SessionUser,

@@ -1,7 +1,4 @@
-/** Figures — the rank badge, the level seal and the HUD stat card. */
-
 @layer components {
-  /* rank badge — brass gold numerals in a stamped cell */
   .level-badge {
     min-width: 1.9rem;
     border-radius: 7px;
@@ -14,10 +11,6 @@
     background: var(--color-ink-900);
   }
 
-  /* The level seal — an indigo stamp for what you earned. The ring holds the
-     figure and nothing else: two lines of text inside a 64px circle left the
-     glyphs brushing the rim. The caption sits under the ring instead, so the
-     number has room to breathe and the label stays legible at any size. */
   .seal {
     --seal-accent: var(--color-seal-400);
     display: grid;
@@ -26,11 +19,7 @@
     border-radius: 50%;
     border: 2px solid color-mix(in oklab, var(--seal-accent) 75%, var(--color-ink-700));
     color: color-mix(in oklab, var(--seal-accent) 55%, var(--color-ink-100));
-    background: radial-gradient(
-      circle at 50% 30%,
-      color-mix(in oklab, var(--seal-accent) 28%, var(--color-ink-850)),
-      color-mix(in oklab, var(--seal-accent) 8%, var(--color-ink-900))
-    );
+    background: color-mix(in oklab, var(--seal-accent) 14%, var(--color-ink-850));
     box-shadow:
       0 0 0 4px color-mix(in oklab, var(--seal-accent) 10%, transparent),
       0 6px 16px -6px color-mix(in oklab, var(--seal-accent) 40%, transparent);
@@ -38,7 +27,6 @@
     font-variant-numeric: tabular-nums;
     line-height: 1;
   }
-  /* the caption under a seal: quiet, so the figure stays the loud part */
   .seal__label {
     margin-top: 0.3rem;
     font-size: 0.82rem;
@@ -49,7 +37,6 @@
     color: var(--color-ink-400);
   }
 
-  /* HUD stat: neutral panel with a serif figure */
   .stat-card {
     position: relative;
     border-radius: 16px;

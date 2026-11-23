@@ -1,6 +1,4 @@
 <script lang="ts">
-  /** The Anki import step 2: pick the language and the mapping, then build. */
-
   import type { AnkiInspection } from '#lib/exercises'
   import { ACCENT } from '#lib/theme'
   import { LANGUAGES, cell, langLabel } from '#lib/learnview'

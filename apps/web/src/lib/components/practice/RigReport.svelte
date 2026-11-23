@@ -1,6 +1,4 @@
 <script lang="ts">
-  /** The "rig powered" report shown after a drill that ran a machine (§13.5.1). */
-
   import { fmtClock, fmtInterval } from '#lib/idle'
   import type { SkillOutcome } from '#lib/skills'
 
@@ -17,9 +15,6 @@
   const remaining = $derived(idle.runFullAtCompletions - idle.completions)
 </script>
 
-<!-- The drill powered a machine: its rate and run length, plus how far it is
-     toward the run-length cap, so the learner can see when a rig is about done —
-     and when it is maxed and worth switching. -->
 <div class="panel panel-accent mb-3 p-3" style="--accent: {accent}">
   <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-xs">
     <span class="text-ink-300">
@@ -57,8 +52,6 @@
       {fmtClock(idle.maxRunSec)} run.
     </p>
   {/if}
-  <!-- The live-rig cap: only a couple of machines run at once, so drilling a
-       fresh action stops the rig closest to finishing. -->
   <p class="mt-2 text-xs text-ink-400">
     {rigsRunning}/{maxLiveRigs} rigs running — only two run at once.
     {#if stoppedName}

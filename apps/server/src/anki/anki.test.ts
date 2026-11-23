@@ -7,7 +7,6 @@ import { unzip } from './zip'
 
 const fixture = () => new Uint8Array(readFileSync(join(import.meta.dir, 'fixtures/sample.apkg')))
 
-/** A modern Anki package: zstd collection, WAL, custom `unicase` collation. */
 const modernFixture = () =>
   new Uint8Array(readFileSync(join(import.meta.dir, 'fixtures/modern-schema18.apkg')))
 
@@ -123,7 +122,6 @@ test('unzip inflates only the entries the filter asks for', async () => {
 
 test('unzip refuses an entry that inflates past the size cap', async () => {
   await expect(unzip(fixture(), { maxEntryBytes: 1000 })).rejects.toThrow(/larger than the 1000/)
-  // an entry that is filtered out is never opened, so its size does not matter
   const none = await unzip(fixture(), { maxEntryBytes: 1000, filter: () => false })
   expect(none.size).toBe(0)
 })

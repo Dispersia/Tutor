@@ -1,5 +1,3 @@
-/** JSON schemas the LLM judge answers against. */
-
 export const JUDGE_SCHEMA = {
   type: 'object',
   properties: {

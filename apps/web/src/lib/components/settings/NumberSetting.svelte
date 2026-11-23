@@ -1,6 +1,4 @@
 <script lang="ts">
-  /** A single numeric tuning knob: a small panel with one number field and Save. */
-
   import { accentStyle } from '#lib/theme'
 
   interface Props {

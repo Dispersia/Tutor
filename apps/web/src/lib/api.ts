@@ -11,40 +11,20 @@ export class ApiError extends Error {
 }
 
 interface Pending {
-  /** The mutation generation the request was started in. */
   gen: number
   promise: Promise<unknown>
 }
 
-/** In-flight GETs, so several screens opening together share one request. */
 const inflight = new Map<string, Pending>()
-/**
- * Bumped when a mutation starts and again when it settles. A GET started in an
- * older generation may carry pre-mutation data, so it is never joined and never
- * overwrites what a newer GET cached.
- */
 let generation = 0
-/** The generation of the GET that last wrote each path to the cache. */
 const written = new Map<string, number>()
 
 let unauthorized: (() => void) | null = null
 
-/**
- * Registers what to do when the server rejects the cookie (the session module
- * signs the member out). A callback, so this module never imports the session.
- */
 export function onUnauthorized(handler: (() => void) | null): void {
   unauthorized = handler
 }
 
-/**
- * fetch wrapper: JSON by default, cookie credentials, typed errors.
- *
- * GET responses are cached (see ./cache) so an SPA route change can render the
- * last known data at once, and a network failure falls back to that cache
- * instead of throwing — which keeps the app usable offline. Real HTTP errors
- * (401, 404, …) always surface so auth and not-found handling stay correct.
- */
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const method = (init.method ?? 'GET').toUpperCase()
   if (method !== 'GET') return mutate<T>(path, init)
@@ -58,7 +38,6 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   return entry.promise as Promise<T>
 }
 
-/** A non-GET: every GET in flight around it is stale from here on. */
 async function mutate<T>(path: string, init: RequestInit): Promise<T> {
   generation++
   try {
@@ -68,7 +47,6 @@ async function mutate<T>(path: string, init: RequestInit): Promise<T> {
   }
 }
 
-/** Runs one request; `gen` is the GET's generation, or null for a mutation. */
 async function runRequest<T>(path: string, init: RequestInit, gen: number | null): Promise<T> {
   const headers = new Headers(init.headers)
   if (typeof init.body === 'string' && !headers.has('content-type')) {
@@ -88,31 +66,22 @@ async function runRequest<T>(path: string, init: RequestInit, gen: number | null
   return data
 }
 
-/** Caches a GET unless a GET from a newer generation already did. */
 function cacheFresh(path: string, data: unknown, gen: number): void {
   if (gen < (written.get(path) ?? 0)) return
   written.set(path, gen)
   writeCache(path, data)
 }
 
-/** The typed error a non-2xx response becomes (its `error` field, or raw text). */
 async function apiError(path: string, res: Response): Promise<ApiError> {
   if (res.status === 401) signedOut(path)
   const text = await res.text().catch(() => '')
   let msg = text
   try {
     msg = (JSON.parse(text) as { error?: string }).error ?? text
-  } catch {
-    // keep raw text
-  }
+  } catch {}
   return new ApiError(res.status, msg || res.statusText)
 }
 
-/**
- * An expired cookie: forget the cached data and tell the session, so the layout
- * sends the member to the login screen. The auth routes answer 401 for their
- * own reasons (a wrong password, the `/me` probe) and handle it themselves.
- */
 function signedOut(path: string): void {
   if (path.startsWith('/api/auth/')) return
   clearCache()

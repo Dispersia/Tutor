@@ -1,8 +1,4 @@
-/** Surfaces — panels and their header. */
-
 @layer components {
-  /* The card: one step lighter than the room, a hairline that catches light
-     on its top edge, and a soft drop so it floats rather than sits. */
   .panel {
     --surface: var(--color-ink-850);
     border-radius: 18px;
@@ -10,26 +6,18 @@
     border: 1px solid color-mix(in oklab, var(--color-ink-700) 80%, transparent);
     background: var(--surface);
     box-shadow:
-      inset 0 1px 0 oklch(1 0 0 / 0.05),
-      0 6px 18px -8px oklch(0.08 0.04 280 / 0.6);
+      inset 0 1px 0 oklch(1 0 0 / 0.04),
+      0 4px 0 oklch(0.13 0.03 280);
   }
 
-  /* A panel that belongs to a profession / section. It stays on the shared
-     card surface — the accent is a soft wash across the top and a faint edge,
-     so a page of mixed sections still reads as one family. */
   .panel-accent {
-    border-color: color-mix(in oklab, var(--accent) 28%, var(--color-ink-700));
-    background:
-      linear-gradient(
-        180deg,
-        color-mix(in oklab, var(--accent) 11%, transparent),
-        transparent 5.5rem
-      ),
-      var(--surface);
+    border-color: color-mix(in oklab, var(--accent) 30%, var(--color-ink-700));
+    --surface: color-mix(in oklab, var(--accent) 4%, var(--color-ink-850));
+    box-shadow:
+      inset 0 3px 0 var(--accent),
+      0 4px 0 color-mix(in oklab, var(--accent) 18%, oklch(0.13 0.03 280));
   }
 
-  /* a panel that acts as a button (a profession tile): same lift as a tile, on
-     the panel radius, and its accent edge brightens. */
   .panel--press {
     cursor: pointer;
     transition:
@@ -41,7 +29,7 @@
   .panel--press:focus-visible {
     transform: translateY(-2px);
     border-color: color-mix(in oklab, var(--accent) 55%, var(--color-ink-700));
-    --surface: var(--color-ink-800);
+    --surface: color-mix(in oklab, var(--accent) 8%, var(--color-ink-800));
   }
 
   .panel-hd {

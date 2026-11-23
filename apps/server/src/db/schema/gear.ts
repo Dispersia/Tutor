@@ -1,18 +1,7 @@
-/**
- * Crafted gear and loadouts (docs/DESIGN.md §13.5.3). Part of the schema split
- * (docs/ARCHITECTURE.md).
- */
-
 import type { UserId, GearInstanceId, GearSetId } from '../../ids'
 import { index, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 import { users } from './users'
 
-/**
- * Crafted gear instances. A recipe produces a *piece*, not a stack: each row
- * carries its own quality and rolled stats. These rows are the only record of
- * owned equipment: an item's count is the number of its instances (the
- * `inventory` table holds materials only).
- */
 export const gearInstances = sqliteTable(
   'gear_instances',
   {
@@ -25,7 +14,6 @@ export const gearInstances = sqliteTable(
     slot: text('slot').notNull(),
     quality: text('quality').notNull().default('common'),
     statsJson: text('stats_json').notNull().default('{}'),
-    /** JSON array of band ids enchanted onto this piece (docs §13.5.3). */
     enchantJson: text('enchant_json').notNull().default('[]'),
     armour: integer('armour').notNull().default(0),
     power: integer('power').notNull().default(0),
@@ -34,7 +22,6 @@ export const gearInstances = sqliteTable(
   (t) => [index('idx_gear_instances_user').on(t.userId, t.itemId)],
 )
 
-/** Equipped gear, one item per slot. `instance_id` points at a crafted roll. */
 export const equipment = sqliteTable(
   'equipment',
   {
@@ -50,7 +37,6 @@ export const equipment = sqliteTable(
   (t) => [primaryKey({ columns: [t.userId, t.slot] })],
 )
 
-/** Saved gear sets for quick loadout changes. */
 export const gearSets = sqliteTable(
   'gear_sets',
   {
@@ -61,7 +47,6 @@ export const gearSets = sqliteTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     combatStyle: text('combat_style').notNull().default('general'),
-    /** JSON: slot → { itemId, instanceId? } */
     slotsJson: text('slots_json').notNull().default('{}'),
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull(),

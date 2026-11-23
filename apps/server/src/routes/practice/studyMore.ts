@@ -1,8 +1,3 @@
-/**
- * "Study more" (Anki's custom study): raise today's new/review allowance so a
- * motivated learner can keep going past the daily goal (docs/DESIGN.md §13.6).
- */
-
 import type { App } from '../../context'
 import { bumpDailyExtra, readStudyPrefs } from '../../services/study'
 import { studyBudget } from '../../services'

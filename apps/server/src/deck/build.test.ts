@@ -30,10 +30,8 @@ function emptyDeck() {
 test('acceptPlanned keeps requested vocab once, in a leading run', () => {
   const planned = [vocab('a'), vocab('zzz'), vocab('a'), sentence('a a', ['a', 'a']), vocab('c')]
   const got = acceptPlanned(planned, ['a', 'b', 'c'])
-  // b is missing, so only a counts: c is asked for again with b, not duplicated
   expect(got.introduced).toBe(1)
   expect(got.cards.map((c) => `${c.template}:${c.back}`)).toEqual(['vocab:a', 'sentence:a a'])
-  // spacing/case differences still match, and the stored word is the requested one
   expect(acceptPlanned([vocab(' Agua ')], ['agua']).cards[0]!.back).toBe('agua')
   expect(acceptPlanned([vocab('x')], ['a']).introduced).toBe(0)
 })
@@ -41,7 +39,6 @@ test('acceptPlanned keeps requested vocab once, in a leading run', () => {
 test('a batch that returns fewer words only counts those, and retries the rest', async () => {
   const { db, sqlite, userId, deckId, vocabOf } = emptyDeck()
   const asked: string[][] = []
-  // The model answers two words per call, however many it was asked for.
   const planner: Planner = async (req) => {
     asked.push(req.words)
     return req.words.slice(0, 2).map(vocab)
@@ -52,7 +49,7 @@ test('a batch that returns fewer words only counts those, and retries the rest',
   const res = await fillDeck(db, userId, deckId, { ctx, opts, planner })
   expect(res.built).toBe(5)
   expect(res.newWords).toEqual(words)
-  expect(vocabOf()).toEqual(words) // none lost, none doubled
+  expect(vocabOf()).toEqual(words)
   expect(asked).toEqual([words, ['c', 'd', 'e'], ['e']])
   expect(progress).toEqual([2, 4, 5])
   sqlite.close()
@@ -80,7 +77,6 @@ test('a word the model never returns is skipped, and the rest of the deck is bui
   }
   const words = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
   await fillDeck(db, userId, deckId, { ctx, opts: { words, count: 8 }, planner })
-  // the batch shrinks down to the stuck word, skips it, and carries on
   expect(vocabOf()).toEqual(['a', 'b', 'd', 'e', 'f', 'g', 'h'])
   expect(calls).toBeLessThan(12)
   sqlite.close()
@@ -89,16 +85,14 @@ test('a word the model never returns is skipped, and the rest of the deck is bui
 test('a pinyin reading becomes clean Zhuyin, or is replaced — never stored with "?"', () => {
   expect(zhuyinFromPinyin('Nǐ hǎo!')).toBe('ㄋㄧˇ ㄏㄠˇ')
   expect(zhuyinFromPinyin('Nǐ hǎo, shìjiè.')).toBe('ㄋㄧˇ ㄏㄠˇ ㄕˋ ㄐㄧㄝˋ')
-  expect(zhuyinFromPinyin('ni3 hao3')).toBeUndefined() // tone digits
-  expect(zhuyinFromPinyin('nei5 hou2')).toBeUndefined() // jyutping
+  expect(zhuyinFromPinyin('ni3 hao3')).toBeUndefined()
+  expect(zhuyinFromPinyin('nei5 hou2')).toBeUndefined()
 
   expect(readingsForPlanned('zh', 'Nǐ hǎo!', 'zhuyin', '你好')).toEqual({ zhuyin: 'ㄋㄧˇ ㄏㄠˇ' })
-  // unconvertible: the model's reading is dropped for the dictionary's
   const fromDictionary = mandarinSentenceZhuyin('你好')!
   expect(fromDictionary).not.toMatch(/[?a-z0-9]/i)
   expect(readingsForPlanned('zh', 'ni3 hao3', 'zhuyin', '你好')).toEqual({ zhuyin: fromDictionary })
   expect(readingsForPlanned('zh', 'ni3 hao3', 'zhuyin')).toEqual({})
-  // Cantonese is never run through the Mandarin converter
   expect(readingsForPlanned('yue', 'nei5 hou2', 'zhuyin', '你好')).toEqual({ reading: 'nei5 hou2' })
   expect(readingsForPlanned('zh', 'nǐ hǎo', 'pinyin', '你好')).toEqual({ pinyin: 'nǐ hǎo' })
   expect(readingsForPlanned('zh', 'ㄋㄧˇ ㄏㄠˇ', 'zhuyin', '你好')).toEqual({

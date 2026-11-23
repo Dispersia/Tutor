@@ -22,7 +22,6 @@ const defaults: Record<Role, string> = {
   translator: 'qwen/t',
 }
 
-/** A fake TTS: records every request and returns a tiny distinct clip. */
 function fakeTts() {
   const calls: TtsRequest[] = []
   const tts = async (req: TtsRequest): Promise<Uint8Array> => {
@@ -82,7 +81,6 @@ async function signup(app: App, db: Db, username = 'alice') {
   return { cookie, userId: user.id }
 }
 
-/** Waits for the background recorder to drain. */
 async function drain(audio: AudioService) {
   for (let i = 0; i < 200; i++) {
     const s = audio.status()
@@ -108,11 +106,9 @@ test('ensure records every voice once, content-addressed and deduped', async () 
   expect(audio.complete('你好', 'zh')).toBe(true)
   for (const v of CARD_VOICES) expect(audio.clip('你好', 'zh', v.id)).toBeTruthy()
 
-  // Recording the same text again is a no-op — the clips are already there.
   await audio.ensure({ text: '你好', language: 'zh', userId: toUserId('user-1') })
   expect(calls.length).toBe(4)
 
-  // Every clip is keyed by (voice, language, text), so a different voice is a new clip.
   expect(findClip(db, clipHash('你好', 'f1', 'zh'))).toBeTruthy()
   expect(findClip(db, clipHash('你好', 'm2', 'zh'))).toBeTruthy()
   expect(findClip(db, clipHash('你好', 'f1', 'zh'))?.bytes).toBeGreaterThan(0)
@@ -163,7 +159,6 @@ test('GET /api/cards/:id/audio streams a recorded voice', async () => {
   expect(cardRes.status).toBe(201)
   const { card } = (await cardRes.json()) as { card: { id: string } }
 
-  // Creating the card queued its audio in the background.
   await drain(audio)
 
   const res = await app.request(`/api/cards/${card.id}/audio?variant=0`, auth(cookie))
@@ -171,7 +166,6 @@ test('GET /api/cards/:id/audio streams a recorded voice', async () => {
   expect(res.headers.get('content-type')).toContain('audio/wav')
   expect((await res.arrayBuffer()).byteLength).toBeGreaterThan(0)
 
-  // A variant beyond the set wraps around instead of 404ing.
   const wrapped = await app.request(`/api/cards/${card.id}/audio?variant=10`, auth(cookie))
   expect(wrapped.status).toBe(200)
 
@@ -199,7 +193,7 @@ test('POST /api/audio/backfill queues the user cards and reports the queue', asy
   expect(res.status).toBe(202)
   const body = (await res.json()) as { queued: number; cards: number }
   expect(body.cards).toBeGreaterThanOrEqual(1)
-  expect(body.queued).toBe(0) // already recorded when the card was created
+  expect(body.queued).toBe(0)
 
   const status = (await (await app.request('/api/audio/status', auth(cookie))).json()) as {
     voices: number
@@ -212,7 +206,6 @@ test('a word two languages share gets its own clip per language', async () => {
   const { sqlite, audio, calls } = makeApp()
   await audio.ensure({ text: '先生', language: 'zh', userId: toUserId('u1') })
   expect(audio.complete('先生', 'zh')).toBe(true)
-  // the Mandarin recording must not satisfy the Japanese card
   expect(audio.complete('先生', 'ja')).toBe(false)
   await audio.ensure({ text: '先生', language: 'ja', userId: toUserId('u1') })
   expect(calls.filter((c) => c.language === 'ja').length).toBe(CARD_VOICES.length)
@@ -232,10 +225,8 @@ test('a clip recorded before the language was keyed is adopted only when unambig
   writeClip(db, dataDir, toUserId('u1'), legacyClipHash('你好', 'f1'), old)
   writeClip(db, dataDir, toUserId('u1'), legacyClipHash('水', 'f1'), old)
 
-  // only Mandarin cards say 你好: the old clip is theirs, moved to the new key
   expect(audio.clip('你好', 'zh', 'f1')).toEqual(old)
   expect(findClip(db, legacyClipHash('你好', 'f1'))).toBeUndefined()
-  // 水 is in both decks: the old clip could be either, so neither language keeps it
   expect(audio.clip('水', 'ja', 'f1')).toBeUndefined()
   expect(audio.clip('水', 'zh', 'f1')).toBeUndefined()
   sqlite.close()
@@ -258,14 +249,12 @@ test('each clip is recorded in its language’s accent, and spoken as written', 
   const { sqlite, audio, calls } = makeApp()
   await audio.ensureVoice({ text: '你好', language: 'zh', userId: toUserId('u1'), voiceId: 'f1' })
   expect(calls[0]!.instruct).toContain('Taiwanese accent')
-  // a Japanese word keeps its kanji: the kanji carries the word, and so its pitch
   await audio.ensureVoice({ text: '橋', language: 'ja', userId: toUserId('u1'), voiceId: 'f1' })
   expect(calls[1]!.text).toBe('橋')
   expect(calls[1]!.instruct).toContain('Japanese')
   sqlite.close()
 })
 
-/** An audio service whose recogniser "hears" the scripted transcripts in order. */
 function gradedService(heard: string[]) {
   const { db, sqlite } = openDb(':memory:')
   const { tts, calls } = fakeTts()
@@ -275,7 +264,6 @@ function gradedService(heard: string[]) {
 }
 
 test('a take that says more than the word is thrown away and recorded again', async () => {
-  // take 1 rambles on after the word, take 2 is clean
   const { sqlite, audio, calls } = gradedService(['茶，我喜歡喝茶。', '茶'])
   await audio.ensureVoice({ text: '茶', language: 'zh', userId: toUserId('u1'), voiceId: 'f1' })
   expect(calls.length).toBe(2)
@@ -291,7 +279,6 @@ test('when no take says the word, no clip is stored and it is not retried', asyn
   expect(calls.length).toBe(3)
   expect(audio.clip('茶', 'zh', 'f1')).toBeUndefined()
   expect(audio.status().rejected).toBe(1)
-  // asking again does not burn three more takes
   await audio.ensureVoice(job)
   expect(calls.length).toBe(3)
   sqlite.close()

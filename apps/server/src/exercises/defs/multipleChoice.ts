@@ -1,17 +1,11 @@
-/** Multiple choice: pick the meaning from seen distractors. */
-
 import type { ExerciseDef } from '@tutor/core'
 import { displayReading, furiganaFor, readingsShown, shuffle } from '../shared'
-
-// --- multiple choice ---------------------------------------------------------
 
 export const multipleChoice: ExerciseDef<string> = {
   id: 'multiple_choice',
   title: 'Pick the right answer',
   modality: 'text',
   supports: (card) => card.back.length <= 12,
-  // Only meaningful when there is at least one other *seen* word to confuse it
-  // with (see `otherBacks`): a one-option question is not a choice.
   available: (ctx) => ctx.distractors.length >= 1,
   async generate(ctx) {
     const choices = shuffle([ctx.card.back, ...ctx.distractors]).slice(0, 4)

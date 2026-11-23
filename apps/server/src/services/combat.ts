@@ -1,5 +1,3 @@
-/** Combat: the player's loadout numbers, encounters and consumables (docs/DESIGN.md §13.5). */
-
 import type { UserId } from '../ids'
 import {
   getEncounter,
@@ -41,10 +39,7 @@ import { accountBandBonuses, enchantOf } from './bands'
 import { consumeItems } from './items'
 import { aggregateBonuses, loadProgress, skillLevelOf } from './progress'
 
-// --- combat (Phase 8, docs/DESIGN.md §13.5) ----------------------------------
-
 export interface PlayerCombat {
-  /** The combat profession this loadout trains (from the equipped weapon). */
   skill: SkillId
   combatStyle: CombatStyle
   maxHp: number
@@ -57,16 +52,13 @@ export interface PlayerCombat {
   crit: number
   haste: number
   mastery: number
-  /** fraction of damage dealt returned as HP (from iron bands/enchants). */
   lifesteal: number
   gearScore: number
-  /** Active armour-set bonuses for the current loadout. */
   setBonuses: ActiveSetBonus[]
 }
 
 type EquipmentRow = ReturnType<typeof listEquipment>[number]
 
-/** The weapon's trained skill, the worn stats, and the raw power/armour. */
 interface Loadout {
   skill: SkillId
   combatStyle: CombatStyle
@@ -76,7 +68,6 @@ interface Loadout {
   armourCounts: Partial<Record<ArmourType, number>>
 }
 
-/** The player's effective combat level, used to scale monsters. */
 export function combatLevel(db: Db, userId: UserId, levels?: Map<string, number>): number {
   return Math.max(
     skillLevelOf(db, userId, 'attack', levels),
@@ -88,7 +79,6 @@ export function combatLevel(db: Db, userId: UserId, levels?: Map<string, number>
   )
 }
 
-/** The active set bonuses for the current loadout (without the full combat maths). */
 export function loadoutSetBonuses(db: Db, userId: UserId): ActiveSetBonus[] {
   return activeSetBonuses(armourCounts(db, userId))
 }
@@ -102,12 +92,6 @@ function armourCounts(db: Db, userId: UserId): Partial<Record<ArmourType, number
   return counts
 }
 
-/**
- * The player's combat numbers for their current loadout. The equipped weapon
- * decides the trained skill (sword → Strength, bow → Ranged, staff → Magic), so
- * fights always use what you have — no per-monster choice. Every worn piece
- * contributes its rolled stats, armour and power.
- */
 export function loadPlayerCombat(
   db: Db,
   userId: UserId,
@@ -148,7 +132,6 @@ function gearTotals(db: Db, userId: UserId, eq: EquipmentRow[]) {
   return { stats, totalPower, totalArmour, armourCounts }
 }
 
-/** One worn piece's contribution, including the enchant's flat stat points. */
 function pieceTotals(db: Db, userId: UserId, row: EquipmentRow, item: ItemDef, running: GearStats) {
   const instance = row.instanceId ? getGearInstance(db, userId, row.instanceId) : undefined
   let stats = addStats(running, instance ? parseStats(instance.statsJson) : statsOf(item))
@@ -173,8 +156,6 @@ interface Assembly {
 
 function combatNumbers(a: Assembly): PlayerCombat {
   const derived = deriveStats(a.boosted.stats, a.load.skill)
-  // Tier bands grant an account-wide passive (§13.5.3), on top of the rolled and
-  // enchanted piece stats.
   const band = accountBandBonuses(a.db, a.userId)
   const stamina = Math.round(a.boosted.stats.stamina + band.stamina)
   return {
@@ -190,7 +171,6 @@ function combatNumbers(a: Assembly): PlayerCombat {
   }
 }
 
-/** Max HP and power: the profession level, the worn gear and the passives. */
 function vitals(
   a: Assembly,
   derived: ReturnType<typeof deriveStats>,
@@ -210,7 +190,6 @@ function vitals(
   }
 }
 
-/** The derived stat totals: band passives plus the rounded stamina. */
 function passives(
   stats: GearStats,
   derived: ReturnType<typeof deriveStats>,
@@ -227,7 +206,6 @@ function passives(
   }
 }
 
-/** Every monster is fightable with whatever gear you have — no per-monster gate. */
 export function monsterState(
   _db: Db,
   _userId: UserId,
@@ -236,26 +214,16 @@ export function monsterState(
   return { unlocked: true, missing: [], equipMissing: null }
 }
 
-// --- auto-used consumables ---------------------------------------------------
-
-/**
- * The player's HP right now. HP persists between fights (docs/DESIGN.md §13.5):
- * damage carries over and only food/potions restore it, so re-entering a fight
- * is not a free heal. A player who has never fought starts at full; the value is
- * clamped to their current max HP, which moves with Constitution and armour.
- */
 export function currentHp(db: Db, userId: UserId, maxHp: number): number {
   const stored = getPlayerHp(db, userId)
   if (stored == null) return maxHp
   return Math.max(1, Math.min(stored, maxHp))
 }
 
-/** HP a defeat leaves you at — a sliver, so you must eat to recover. */
 export const DEFEAT_HP = 1
 
 const DEFAULT_FOOD_THRESHOLD = 0.5
 
-/** Food is auto-eaten when HP falls below this fraction (user setting, %). */
 export function foodThreshold(db: Db, userId: UserId): number {
   const raw = getUserSetting(db, userId, 'foodThreshold')
   const n = raw ? Number(raw) : NaN
@@ -283,17 +251,14 @@ function bestConsumable(
   return best
 }
 
-/** The best food in the bank (highest heal). */
 export function bestFood(db: Db, userId: UserId): ItemDef | undefined {
   return bestConsumable(db, userId, (i) => i.heal)
 }
 
-/** The best potion in the bank (highest buff). */
 export function bestPotion(db: Db, userId: UserId): ItemDef | undefined {
   return bestConsumable(db, userId, (i) => (i.buff ? i.buff.value : undefined))
 }
 
-/** What a fight-start potion did: raise power, raise max HP, or nothing. */
 type Drank = { item: string; buff: { kind: 'power' | 'maxHp'; value: number } } | null
 
 interface DrinkResult {
@@ -303,7 +268,6 @@ interface DrinkResult {
   drank: Drank
 }
 
-/** Drinks the best buff potion at the start of a fight, returning its effect. */
 function drinkBestPotion(db: Db, bus: EventBus, userId: UserId, maxHp: number): DrinkResult {
   const potion = bestPotion(db, userId)
   if (!potion?.buff) return { maxHp, powerBonus: 0, potionId: null, drank: null }
@@ -318,7 +282,6 @@ function drinkBestPotion(db: Db, bus: EventBus, userId: UserId, maxHp: number): 
   }
 }
 
-/** The encounter numbers a fresh fight starts with. */
 export interface EncounterStart {
   monsterId: string
   monsterHp: number
@@ -344,19 +307,15 @@ function startEncounterTx(db: Db, bus: EventBus, userId: UserId, monsterId: stri
   if (!m) return { ok: false, error: 'unknown monster' }
   const locked = lockResult(db, userId, m)
   if (locked) return locked
-  // Starting over mid-fight would reset the monster and drink a second potion.
   if (getEncounter(db, userId))
     return { ok: false, error: 'finish or flee the current fight first' }
   const pc = loadPlayerCombat(db, userId, loadProgress(db, userId).levels)
   const potion = drinkBestPotion(db, bus, userId, pc.maxHp)
-  // HP carries between fights: resume from what's left, clamped to this fight's
-  // max HP (which a restore potion may have raised).
   const startHp = currentHp(db, userId, potion.maxHp)
   upsertEncounter(db, userId, startRow(monsterId, m, potion, startHp))
   return startOk(monsterId, m, potion, startHp)
 }
 
-/** {@link startEncounterTx}, all-or-nothing. */
 export const startEncounter = atomic(startEncounterTx)
 
 function startOk(
@@ -373,7 +332,6 @@ function startOk(
   }
 }
 
-/** The refusal when the monster is locked for this player, else undefined. */
 function lockResult(db: Db, userId: UserId, m: MonsterDef): StartResult | undefined {
   const state = monsterState(db, userId, m)
   if (state.unlocked) return undefined
@@ -385,8 +343,6 @@ function lockResult(db: Db, userId: UserId, m: MonsterDef): StartResult | undefi
   }
 }
 
-// Monsters are **fixed** (docs §13.5): their numbers never move, so the buffs a
-// player stacks read as power, not as a modifier that cancels itself out.
 function startRow(monsterId: string, m: MonsterDef, potion: DrinkResult, startHp: number) {
   return {
     monsterId,

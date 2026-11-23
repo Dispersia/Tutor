@@ -31,7 +31,6 @@ test('a failing handler does not break others', () => {
   expect(bus.handlerCount('level.up')).toBe(2)
 })
 
-/** A bus that logs each `level.up` it delivers, on a fresh in-memory database. */
 function txFixture() {
   const { db, sqlite } = openDb(':memory:')
   const bus = new EventBus()
@@ -87,7 +86,6 @@ test('nothing is delivered when the transaction throws', () => {
   expect(run).toThrow('rollback')
   expect(getSetting(db, 'k')).toBeUndefined()
   expect(seen).toEqual([])
-  // the buffer is gone with the transaction: the next emit is immediate again
   levelUp(4)
   expect(seen).toEqual([4])
   sqlite.close()

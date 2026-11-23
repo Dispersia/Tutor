@@ -1,17 +1,5 @@
 @import 'tailwindcss';
 
-/* ---------------------------------------------------------------------------
-   Nightforge — the tutor's game UI.
-
-   A twilight-indigo ground with a soft top glow, raised cards that carry a
-   section accent as a gentle wash (never a full tint), one chunky violet
-   action, category hues that always mean the same thing, generous radii, and a
-   self-hosted type system that covers every target script — Latin, CJK, kana,
-   Hangul, Bopomofo and Cyrillic — so no target language can ever render tofu.
-
-   The stylesheet is split under `styles/` so each concern is its own file.
-   --------------------------------------------------------------------------- */
-
 @import './styles/fonts.css';
 @import './styles/tokens.css';
 @import './styles/base.css';

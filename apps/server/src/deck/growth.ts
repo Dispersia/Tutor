@@ -1,5 +1,3 @@
-/** Growing an existing deck: its next batch and the background finish. */
-
 import type { UserId, DeckId } from '../ids'
 import { getDeck, listCards, rememberedDeckInstruction, updateDeckSettings } from '../db/repo'
 import type { Db } from '../db/client'
@@ -14,27 +12,16 @@ import { startDeckBuild } from './jobs'
 
 type Deck = NonNullable<ReturnType<typeof getDeck>>
 
-/** The words, rules and n+1 state one organic growth run works from. */
 export interface GrowthPlan {
   instruction: string
   ctx: DeckContext
-  /** The words still to introduce, in order. */
   words: string[]
-  /** Words already in the deck, so example cards stay n+1. */
   knownWords: string[]
-  /** The n+1 step to continue from. */
   startStep: number
-  /** The index into the deck's source list this growth starts at. */
   cursor: number
-  /** How many cards the deck holds before this growth. */
   cardCount: number
 }
 
-/**
- * Reads a deck's next growth batch: its remaining words, its rules and the n+1
- * state to carry forward. An imported deck grows from its stored word list; a
- * frequency deck re-pulls `want` words' worth (plus headroom).
- */
 export async function growthPlan(
   db: Db,
   userId: UserId,
@@ -60,13 +47,6 @@ function planOf(head: PlanHead, source: string[], instruction: string, topic?: s
   }
 }
 
-/**
- * A card that introduced a word. Sentence and grammar cards are not vocabulary:
- * counting their `back` as known would let a later batch skip a real word that
- * happens to equal a grammar answer, and would hand whole sentences to the
- * planner as "words". Cards made outside the planner carry no template, so
- * their card type decides.
- */
 function introducesWord(c: ReturnType<typeof listCards>[number]): boolean {
   const template = c.payload?.template
   return template === undefined ? c.type === 'vocab' : template === 'vocab'
@@ -87,7 +67,6 @@ interface PlanHead {
   want: number
 }
 
-/** The deck, its settings and n+1 state, or undefined when it does not exist. */
 async function planHead(
   db: Db,
   userId: UserId,
@@ -108,7 +87,6 @@ async function planHead(
   }
 }
 
-/** The deck's stored word list, or a freshly pulled frequency list. */
 async function sourceWordsFor(head: PlanHead, fetcher?: Fetcher): Promise<string[]> {
   if (head.settings.words?.length) return head.settings.words
   const { words } = await fetchFrequencyWords(head.deck.targetLang, {
@@ -119,11 +97,6 @@ async function sourceWordsFor(head: PlanHead, fetcher?: Fetcher): Promise<string
   return words.map((w) => w.word)
 }
 
-/**
- * A deck's own prompt wins. Older imported decks only carry the generic "Build a
- * deck from the imported deck …" wording, so they pick up the learner's
- * remembered prompt instead of losing it on the next batch.
- */
 function instructionFor(db: Db, userId: UserId, settings: DeckSettings): string {
   const generic =
     !settings.instruction || settings.instruction.startsWith('Build a deck from the imported deck ')
@@ -138,8 +111,6 @@ function growthContext(
   instruction: string,
   topic?: string,
 ): DeckContext {
-  // The prompt that built the deck stays in force for every later batch; a topic
-  // narrows the batch without replacing the learner's rules.
   return {
     instruction,
     targetLang: deck.targetLang,
@@ -148,18 +119,10 @@ function growthContext(
     variant: settings.variant,
     readingScript: settings.readingScript,
     pitchAccent: settings.pitchAccent,
-    // An imported deck's own readings/meanings, stored at import time: without
-    // them a build resumed after a restart would fall back to the model's guess.
     hints: settings.hints,
   }
 }
 
-/**
- * Grows a deck organically: adds another n+1 batch from its frequency list (or
- * its stored word list). `topic` narrows the batch to a theme (e.g. a
- * restaurant). Synchronous — {@link startDeckGrowth} finishes it in the
- * background instead.
- */
 export async function growDeck(
   db: Db,
   userId: UserId,
@@ -229,11 +192,6 @@ function grewDeck(
   return { deckId, name: deck.name, cardCount, source, newWords }
 }
 
-/**
- * Finishes a deck in the background: introduces every remaining word so an
- * interrupted or stopped build resumes with one action. Returns how many words
- * were left (0 when the deck was already complete).
- */
 export async function startDeckGrowth(
   db: Db,
   userId: UserId,

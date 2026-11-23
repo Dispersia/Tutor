@@ -1,6 +1,4 @@
 <script lang="ts">
-  /** The end-of-fight panel: victory or defeat, the loot, and the way back. */
-
   import { ACCENT, accentStyle, tierAccent } from '#lib/theme'
   import Icon from '#lib/components/Icon.svelte'
   import type { HitResult } from '#lib/combat'

@@ -1,22 +1,14 @@
-/**
- * Pure derivations for the practice screen: labels for the header and results,
- * the next lesson on the path, and the "quiet mode" countdown. No runes, no DOM.
- */
-
 import type { CurriculumDeck, LessonDTO } from './curriculum'
 import type { SrsOutcome } from './exercises'
 import { href } from './paths'
 
 const RATING_NAMES = { 1: 'Again', 2: 'Hard', 3: 'Good', 4: 'Easy' } as const
 
-/** Short label for the lesson header (the frequency path reads as "Frequency"). */
 export function lessonLabel(l: LessonDTO): string {
   if (l.level === 'zhfreq' || l.level === 'jafreq') return 'Frequency'
-  // generated decks address their lessons by deck id; show a plain label
   return l.level.length > 12 ? 'Deck' : l.level.toUpperCase()
 }
 
-/** Human summary of the FSRS-6 scheduling decision. */
 export function reviewLabel(s: SrsOutcome, now: number = Date.now()): string {
   const rating = RATING_NAMES[s.rating]
   if (s.state === 'learning' || s.state === 'relearning') {
@@ -27,7 +19,6 @@ export function reviewLabel(s: SrsOutcome, now: number = Date.now()): string {
   return `${rating} · next in ${d} day${d === 1 ? '' : 's'}`
 }
 
-/** The next step of the path: the first unfinished lesson after this one. */
 export function nextLessonAfter(curriculum: CurriculumDeck[], id: string): string | undefined {
   const deck = curriculum.find((d) => d.lessons.some((l) => l.id === id))
   if (!deck) return undefined
@@ -36,13 +27,11 @@ export function nextLessonAfter(curriculum: CurriculumDeck[], id: string): strin
   return deck.lessons.slice(idx + 1).find((l) => !l.complete)?.id
 }
 
-/** mm:ss remaining in the "can't speak or listen" window. */
 export function quietClock(until: number, now: number): string {
   const s = Math.max(0, Math.ceil((until - now) / 1000))
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 }
 
-/** The `POST /api/practice/next` body for the current URL selection. */
 export interface NextDrillRequest {
   actionId?: string
   choiceId?: string
@@ -64,20 +53,17 @@ export function nextDrillBody(p: NextDrillRequest): {
   return body
 }
 
-/** The word the next lesson introduces, for the "next lesson" button label. */
 export function nextLessonTitleOf(curriculum: CurriculumDeck[], id: string | undefined): string {
   const next = curriculum.flatMap((d) => d.lessons).find((l) => l.id === id)
   return next?.newWord ?? next?.title ?? ''
 }
 
-/** A practice URL for a lesson that keeps the selected profession action. */
 export function practiceLessonHref(id: string, actionId?: string): string {
   const query = new URLSearchParams({ lesson: id })
   if (actionId) query.set('action', actionId)
   return href(`/practice?${query.toString()}`)
 }
 
-/** The JSON body for a typed answer to the current drill. */
 export interface AnswerBody {
   exerciseId: string
   cardId: string
@@ -107,7 +93,6 @@ export function answerBody(p: {
   }
 }
 
-/** The multipart body for a recorded answer (a retry is flagged). */
 export function speakForm(p: {
   blob: Blob
   isRetry: boolean

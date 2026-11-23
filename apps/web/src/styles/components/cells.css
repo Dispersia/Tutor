@@ -1,8 +1,4 @@
-/** The character cell — the system's signature mark. */
-
 @layer components {
-  /* the character cell — the system's signature mark. It grows to fit a
-     multi-character word; it never clips. */
   .cell {
     position: relative;
     display: grid;
@@ -13,15 +9,12 @@
     padding: 0.85rem 1rem;
     border: 1px solid color-mix(in oklab, var(--accent) 35%, var(--color-ink-700));
     border-radius: 16px;
-    background:
-      linear-gradient(180deg, color-mix(in oklab, var(--accent) 12%, transparent), transparent),
-      var(--color-ink-850);
+    background: color-mix(in oklab, var(--accent) 7%, var(--color-ink-850));
     box-shadow:
       inset 0 1px 0 oklch(1 0 0 / 0.05),
       0 3px 0 oklch(0.12 0.03 280 / 0.55);
     text-align: center;
   }
-  /* faint cross guides at 12% inset: two hairlines, no gradient */
   .cell::before,
   .cell::after {
     content: '';
@@ -56,7 +49,6 @@
     letter-spacing: 0;
     color: var(--color-ink-400);
   }
-  /* the small cell cannot afford 0.5em of a 1.5rem glyph: keep ruby readable */
   .cell--sm .cell__glyph rt {
     font-size: 0.55em;
   }
@@ -87,7 +79,6 @@
     font-size: 1.65rem;
   }
 
-  /* a cell the player can press (a choice, a word chip) */
   .cell--press {
     cursor: pointer;
     transition:
@@ -98,16 +89,12 @@
   }
   .cell--press:hover:not(:disabled) {
     border-color: color-mix(in oklab, var(--accent) 65%, var(--color-ink-700));
-    background:
-      linear-gradient(180deg, color-mix(in oklab, var(--accent) 20%, transparent), transparent),
-      var(--color-ink-800);
+    background: color-mix(in oklab, var(--accent) 12%, var(--color-ink-800));
   }
   .cell--press:active:not(:disabled) {
     transform: translateY(2px);
     box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.05);
   }
-  /* a control that cannot act goes neutral: surface fill, hairline, muted text.
-     Never a faded smear of its own accent. */
   .cell--press:disabled,
   .cell--off {
     cursor: not-allowed;

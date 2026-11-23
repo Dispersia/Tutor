@@ -34,7 +34,6 @@ test('a growth plan reads the stored rules and counts only word cards as known',
       origin: 'llm',
     })
   add('我', 'vocab')
-  // A grammar card whose answer is a word still to come does not make it known.
   add('喝', 'grammar')
 
   const plan = (await growthPlan(db, user.id, deck.id))!

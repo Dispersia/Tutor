@@ -1,29 +1,16 @@
-/**
- * The enchant catalog (docs/DESIGN.md §13.5.3.2) — content and its helpers.
- */
-
 import type { Cost, GearStats, Slot } from './types'
 import { essenceId, type EssenceId } from './essences'
-
-// --- enchants (docs/DESIGN.md §13.5.3.2) -------------------------------------
-//
-// Enchants are catalogued by **slot** and unlocked at Enchanting levels. Each needs
-// its own essence reagents, and applying one grants **no** XP — it is the payoff.
 
 export interface EnchantDef {
   id: string
   name: string
-  /** the equipment slot family it fits */
   slot: Slot
   stat: keyof GearStats
-  /** flat points the enchant adds to the piece */
   value: number
-  /** Enchanting level required */
   level: number
   reagents: Cost[]
 }
 
-/** The noun a slot's enchant names itself after. */
 const SLOT_WORD: Partial<Record<Slot, string>> = {
   head: 'helm',
   neck: 'amulet',
@@ -38,7 +25,6 @@ const SLOT_WORD: Partial<Record<Slot, string>> = {
   trinket1: 'charm',
 }
 
-/** Which essence an enchant's stat wants (§13.5.3.2). */
 function familyForStat(stat: keyof GearStats): EssenceId {
   if (stat === 'agility') return 'leather'
   if (stat === 'intellect') return 'cloth'
@@ -48,11 +34,6 @@ function familyForStat(stat: keyof GearStats): EssenceId {
 
 const cap = (s: string) => s[0]!.toUpperCase() + s.slice(1)
 
-/**
- * The catalog: one enchant per `[slot, stat]`, its `level` the Enchanting gate. All
- * enchants of a slot sit together, so a slot's stat menu opens a piece at a time.
- * Levels run 2 → 50; cost and payoff scale with them.
- */
 const ENCHANT_TABLE: [Slot, keyof GearStats, number][] = [
   ['head', 'stamina', 2],
   ['head', 'intellect', 6],
@@ -112,13 +93,9 @@ const ENCHANT_TABLE: [Slot, keyof GearStats, number][] = [
 export const ENCHANTS: EnchantDef[] = ENCHANT_TABLE.map(([slot, stat, level]) => {
   const family = familyForStat(stat)
   const reagents: Cost[] = [{ item: essenceId(family), count: Math.max(1, Math.round(level / 4)) }]
-  // A non-gem enchant also asks for a gem essence, so deeper enchants pull from two
-  // families and Distill has to feed both.
   if (family !== 'gem') {
     reagents.push({ item: essenceId('gem'), count: Math.max(1, Math.round(level / 10)) })
   }
-  // Weapons and off-hands also want wood (grips, frames, staves), so wood essence has
-  // a home too.
   if (slot === 'mainHand' || slot === 'offHand') {
     reagents.push({ item: essenceId('wood'), count: Math.max(1, Math.round(level / 8)) })
   }

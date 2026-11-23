@@ -1,6 +1,4 @@
 <script lang="ts">
-  /** Shown when the day's new/review budget is spent and nothing can be served. */
-
   import { href } from '#lib/paths'
   import { ACCENT } from '#lib/theme'
   import type { SrsStats } from '#lib/curriculum'

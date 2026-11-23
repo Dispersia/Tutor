@@ -3,26 +3,14 @@ import { parsePitchContour } from '@tutor/core'
 import { PLAN_SYSTEM, planPrompt, type PlanRequest } from './planPrompt'
 import { bareText } from '../text/normalize'
 
-/**
- * Turns a user instruction + a pulled frequency list into cards that fit the
- * card templates (docs/DESIGN.md §11). The planner is the only LLM call in the
- * deck builder; it is injected so tests run with no key.
- */
-
-/** The template kinds the deck builder generates. */
 export type PlanTemplate = 'vocab' | 'sentence' | 'grammar'
 
 export interface PlannedCard {
   template: PlanTemplate
-  /** Meaning in the learner's language. */
   front: string
-  /** Target-language text. */
   back: string
-  /** Native-script reading (Zhuyin / kana). */
   reading?: string
-  /** Extra structured content (tokens, answer, options, …) per template. */
   payload?: Record<string, unknown>
-  /** Language-specific annotations (pitch accent, …). */
   metadata?: Record<string, unknown>
 }
 
@@ -45,12 +33,6 @@ const PAYLOAD_SCHEMA = {
   additionalProperties: false,
 }
 
-/**
- * Language-agnostic annotations. `pitch` is the one shape the app renders; the
- * rest is an open bag so a new language can annotate a card without a schema
- * change. Pitch levels are one per mora; `drop` is the accent nucleus, counted
- * from 1 (the mora after which the pitch falls).
- */
 const METADATA_SCHEMA = {
   type: 'object',
   properties: {
@@ -94,36 +76,17 @@ export const DECK_SCHEMA = {
   additionalProperties: false,
 }
 
-/**
- * Phrases that only ever appear when the model leaks its own reasoning into a
- * card ("(Grammatically valid, though semantically odd)", "Wait, 來 is not
- * introduced yet"). A card that still contains one after cleaning is not usable.
- */
 export const META_MARKERS =
   /\b(note:|grammatically|semantically|n\+1|not introduced|introduced yet|strict n|used to test|test structure|as an ai|i'll use|i will use|per the rules|per rules|known list|skip the)/i
 
-/**
- * Conversational markers that mean reasoning **only inside an aside** — a
- * bracketed note or a trailing "Wait, …" clause. On their own they are everyday
- * language ("Let's go.", "to wait", "I must go now."), so they never condemn a
- * whole card the way `META_MARKERS` does.
- */
 const ASIDE_MARKERS =
   /\b(wait,|correction|corrected|revised|oops|let me|let's|i cannot|i must|however,|actually,)/i
 
 const isAside = (text: string): boolean => META_MARKERS.test(text) || ASIDE_MARKERS.test(text)
 
-/**
- * Strips the model's asides from a gloss or prompt: bracketed notes that read
- * like reasoning, and a trailing clause that starts with a meta marker. Plain
- * optional words such as "I have (it)." survive, because the marker test fails.
- */
 export function stripMetaCommentary(text: string): string {
-  // A leading "Translate:" / "Meaning:" is the model echoing its instruction.
   let out = text.replace(/^\s*(?:translate|translation|meaning|gloss|english)\s*[::]\s*/i, '')
   out = out.replace(/[（([][^)）\]]*[)）\]]/g, (m) => (isAside(m) ? ' ' : m))
-  // A trailing aside starts a new clause and is followed by ":" or ",": "…. Wait,
-  // 來 is not introduced". The word alone ("to wait", "banknote") is content.
   out = out.replace(
     /(?:^|[.。!！?？]\s*|\s[-–—]\s*)(?:note|wait|correction|revised|actually|hmm|oops)\s*[:,：，][\s\S]*$/i,
     (m) => m.match(/^[.。!！?？]/)?.[0] ?? '',
@@ -134,36 +97,27 @@ export function stripMetaCommentary(text: string): string {
     .trim()
 }
 
-/**
- * A sentence card's tokens must rebuild its `back`, ignoring case, spaces,
- * punctuation and symbols. Anything that is not a token list has nothing to
- * disagree with, so it passes.
- */
 export function tokensMatchBack(tokens: unknown, back: string): boolean {
   if (!Array.isArray(tokens)) return true
   const joined = tokens.filter((t): t is string => typeof t === 'string').join('')
   return bareText(joined) === bareText(back)
 }
 
-/** Cleans the free-text fields of a planned card and drops an unusable one. */
 export function sanitizePlannedCard(card: PlannedCard): PlannedCard | undefined {
   const front = stripMetaCommentary(card.front)
   const back = stripMetaCommentary(card.back)
   if (!front || !back || META_MARKERS.test(front) || META_MARKERS.test(back)) return undefined
-  // A blank belongs in a grammar prompt, never in the text a learner produces.
   if (back.includes('___')) return undefined
   const payload = cleanPayload(card, back)
   if (payload === null) return undefined
   return { ...card, front, back, payload }
 }
 
-/** Cleans the payload's free text; null when the card is no longer usable. */
 function cleanPayload(card: PlannedCard, back: string): Record<string, unknown> | undefined | null {
   if (!card.payload) return undefined
   const payload = { ...card.payload }
   cleanText(payload)
   cleanLists(payload)
-  // A sentence whose tokens no longer rebuild it is corrupt — drop it.
   const corrupt =
     card.template === 'sentence' &&
     Array.isArray(payload.tokens) &&
@@ -172,14 +126,11 @@ function cleanPayload(card: PlannedCard, back: string): Record<string, unknown> 
   return corrupt ? null : payload
 }
 
-/** Strips meta commentary from the payload's text fields, dropping unusable ones. */
 function cleanText(payload: Record<string, unknown>): void {
   for (const key of ['gloss', 'prompt', 'rule', 'explanation']) {
     const v = payload[key]
     if (typeof v !== 'string') continue
     const cleaned = stripMetaCommentary(v)
-    // A rule is a short label and an explanation one short sentence: anything
-    // long is the model thinking out loud, not something to show a learner.
     if (!cleaned || cleaned.length > 200 || META_MARKERS.test(cleaned)) delete payload[key]
     else payload[key] = cleaned
   }
@@ -198,7 +149,6 @@ function cleanLists(payload: Record<string, unknown>): void {
   }
 }
 
-/** Normalises whatever the model returned into valid PlannedCards. */
 export function normalizePlan(raw: unknown): PlannedCard[] {
   const cards = (raw as { cards?: unknown } | undefined)?.cards
   if (!Array.isArray(cards)) return []
@@ -228,7 +178,6 @@ function toPlanned(c: unknown): PlannedCard | undefined {
   })
 }
 
-/** Keeps only annotations we can store, normalising pitch into a contour. */
 function normalizeMetadata(raw: unknown): Record<string, unknown> | undefined {
   if (!raw || typeof raw !== 'object') return undefined
   const out: Record<string, unknown> = {}
@@ -237,8 +186,6 @@ function normalizeMetadata(raw: unknown): Record<string, unknown> | undefined {
   return Object.keys(out).length ? out : undefined
 }
 
-/** An OpenRouter-backed planner using the given (generator) model. */
-/** Natural sentences want some variety; the schema and the n+1 checks keep the shape. */
 const PLAN_TEMPERATURE = 0.6
 
 export function llmPlanner(or: OpenRouter, model: string, reasoning: ReasoningEffort): Planner {

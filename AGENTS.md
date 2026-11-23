@@ -4,8 +4,18 @@
 
 Run `bun run verify` (or `just ci`): format, lint, architecture rules, typecheck
 (server + web) and tests. Layout and conventions are in `docs/ARCHITECTURE.md`;
-the design, cited from code as `DESIGN §N`, is `docs/DESIGN.md`; open defects are
+the design is `docs/DESIGN.md`; open defects are
 in `docs/BACKLOG.md` — remove an item there when you fix it.
+
+## No comments in code
+
+Do not write comments in source files (`.ts`, `.js`, `.svelte`, `.css`, `.html`):
+no JSDoc, no header blocks, no inline notes, no `<!-- -->` in markup. They are
+kept out to save context. Make code explain itself with names and small functions;
+put design reasoning in `docs/DESIGN.md` and open defects in `docs/BACKLOG.md`.
+The only exceptions are tool directives the code needs to build or lint:
+`eslint-disable`, `@ts-expect-error`/`@ts-ignore`, `svelte-ignore` and
+`prettier-ignore`. An empty `catch {}` is allowed without an explanatory comment.
 
 ## Update the launchd server after completing a task
 

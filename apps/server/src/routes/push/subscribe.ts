@@ -1,9 +1,3 @@
-/**
- * Web Push plumbing (docs/DESIGN.md §13.5.1): the VAPID key, per-device
- * subscribe/unsubscribe, a test notification, and the rig clock the client's
- * local timer reads.
- */
-
 import type { Context } from 'hono'
 import type { App, AppEnv } from '../../context'
 import { deletePushSubscription, upsertPushSubscription } from '../../db/repo'
@@ -16,7 +10,6 @@ interface SubscribeBody {
   keys?: { p256dh?: string; auth?: string }
 }
 
-/** Reads a browser push subscription's endpoint and its two keys. */
 function readSubscribe(body: Record<string, unknown>): SubscribeBody {
   const keys = obj(body, 'keys')
   return {
@@ -31,7 +24,6 @@ export function registerPushSubscribe(app: App) {
   app.post('/api/push/unsubscribe', (c) => unsubscribeHandler(c))
 }
 
-/** The VAPID public key the browser subscribes with. Stable per database. */
 async function keyHandler(c: Context<AppEnv>) {
   const keys = await vapidKeys(c.get('deps').db)
   return c.json({ publicKey: keys.publicKey })
@@ -52,11 +44,6 @@ async function subscribeHandler(c: Context<AppEnv>) {
   return c.json({ ok: true })
 }
 
-/**
- * The browser push services. The server POSTs to whatever endpoint it stores,
- * so anything else would let a member aim those requests at an arbitrary host
- * (an internal one included).
- */
 const PUSH_HOSTS = [
   'fcm.googleapis.com',
   '.push.apple.com',
@@ -64,7 +51,6 @@ const PUSH_HOSTS = [
   '.notify.windows.com',
 ]
 
-/** True for an https endpoint on one of the known browser push services. */
 export function isPushServiceEndpoint(endpoint: string): boolean {
   let url: URL
   try {

@@ -1,9 +1,3 @@
-/**
- * Decks, cards, chat sessions and messages, plus stored audio (docs/DESIGN.md
- * §12). Cards carry a JSON payload so new card types need no migration. Part of
- * the schema split (docs/ARCHITECTURE.md).
- */
-
 import type { UserId, DeckId, CardId, SessionId } from '../../ids'
 import { index, integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
@@ -15,7 +9,6 @@ export const decks = sqliteTable('decks', {
   targetLang: text('target_lang').notNull(),
   level: text('level'),
   description: text('description'),
-  /** Deck-level overrides (ruby/reading rules, character variant, toggles). */
   settingsJson: text('settings_json').notNull().default('{}'),
 })
 
@@ -27,7 +20,6 @@ export const cards = sqliteTable(
       .$type<DeckId>()
       .references(() => decks.id),
     userId: text('user_id').$type<UserId>(),
-    /** Set for a card only one member sees (their reinforcement cards); null = shared. */
     privateTo: text('private_to').$type<UserId>(),
     type: text('type').notNull(),
     sourceLang: text('source_lang').notNull(),
@@ -37,7 +29,6 @@ export const cards = sqliteTable(
     readingsJson: text('readings_json').notNull().default('{}'),
     tagsJson: text('tags_json').notNull().default('[]'),
     payloadJson: text('payload_json').notNull().default('{}'),
-    /** Language-agnostic annotations (pitch accent, radicals, …) — see core metadata. */
     metadataJson: text('metadata_json').notNull().default('{}'),
     origin: text('origin').notNull().default('manual'),
     createdAt: integer('created_at').notNull(),

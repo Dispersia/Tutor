@@ -1,5 +1,3 @@
-/** Choosing a talent at a milestone, and the talent board (docs/DESIGN.md §13.5). */
-
 import type { UserId } from '../ids'
 import { addTalent, listTalents, replaceTalent } from '../db/repo'
 import type { Db } from '../db/client'
@@ -25,7 +23,6 @@ interface TalentRow {
   milestone: number
 }
 
-/** Writes a talent, replacing any already taken at the same tier + milestone. */
 function applyTalent(
   db: Db,
   bus: EventBus,
@@ -69,7 +66,6 @@ function replaceExisting(
   })
 }
 
-/** The stored row a talent choice writes. */
 function talentRow(option: TalentDef) {
   return {
     talentId: option.id,
@@ -79,12 +75,6 @@ function talentRow(option: TalentDef) {
   }
 }
 
-/**
- * Chooses a talent — a **choice** at a 10-level milestone or a **mastery** capstone
- * at Lv 50/100 — or changes one already taken at that milestone (a free respec).
- * Mastery options are additionally gated on a level in the profession that feeds
- * this one, so a mastery has to be earned by cross-training.
- */
 export function chooseTalent(
   db: Db,
   bus: EventBus,
@@ -108,7 +98,6 @@ interface ChooseReq {
   mine: TalentRow[]
 }
 
-/** Resolves the requested option and the current state, or the reason it is bad. */
 function chooseRequest(db: Db, userId: UserId, talentId: string): ChooseReq | { error: string } {
   const parsed = parseTalentId(talentId)
   if (!parsed) return { error: 'not a talent' }
@@ -124,7 +113,6 @@ function chooseRequest(db: Db, userId: UserId, talentId: string): ChooseReq | { 
   }
 }
 
-/** A mastery capstone: Lv 50/100, plus the feeding profession's level. */
 function masteryGuard(
   db: Db,
   userId: UserId,
@@ -139,7 +127,6 @@ function masteryGuard(
   return `requires ${unmet.map((r) => `${r.skill} ${r.level}`).join(', ')}`
 }
 
-/** Choice tier: every 10 levels, taken in order with no skipping ahead. */
 function choiceGuard(level: number, milestone: number, mine: TalentRow[]): string | undefined {
   const milestones = talentMilestones(level)
   if (!milestones.includes(milestone)) return 'milestone not reached'
@@ -149,7 +136,6 @@ function choiceGuard(level: number, milestone: number, mine: TalentRow[]): strin
   return milestone === milestones[choices.length] ? undefined : 'not the current milestone'
 }
 
-/** The shape `talentView` returns for one owned talent (choice or mastery). */
 function ownedTalents(rows: TalentRow[], levelOf: LevelOf) {
   return resolveTalents(rows).map((t) => ({
     id: t.id,
@@ -159,7 +145,6 @@ function ownedTalents(rows: TalentRow[], levelOf: LevelOf) {
     tier: t.tier,
     mods: t.mods,
     requires: requiresView(t.requires, levelOf),
-    // the other options at the same tier + milestone (so it can be changed)
     options: optionsFor(t.skillId, t.milestone, t.tier).map((o) => optionView(o, levelOf)),
   }))
 }
@@ -178,14 +163,10 @@ function requiresView(reqs: TalentDef['requires'], levelOf: LevelOf) {
   return reqs.map((r) => ({ ...r, met: levelOf(r.skill) >= r.level }))
 }
 
-/** A profession's level, resolved against one action-level map for the whole view. */
 type LevelOf = (skill: SkillId) => number
 
-/** Per-skill talent state for the UI (choice milestone + mastery capstones). */
 export function talentView(db: Db, userId: UserId, levels?: Map<string, number>) {
   const owned = listTalents(db, userId) as TalentRow[]
-  // One action-level map for every profession and requirement in the view: each
-  // lookup used to scan `action_progress` again (25+ scans per board).
   const map = levels ?? actionLevelMap(db, userId)
   const levelOf: LevelOf = (skill) => skillLevelOf(db, userId, skill, map)
   return SKILLS.map((s) => skillTalentView(s, owned, levelOf))
@@ -213,14 +194,12 @@ function choiceState(level: number, choices: TalentRow[]) {
   const milestones = talentMilestones(level)
   const pending = milestones.length > choices.length
   const nextMilestone = pending ? milestones[choices.length]! : null
-  // Every 10-level choice in the game; `null` once they are all taken.
   const nextChoice = pending
     ? nextMilestone
     : (talentMilestones(ACTION_MAX_LEVEL)[choices.length] ?? null)
   return { pending, nextMilestone, nextChoice }
 }
 
-/** The profession this one trades with, and where its synergy talent is taken. */
 function synergyView(skillId: SkillId, mine: TalentRow[]) {
   const syn = SYNERGY[skillId]
   const taken = mine
@@ -250,7 +229,6 @@ function masteryView(of: { skillId: SkillId; level: number; mine: TalentRow[] },
   }))
   return {
     milestones: MASTERY_MILESTONES,
-    // the next not-yet-reached capstone, or null once both are done
     next: MASTERY_MILESTONES.find((m) => level < m) ?? null,
     pending,
     owned: ownedTalents(masteries, levelOf),

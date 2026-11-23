@@ -6,7 +6,6 @@ import { PITCH_BATCH, backfillDeckPitch, pitchTargets, type PitchFetcher } from 
 
 const FLAT = { levels: ['L', 'H'] as ('H' | 'L')[], drop: 0 }
 
-/** A Japanese deck: `n` made-up words (not in the dictionary), 学生 and a sentence. */
 function deck(n: number) {
   const { db, sqlite } = openDb(':memory:')
   const user = createUser(db, { username: 'p', passwordHash: 'x' })
@@ -46,7 +45,6 @@ test('the annotator is called in batches and a failed batch is skipped', async (
     return new Map(words.map((w) => [w.word, FLAT]))
   }
   const res = await backfillDeckPitch(db, userId, deckId, fetcher)
-  // 学生 came from the dictionary and never reached the annotator
   expect(sizes).toEqual([PITCH_BATCH, PITCH_BATCH, 10])
   expect(res.failedBatches).toBe(1)
   expect(res.updated).toBe(1 + PITCH_BATCH + 10)
@@ -71,7 +69,6 @@ test('a backfill that annotated nothing reports why', async () => {
   const failing: PitchFetcher = async () => {
     throw new Error('no key')
   }
-  // 学生 is already annotated, so the dictionary has nothing left to add
   await backfillDeckPitch(db, userId, deckId, async () => new Map())
   await expect(backfillDeckPitch(db, userId, deckId, failing)).rejects.toThrow('no key')
   sqlite.close()

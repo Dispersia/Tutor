@@ -1,6 +1,4 @@
 <script lang="ts">
-  /** Saved loadouts: name the current outfit, then wear or delete one in a tap. */
-
   import { ACCENT, accentStyle } from '#lib/theme'
   import type { GearResponse } from '#lib/skills'
 

@@ -6,7 +6,6 @@ import { charSound, soundAlike } from './variants'
 const CJK = /[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af]/
 const PUNCT = /^[\p{P}\p{S}]$/u
 
-/** CJK: one token per character. Others: whitespace words. */
 export function tokenize(text: string): string[] {
   const tokens: string[] = []
   for (const part of text.trim().split(/\s+/)) {
@@ -37,15 +36,8 @@ function multisetDiff(a: string[], b: string[], eq: (x: string, y: string) => bo
   return out
 }
 
-/** Mandarin decks are Taiwan-standard, so sh/s (and friends) are not errors. */
 const accentAware = (lang: string | undefined) => lang === 'zh'
 
-/**
- * Normalised-comparable form of a text. For Mandarin each character is folded to
- * its accent-equivalent Zhuyin so that a Taiwan-accent rendering of 是 (heard as
- * 四) compares equal to the expected text; other languages use the plain
- * normalised characters.
- */
 function foldForCompare(text: string, lang: string | undefined): string {
   const base = tonelessKey(text)
   if (!accentAware(lang)) return base
@@ -60,9 +52,7 @@ export interface WordTiming {
   end: number
   duration: number
   syllables: number
-  /** syllables per second */
   rate: number
-  /** timing looks off (too fast / clipped) */
   flagged: boolean
 }
 
@@ -74,7 +64,6 @@ export interface Pause {
 export interface AssessFeatures {
   expected: string
   transcript: string
-  /** character error rate 0..1 */
   cer: number
   missing: string[]
   extra: string[]
@@ -83,7 +72,6 @@ export interface AssessFeatures {
   speechRate: number
   truncated: boolean
   duration: number
-  /** 0..100 deterministic score (no LLM) */
   score: number
   correct: boolean
 }
@@ -93,11 +81,9 @@ export interface AssessInput {
   transcript: string
   items: AlignItem[]
   duration: number
-  /** Target language; enables Mandarin accent tolerance when `zh`. */
   lang?: string
 }
 
-/** Turns the ASR + aligner output into explainable, deterministic features. */
 export function computeFeatures(input: AssessInput): AssessFeatures {
   const tokensEqual = accentAware(input.lang) ? soundAlike : (a: string, b: string) => a === b
   const expectedTokens = tokenize(input.expected)
@@ -161,7 +147,6 @@ function compareTokens(
   }
 }
 
-/** Character error rate over the accent-folded forms the two texts compare on. */
 function charErrorRate(expected: string, transcript: string, lang: string | undefined): number {
   const normExpected = foldForCompare(expected, lang)
   const normTranscript = foldForCompare(transcript, lang)
@@ -173,14 +158,11 @@ function wordTimings(items: AlignItem[]): WordTiming[] {
     const duration = Math.max(0.01, it.end - it.start)
     const syllables = syllableCount(it.text)
     const rate = syllables / duration
-    // a CJK syllable below ~0.07s or above ~1s reads as unnatural (loose: fast
-    // TTS and quick native speech shouldn't be flagged)
     const flagged = rate > 14 || rate < 1.0
     return { text: it.text, start: it.start, end: it.end, duration, syllables, rate, flagged }
   })
 }
 
-/** Gaps over 0.4s between aligned words, as pauses the learner took. */
 function pausesOf(items: AlignItem[]): Pause[] {
   const pauses: Pause[] = []
   for (let i = 1; i < items.length; i++) {
@@ -190,7 +172,6 @@ function pausesOf(items: AlignItem[]): Pause[] {
   return pauses
 }
 
-/** A clip is truncated when it aligned fewer words than expected, or cut short. */
 function isTruncated(input: AssessInput, expectedTokens: string[], missing: string[]): boolean {
   const last = input.items[input.items.length - 1]
   return (
@@ -211,7 +192,6 @@ function scoreOf(
   return truncated ? Math.max(0, score - 5) : score
 }
 
-/** Deterministic per-word feedback (used when there is no LLM judge). */
 export function deterministicWords(f: AssessFeatures): WordFeedback[] {
   const missingSet = new Set(f.missing)
   const timingByText = new Map(f.words.map((w) => [w.text, w]))

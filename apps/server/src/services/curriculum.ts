@@ -1,5 +1,3 @@
-/** The guided path: decks split into lessons, and lesson completion (docs/DESIGN.md §13.6). */
-
 import type { UserId } from '../ids'
 import { completeLesson, deckKey, listCards, listDecks, listLessonProgress } from '../db/repo'
 import type { Db } from '../db/client'
@@ -10,7 +8,6 @@ import { publicDeckSettings } from '../deck/settings'
 import { displayReading } from '../text/readings'
 import { srsStateMap } from './srs'
 
-/** The guided path: each deck split into lessons with completion state. */
 export function curriculumView(db: Db, userId: UserId) {
   const decks = listDecks(db)
   const srsMap = srsStateMap(db, userId)
@@ -57,16 +54,11 @@ function lessonView(l: LessonRow, ctx: CurriculumCtx) {
   }
 }
 
-/**
- * How many source words are still unbuilt (an interrupted import), so the UI can
- * offer to finish it. Undefined when the deck has no stored list.
- */
 function remainingWords(d: DeckRow): number | undefined {
   if (!d.settings.words) return undefined
   return Math.max(0, d.settings.words.length - (d.settings.cursor ?? 0))
 }
 
-/** Maps stored cards to the shape the curriculum builder needs. */
 function lessonCardsOf(cards: ReturnType<typeof listCards>) {
   return cards.map((c) => ({
     id: c.id,
@@ -77,12 +69,10 @@ function lessonCardsOf(cards: ReturnType<typeof listCards>) {
   }))
 }
 
-/** The reading a learner sees: Zhuyin for Chinese, kana for Japanese. */
 function cardDisplayReading(c: { targetLang: string; readings: Record<string, string> }): string {
   return displayReading(c)
 }
 
-/** Marks a lesson complete when every card in it has been learned. */
 export function checkLessonCompletion(
   db: Db,
   bus: EventBus,
@@ -97,15 +87,12 @@ export function checkLessonCompletion(
   if (!lesson || lesson.cardIds.length === 0) return false
   const srsMap = srsStateMap(db, userId)
   if (!lesson.cardIds.every((id) => isLearned(srsMap.get(id)))) return false
-  // Only a transition counts: reviewing a lesson that was finished days ago is
-  // not "lesson complete" again (the practice queue interleaves steps now).
   if (listLessonProgress(db, userId).some((p) => p.lessonId === lessonId)) return false
   completeLesson(db, userId, lessonId)
   bus.emit('lesson.completed', { userId, lessonId })
   return true
 }
 
-/** Splits `<key>:<index>` into its parts, or undefined when malformed. */
 function parseLessonId(lessonId: string): { key: string; index: number } | undefined {
   const sep = lessonId.lastIndexOf(':')
   if (sep <= 0) return undefined

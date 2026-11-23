@@ -13,27 +13,18 @@ import type { AudioService } from './audio/service'
 
 export interface Deps {
   db: Db
-  /** Shared client (catalogue + fallback when a user has no key). */
   or: OpenRouter
   supervisor: SpeechSupervisor
-  /** Pre-recorded card audio; absent in most tests (routes degrade to 503). */
   audio?: AudioService
-  /** Domain event bus for game systems (DESIGN §11.4). */
   events: EventBus
   defaults: Record<Role, string>
-  /** Server-level OpenRouter key, used when a user hasn't set their own. */
   serverKey?: string
-  /** Encrypts per-user secrets at rest. */
   secret?: string
   allowRegistration: boolean
   sessionTtlMs: number
-  /** Test hook: overrides the real speech assessor. */
   assess?: AssessFn
-  /** Test hook: overrides the frequency-list fetcher used by the deck builder. */
   fetcher?: Fetcher
-  /** Test hook: overrides the LLM deck planner. */
   planner?: Planner
-  /** Test hook: overrides the LLM pitch-accent annotator. */
   pitch?: PitchFetcher
 }
 

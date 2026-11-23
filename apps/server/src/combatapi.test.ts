@@ -55,10 +55,8 @@ const auth = (cookie: string, extra: RequestInit = {}): RequestInit => ({
 async function signup(app: App, db: Db, username = 'alice') {
   const res = await app.request('/api/auth/register', json({ username, password: 'password123' }))
   const cookie = res.headers.getSetCookie()[0]!.split(';')[0]!
-  // Decks are no longer pre-seeded; tests drill the curated fixture decks.
   const { user } = (await res.json()) as { user: { id: UserId } }
   seedStarterDecks(db, user.id)
-  // Combat is review only, so give every card a spent SRS state (due now).
   const now = Date.now()
   for (const c of listCards(db, user.id)) {
     upsertSrs(db, user.id, c.id, {
@@ -94,15 +92,8 @@ async function cardIndex(app: App, cookie: string) {
 
 type Instance = { exerciseId: string; cardId: string; data?: Record<string, unknown> }
 
-/**
- * The correct answer for whatever drill the server picked. `pickNextExercise`
- * randomises among the eligible exercise kinds (front↔back translate, multiple
- * choice, listen, speak, converse, sentence build), so the answer has to be
- * derived from the instance rather than assumed to be the card's front/back.
- */
 function correctAnswer(instance: Instance, card: CardRow): string | string[] {
   if (instance.exerciseId === 'translate.back_to_front') return card.front
-  // A sentence that *uses* the word (the bare word alone is not a sentence).
   if (instance.exerciseId === 'converse') return `我${card.back}`
   if (instance.exerciseId === 'sentence_build') {
     const tokens = instance.data?.tokens
@@ -128,7 +119,6 @@ test('GET /api/combat lists monsters, player stats and any encounter', async () 
 
 test('starting a fight with no review cards is refused', async () => {
   const { app, db, sqlite } = makeApp()
-  // Register without seeding any SRS state: nothing to review yet.
   const res = await app.request(
     '/api/auth/register',
     json({ username: 'fresh', password: 'password123' }),
@@ -273,7 +263,6 @@ test('a correct drill still takes the monster’s blow', async () => {
     encounter: { playerHp: number } | null
   }
 
-  // The hit lands — and the monster still hits back on the same exchange.
   expect(res.result.correct).toBe(true)
   expect(res.hit.playerDamage).toBeGreaterThan(0)
   expect(res.hit.playerHp).toBeLessThan(start.encounter.playerHp)
@@ -340,8 +329,6 @@ test('reloading mid-fight returns a fresh drill to resume', async () => {
   ).json()) as { instance: Instance }
   expect(start.instance).toBeTruthy()
 
-  // Opening Combat again mid-fight must hand back a drill, otherwise the page
-  // shows "No drill available — try again." with no way to continue.
   const body = (await (await app.request('/api/combat', auth(cookie))).json()) as {
     encounter: unknown
     instance: Instance | null
@@ -374,7 +361,6 @@ test('leaving a fight clears the encounter with no rewards', async () => {
   expect(after.encounter).toBeNull()
   expect(after.instance).toBeNull()
 
-  // Fleeing awards nothing: no bones (the slime's guaranteed drop).
   const skills = (await (await app.request('/api/skills', auth(cookie))).json()) as {
     inventory: { itemId: string; count: number }[]
   }

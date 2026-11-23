@@ -1,6 +1,3 @@
-/** Deterministic PRNG for the sentence drills. */
-
-/** Deterministic PRNG so the same card always yields the same sentence. */
 export function seededRandom(seed: number): () => number {
   let a = seed >>> 0
   return () => {

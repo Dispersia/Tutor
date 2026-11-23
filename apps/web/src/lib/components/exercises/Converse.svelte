@@ -17,7 +17,6 @@
   }: { instance: Instance; busy?: boolean; onsubmit: (answer: string) => void } = $props()
 
   const recorder = new Recorder()
-  // The next card (or another screen) must not inherit a live mic.
   onDestroy(() => recorder.dispose())
   const language = $derived((instance.data.language as string) ?? undefined)
   const answerLang = $derived((instance.data.answerLang as string) ?? language)
@@ -42,10 +41,6 @@
     send()
   }
 
-  /**
-   * Enter sends, Shift+Enter adds a newline. `isComposing` (and keyCode 229) guard
-   * the Enter that confirms an IME candidate — critical when typing Japanese.
-   */
   function onKeydown(e: KeyboardEvent) {
     if (e.key !== 'Enter' || e.shiftKey || e.repeat) return
     if (e.isComposing || e.keyCode === 229) return

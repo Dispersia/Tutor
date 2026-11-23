@@ -68,7 +68,7 @@ test('the default fetcher downloads a list once, with a timeout, and retries a f
     const url = 'http://frequency.test/once.txt'
     await expect(defaultFetcher(url)).rejects.toThrow(/-> 503/)
     fail = false
-    expect(await defaultFetcher(url)).toBe('的 100\n我 90') // the failure was not cached
+    expect(await defaultFetcher(url)).toBe('的 100\n我 90')
     expect(await defaultFetcher(url)).toBe('的 100\n我 90')
     expect(calls).toBe(2)
     expect(signals[0]).toBeInstanceOf(AbortSignal)

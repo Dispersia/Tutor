@@ -1,6 +1,4 @@
 <script lang="ts">
-  /** The Study panel: reading prefs, the daily budget and the exercise checklist. */
-
   import { accentStyle, ACCENT } from '#lib/theme'
   import { MODALITY_LABEL, drillGroupsOf } from '#lib/settingsview'
   import type { ExerciseInfo, StudyPrefs } from '#lib/types'
@@ -24,7 +22,6 @@
     study = { ...study, disabledExercises: [...next] }
   }
 
-  /** Turn a whole modality group on or off at once (product-wide offs stay off). */
   function setGroup(modality: string, enabled: boolean) {
     const ids =
       drillGroups

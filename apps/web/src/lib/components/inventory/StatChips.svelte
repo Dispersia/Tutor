@@ -1,6 +1,4 @@
 <script lang="ts">
-  /** The worn totals line: power, armour, each positive stat and the band buffs. */
-
   import { ACCENT, accentStyle } from '#lib/theme'
   import { STAT_LABEL, STAT_ORDER, combatBuffsOf, totalsOf } from '#lib/inventoryview'
 

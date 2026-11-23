@@ -8,10 +8,6 @@ import SpeakWord from './SpeakWord.svelte'
 import Translate from './Translate.svelte'
 import TypeListen from './TypeListen.svelte'
 
-/**
- * Frontend half of the exercise registry (DESIGN §11.2): `id -> component`.
- * Adding an exercise = a new component + a line here + a backend def.
- */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const map: Record<string, Component<any>> = {
   introduce: Introduce,

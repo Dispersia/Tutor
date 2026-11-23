@@ -1,12 +1,8 @@
-/** Shared palette helpers for the Nightforge theme (apps/web/src/app.css). */
-
 export type SkillCategory = 'gathering' | 'artisan' | 'support' | 'combat'
 
 export interface CategoryStyle {
   label: string
-  /** accent colour (matches the CSS custom properties) */
   accent: string
-  /** soft tint */
   tint: string
 }
 
@@ -17,49 +13,36 @@ export const CATEGORY: Record<SkillCategory, CategoryStyle> = {
   combat: { label: 'Combat', accent: 'oklch(0.71 0.15 25)', tint: 'rgba(232,132,116,0.14)' },
 }
 
-/** Named roles. Colour always means the same thing. */
 export const ACCENT = {
-  /** the one action that moves forward */
   seal: 'oklch(0.71 0.15 285)',
-  /** numbers the player earned */
   gold: 'oklch(0.85 0.13 93)',
   xp: 'oklch(0.85 0.13 93)',
-  /** what grows: goal, health, success */
   jade: 'oklch(0.77 0.12 165)',
   green: 'oklch(0.77 0.12 165)',
   health: 'oklch(0.77 0.12 165)',
   player: 'oklch(0.77 0.12 165)',
-  /** streak, artisan, coins */
   brass: 'oklch(0.79 0.125 78)',
   streak: 'oklch(0.79 0.125 78)',
-  /** the academy: arcane, levels, chat */
   azure: 'oklch(0.76 0.11 240)',
   arcane: 'oklch(0.76 0.11 240)',
   level: 'oklch(0.76 0.11 240)',
-  /** talents and support */
   violet: 'oklch(0.74 0.12 305)',
-  /** damage and danger */
   ember: 'oklch(0.71 0.15 25)',
-  /** errors that need attention */
   warn: 'oklch(0.79 0.125 78)',
-  /** neutral — quiet pills and labels that are not a role (item tier, counts) */
   ink: 'oklch(0.585 0.032 280)',
 } as const
 
-/** History kinds → accent. */
 export const KIND_ACCENT: Record<string, string> = {
   chat: ACCENT.azure,
   voice: ACCENT.violet,
   lesson: ACCENT.jade,
 }
 
-/** The `--accent` style string a component can spread onto an element. */
 export const accentStyle = (color: string) => `--accent: ${color}`
 
 export const categoryAccent = (cat: string): string =>
   CATEGORY[cat as SkillCategory]?.accent ?? ACCENT.azure
 
-/** Item-tier colours (raw/refined/equipment/consumable/coin/other). */
 export const TIER: Record<string, string> = {
   raw: 'oklch(0.71 0.026 280)',
   refined: 'oklch(0.76 0.11 240)',
@@ -71,7 +54,6 @@ export const TIER: Record<string, string> = {
 
 export const tierAccent = (tier?: string | null): string => TIER[tier ?? 'other'] ?? TIER.other!
 
-/** Crafted gear quality → accent (WoW-style colour ramp). */
 export const QUALITY: Record<string, string> = {
   common: 'oklch(0.76 0.024 280)',
   uncommon: 'oklch(0.73 0.12 145)',

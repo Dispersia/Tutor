@@ -24,7 +24,6 @@
   import { countConsumables } from '#lib/combatview'
   import { cachedResource } from '#lib/resource.svelte'
 
-  // Seed from the last fetch so returning to Combat shows the board at once.
   const combat = cachedResource<CombatResponse>('/api/combat', { auto: false })
   const board = useSkills()
   const data = $derived(combat.data ?? null)
@@ -34,19 +33,11 @@
   let drank = $state<{ item: string; buff: { kind: string; value: number } } | null>(null)
   let foodThreshold = $state(50)
   let busy = $state(false)
-  /**
-   * Time attack: each drill has a countdown. The first drill of a fight waits
-   * for a Start click; every drill after that starts its own clock. A timeout
-   * is a miss, so the monster gets to hit back.
-   */
   let timerStarted = $state(false)
   let deadline = $state(0)
   let now = $state(Date.now())
-  /** One timeout per drill, so the ticking clock can't submit twice. */
   let timeoutFired = $state(false)
-  /** Bumps on every monster hit so the health block remounts and re-shakes. */
   let hitSeq = $state(0)
-  /** The last exchange took a monster hit — jolt the health block. */
   let justHit = $state(false)
   const timeLeft = $derived(Math.max(0, deadline - now))
   const timeLeftSec = $derived(Math.ceil(timeLeft / 1000))
@@ -56,7 +47,6 @@
 
   const itemMap = $derived(board.itemMap)
   const skillMap = $derived(board.skillMap)
-  // The fight trains whatever profession the equipped weapon is for.
   const fightSkill = $derived(skillMap.get(data?.player.skill ?? '')?.name ?? '')
   const fightSkillIcon = $derived(skillMap.get(data?.player.skill ?? '')?.icon ?? '')
   const consumables = $derived(countConsumables(board.inventory, itemMap))
@@ -65,14 +55,12 @@
 
   onMount(refresh)
 
-  /** Tick the clock while a drill is live. */
   $effect(() => {
     if (!timerStarted) return
     const timer = setInterval(() => (now = Date.now()), 100)
     return () => clearInterval(timer)
   })
 
-  /** When the clock runs out, take the miss once. */
   $effect(() => {
     if (!timerStarted || deadline === 0 || timeoutFired) return
     if (now < deadline) return
@@ -101,12 +89,8 @@
 
   const prefs = () => api<{ foodThreshold?: number }>('/api/settings').catch(() => null)
 
-  /** Applies a fresh combat board, adopting any running encounter. */
   function applyCombat(c: CombatResponse, food?: number) {
-    // A finished fight stays up until the player leaves the outcome panel.
     if (!hit || hit.outcome === 'ongoing') encounter = c.encounter
-    // Resuming a fight: adopt the drill the server rebuilt for this encounter
-    // so the fight keeps going after a reload. The clock waits for Start.
     if (c.encounter) {
       instance = c.instance
       stopTimer()
@@ -144,7 +128,6 @@
     }
   }
 
-  /** The server body for one exchange. */
   function hitBody(answer: unknown, timedOut: boolean): Parameters<typeof combatHit>[0] {
     return {
       exerciseId: instance!.exerciseId,
@@ -158,21 +141,16 @@
     return last && { ...last, monsterHp: h.monsterHp, playerHp: h.playerHp }
   }
 
-  /** Applies one exchange: the hit, the next drill and the drill clock. */
   function applyHit(r: Awaited<ReturnType<typeof combatHit>>) {
     hit = r.hit
     justHit = r.hit.playerDamage > 0
     if (r.hit.playerDamage > 0) hitSeq += 1
-    // The server clears a finished encounter; keep the last one on screen (at its
-    // final HP) so the outcome panel and the loot have a fight to render under.
     encounter = r.encounter ?? finalState(encounter, r.hit)
     instance = r.instance
     if (r.hit.outcome !== 'ongoing') {
-      // fight over — refresh the monster list / bank
       stopTimer()
       void refresh()
     } else if (r.instance) {
-      // time attack: the next drill starts its own clock straight away
       startTimer()
     } else {
       stopTimer()
@@ -189,7 +167,6 @@
     void refresh()
   }
 
-  /** Flee: drop the encounter on the server, then return to the monster list. */
   async function flee() {
     if (busy) return
     if (!confirm('Leave the fight? Your progress in this battle is lost.')) return
@@ -205,11 +182,6 @@
     }
   }
 
-  /**
-   * Enter fires the drill's primary action ("Got it", "Check") when the focus
-   * is not in a text field, matching the practice screen. There is no result
-   * screen here, the next instance arrives with the hit.
-   */
   function onKeydown(e: KeyboardEvent) {
     if (e.key !== 'Enter' || e.repeat || busy) return
     const t = e.target instanceof HTMLElement ? e.target : null
@@ -306,7 +278,6 @@
       <Spinner size={14} label="Loading encounter" /> Loading…
     </p>
   {:else if encounter}
-    <!-- active fight -->
     <FightBoard {encounter} {hit} {justHit} {hitSeq} {drank} {itemMap} {busy} onFlee={flee} />
 
     {#if hit}
@@ -317,8 +288,6 @@
       <OutcomePanel {hit} {itemMap} onLeave={leave} />
     {:else if instance}
       {#if !timerStarted}
-        <!-- The first drill of a fight waits for Start; after that each drill's
-           clock starts on its own. -->
         <div class="panel p-5 text-center lg:mx-auto lg:max-w-xl">
           <p class="display text-lg text-ink-200">Ready?</p>
           <p class="mt-1 text-xs text-ink-400">
@@ -336,8 +305,6 @@
         <div class="bar mb-2" style="--accent: {timeLeftSec <= 5 ? ACCENT.ember : ACCENT.jade}">
           <i style="width: {timePct}%"></i>
         </div>
-        <!-- Key on the instance so a fresh drill remounts the component. Otherwise
-           two same-type drills in a row reuse it and keep the last answer text. -->
         {#key instance}
           {@const Comp = componentFor(instance.exerciseId)}
           <div class="panel p-5 lg:mx-auto lg:max-w-xl">

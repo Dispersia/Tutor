@@ -15,11 +15,9 @@ test('quiet mode turns on for 15 minutes, then lifts', () => {
   expect(on.active).toBe(true)
   expect(on.until).toBe(now + QUIET_MS)
 
-  // Still on just before it lifts; off exactly at expiry.
   expect(quietState(db, user.id, now + QUIET_MS - 1).active).toBe(true)
   expect(quietState(db, user.id, now + QUIET_MS)).toEqual({ active: false, until: 0 })
 
-  // Can be turned off early.
   setQuiet(db, user.id, true, now)
   expect(setQuiet(db, user.id, false, now).active).toBe(false)
   sqlite.close()

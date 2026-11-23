@@ -1,13 +1,3 @@
-/**
- * Domain event bus (docs/DESIGN.md §11.4). Game systems subscribe to these events
- * so new mechanics (achievements, quests, leagues) are additive — they never have
- * to touch the exercise engine.
- *
- * Events are facts about committed writes: an `emit` inside a transaction
- * (`inTransaction`/`atomic`, which run under `deferEvents`) is held until the
- * outermost transaction commits, and dropped if it rolls back.
- */
-
 import type { UserId, CardId, GearInstanceId } from './ids'
 import type { CardState, Rating } from './game/srs'
 import type { Cost } from './game/skills'
@@ -34,7 +24,6 @@ export interface GameEventMap {
   'skill.level.up': { userId: UserId; actionId: string; skillId: string; level: number }
   'item.gained': { userId: UserId; itemId: string; count: number; total?: number }
   'item.consumed': { userId: UserId; itemId: string; count: number; total?: number }
-  /** idle rigs settled (docs/DESIGN.md §13.5.1): everything the runs made and spent */
   'idle.settled': { userId: UserId; gained: Cost[]; spent: Cost[] }
   'talent.chosen': {
     userId: UserId
@@ -52,7 +41,6 @@ export interface GameEventMap {
     tier: 'choice' | 'mastery'
   }
   'item.equipped': { userId: UserId; itemId: string; slot: string }
-  /** A band reagent enchanted a piece (docs §13.5.3). */
   'item.enchanted': { userId: UserId; instanceId: GearInstanceId; band: string }
   'combat.hit': {
     userId: UserId
@@ -79,19 +67,8 @@ export type GameEventType = keyof GameEventMap
 
 type Handler<T extends GameEventType> = (event: GameEventMap[T]) => void
 
-/**
- * One buffer of held deliveries per open `deferEvents` scope, innermost last.
- * Module-level on purpose: transactions are synchronous (no `await` inside),
- * so scopes strictly nest and can never interleave.
- */
 const scopes: (() => void)[][] = []
 
-/**
- * Runs `fn` with event delivery held back. When `fn` returns, its events join
- * the enclosing scope (a savepoint inside a transaction) or, for the outermost
- * scope, are delivered in the order they were emitted. When `fn` throws, its
- * events are dropped — the writes they describe were rolled back.
- */
 export function deferEvents<T>(fn: () => T): T {
   const held: (() => void)[] = []
   scopes.push(held)
@@ -110,7 +87,6 @@ export function deferEvents<T>(fn: () => T): T {
 export class EventBus {
   #handlers = new Map<GameEventType, Set<(event: never) => void>>()
 
-  /** Subscribes; returns an unsubscribe function. */
   on<T extends GameEventType>(type: T, fn: Handler<T>): () => void {
     const set = this.#handlers.get(type) ?? new Set()
     set.add(fn as (event: never) => void)
@@ -118,7 +94,6 @@ export class EventBus {
     return () => set.delete(fn as (event: never) => void)
   }
 
-  /** Delivers now, or once the open transaction commits (see `deferEvents`). */
   emit<T extends GameEventType>(type: T, event: GameEventMap[T]): void {
     const held = scopes.at(-1)
     if (held) held.push(() => this.#deliver(type, event))

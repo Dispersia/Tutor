@@ -24,7 +24,6 @@ import {
   type FsrsState,
 } from './srs'
 
-/** The reference implementation, used only to assert parity in these tests. */
 const reference = FSRS6Model.create({
   config: {
     weights: [...FSRS6_DEFAULT_WEIGHTS],
@@ -63,7 +62,7 @@ test('nextInterval shortens as desired retention rises', () => {
   const strict = nextInterval(20, 0.97)
   expect(normal).toBeLessThan(relaxed)
   expect(strict).toBeLessThan(normal)
-  expect(normal).toBe(20) // round(S) at the default retention
+  expect(normal).toBe(20)
 })
 
 test('a new card walks Anki learning steps and graduates', () => {
@@ -77,14 +76,12 @@ test('a new card walks Anki learning steps and graduates', () => {
   expect(again.state.step).toBe(0)
   expect(again.dueAt).toBe(now + 1 * MIN_MS)
 
-  // Easy graduates straight away to a multi-day interval.
   const easy = schedule(NEW_STATE, EASY, now)
   expect(easy.state.state).toBe('review')
   expect(easy.intervalDays).toBeGreaterThan(1)
   expect(easy.dueAt).toBe(now + easy.intervalDays * DAY)
   expect(isLearned(easy.state)).toBe(true)
 
-  // Second Good on the same day graduates the card with a review interval.
   const graduate = schedule(good.state, GOOD, now + 60_000)
   expect(graduate.state.state).toBe('review')
   expect(graduate.intervalDays).toBeGreaterThanOrEqual(1)
@@ -110,7 +107,6 @@ test('a lapse drops to relearning and keeps stability from growing', () => {
   expect(lapsed.state.lapses).toBe(1)
   expect(lapsed.state.stability).toBeLessThanOrEqual(easy.state.stability)
 
-  // Relearning graduates back to review after a Good.
   const done = schedule(lapsed.state, GOOD, later + 10 * MIN_MS)
   expect(done.state.state).toBe('review')
   expect(done.intervalDays).toBeGreaterThanOrEqual(1)
@@ -161,7 +157,6 @@ test('same-day updates match ts-fsrs, including the no-shrink floor on Hard', ()
       expect(ours.state.difficulty).toBeCloseTo(ref.difficulty, 9)
     }
   }
-  // the floor the old hand-rolled core was missing
   expect(sameDayStability(0.05, HARD)).toBeGreaterThanOrEqual(0.05)
 })
 
@@ -177,16 +172,14 @@ test('isLearned is true only once the card is in review with a day+ interval', (
 test('selectCardId prefers overdue, then new, then soonest due', () => {
   const state = (dueAt: number): FsrsState => ({ ...NEW_STATE, state: 'review', dueAt })
   const srs = new Map<string, FsrsState>([
-    ['a', state(now - DAY)], // overdue
-    ['b', state(now + DAY)], // not due
+    ['a', state(now - DAY)],
+    ['b', state(now + DAY)],
   ])
   expect(selectCardId(['b', 'c', 'a'], srs, now)).toBe('a')
 
-  // nothing overdue -> a brand-new card
   const none = new Map<string, FsrsState>([['b', state(now + DAY)]])
   expect(selectCardId(['b', 'c'], none, now)).toBe('c')
 
-  // all scheduled -> the soonest due
   const all = new Map<string, FsrsState>([
     ['b', state(now + 5 * DAY)],
     ['c', state(now + DAY)],
@@ -203,21 +196,17 @@ test('selectStudyCardId never serves a card ahead of its due date', () => {
     dueAt,
   })
 
-  // Nothing overdue and nothing new: a future review card is not studyable.
   const future = new Map<string, FsrsState>([['a', state(now + DAY)]])
   expect(selectStudyCardId(['a'], future, now)).toBeUndefined()
 
-  // A learning step that is not due yet waits its turn too.
   const soon = new Map<string, FsrsState>([
     ['a', { ...state(now + 10 * MIN_MS, 'learning'), step: 1 }],
   ])
   expect(selectStudyCardId(['a'], soon, now)).toBeUndefined()
 
-  // Once the step comes due, it is served.
   const dueStep = new Map<string, FsrsState>([['a', { ...state(now - 1, 'learning'), step: 1 }]])
   expect(selectStudyCardId(['a'], dueStep, now)).toBe('a')
 
-  // Overdue comes first, then a new word, never a scheduled-but-not-due card.
   const mixed = new Map<string, FsrsState>([
     ['a', state(now + DAY)],
     ['b', state(now - 1)],
@@ -253,16 +242,13 @@ describe('early reviews (combat drills ahead of the schedule)', () => {
   }
 
   test('a due review card answered within a day of an early review is rescheduled', () => {
-    // drilled 8h before it fell due: a same-day review keeps the due date …
     const drilled = { ...review, lastReviewAt: 2 * DAY - 16 * 3_600_000 }
     const early = schedule(drilled, 3, 2 * DAY - 8 * 3_600_000)
     expect(early.dueAt).toBe(review.dueAt)
-    // … then answered once it is due, still inside 24h of that early review
     const now = 2 * DAY + 3_600_000
     const due = schedule(early.state, 3, now)
     expect(due.dueAt).toBeGreaterThan(now)
     expect(due.state.state).toBe('review')
-    // a miss on the due card goes to relearning instead of staying due forever
     const missed = schedule(early.state, 1, now)
     expect(missed.state.state).toBe('relearning')
     expect(missed.dueAt).toBeGreaterThan(now)

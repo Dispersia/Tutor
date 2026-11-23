@@ -13,17 +13,6 @@ function toWav(audio: Uint8Array): Blob {
   return new Blob([buf], { type: 'audio/wav' })
 }
 
-/**
- * Runs one attempt through the speech gateway: ASR transcript + forced alignment
- * to the expected text (DESIGN §9.4). Wakes the sidecar if it's asleep.
- *
- * We deliberately do NOT bias the ASR toward the deck vocabulary. Whisper folds
- * hotwords into its initial prompt, and on a short take the decoder "continues"
- * that prompt instead of listening: a learner who says いる comes back as います,
- * a course word they never said. Pronunciation scoring is only honest if the
- * transcript reports what was actually said, so the decode is unbiased and the
- * forced aligner (given the expected text) is what anchors the attempt.
- */
 export function makeAssessor(deps: Deps, language?: string): AssessFn {
   return (audio, expected) =>
     withGateway(deps.supervisor, async (url) => {

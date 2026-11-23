@@ -24,7 +24,6 @@
   } = $props()
 
   const recorder = new Recorder()
-  // The next card (or another screen) must not inherit a live mic.
   onDestroy(() => recorder.dispose())
   const target = $derived((instance.data.target as string) ?? '')
   const reading = $derived((instance.data.reading as string) ?? '')
@@ -38,7 +37,6 @@
   let working = $state(false)
   let err = $state('')
 
-  /** Plays the model pronunciation; a failed synthesis shows instead of vanishing. */
   function hear() {
     err = ''
     speak(target, speechOpts(language)).catch((e) => (err = (e as Error).message))

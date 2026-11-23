@@ -3,16 +3,10 @@ import { getTableConfig, type SQLiteTable } from 'drizzle-orm/sqlite-core'
 import { openDb } from './client'
 import * as schema from './schema'
 
-/**
- * The migrations are hand-written SQL and the drizzle schema is hand-written
- * TypeScript: nothing but this test keeps the two describing the same database.
- */
-
 const tables = (Object.values(schema) as unknown[]).filter(
   (t): t is SQLiteTable => typeof t === 'object' && t !== null && Symbol.for('drizzle:Name') in t,
 )
 
-/** Columns the database still has that the code no longer reads. */
 const RETIRED: Record<string, string[]> = { srs: ['ease'] }
 
 function database() {

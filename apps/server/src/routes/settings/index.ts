@@ -1,8 +1,3 @@
-/**
- * The member's own settings (docs/DESIGN.md §12.5, §10.1): read the whole view,
- * then patch roles, study prefs and the scalar tuning knobs.
- */
-
 import { toDeckId, type UserId } from '../../ids'
 import type { Context } from 'hono'
 import {
@@ -47,7 +42,6 @@ async function updateSettings(c: Context<AppEnv>) {
   const body = await jsonBody(c)
   const roles = obj(body, 'roles')
   const study = obj(body, 'study')
-  // Validate everything before writing anything: a rejected request changes nothing.
   const error = rolesError(roles) ?? studyError(deps, userId, study) ?? timeZoneError(body)
   if (error) return fail(c, 400, error)
   if (roles) applyRoles(deps, userId, roles)
@@ -56,7 +50,6 @@ async function updateSettings(c: Context<AppEnv>) {
   return c.json(settingsReply(deps, userId))
 }
 
-/** The browser's IANA zone, reported so a day starts at the member's own midnight. */
 function timeZoneError(body: Record<string, unknown>): string | undefined {
   const zone = str(body, 'timezone')
   if (zone === undefined || isTimeZone(zone)) return undefined
@@ -94,7 +87,6 @@ function studyError(
   return undefined
 }
 
-/** Whether an active-deck id names a real deck ('' clears it). */
 function deckExists(deps: Deps, userId: UserId, wanted: unknown): boolean {
   if (typeof wanted !== 'string' || !wanted) return true
   return listDecks(deps.db).some((d) => d.id === wanted)
@@ -121,7 +113,6 @@ function studyPatch(study: Record<string, unknown>): Partial<StudyPrefs> {
   return patch
 }
 
-/** Only known exercise ids; the first-exposure "teach" step is never a drill. */
 function knownExercises(ids: string[]): string[] {
   const known = new Set(registry.list().map((d) => d.id))
   return ids.filter(
@@ -152,7 +143,6 @@ function clamp(n: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, Math.round(n)))
 }
 
-/** Each user brings their own OpenRouter key (or uses the server's). */
 async function saveKey(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!

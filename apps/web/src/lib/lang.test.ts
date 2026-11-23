@@ -4,12 +4,12 @@ import { htmlLang, typingAttrs } from './lang'
 test('htmlLang maps app codes to HTML lang tags', () => {
   expect(htmlLang('ja')).toBe('ja')
   expect(htmlLang('en')).toBe('en')
-  expect(htmlLang('zh')).toBe('zh-Hant') // the app's default script
+  expect(htmlLang('zh')).toBe('zh-Hant')
   expect(htmlLang('zh', 'simplified')).toBe('zh-Hans')
   expect(htmlLang('yue')).toBe('zh-Hant-HK')
   expect(htmlLang('')).toBeUndefined()
   expect(htmlLang(undefined)).toBeUndefined()
-  expect(htmlLang('pt')).toBe('pt') // codes we don't special-case pass through
+  expect(htmlLang('pt')).toBe('pt')
 })
 
 test('typingAttrs labels a field and turns off wrong-language help', () => {

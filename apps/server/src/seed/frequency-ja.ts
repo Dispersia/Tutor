@@ -1,40 +1,15 @@
-/**
- * A Japanese frequency list, the Japanese counterpart to `text/lexicon.ts`
- * (docs/DESIGN.md §13.7).
- *
- * Ordered roughly by usefulness so the head is the words a beginner can build
- * with. The deck is seeded in this order and the path walks it one word per
- * step (strict n+1), exactly like Mandarin. `kana` is the native reading shown
- * as furigana; `romaji` is only used to derive it and is never displayed.
- */
-
 export type JaPos =
-  | 'pron' // pronoun / demonstrative (私, これ …)
-  | 'noun'
-  | 'verb'
-  | 'adj' // い-adjective (大きい …)
-  | 'nadj' // な-adjective (好き …)
-  | 'adv'
-  | 'part' // particle (は, を, に …)
-  | 'qword' // question word (何, 誰 …)
-  | 'num'
-  | 'copula' // です
-  | 'conj'
+  'pron' | 'noun' | 'verb' | 'adj' | 'nadj' | 'adv' | 'part' | 'qword' | 'num' | 'copula' | 'conj'
 
 export interface JaFreqWord {
-  /** display form (kanji + kana) */
   word: string
-  /** hiragana reading (furigana source) */
   kana: string
-  /** latin transliteration — used only to derive the native reading */
   romaji: string
-  /** short English gloss used in prompts */
   en: string
   pos: JaPos
 }
 
 export const FREQUENCY_JA: JaFreqWord[] = [
-  // people & pronouns
   { word: '私', kana: 'わたし', romaji: 'watashi', en: 'I, me', pos: 'pron' },
   { word: 'あなた', kana: 'あなた', romaji: 'anata', en: 'you', pos: 'pron' },
   { word: '彼', kana: 'かれ', romaji: 'kare', en: 'he, him', pos: 'pron' },
@@ -45,7 +20,6 @@ export const FREQUENCY_JA: JaFreqWord[] = [
   { word: '学生', kana: 'がくせい', romaji: 'gakusei', en: 'student', pos: 'noun' },
   { word: '家族', kana: 'かぞく', romaji: 'kazoku', en: 'family', pos: 'noun' },
 
-  // demonstratives & question words
   { word: 'これ', kana: 'これ', romaji: 'kore', en: 'this', pos: 'pron' },
   { word: 'それ', kana: 'それ', romaji: 'sore', en: 'that', pos: 'pron' },
   { word: 'あれ', kana: 'あれ', romaji: 'are', en: 'that (over there)', pos: 'pron' },
@@ -56,7 +30,6 @@ export const FREQUENCY_JA: JaFreqWord[] = [
   { word: '誰', kana: 'だれ', romaji: 'dare', en: 'who', pos: 'qword' },
   { word: 'いつ', kana: 'いつ', romaji: 'itsu', en: 'when', pos: 'qword' },
 
-  // copula & core verbs
   { word: 'です', kana: 'です', romaji: 'desu', en: 'to be', pos: 'copula' },
   { word: 'する', kana: 'する', romaji: 'suru', en: 'to do', pos: 'verb' },
   { word: 'ある', kana: 'ある', romaji: 'aru', en: 'to exist (things)', pos: 'verb' },
@@ -79,7 +52,6 @@ export const FREQUENCY_JA: JaFreqWord[] = [
   { word: '使う', kana: 'つかう', romaji: 'tsukau', en: 'to use', pos: 'verb' },
   { word: '作る', kana: 'つくる', romaji: 'tsukuru', en: 'to make', pos: 'verb' },
 
-  // particles
   { word: 'は', kana: 'は', romaji: 'wa', en: 'topic particle', pos: 'part' },
   { word: 'が', kana: 'が', romaji: 'ga', en: 'subject particle', pos: 'part' },
   { word: 'を', kana: 'を', romaji: 'o', en: 'object particle', pos: 'part' },
@@ -93,7 +65,6 @@ export const FREQUENCY_JA: JaFreqWord[] = [
   { word: 'まで', kana: 'まで', romaji: 'made', en: 'until, as far as', pos: 'part' },
   { word: 'でも', kana: 'でも', romaji: 'demo', en: 'but', pos: 'conj' },
 
-  // adjectives
   { word: 'いい', kana: 'いい', romaji: 'ii', en: 'good', pos: 'adj' },
   { word: '悪い', kana: 'わるい', romaji: 'warui', en: 'bad', pos: 'adj' },
   { word: '大きい', kana: 'おおきい', romaji: 'ookii', en: 'big', pos: 'adj' },
@@ -109,7 +80,6 @@ export const FREQUENCY_JA: JaFreqWord[] = [
   { word: '忙しい', kana: 'いそがしい', romaji: 'isogashii', en: 'busy', pos: 'adj' },
   { word: '好き', kana: 'すき', romaji: 'suki', en: 'liked, favourite', pos: 'nadj' },
 
-  // everyday nouns
   { word: '水', kana: 'みず', romaji: 'mizu', en: 'water', pos: 'noun' },
   { word: 'お茶', kana: 'おちゃ', romaji: 'ocha', en: 'tea', pos: 'noun' },
   { word: 'ご飯', kana: 'ごはん', romaji: 'gohan', en: 'rice, meal', pos: 'noun' },
@@ -139,7 +109,6 @@ export const FREQUENCY_JA: JaFreqWord[] = [
   { word: '山', kana: 'やま', romaji: 'yama', en: 'mountain', pos: 'noun' },
   { word: '川', kana: 'かわ', romaji: 'kawa', en: 'river', pos: 'noun' },
 
-  // adverbs & numbers
   { word: 'とても', kana: 'とても', romaji: 'totemo', en: 'very', pos: 'adv' },
   { word: '少し', kana: 'すこし', romaji: 'sukoshi', en: 'a little', pos: 'adv' },
   { word: 'もう', kana: 'もう', romaji: 'mou', en: 'already', pos: 'adv' },

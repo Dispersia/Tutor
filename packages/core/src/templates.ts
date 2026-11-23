@@ -1,73 +1,26 @@
 import type { Card, Modality } from './types'
 
-/**
- * Card templates (docs/DESIGN.md §11).
- *
- * A *template* is the reusable shape of a practice card: the content it needs
- * and the function it serves. Templates are language-agnostic — a "vocab"
- * template works for Mandarin, Japanese, Spanish or anything else, because it
- * names its content by role (`back` is "the target-language text") rather than
- * by script. The five built-ins cover the functions the app practises today:
- *
- *   vocab      recall a word's meaning
- *   spoken     say a word/sentence out loud
- *   listening  transcribe what you hear
- *   grammar    apply a rule to a pattern
- *   sentence   arrange/type a whole sentence
- *
- * A card's *content* is the existing `Card` model (`front`, `back`, `readings`,
- * `payload`). A template only declares which parts of that model it reads, so a
- * single card can be reused by several templates (one word card is practised as
- * vocab, spoken and listening) and a single template can be reused across every
- * language. Adding a template means describing its fields and registering the
- * exercises that realise it — nothing in the card model changes.
- */
-
 export type TemplateKind = 'vocab' | 'spoken' | 'listening' | 'grammar' | 'sentence'
 
-/** How a template field is read off a card. */
-export type TemplateFieldKind =
-  /** a plain string (meaning, gloss, prompt) */
-  | 'text'
-  /** a native-script phonetic reading (Zhuyin, kana, …) — never Latin */
-  | 'reading'
-  /** target-language text that is synthesised to speech for the learner */
-  | 'audio'
-  /** an ordered list of target-language tokens (a segmented sentence) */
-  | 'tokens'
-  /** a list of candidate answers for a choice card */
-  | 'options'
-  /** structured extras (grammar slots, patterns) */
-  | 'json'
+export type TemplateFieldKind = 'text' | 'reading' | 'audio' | 'tokens' | 'options' | 'json'
 
 export interface TemplateField {
-  /** Dotted path on the `Card`: `back`, `readings.kana`, `payload.tokens`. */
   path: string
   label: string
   kind: TemplateFieldKind
   required: boolean
-  /** What the field holds, in plain words (shown in authoring UIs). */
   description: string
 }
 
 export interface CardTemplate {
   kind: TemplateKind
-  /** Short name for the practice function, e.g. "Vocabulary". */
   title: string
-  /** One-line summary of what the learner does. */
   summary: string
-  /** The modality most instances of this template use. */
   modality: Modality
-  /** The reusable content model: what a card must carry to use this template. */
   fields: TemplateField[]
-  /**
-   * Exercise ids (the server registry) that realise this template. An exercise
-   * id is stable; templates only group them by function.
-   */
   exercises: string[]
 }
 
-/** Native-script reading — the template never names a script, only the role. */
 const readingField: TemplateField = {
   path: 'readings.*',
   label: 'Reading',
@@ -92,10 +45,6 @@ const targetField: TemplateField = {
   description: 'The target-language text the card teaches (word, phrase or sentence).',
 }
 
-/**
- * The five built-in templates. Order is the order a learner meets them: the
- * word first, then hearing it, then producing it, then the patterns around it.
- */
 export const CARD_TEMPLATES: readonly CardTemplate[] = [
   {
     kind: 'vocab',
@@ -199,21 +148,14 @@ export const CARD_TEMPLATES: readonly CardTemplate[] = [
   },
 ] as const
 
-/** Look up a template by its kind. */
 export const TEMPLATE_BY_KIND: Record<TemplateKind, CardTemplate> = Object.fromEntries(
   CARD_TEMPLATES.map((t) => [t.kind, t]),
 ) as Record<TemplateKind, CardTemplate>
 
-/** The template that owns an exercise id, if any. */
 export function templateForExercise(exerciseId: string): CardTemplate | undefined {
   return CARD_TEMPLATES.find((t) => t.exercises.includes(exerciseId))
 }
 
-/**
- * The templates a card can be practised with, in template order. Reads only the
- * card's content (`payload`), so it is language-agnostic: a card carrying
- * `payload.tokens` is a sentence card in any language.
- */
 export function templatesForCard(card: Pick<Card, 'payload'>): CardTemplate[] {
   const payload = card.payload ?? {}
   const has = (key: string) => {

@@ -6,11 +6,6 @@ import { OpenRouter } from '../llm/openrouter'
 import { resolveUserKey } from '../llm/userkey'
 import { llmPlanner, type Planner } from './plan'
 
-/**
- * The deck planner for a user: the test override when present, otherwise an
- * OpenRouter-backed generator using the user's own key (or the server's).
- * Undefined when no key is configured.
- */
 export async function plannerFor(deps: Deps, userId: UserId): Promise<Planner | undefined> {
   if (deps.planner) return deps.planner
   const key = await resolveUserKey(deps, userId)

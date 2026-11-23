@@ -84,7 +84,6 @@ test('streamChat yields deltas, usage then done; listModels maps + caches', asyn
   expect(events.at(-1)).toEqual({ type: 'done' })
   expect(usage.totalTokens).toBe(7)
 
-  // Thinking models must not spend hidden reasoning unless asked to.
   expect(bodies[0]!.reasoning).toEqual({ effort: 'none' })
 
   globalThis.fetch = orig

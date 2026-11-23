@@ -1,49 +1,27 @@
 import type { AnkiDeck, AnkiNote } from './parse'
 
-/**
- * Turns Anki notes into an ordered word list (docs/DESIGN.md §13.7) — the same
- * shape a frequency list yields, so an uploaded deck is just another source.
- *
- * Which field holds the word is chosen by the learner in the UI; this module
- * only pre-selects a sensible default and extracts the chosen fields. A package
- * can carry several note types, so everything is scoped to the model that most
- * notes use.
- */
-
 export interface AnkiWordList {
   words: string[]
-  /** word → native reading (when a reading field was found) */
   readings: Record<string, string>
-  /** word → meaning (when a meaning field was found) */
   meanings: Record<string, string>
-  /** The model's field names, in order. */
   fields: string[]
-  /** The field index used as the word. */
   wordField: number
   readingField: number
   meaningField: number
 }
 
-/** What a deck looks like before the learner picks its fields. */
 export interface AnkiInspection {
   name?: string
-  /** The model's field names, in order. */
   fields: string[]
-  /** A few notes' cleaned fields, for a preview table. */
   sample: string[][]
   noteCount: number
-  /** Best-guess field indices, used only to pre-select the pickers. */
   suggested: { wordField: number; readingField: number; meaningField: number }
-  /** Target language guessed from the deck's script (kana → Japanese, …). */
   suggestedLang?: string
 }
 
 export interface WordFieldOptions {
-  /** Explicit field index for the word (required by the UI, guessed as a fallback). */
   wordField?: number
-  /** Explicit reading field index, or -1 for none. */
   readingField?: number
-  /** Explicit meaning field index, or -1 for none. */
   meaningField?: number
   limit?: number
 }
@@ -57,7 +35,6 @@ const MEANING_FIELD =
 
 const CJK = /[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff\uac00-\ud7af]/
 
-/** Strips Anki HTML/sound markup and collapses whitespace. */
 export function cleanField(s: string): string {
   return s
     .replace(/\[sound:[^\]]*\]/g, '')
@@ -71,7 +48,6 @@ export function cleanField(s: string): string {
     .trim()
 }
 
-/** Fraction of characters in a CJK script. */
 function cjkRatio(s: string): number {
   if (!s) return 0
   let n = 0
@@ -79,7 +55,6 @@ function cjkRatio(s: string): number {
   return n / [...s].length
 }
 
-/** The note type most notes use (a package can carry more than one). */
 function dominantMid(deck: AnkiDeck): number | undefined {
   const counts = new Map<number, number>()
   for (const n of deck.notes) counts.set(n.mid, (counts.get(n.mid) ?? 0) + 1)
@@ -94,7 +69,6 @@ function dominantMid(deck: AnkiDeck): number | undefined {
   return best
 }
 
-/** The notes of the dominant model, in deck order. */
 function dominantNotes(deck: AnkiDeck): AnkiNote[] {
   const mid = dominantMid(deck)
   if (mid === undefined) return deck.notes
@@ -102,7 +76,6 @@ function dominantNotes(deck: AnkiDeck): AnkiNote[] {
   return subset.length ? subset : deck.notes
 }
 
-/** Field names of the dominant model, or generic labels sized to the data. */
 function modelFields(deck: AnkiDeck, notes: AnkiNote[]): string[] {
   const mid = dominantMid(deck)
   const named = mid !== undefined ? deck.models[String(mid)]?.fields : undefined
@@ -116,13 +89,11 @@ function modelFields(deck: AnkiDeck, notes: AnkiNote[]): string[] {
   return Array.from({ length: width }, (_, i) => `Field ${i + 1}`)
 }
 
-/** Picks the field index that most likely holds the target word. */
 function pickWordField(fields: string[], rows: string[][], targetLang: string): number {
   const named = fields.findIndex((f) => WORD_FIELD.test(f))
   if (named >= 0) return named
   const cjk = targetLang === 'zh' || targetLang === 'ja' || targetLang === 'yue'
   if (cjk) {
-    // the field whose values are mostly target-script characters
     let bestIdx = 0
     let bestScore = -1
     fields.forEach((_, i) => {
@@ -137,16 +108,10 @@ function pickWordField(fields: string[], rows: string[][], targetLang: string): 
   return 0
 }
 
-/** The cleaned field rows of the dominant model. */
 function rowsOf(notes: AnkiNote[]): string[][] {
   return notes.map((n) => n.fields.map(cleanField))
 }
 
-/**
- * Guesses the target language from the script the deck is written in. Kana wins
- * over Han (Japanese uses both), Hangul is Korean, Han alone is Chinese. Latin
- * scripts are ambiguous, so they return undefined and the caller decides.
- */
 export function detectLanguage(deck: AnkiDeck): string | undefined {
   const counts = scriptCounts(dominantNotes(deck).slice(0, 200))
   if (counts.kana > 0) return 'ja'
@@ -182,7 +147,6 @@ function countField(field: string, counts: ScriptCounts): void {
   }
 }
 
-/** Best-guess field indices (used only to pre-select the pickers). */
 export function suggestAnkiFields(
   deck: AnkiDeck,
   targetLang: string,
@@ -197,7 +161,6 @@ export function suggestAnkiFields(
   }
 }
 
-/** What a deck looks like before the learner picks its fields. */
 export function inspectAnki(deck: AnkiDeck, targetLang: string): AnkiInspection {
   const notes = dominantNotes(deck)
   return {
@@ -210,11 +173,6 @@ export function inspectAnki(deck: AnkiDeck, targetLang: string): AnkiInspection 
   }
 }
 
-/**
- * Extracts an ordered, de-duplicated word list from a deck's notes. `wordField`
- * (and optional reading/meaning fields) come from the learner's choice; the
- * indices are guessed only when they are not supplied.
- */
 export function wordsFromAnki(
   deck: AnkiDeck,
   targetLang: string,
@@ -261,7 +219,6 @@ function extractWords(
   return out
 }
 
-/** Adds one row's word (and its reading/meaning); false when it is a duplicate. */
 function addWord(out: AnkiWordList, seen: Set<string>, row: string[], idx: WordFields): boolean {
   const word = row[idx.wordField] ?? ''
   if (!word || seen.has(word)) return false

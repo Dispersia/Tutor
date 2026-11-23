@@ -43,20 +43,14 @@ export type Role = 'conversation' | 'judge' | 'generator' | 'translator'
 
 export type Roles = Record<Role, string>
 
-/** Per-user study preferences: reading display + which exercise kinds are offered. */
 export interface StudyPrefs {
   showZhuyin: boolean
   showFurigana: boolean
   disabledExercises: string[]
-  /** New cards to introduce per day (0 = unlimited). */
   newPerDay: number
-  /** Graded reviews allowed per day (0 = unlimited). */
   maxReviewsPerDay: number
-  /** Learning steps in minutes; a new card repeats once per step. */
   learningSteps: number[]
-  /** Grow the deck automatically when a word keeps lapsing. */
   autoReinforce: boolean
-  /** The deck the member studies everywhere (null = free practice across decks). */
   activeDeckId?: string | null
 }
 
@@ -65,16 +59,13 @@ export interface ExerciseInfo {
   title: string
   modality: string
   needsAudio?: boolean
-  /** Switched off product-wide for now; the learner cannot turn it on. */
   disabled?: boolean
-  /** The card template this exercise belongs to (vocab, spoken, …). */
   template?: TemplateKind
 }
 
 export type TemplateKind = 'vocab' | 'spoken' | 'listening' | 'grammar' | 'sentence'
 
 export interface TemplateField {
-  /** Dotted path on the card: `back`, `readings.kana`, `payload.tokens`. */
   path: string
   label: string
   kind: string
@@ -82,7 +73,6 @@ export interface TemplateField {
   description: string
 }
 
-/** A reusable, language-agnostic practice card template (see @tutor/core). */
 export interface CardTemplate {
   kind: TemplateKind
   title: string
@@ -92,30 +82,19 @@ export interface CardTemplate {
   exercises: string[]
 }
 
-/** One step of a pitch contour. */
 export type PitchLevel = 'H' | 'L'
 
-/**
- * A language-agnostic pitch contour (Japanese pitch accent, tone contours): one
- * level per syllable/mora. `drop` is the accent nucleus counted from 1 — the
- * mora after which the pitch falls (`0` = no in-word drop).
- */
 export interface PitchContour {
   levels: PitchLevel[]
   drop?: number | null
-  /** The syllable/mora texts the levels describe (kana); defaults to 1:1 chars. */
   syllables?: string[]
 }
 
-/** Language-specific annotations attached to a card (see @tutor/core). */
 export interface CardMetadata {
-  /** Pitch contour of the card's word (Japanese pitch accent, tones, …). */
   pitch?: PitchContour
-  /** Any other annotation, keyed by convention (`radical`, `strokeOrder`, …). */
   [key: string]: unknown
 }
 
-/** A stored card, as the decks API returns it. */
 export interface Card {
   id: string
   deckId: string | null

@@ -28,7 +28,6 @@
       { text: string; reading?: string; gloss?: string; target?: string } | undefined,
   )
 
-  /** Split the example so the new word can be highlighted. */
   const exampleParts = $derived.by(() => {
     if (!example) return [] as { text: string; hit: boolean }[]
     const hit = example.target || word

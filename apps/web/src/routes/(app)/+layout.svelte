@@ -17,10 +17,6 @@
     if (session.loaded && !session.user) void goto(href('/login'))
   })
 
-  // Label the document with the language its content is written in — the
-  // learner's own language (prompts, meanings and feedback use it). No browser
-  // can switch the OS keyboard for us; this is the best-effort hint (DESIGN
-  // §14.2). Target-language text is tagged per element instead.
   $effect(() => {
     if (typeof document === 'undefined') return
     const tag = htmlLang(session.user?.nativeLang ?? 'en')
@@ -28,19 +24,11 @@
   })
 
   onMount(() => {
-    // The deck chosen everywhere (free practice, Learn) lives in the profile
-    // menu; load it once so every screen shares the same choice.
     void loadActiveDeck()
-    // The server rolls the day over at the member's own midnight.
     void reportTimezone(session.user?.id)
-    // Rig alerts are per device; the timer checks the switch on each tick.
     return startRigAlerts()
   })
 
-  // Three destinations stay in the thumb zone on a phone; the tutor, inventory,
-  // the bank, the archive and the account sit behind the profile stamp in the
-  // title bar. On desktop the same destinations move into a persistent left
-  // rail — the dictionary's spine — and both bars disappear.
   const tabs = [
     { href: '/home', label: 'Home', icon: 'home' },
     { href: '/skills', label: 'Skills', icon: 'skills' },
@@ -55,7 +43,6 @@
   ]
 
   const active = $derived(stripBase(page.url.pathname))
-  /** On an account screen the stamp reads as active, like a selected tab. */
   const inAccount = $derived(account.some((m) => active.startsWith(m.href)))
 
   let open = $state(false)
@@ -63,7 +50,6 @@
     (session.user?.handle || session.user?.username || '?').trim().charAt(0).toUpperCase(),
   )
 
-  // A new route always closes the menu (a link tap navigates, then this runs).
   $effect(() => {
     void active
     open = false
@@ -73,7 +59,6 @@
     if (e.key === 'Escape') open = false
   }
 
-  /** Choosing a deck in the profile menu sets it for the whole app. */
   function onDeckChange(e: Event) {
     const value = (e.currentTarget as HTMLSelectElement).value
     void setActiveDeck(value || null)
@@ -89,7 +74,6 @@
 <svelte:window onkeydown={onKeydown} />
 
 <div class="flex min-h-dvh flex-col lg:pl-64">
-  <!-- desktop rail: the spine of the book, all destinations in one column -->
   <aside
     class="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex lg:w-64 lg:flex-col lg:border-r lg:border-ink-700/70 lg:bg-ink-950/70 lg:backdrop-blur-xl"
     aria-label="Primary"
@@ -176,7 +160,6 @@
     </div>
   </aside>
 
-  <!-- title bar (phone): the app mark, and the account behind a personal stamp -->
   <header
     class="sticky top-0 z-20 border-b border-ink-700/60 bg-ink-950/75 pt-safe backdrop-blur-xl lg:hidden"
   >

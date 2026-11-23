@@ -1,5 +1,3 @@
-/** User accounts. */
-
 import type { UserId } from '../../ids'
 import { eq, sql } from 'drizzle-orm'
 import type { Db } from '../client'
@@ -72,11 +70,6 @@ export function createUser(db: Db, u: NewUser) {
 
 export type RegisterResult = { user: ReturnType<typeof createUser> } | { error: 'taken' | 'closed' }
 
-/**
- * Creates an account in one step: the username check, the "first account is the
- * admin" decision and the insert cannot interleave with another registration
- * (the password is hashed before this runs, so nothing here awaits).
- */
 export function registerUser(db: Db, u: NewUser, allowRegistration: boolean): RegisterResult {
   return inTransaction(db, (tx): RegisterResult => {
     if (getUserByUsername(tx, u.username)) return { error: 'taken' }
@@ -98,7 +91,6 @@ export function listUsers(db: Db) {
   return db.select().from(users).orderBy(users.createdAt).all().map(publicUser)
 }
 
-/** How many accounts exist — a `COUNT(*)`, never a full table load. */
 export function countUsers(db: Db): number {
   const row = db
     .select({ n: sql<number>`count(*)` })
@@ -118,13 +110,6 @@ export function updateUser(
     .run()
 }
 
-/**
- * Deletes a member and everything that is theirs, in one transaction. The game
- * and SRS tables cascade from `users`; the older content and history tables have
- * no foreign key, so their rows are removed here. Decks and cards are shared, so
- * they stay (losing only their creator) — until the last member is gone, when
- * nobody is left to study them. Returns false when there was no such member.
- */
 export function deleteUser(db: Db, uid: UserId): boolean {
   return inTransaction(db, (tx) => {
     if (!tx.select({ id: users.id }).from(users).where(eq(users.id, uid)).get()) return false
@@ -139,7 +124,6 @@ export function deleteUser(db: Db, uid: UserId): boolean {
   })
 }
 
-/** The member's chats, reviews, attempts, XP ledger and stats row. */
 function deleteUserHistory(db: Db, uid: UserId): void {
   const chats = db.select({ id: sessions.id }).from(sessions).where(eq(sessions.userId, uid)).all()
   for (const c of chats) db.delete(messages).where(eq(messages.sessionId, c.id)).run()

@@ -61,16 +61,10 @@ async function send() {
 </body>
 </html>`
 
-/**
- * Cache policy for served files. Hashed build assets are immutable; the shell
- * and the service worker must always revalidate so a new deploy shows up.
- */
 function cacheHeaders(path: string): Record<string, string> {
   if (path.startsWith('/_app/immutable/')) {
     return { 'cache-control': 'public, max-age=31536000, immutable' }
   }
-  // Silero VAD weights + onnxruntime wasm (~16 MB): content-hashed at build time by
-  // apps/web/scripts/sync-vad-assets.mjs, so they can be cached forever.
   if (path.startsWith('/vad/') && path !== '/vad/manifest.json') {
     return { 'cache-control': 'public, max-age=31536000, immutable' }
   }
@@ -85,10 +79,6 @@ function cacheHeaders(path: string): Record<string, string> {
   return { 'cache-control': 'public, max-age=3600' }
 }
 
-/**
- * Serves the built SvelteKit PWA when present (apps/web/build), falling back to
- * SPA index.html, and finally to a placeholder page so the API is testable now.
- */
 export function registerStatic(app: App, staticDir: string) {
   app.get('*', (c) => {
     const path = c.req.path
@@ -108,7 +98,6 @@ export function registerStatic(app: App, staticDir: string) {
   })
 }
 
-/** Reads TLS cert/key for the Android secure-context requirement (DESIGN §14.1). */
 export function readTls(cert?: string, key?: string): { cert: string; key: string } | undefined {
   if (!cert || !key || !existsSync(cert) || !existsSync(key)) return undefined
   return { cert: readFileSync(cert, 'utf8'), key: readFileSync(key, 'utf8') }

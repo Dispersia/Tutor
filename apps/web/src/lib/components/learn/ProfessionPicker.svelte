@@ -1,6 +1,4 @@
 <script lang="ts">
-  /** The profession selector: the actions a lesson can train, grouped by skill. */
-
   import { ACCENT } from '#lib/theme'
   import { href } from '#lib/paths'
   import { groupedActions, usableActions } from '#lib/learnview'

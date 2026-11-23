@@ -1,5 +1,3 @@
-/** The XP ledger and the derived stats row (level, streak, daily goal). */
-
 import type { UserId } from '../../ids'
 import { and, eq, sql } from 'drizzle-orm'
 import type { Db } from '../client'
@@ -28,19 +26,9 @@ export function sumXp(db: Db, userId: UserId): number {
   return Number(row?.total ?? 0)
 }
 
-/**
- * The calendar day of an event, in SQL (`created_at` is epoch ms, UTC), for a
- * member `offsetMin` minutes ahead of UTC. One offset is applied to the whole
- * ledger, so across a daylight-saving change an event within an hour of
- * midnight can land on the neighbouring day.
- */
 const xpDay = (offsetMin: number) =>
   sql<string>`date(${xpEvents.createdAt} / 1000 + ${offsetMin * 60}, 'unixepoch')`
 
-/**
- * Total XP per day for a user, grouped in SQL so the streak and heat-map never
- * load the whole ledger. There is one row per active day.
- */
 export function xpByDay(db: Db, userId: UserId, offsetMin = 0): { day: string; amount: number }[] {
   const day = xpDay(offsetMin)
   return db
@@ -52,7 +40,6 @@ export function xpByDay(db: Db, userId: UserId, offsetMin = 0): { day: string; a
     .map((r) => ({ day: r.day, amount: Number(r.amount) }))
 }
 
-/** The XP a user earned on one of their days. */
 export function xpForDay(db: Db, userId: UserId, day: string, offsetMin = 0): number {
   const row = db
     .select({ total: sql<number>`coalesce(sum(${xpEvents.amount}), 0)` })

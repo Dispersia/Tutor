@@ -1,8 +1,3 @@
-/**
- * A deck's own lifecycle and rules: rename, toggle its reading/variant settings,
- * or delete it with all its cards and history (docs/DESIGN.md §12.4, §13.7).
- */
-
 import { toDeckId } from '../../ids'
 import type { Context } from 'hono'
 import type { App, AppEnv } from '../../context'
@@ -14,7 +9,6 @@ import { fail } from '../errors'
 
 const VARIANTS = ['traditional', 'simplified'] as const
 
-/** The settings a PATCH carries, keeping only the keys actually sent. */
 function readSettings(body: Record<string, unknown>): Partial<DeckSettings> {
   const settings = obj(body, 'settings')
   if (!settings) return {}
@@ -37,11 +31,6 @@ export function registerDeckSettings(app: App) {
   app.patch('/api/decks/:id', (c) => patchDeckHandler(c))
 }
 
-/**
- * Delete a deck completely: cards, SRS state, history and deck chats. Decks are
- * shared, so this removes it — and everyone's progress on it — for every
- * member: only the admin or the member who created the deck may do it.
- */
 function deleteDeckHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
@@ -55,7 +44,6 @@ function deleteDeckHandler(c: Context<AppEnv>) {
   return c.json({ ok: true, deckId })
 }
 
-/** Update a deck's own rules (ruby/reading override, variant, toggles). */
 async function patchDeckHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const deckId = toDeckId(String(c.req.param('id')))

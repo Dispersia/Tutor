@@ -1,8 +1,3 @@
-/**
- * The skills/gear API client (docs/ARCHITECTURE.md). Every
- * `fetch` wrapper over `/api/skills*`; the DTOs live in `types.ts`.
- */
-
 import { api } from '../api'
 import type {
   GearResponse,
@@ -15,7 +10,6 @@ import type {
 
 export const getSkills = () => api<SkillsResponse>('/api/skills')
 
-/** The gear screen's own payload (worn, rolled and saved sets). */
 export const getGear = () => api<GearResponse>('/api/skills/gear')
 
 export const getSkill = (id: string) =>
@@ -24,11 +18,9 @@ export const getSkill = (id: string) =>
 export const chooseTalent = (talentId: string) =>
   api('/api/skills/talents', { method: 'POST', body: JSON.stringify({ talentId }) })
 
-/** Pick which recipe a choose-input action runs (prospect any ore, cut any gem). */
 export const chooseAction = (actionId: string, choiceId: string) =>
   api('/api/skills/choice', { method: 'POST', body: JSON.stringify({ actionId, choiceId }) })
 
-/** Stop a running rig on purpose (§13.5.1): frees its slot for another action. */
 export const stopRig = (actionId: string) =>
   api<StopRigResponse>('/api/skills/rigs/stop', {
     method: 'POST',
@@ -62,14 +54,12 @@ export const salvageGear = (instanceId: string) =>
     body: JSON.stringify({ instanceId }),
   })
 
-/** Apply a catalog enchant to a crafted piece (§13.5.3.2). */
 export const applyEnchant = (instanceId: string, enchantId: string) =>
   api<GearResponse>('/api/skills/gear/enchant', {
     method: 'POST',
     body: JSON.stringify({ instanceId, enchantId }),
   })
 
-/** Distill an item: burn it for Enchanting XP (by value) and its essence (§13.5.3.2). */
 export const distillGear = (itemId: string, count = 1) =>
   api<GearResponse & { xp: number; essence: string }>('/api/skills/gear/distill', {
     method: 'POST',

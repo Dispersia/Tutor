@@ -1,5 +1,3 @@
-/** Pure derivations for the inventory screen: slots, stat text and gear totals. */
-
 import type {
   BandBuffs,
   GearInstanceDTO,
@@ -9,7 +7,6 @@ import type {
   ItemDTO,
 } from './skills'
 
-/** One worn slot; rings and trinkets share a family. */
 export interface SlotDef {
   id: string
   label: string
@@ -17,7 +14,6 @@ export interface SlotDef {
   family: string[]
 }
 
-/** Paper-doll order. */
 export const SLOTS: SlotDef[] = [
   { id: 'head', label: 'Head', icon: '⛑️', family: ['head'] },
   { id: 'neck', label: 'Neck', icon: '📿', family: ['neck'] },
@@ -54,14 +50,12 @@ export const STAT_LABEL: Record<GearStatId, string> = {
   mastery: 'Mastery',
 }
 
-/** `+4 Strength · +2 Crit` — the positive stats of a piece. */
 export function statsText(stats: GearStats): string {
   return STAT_ORDER.filter((id) => stats[id] > 0)
     .map((id) => `+${stats[id]} ${STAT_LABEL[id]}`)
     .join(' · ')
 }
 
-/** The skill levels a piece demands, e.g. `Attack 10 · Defence 4`. */
 export function requiresText(g: GearInstanceDTO): string {
   const reqs = Object.entries(g.requirements ?? {})
   if (!reqs.length) return ''
@@ -70,12 +64,10 @@ export function requiresText(g: GearInstanceDTO): string {
     .join(' · ')
 }
 
-/** What the player is still missing, e.g. `Attack 3/10`. */
 export function lockedText(g: GearInstanceDTO): string {
   return g.missing.map((m) => `${m.name} ${m.current}/${m.level}`).join(' · ')
 }
 
-/** The enchant a piece carries, as `Name (+2 strength)`. */
 export function enchantsText(
   g: GearInstanceDTO,
   byId: Map<string, { name: string; value: number; stat: string }>,
@@ -88,14 +80,12 @@ export function enchantsText(
     .join(' · ')
 }
 
-/** Which gear instances can fill a slot (rings/trinkets share families). */
 export function candidatesIn(slot: string, gear: GearInstanceDTO[]): GearInstanceDTO[] {
   const def = SLOTS.find((s) => s.id === slot)
   if (!def) return []
   return gear.filter((g) => def.family.includes(g.slot))
 }
 
-/** Gear instances worn in each slot. */
 export function wornOf(
   equipment: { slot: string; instanceId: string | null }[],
   byId: Map<string, GearInstanceDTO>,
@@ -110,7 +100,6 @@ export function wornOf(
   return out
 }
 
-/** The worn piece's name in a slot, or `Empty`. */
 export function wornName(
   slot: string,
   worn: Map<string, GearInstanceDTO>,
@@ -121,7 +110,6 @@ export function wornName(
   return itemMap.get(g.itemId)?.name ?? g.itemId
 }
 
-/** The slot's icon: the worn piece's, else the empty slot's. */
 export function wornIcon(
   slot: string,
   worn: Map<string, GearInstanceDTO>,
@@ -132,7 +120,6 @@ export function wornIcon(
   return SLOTS.find((s) => s.id === slot)?.icon ?? '◇'
 }
 
-/** Equipment-tier bank rows with no rolled instance (legacy crafts). */
 export function baseEquipmentOf(
   inventory: { itemId: string; count: number }[],
   items: Map<string, ItemDTO>,
@@ -155,10 +142,6 @@ const emptyStats = (): GearStats => ({
   mastery: 0,
 })
 
-/**
- * The worn totals: the summed piece stats plus the active set bonuses, so the
- * inventory reads the same numbers the fight uses.
- */
 export function totalsOf(
   worn: Iterable<GearInstanceDTO>,
   setBonuses: NonNullable<GearResponse['setBonuses']>,
@@ -179,7 +162,6 @@ export function totalsOf(
   }
 }
 
-/** Applies the active set-bonus tiers to the worn totals, rounded. */
 function withSetBonuses(
   stats: GearStats,
   armour: number,
@@ -196,7 +178,6 @@ function withSetBonuses(
   return { stats, armour: Math.round(armour), power: Math.round(power) }
 }
 
-/** The account-wide combat buffs from tier bands, positive only. */
 export function combatBuffsOf(band: BandBuffs | undefined): { stat: keyof BandBuffs; v: number }[] {
   const sum = (k: keyof BandBuffs) => band?.[k] ?? 0
   return (

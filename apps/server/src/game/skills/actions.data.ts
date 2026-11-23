@@ -1,37 +1,18 @@
-/**
- * The action catalogue (docs/DESIGN.md §13.5) — content only, built through the
- * `A` / `bandGear` helpers below.
- */
-
 import { BAND_BY_ID, type BandId } from '../bands'
 import type { ActionDef } from './types'
 import { GEM_TIERS, GEM_TYPES, dustId, gemId, uncutGemId } from './gems'
 
-// --- actions -----------------------------------------------------------------
-
 const A = (a: ActionDef): ActionDef => a
 
-/** Reward per unit by material tier — a deeper band pays a little more per unit. */
 const BAND_XP_PER_UNIT: Record<number, number> = { 1: 1, 2: 1.1, 3: 1.2, 4: 1.3, 5: 1.4 }
 
-/** The band levels a gear slot unlocks at, cheapest material first. */
 const SLOT_LEVELS = [3, 5, 6, 8, 10, 14, 18, 24]
 
-/**
- * The XP a band recipe pays: its material cost scaled by the band's tier and by how
- * deep the slot unlocks, so the reward grows ~10% per material over the previous
- * slot and the deepest piece you can afford is always the most rewarding (§13.5.3).
- */
 function craftXp(count: number, tier: number, bandLevel: number): number {
   const slot = Math.max(0, SLOT_LEVELS.indexOf(bandLevel))
   return Math.max(1, Math.round(count * (BAND_XP_PER_UNIT[tier] ?? 1) * (1 + 0.1 * slot)))
 }
 
-/**
- * A gear recipe for one **band** of a line (§13.5.3). It belongs to a material band,
- * unlocks at `bandLevel` inside it, and consumes that line's material. Smithing,
- * Leatherworking and Tailoring share it — only the skill, verb and material differ.
- */
 function bandGear(
   skillId: 'smithing' | 'leatherworking' | 'tailoring',
   verb: string,
@@ -90,7 +71,6 @@ const sewCloth = (
   bandGear('tailoring', 'Sew', 'cloth', id, bandId, itemId, count, bandLevel, deckLevel)
 
 export const ACTIONS: ActionDef[] = [
-  // Mining
   A({
     id: 'mine-copper',
     skillId: 'mining',
@@ -144,7 +124,6 @@ export const ACTIONS: ActionDef[] = [
     produces: [{ item: 'coal', count: 1 }],
   }),
 
-  // Woodcutting
   A({
     id: 'chop-oak',
     skillId: 'woodcutting',
@@ -178,7 +157,6 @@ export const ACTIONS: ActionDef[] = [
     produces: [{ item: 'maple_log', count: 1 }],
   }),
 
-  // Fishing
   A({
     id: 'fish-shrimp',
     skillId: 'fishing',
@@ -212,7 +190,6 @@ export const ACTIONS: ActionDef[] = [
     produces: [{ item: 'raw_lobster', count: 1 }],
   }),
 
-  // Farming
   A({
     id: 'farm-guam',
     skillId: 'farming',
@@ -267,8 +244,6 @@ export const ACTIONS: ActionDef[] = [
     produces: [{ item: 'silk', count: 1 }],
   }),
 
-  // Smithing — one **band** per material (§13.5.3): every item of a metal feeds the
-  // same score, unlocks at a threshold inside it, and the next metal opens at band 40.
   A({
     id: 'smelt-bronze',
     skillId: 'smithing',
@@ -353,8 +328,6 @@ export const ACTIONS: ActionDef[] = [
     consumes: [{ item: 'steel_bar', count: 40 }],
     produces: [{ item: 'steel_platebody', count: 1 }],
   }),
-  // The rest of the plate set: every slot is craftable, and the higher tiers
-  // simply cost more bars. The gear gets random secondary stats on every craft.
   forgePlate('forge-bronze-helm', 'bronze', 'bronze_helm', 4, 10),
   forgePlate('forge-bronze-chest', 'bronze', 'bronze_chest', 8, 24),
   forgePlate('forge-bronze-waist', 'bronze', 'bronze_waist', 3, 6),
@@ -386,12 +359,10 @@ export const ACTIONS: ActionDef[] = [
   forgePlate('forge-adamant-boots', 'adamant', 'adamant_boots', 16, 8),
   forgePlate('forge-adamant-gloves', 'adamant', 'adamant_gloves', 12, 5),
   forgePlate('forge-adamant-shield', 'adamant', 'adamant_shield', 20, 14),
-  // Ring bases — the metal half of a ring; Jewellery sets the gem (§13.5.3.1).
   forgePlate('forge-bronze-band', 'bronze', 'bronze_band', 2, 3),
   forgePlate('forge-iron-band', 'iron', 'iron_band', 2, 3),
   forgePlate('forge-mythril-band', 'mythril', 'mythril_band', 2, 3),
 
-  // Cooking
   A({
     id: 'cook-shrimp',
     skillId: 'cooking',
@@ -428,7 +399,6 @@ export const ACTIONS: ActionDef[] = [
     produces: [{ item: 'cooked_lobster', count: 1 }],
   }),
 
-  // Herblore
   A({
     id: 'brew-attack',
     skillId: 'herblore',
@@ -459,7 +429,6 @@ export const ACTIONS: ActionDef[] = [
     produces: [{ item: 'restore_potion', count: 1 }],
   }),
 
-  // Fletching — the wood line: oak → willow → yew (§13.5.3).
   A({
     id: 'fletch-oak-bow',
     skillId: 'fletching',
@@ -526,7 +495,6 @@ export const ACTIONS: ActionDef[] = [
     produces: [{ item: 'willow_staff', count: 1 }],
   }),
 
-  // Runecrafting
   A({
     id: 'rc-air',
     skillId: 'runecrafting',
@@ -563,7 +531,6 @@ export const ACTIONS: ActionDef[] = [
     produces: [{ item: 'nature_rune', count: 1 }],
   }),
 
-  // Crafting
   A({
     id: 'craft-vial',
     skillId: 'crafting',
@@ -585,10 +552,6 @@ export const ACTIONS: ActionDef[] = [
     consumes: [{ item: 'uncut_gem', count: 2 }],
     produces: [{ item: 'cut_gem', count: 1 }],
   }),
-  // Prospecting (§13.5.3.1): **one** action, whatever the ore. You choose which ore
-  // to crush; the ore's tier decides the gem table (any type of that tier can fall).
-  // It always spends the ore and only sometimes finds a gem, so this one action
-  // levels no matter which ore you pick.
   A({
     id: 'prospect',
     skillId: 'crafting',
@@ -616,8 +579,6 @@ export const ACTIONS: ActionDef[] = [
       },
     ],
   }),
-  // Cutting (§13.5.3.1): **one action per tier**, whatever the gem. Pick a rough gem
-  // of the tier and cut it — every gem of a tier shares the one action, and its level.
   ...GEM_TIERS.map((t) =>
     A({
       id: `cut-gems-${t.band}`,
@@ -661,7 +622,6 @@ export const ACTIONS: ActionDef[] = [
     produces: [{ item: 'leather_body', count: 1 }],
   }),
 
-  // Leatherworking: hides → leather → the ranged armour set.
   A({
     id: 'tan-hide',
     skillId: 'leatherworking',
@@ -690,7 +650,6 @@ export const ACTIONS: ActionDef[] = [
   sewLeather('sew-hardened-gloves', 'hardened', 'hardened_gloves', 6, 5),
   sewLeather('sew-hardened-quiver', 'hardened', 'hardened_quiver', 9, 14),
 
-  // Tailoring: wool → cloth → the magic armour set.
   A({
     id: 'weave-cloth',
     skillId: 'tailoring',
@@ -719,7 +678,6 @@ export const ACTIONS: ActionDef[] = [
   sewCloth('sew-silk-gloves', 'silk', 'silk_gloves', 6, 5),
   sewCloth('sew-silk-tome', 'silk', 'silk_tome', 9, 14),
 
-  // Firemaking
   A({
     id: 'burn-oak',
     skillId: 'firemaking',
@@ -744,7 +702,6 @@ export const ACTIONS: ActionDef[] = [
     produces: [{ item: 'ash', count: 1 }],
   }),
 
-  // Construction
   A({
     id: 'make-plank',
     skillId: 'construction',
@@ -769,7 +726,6 @@ export const ACTIONS: ActionDef[] = [
     produces: [{ item: 'plank', count: 1 }],
   }),
 
-  // Thieving
   A({
     id: 'steal-coins',
     skillId: 'thieving',
@@ -792,7 +748,6 @@ export const ACTIONS: ActionDef[] = [
     produces: [{ item: 'uncut_gem', count: 1 }],
   }),
 
-  // Agility
   A({
     id: 'agility-drill',
     skillId: 'agility',
@@ -804,7 +759,6 @@ export const ACTIONS: ActionDef[] = [
     produces: [{ item: 'grace', count: 1 }],
   }),
 
-  // Combat (gear-gated)
   A({
     id: 'train-attack',
     skillId: 'attack',
@@ -899,7 +853,6 @@ export const ACTIONS: ActionDef[] = [
     ],
   }),
 
-  // --- tier 4–5: deeper chains, and recipes gated on a second profession ---------
   A({
     id: 'mine-mythril',
     skillId: 'mining',
@@ -1065,8 +1018,6 @@ export const ACTIONS: ActionDef[] = [
     ],
     produces: [{ item: 'super_attack_potion', count: 1 }],
   }),
-  // Jewellery binds a gem into a metal band (§13.5.3.1): the band sets the base, the
-  // gem's **type** sets the stat. One set action per tier — pick any gem of the tier.
   ...GEM_TIERS.map((t) =>
     A({
       id: `set-gems-${t.band}`,
@@ -1089,8 +1040,6 @@ export const ACTIONS: ActionDef[] = [
       })),
     }),
   ),
-  // Crushing (§13.5.3.1): break a cut gem into dust for Enchanting. One action —
-  // pick any gem, and the dust carries that gem's stat.
   A({
     id: 'crush-gems',
     skillId: 'crafting',
@@ -1156,9 +1105,6 @@ export const ACTIONS: ActionDef[] = [
     ],
     produces: [{ item: 'rune_orb', count: 1 }],
   }),
-  // Enchanting (§13.5.3.2) has **one** track: Distill. It breaks an item down to
-  // learn from it (XP by the item's coin value) and yields its family essence, the
-  // reagent every enchant is built from. You pick the item on the Enchanting page.
   A({
     id: 'distill',
     skillId: 'enchanting',
@@ -1168,7 +1114,6 @@ export const ACTIONS: ActionDef[] = [
     xp: 10,
     deckLevel: 'zhfreq',
   }),
-  // Enchanting-adjacent gear crafts (now under Crafting; Enchanting is the one track).
   A({
     id: 'enchant-amulet',
     skillId: 'crafting',

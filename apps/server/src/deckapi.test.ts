@@ -21,14 +21,12 @@ const defaults: Record<Role, string> = {
   translator: 'qwen/t',
 }
 
-/** A tiny stand-in for a pulled frequency list (no network in tests). */
 const FAKE_LIST = ['的 100', '我 90', '你 80', '他 70', '好 60', '是 50', '不 40', '在 30'].join(
   '\n',
 )
 
 const fetcher: Fetcher = async () => FAKE_LIST
 
-/** Deterministic planner: one vocab card per requested word, plus one grammar. */
 const planner: Planner = async (req) => {
   const cards: PlannedCard[] = []
   for (const w of req.words.slice(0, req.count)) {
@@ -106,13 +104,11 @@ test('parseInstruction reads the character variant and reading script', () => {
   expect(parseInstruction('simplified chinese with pinyin', 'zh').variant).toBe('simplified')
   expect(parseInstruction('japanese with furigana', 'ja').readingScript).toBe('kana')
   expect(parseInstruction('japanese with romaji', 'ja').readingScript).toBe('romaji')
-  // a Chinese prompt remembered from another deck never forces Zhuyin on Japanese
   expect(parseInstruction('traditional chinese with zhuyin', 'ja')).toEqual({
     variant: undefined,
     readingScript: 'kana',
     pitchAccent: false,
   })
-  // pitch-accent metadata is opt-in, by instruction
   expect(parseInstruction('japanese with pitch accent', 'ja').pitchAccent).toBe(true)
   expect(parseInstruction('japanese frequency list', 'ja').pitchAccent).toBe(false)
 })
@@ -135,21 +131,18 @@ test('POST /api/decks builds a deck from an instruction and a pulled list', asyn
   const body = (await res.json()) as DeckBody
   expect(body.source).toContain('Traditional')
   expect(body.newWords).toEqual(['的', '我', '你', '他'])
-  // deck carries its own reading rules
   expect(body.deck.settings.variant).toBe('traditional')
   expect(body.deck.settings.readingScript).toBe('zhuyin')
 
   const cards = (await (
     await app.request(`/api/decks/${body.deck.id}/cards`, auth(cookie))
   ).json()) as { cards: { back: string; type: string; payload: Record<string, unknown> }[] }
-  // 4 vocab + 1 grammar
   expect(cards.cards.length).toBe(5)
   const vocab = cards.cards.filter((c) => c.payload.template === 'vocab')
   expect(vocab.length).toBe(4)
-  // strict n+1: one step per new word, in frequency order
   expect(vocab.map((c) => c.payload.step)).toEqual([1, 2, 3, 4])
   const grammar = cards.cards.find((c) => c.payload.template === 'grammar')!
-  expect(grammar.payload.step).toBe(4) // shares the last introduced word's step
+  expect(grammar.payload.step).toBe(4)
   sqlite.close()
 })
 
@@ -163,7 +156,6 @@ test('POST /api/decks/:id/cards adds a card, optionally into a lesson', async ()
     )
   ).json()) as DeckBody
 
-  // With a step it joins that lesson (the n+1 group).
   const res = await app.request(
     `/api/decks/${created.deck.id}/cards`,
     auth(cookie, json({ front: 'a sentence', back: '你好', type: 'phrase', step: 2 })),
@@ -182,7 +174,6 @@ test('POST /api/decks/:id/cards adds a card, optionally into a lesson', async ()
   ).json()) as { cards: { id: string }[] }
   expect(cards.cards.some((c) => c.id === body.card.id)).toBe(true)
 
-  // Without a step it appends a fresh step at the end.
   const appended = (await (
     await app.request(
       `/api/decks/${created.deck.id}/cards`,
@@ -221,7 +212,6 @@ test('POST /api/decks/:id/grow appends an n+1 batch, optionally on a topic', asy
     )
   ).json()) as DeckBody
   expect(grown.cardCount).toBeGreaterThan(created.cardCount)
-  // the second batch continues the frequency list (cursor advanced)
   expect(grown.newWords).toEqual(['你', '他'])
   sqlite.close()
 })
@@ -251,7 +241,6 @@ test('growing a deck keeps its original prompt and adds the topic', async () => 
     auth(cookie, json({ topic: 'ordering at a restaurant', count: 1 })),
   )
   const last = calls[calls.length - 1]!
-  // the prompt is not replaced by the topic — both reach the planner
   expect(last.instruction).toBe('my special deck prompt')
   expect(last.topic).toBe('ordering at a restaurant')
   sqlite.close()
@@ -268,13 +257,11 @@ test('a new deck reuses the prompt from the previous one', async () => {
     ),
   )
 
-  // the settings expose it for the deck builder to prefill
   const settings = (await (await app.request('/api/settings', auth(cookie))).json()) as {
     deckInstruction: string
   }
   expect(settings.deckInstruction).toBe('traditional Chinese, zhuyin only')
 
-  // an import with no typed prompt still carries it
   const apkg = readFileSync(join(import.meta.dir, 'anki/fixtures/sample.apkg'))
   const form = new FormData()
   form.set('file', new File([apkg], 'sample.apkg'))
@@ -314,7 +301,7 @@ test('DELETE /api/decks/:id removes the deck and its cards', async () => {
 
 test('a shared deck can only be deleted by its creator or the admin', async () => {
   const { app, sqlite } = makeApp()
-  const admin = await signup(app, 'admin') // the first account is the admin
+  const admin = await signup(app, 'admin')
   const alice = await signup(app, 'alice')
   const bob = await signup(app, 'bob')
   const created = (await (
@@ -325,11 +312,9 @@ test('a shared deck can only be deleted by its creator or the admin', async () =
   ).json()) as DeckBody
   const url = `/api/decks/${created.deck.id}`
 
-  // every member sees and can study a shared deck …
   const bobs = (await (await app.request('/api/decks', auth(bob))).json()) as { decks: unknown[] }
   expect(bobs.decks.length).toBe(1)
   expect((await app.request(`${url}/cards`, auth(bob))).status).toBe(200)
-  // … but deleting it would take it away from everyone
   expect((await app.request(url, auth(bob, { method: 'DELETE' }))).status).toBe(403)
   expect((await app.request(`${url}/cards`, auth(alice))).status).toBe(200)
   expect((await app.request(url, auth(admin, { method: 'DELETE' }))).status).toBe(200)
@@ -358,7 +343,6 @@ test('a deck override hides readings for its cards', async () => {
 
   expect(await reading()).toBeTruthy()
 
-  // PATCH the deck's own rule: hide readings (wins over the user preference)
   const patched = await app.request(
     `/api/decks/${created.deck.id}`,
     auth(cookie, { ...json({ settings: { showReadings: false } }), method: 'PATCH' }),
@@ -402,7 +386,6 @@ test('pitch-accent metadata flows from the planner to the learner', async () => 
     drop: 2,
   })
 
-  // the annotation reaches the exercise data (so the UI can render it)
   const next = (await (
     await app.request(
       '/api/practice/next',
@@ -427,7 +410,6 @@ test('POST /api/decks/:id/pitch backfills pitch for cards that lack it', async (
       auth(cookie, json({ instruction: 'japanese frequency list', targetLang: 'ja', count: 3 })),
     )
   ).json()) as DeckBody
-  // the deck was built without asking for pitch
   expect(created.deck.settings.pitchAccent).toBeFalsy()
 
   const before = (await (
@@ -446,7 +428,6 @@ test('POST /api/decks/:id/pitch backfills pitch for cards that lack it', async (
   ).json()) as { cards: { metadata: { pitch?: { levels: string[] } } }[] }
   expect(after.cards[0]!.metadata.pitch?.levels).toEqual(['L', 'H'])
 
-  // a second run has nothing left to annotate
   const again = (await (
     await app.request(`/api/decks/${created.deck.id}/pitch`, auth(cookie, { method: 'POST' }))
   ).json()) as { updated: number }
@@ -455,12 +436,10 @@ test('POST /api/decks/:id/pitch backfills pitch for cards that lack it', async (
 })
 
 test('a generated Chinese deck reads words from the Taiwan dictionary', async () => {
-  // the planner's readings are wrong on purpose: the dictionary must win
   const zhPlanner: Planner = async () => [
     { template: 'vocab', front: 'possessive particle', back: '的', reading: 'de' },
     { template: 'vocab', front: 'nonsense', back: 'x-test', reading: 'mā' },
   ]
-  // the list holds exactly the words the planner returns: only requested words are kept
   const zhList: Fetcher = async () => '的 100\nx-test 90'
   const { app, sqlite } = makeApp({ planner: zhPlanner, fetcher: zhList })
   const cookie = await signup(app)
@@ -473,8 +452,6 @@ test('a generated Chinese deck reads words from the Taiwan dictionary', async ()
   const cards = (await (
     await app.request(`/api/decks/${created.deck.id}/cards`, auth(cookie))
   ).json()) as { cards: { back: string; readings: Record<string, string> }[] }
-  // 的 resolves to its Taiwan Zhuyin; an unknown word keeps the planner's
-  // reading — converted from pinyin, so the learner never sees Latin letters.
   expect(cards.cards.find((c) => c.back === '的')?.readings.zhuyin).toBe('ㄉㄜ˙')
   expect(cards.cards.find((c) => c.back === 'x-test')?.readings.zhuyin).toBe('ㄇㄚ')
   sqlite.close()
@@ -503,7 +480,6 @@ test('PATCH a card metadata merges annotations and null removes one', async () =
       }),
     )
   ).json()) as { card: { metadata: { pitch?: { levels: string[] }; radical?: string } } }
-  // the "LHHL" shorthand is normalised into a contour; other keys pass through
   expect(first.card.metadata.pitch?.levels).toEqual(['L', 'H', 'H', 'L'])
   expect(first.card.metadata.radical).toBe('水')
 
@@ -547,7 +523,6 @@ test('POST /api/decks/import builds a whole deck from an uploaded Anki package',
   const form = new FormData()
   form.set('file', new File([apkg], 'sample.apkg'))
   form.set('targetLang', 'zh')
-  // no count: the whole deck is imported, not a 20-word first batch
   form.set('wordField', '0')
   form.set('readingField', '1')
   form.set('meaningField', '2')
@@ -561,9 +536,7 @@ test('POST /api/decks/import builds a whole deck from an uploaded Anki package',
   expect(body.source).toBe('Imported Chinese')
   expect(body.words).toBe(4)
   expect(body.fields).toEqual(['Word', 'Reading', 'Meaning'])
-  // the response returns immediately; the cards fill in the background
   expect(body.building).toBe(true)
-  // …and the flag is really stored (the learn page polls on it)
   expect(body.deck.settings.building).toBe(true)
 
   await awaitDeckBuild(body.deck.id)
@@ -575,11 +548,9 @@ test('POST /api/decks/import builds a whole deck from an uploaded Anki package',
   }
   const vocab = after.cards.filter((c) => c.payload.template === 'vocab')
   expect(vocab.map((c) => c.back)).toEqual(['我', '你', '喝', '茶'])
-  // the generator weaves a grammar card through the imported words
   expect(after.cards.some((c) => c.payload.template === 'grammar')).toBe(true)
   expect(after.deck.settings.building).toBe(false)
 
-  // the imported deck can grow from its stored word list (no frequency pull)
   const grown = (await (
     await app.request(
       `/api/decks/${body.deck.id}/grow`,
@@ -621,7 +592,6 @@ test('POST /api/decks/import detects the deck language when none is given', asyn
   const form = new FormData()
   form.set('file', new File([apkg], 'modern.apkg'))
   form.set('wordField', '0')
-  // no targetLang: the deck's own script (Han) decides
   const res = await app.request('/api/decks/import', auth(cookie, { method: 'POST', body: form }))
   expect(res.status).toBe(201)
   const body = (await res.json()) as DeckBody
@@ -655,23 +625,16 @@ test('GET /api/decks exposes each deck settings', async () => {
 })
 
 test('generated sentence/grammar cards that reach ahead of their words are dropped', async () => {
-  // The planner is only *asked* to stay n+1; the loader must enforce it. These
-  // cards reach ahead to words the deck introduces much later (the real "dono
-  // before its own card" bug).
   const list = ['w1 100', 'w2 90', 'w3 80', 'w4 70', 'w5 60', 'w6 50'].join('\n')
   const futureFetcher: Fetcher = async () => list
   const aheadPlanner: Planner = async () => {
     const cards: PlannedCard[] = [
       { template: 'vocab', front: 'v1', back: 'w1', reading: 'r1' },
-      // uses only w1 (known) -> kept
       { template: 'sentence', front: 's-w1', back: 'w1', payload: { tokens: ['w1'] } },
-      // uses w5 before w5's vocab card -> dropped (n+1)
       { template: 'sentence', front: 's-w5', back: 'w5', payload: { tokens: ['w5'] } },
       { template: 'vocab', front: 'v2', back: 'w2', reading: 'r2' },
       { template: 'vocab', front: 'v3', back: 'w3', reading: 'r3' },
-      // grammar whose answer is still to come -> dropped
       { template: 'grammar', front: 'g-w6', back: 'w6', payload: { answer: 'w6', rule: 'r' } },
-      // grammar built on an introduced word -> kept
       { template: 'grammar', front: 'g-w3', back: 'w3', payload: { answer: 'w3', rule: 'r' } },
     ]
     return cards
@@ -695,7 +658,6 @@ test('generated sentence/grammar cards that reach ahead of their words are dropp
   expect(fronts).toContain('g-w3')
   expect(fronts).not.toContain('s-w5')
   expect(fronts).not.toContain('g-w6')
-  // the kept cards still carry their n+1 step
   expect(cards.cards.find((c) => c.front === 'g-w3')!.payload.step).toBe(3)
   sqlite.close()
 })
@@ -733,15 +695,12 @@ test('a large build chunks the planner and keeps n+1 across chunks', async () =>
     )
   ).json()) as DeckBody
 
-  // one planner call per chunk, never more than PLAN_CHUNK words
   expect(calls.length).toBe(2)
   expect(calls.every((c) => c.words.length <= PLAN_CHUNK)).toBe(true)
-  // each later batch is told the words the earlier ones introduced (n+1)
   expect(calls[0]!.knownWords.length).toBe(0)
   expect(calls[1]!.knownWords.length).toBe(PLAN_CHUNK)
   expect(created.newWords.length).toBe(words.length)
 
-  // the sentence card shares the last introduced word's n+1 step
   const cards = (await (
     await app.request(`/api/decks/${created.deck.id}/cards`, auth(cookie))
   ).json()) as { cards: { payload: Record<string, unknown> }[] }
@@ -754,7 +713,6 @@ test('a batch that overflows the model is retried smaller, not abandoned', async
   const words = Array.from({ length: PLAN_CHUNK * 2 }, (_, i) => `w${i + 1}`)
   const bigFetcher: Fetcher = async () => words.map((w, i) => `${w} ${1000 - i}`).join('\n')
   const calls: PlanRequest[] = []
-  // accept only small batches — anything wider "truncates" like a real model
   const flaky: Planner = async (req) => {
     calls.push(req)
     if (req.count > 10)
@@ -778,7 +736,6 @@ test('a batch that overflows the model is retried smaller, not abandoned', async
     )
   ).json()) as DeckBody
 
-  // every word made it despite the first (large) batch failing
   expect(created.newWords.length).toBe(words.length)
   expect(calls[0]!.count).toBe(PLAN_CHUNK)
   expect(calls.some((c) => c.count <= 10)).toBe(true)
@@ -792,13 +749,12 @@ test('grow { all: true } finishes a partly-imported deck in the background', asy
   const form = new FormData()
   form.set('file', new File([apkg], 'sample.apkg'))
   form.set('targetLang', 'zh')
-  form.set('count', '2') // import only the first two of the deck's four words
+  form.set('count', '2')
   form.set('wordField', '0')
   const res = await app.request('/api/decks/import', auth(cookie, { method: 'POST', body: form }))
   const body = (await res.json()) as DeckBody
   await awaitDeckBuild(body.deck.id)
 
-  // the deck still has the rest of its list to build
   const grown = (await (
     await app.request(`/api/decks/${body.deck.id}/grow`, auth(cookie, json({ all: true })))
   ).json()) as { remaining: number; building: boolean }
@@ -825,7 +781,6 @@ test('parseInstruction honours a ruled-out variant and only whole pitch words', 
   expect(variant("don't use traditional characters")).toBe('simplified')
   expect(variant('not simplified')).toBe('traditional')
   expect(variant('不要繁體，用简体')).toBe('simplified')
-  // naming both without ruling one out keeps the app's default
   expect(variant('traditional and simplified')).toBe('traditional')
   expect(variant('everyday words')).toBe('traditional')
 
@@ -859,11 +814,9 @@ test('an import resumed later still builds under the rules it was imported with'
   const res = await app.request('/api/decks/import', auth(cookie, { method: 'POST', body: form }))
   const body = (await res.json()) as DeckBody
   await awaitDeckBuild(body.deck.id)
-  // the rules are on the deck, but the per-word hints never go to a client
   expect(body.deck.settings).toMatchObject({ variant: 'simplified', readingScript: 'pinyin' })
   expect(body.deck.settings.hints).toBeUndefined()
 
-  // "Finish" plans from the stored settings alone, as it would after a restart.
   seen.length = 0
   await app.request(`/api/decks/${body.deck.id}/grow`, auth(cookie, json({ all: true })))
   await awaitDeckBuild(body.deck.id)

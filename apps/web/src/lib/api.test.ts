@@ -11,7 +11,6 @@ interface Call {
 let calls: Call[] = []
 const realFetch = globalThis.fetch
 
-/** A fetch whose responses the test releases by hand, to order the race. */
 function fakeFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   return new Promise<Response>((resolve) => {
     const reply = (body: unknown, status = 200) =>
@@ -51,7 +50,6 @@ test('a GET after a mutation never joins the GET that started before it', async 
   expect(calls.length).toBe(3)
   calls[2]!.reply({ n: 2 })
   expect(await fresh).toEqual({ n: 2 })
-  // The pre-mutation response lands last and must not overwrite the cache.
   calls[0]!.reply({ n: 1 })
   expect(await stale).toEqual({ n: 1 })
   expect(peekCached<{ n: number }>('/api/t/board')).toEqual({ n: 2 })

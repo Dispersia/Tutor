@@ -1,6 +1,4 @@
 <script lang="ts">
-  /** The member's own OpenRouter key, with its status line. */
-
   import { accentStyle } from '#lib/theme'
   import { ACCENT } from '#lib/theme'
 

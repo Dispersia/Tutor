@@ -1,6 +1,4 @@
 <script lang="ts">
-  /** One action in a profession page: its level, cost chips and idle rig. */
-
   import { href } from '#lib/paths'
   import { fmtClock, fmtInterval, rigSecondsLeft } from '#lib/idle'
   import { ACCENT, accentStyle } from '#lib/theme'
@@ -56,8 +54,6 @@
   style={accentStyle(accent)}
 >
   <div class="flex items-start gap-2.5">
-    <!-- The item you make is the row's anchor: it reads faster than a repeated
-         tier label. Actions without an output fall back to the tier. -->
     <div
       class="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-ink-700 bg-ink-900 text-base"
       aria-hidden="true"
@@ -172,8 +168,6 @@
       {#if a.idle}
         {@const idleLeft = rigSecondsLeft(a.idle, now)}
         {@const runPct = Math.min(1, Math.max(0, idleLeft / a.idle.runSec))}
-        <!-- The rig row: the run's rate and clock, over a bar that is the run
-             draining — not a level. Still when the run is over. -->
         <div
           class="mt-1"
           style={accentStyle(accent)}

@@ -1,25 +1,3 @@
-/**
- * One-off backfill: record the voice clips for every card that is missing
- * them. Same work the server does when a card is created (and the same
- * `POST /api/audio/backfill` route) — this runs it from a shell against a
- * database, so the whole existing library can be recorded in one go.
- *
- * Recording is slow (one clip at a time, ~1s each, a few voices per text) and
- * saturates the speech model while it runs. It is resumable: cards whose clips
- * already exist are skipped, so it can be stopped and started again. The
- * content-addressed store means a word shared between decks is only recorded
- * once.
- *
- * Needs the speech gateway (marginally it can start it itself). Run it inside
- * the dev shell so `uv`, `python` and the model weights are on PATH:
- *
- *   TUTOR_DATA_DIR=~/.local/share/tutor \
- *   TUTOR_MODELS_DIR=~/.local/share/tutor/models \
- *     nix develop -c bun scripts/backfill-audio.ts [deck-id-or-name]
- *
- * With no argument it records every card of every user.
- */
-
 import { join } from 'node:path'
 import { createAudioService, gatewayAsr, gatewayTts } from '../apps/server/src/audio/service'
 import { openDb } from '../apps/server/src/db/client'

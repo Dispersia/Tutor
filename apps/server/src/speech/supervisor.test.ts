@@ -24,7 +24,7 @@ test('activity tracking + idle accounting', () => {
   expect(sup.idleMs()).toBeLessThan(50)
   sup.end()
   sup.end()
-  sup.end() // never goes negative
+  sup.end()
   expect(sup.activity().activeStreams).toBe(0)
 })
 
@@ -50,7 +50,7 @@ test('ensure() spawns once and stop() kills', async () => {
   })
 
   await sup.ensure()
-  await sup.ensure() // already running → no second spawn
+  await sup.ensure()
   expect(spawned).toBe(1)
   expect(sup.running).toBe(true)
 
@@ -84,7 +84,7 @@ test('warm() spawns once and asks the gateway to load its models', async () => {
   })
 
   await sup.warm()
-  await sup.warm() // idempotent: already running → no respawn
+  await sup.warm()
   expect(spawned).toBe(1)
   expect(calls.filter((c) => c === 'POST http://127.0.0.1:9/v1/warm').length).toBe(2)
   expect(sup.activity().activeStreams).toBe(0)
@@ -148,7 +148,6 @@ test('stop() waits for the exit, so an immediate ensure() cannot double-spawn', 
   const stopping = sup.stop()
   const restarting = sup.ensure()
   await Bun.sleep(20)
-  // The first gateway has been killed but has not exited: no second spawn yet.
   expect(exits.length).toBe(1)
   exits[0]!()
   await stopping
@@ -181,7 +180,6 @@ test('ensure() adopts a gateway that already answers instead of spawning', async
   expect(spawned).toBe(0)
   expect(sup.running).toBe(true)
 
-  // No handle to kill: stopping asks the adopted gateway to unload its models.
   await sup.stop()
   expect(sup.running).toBe(false)
   expect(calls).toContain('POST http://127.0.0.1:9/admin/shutdown')

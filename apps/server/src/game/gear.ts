@@ -1,15 +1,3 @@
-/**
- * Gear stats (docs/DESIGN.md §13.5).
- *
- * Every craftable piece rolls a quality and a set of WoW-style stats. The
- * primaries decide the combat style the piece is built for (Strength → melee,
- * Agility → ranged, Intellect → magic), while the secondaries change how the
- * fight plays: Haste gives extra strikes, Crit multiplies a hit, Mastery boosts
- * the weapon's own style.
- *
- * Everything here is pure: the same seed and item always produce the same roll.
- */
-
 import type {
   ArmourType,
   CombatStyle,
@@ -63,17 +51,12 @@ export function sumStats(stats: GearStats): number {
   return STAT_IDS.reduce((sum, id) => sum + stats[id], 0)
 }
 
-/** A rough single number for scaling monsters and comparing sets. */
 export function gearScore(stats: GearStats, armour: number, power: number): number {
   return Math.round(sumStats(stats) + armour * 2 + power * 2)
 }
 
-// --- armour set bonuses ------------------------------------------------------
-
 export interface SetBonusTier {
-  /** How many worn pieces of this armour type unlock the tier. */
   pieces: number
-  /** Human label for the inventory screen. */
   label: string
   stats?: Partial<GearStats>
   armourPct?: number
@@ -87,12 +70,6 @@ export interface GearSetDef {
   tiers: SetBonusTier[]
 }
 
-/**
- * Wearing enough pieces of one armour family unlocks a set bonus. The set is
- * keyed by armour type, so a smithed plate loadout, a leather ranged loadout and
- * a cloth magic loadout each build toward their own bonuses. Jewellery has its
- * own smaller set.
- */
 export const GEAR_SETS: GearSetDef[] = [
   {
     id: 'vanguard',
@@ -139,15 +116,11 @@ export interface ActiveSetBonus {
   id: string
   name: string
   armourType: ArmourType
-  /** Worn pieces that count toward this set. */
   pieces: number
-  /** Tiers unlocked by the current piece count. */
   active: SetBonusTier[]
-  /** The next tier, when one is still locked. */
   next: SetBonusTier | null
 }
 
-/** Resolves the worn armour-type counts into active and next set tiers. */
 export function activeSetBonuses(counts: Partial<Record<ArmourType, number>>): ActiveSetBonus[] {
   return GEAR_SETS.map((set) => {
     const pieces = counts[set.armourType] ?? 0
@@ -157,7 +130,6 @@ export function activeSetBonuses(counts: Partial<Record<ArmourType, number>>): A
   }).filter((set) => set.pieces > 0)
 }
 
-/** Applies the active set tiers to the player's totals. */
 export function applySetBonuses(
   stats: GearStats,
   armour: number,
@@ -175,7 +147,6 @@ export function applySetBonuses(
 
 type SetTier = ActiveSetBonus['active'][number]
 
-/** One active tier: added stats, and percentage armour/power multipliers. */
 function applyTier(
   totals: { stats: GearStats; armour: number; power: number },
   tier: SetTier,
@@ -199,7 +170,6 @@ export function primaryForCombatStyle(style: CombatStyle): PrimaryStat {
   return 'strength'
 }
 
-/** Rating → percent. Diminishing, so stacking crit never reaches 100%. */
 export function ratingToPercent(rating: number, scale = 250): number {
   if (rating <= 0) return 0
   return (100 * rating) / (rating + scale)
@@ -218,13 +188,9 @@ export function masteryPercent(mastery: number): number {
 }
 
 export interface DerivedStats {
-  /** The primary stat the equipped weapon scales with. */
   primary: number
-  /** Crit chance as a fraction (0.12 = 12%). */
   crit: number
-  /** Haste proc chance as a fraction. */
   haste: number
-  /** Mastery damage bonus as a fraction. */
   mastery: number
 }
 
@@ -261,11 +227,6 @@ function affixPool(item: ItemDef): (keyof GearStats)[] {
   return [primary, 'stamina', 'haste', 'crit', 'mastery']
 }
 
-/**
- * Rolls a crafted instance. Base stats are scaled by quality, then 1–3 random
- * affixes are added from the piece's stat pool. `itemLevel` budgets the affix
- * values; the default is 1 so early crafts stay modest.
- */
 export function rollGearStats(item: ItemDef, rand: () => number = Math.random): GearRoll {
   const quality = rollQuality(rand)
   const mult = QUALITY_MULTIPLIER[quality]
@@ -288,7 +249,6 @@ export function rollGearStats(item: ItemDef, rand: () => number = Math.random): 
 
 const scaled = (value: number, mult: number): number => Math.max(0, Math.round(value * mult))
 
-/** The item's base stats, scaled by quality (never below 1). */
 function scaledBase(item: ItemDef, mult: number): GearStats {
   const base = item.stats ?? {}
   let stats = EMPTY_STATS
@@ -311,7 +271,6 @@ interface AffixReq {
   rand: () => number
 }
 
-/** Adds the rolled affixes from the piece's stat pool. */
 function addAffixes(req: AffixReq): GearStats {
   let stats = req.stats
   for (let i = 0; i < req.count; i++) {
@@ -329,12 +288,10 @@ export function emptyStats(): GearStats {
   return { ...EMPTY_STATS }
 }
 
-/** A crafted piece's base stats, with every stat present (0 when absent). */
 export function statsOf(item: ItemDef): GearStats {
   return addStats(EMPTY_STATS, item.stats ?? {})
 }
 
-/** Reads the stats JSON stored on a gear instance row. */
 export function parseStats(json: string | null | undefined): GearStats {
   if (!json) return emptyStats()
   try {
@@ -345,14 +302,6 @@ export function parseStats(json: string | null | undefined): GearStats {
   }
 }
 
-// --- equipment requirements (RuneScape-style) --------------------------------
-
-/**
- * The combat level each item level demands. Bronze (1) is wearable from the
- * start; adamant (5) needs level 30. Higher item levels extrapolate at +5 each.
- * Crafting is always a step ahead of the combat gate: Smithing 35 can forge
- * adamant, but Defence 30 is needed to wear it.
- */
 const REQUIREMENT_BY_ITEM_LEVEL: Record<number, number> = {
   1: 1,
   2: 5,
@@ -366,11 +315,6 @@ export function requiredLevelFor(itemLevel: number): number {
   return REQUIREMENT_BY_ITEM_LEVEL[level] ?? level * 5
 }
 
-/**
- * The skill that gates a piece: melee weapons train Attack, bows Ranged, staves
- * Magic; armour (and shields) train Defence; quivers, tomes and orbs gate on
- * their own combat style. Jewellery (rings, necks, trinkets) has no requirement.
- */
 export function requirementSkill(item: ItemDef): SkillId | null {
   if (!item.slot) return null
   if (item.slot === 'mainHand') {
@@ -390,7 +334,6 @@ export function requirementSkill(item: ItemDef): SkillId | null {
   return 'defence'
 }
 
-/** Explicit requirements, or the ones derived from the piece's slot and tier. */
 export function itemRequirements(item: ItemDef): Partial<Record<SkillId, number>> {
   if (item.requirements) return item.requirements
   const skill = requirementSkill(item)
@@ -400,13 +343,10 @@ export function itemRequirements(item: ItemDef): Partial<Record<SkillId, number>
 
 export interface MissingRequirement {
   skill: SkillId
-  /** The level the piece demands. */
   level: number
-  /** The player's current level in that skill. */
   current: number
 }
 
-/** Whether the player's levels satisfy an item's requirements. */
 export function meetsRequirements(
   item: ItemDef,
   levelOf: (skill: SkillId) => number,

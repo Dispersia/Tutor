@@ -1,6 +1,4 @@
 <script lang="ts">
-  /** The paper doll: the worn grid and the picker for the slot being changed. */
-
   import { ACCENT, accentStyle, qualityAccent } from '#lib/theme'
   import {
     SLOTS,
@@ -37,7 +35,6 @@
   }: Props = $props()
 </script>
 
-<!-- Paper doll -->
 <section class="mt-6" style={accentStyle(ACCENT.gold)}>
   <div class="flex items-center justify-between border-b border-ink-700 pb-2">
     <h2 class="eyebrow" style="color: var(--accent)">Equipped</h2>

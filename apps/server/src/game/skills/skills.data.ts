@@ -1,10 +1,4 @@
-/**
- * The professions themselves (docs/DESIGN.md §13.5) — content only.
- */
-
 import type { SkillDef, SkillId } from './types'
-
-// --- professions -------------------------------------------------------------
 
 const gather = (id: SkillId, name: string, icon: string, thing: string): SkillDef => ({
   id,
@@ -37,12 +31,10 @@ const combat = (id: SkillId, name: string, icon: string, desc: string): SkillDef
 })
 
 export const SKILLS: SkillDef[] = [
-  // gathering
   gather('mining', 'Mining', '⛏️', 'ore and rune essence'),
   gather('woodcutting', 'Woodcutting', '🪓', 'logs'),
   gather('fishing', 'Fishing', '🎣', 'raw fish'),
   gather('farming', 'Farming', '🌱', 'herbs'),
-  // artisan
   artisan('smithing', 'Smithing', '🔨', 'Smelt bars and forge weapons & armour'),
   artisan('cooking', 'Cooking', '🍳', 'Cook fish into food'),
   artisan('herblore', 'Herblore', '🧪', 'Brew herbs into potions'),
@@ -59,7 +51,6 @@ export const SKILLS: SkillDef[] = [
     '🔯',
     'Bind cut gems and runes into gear that grows stronger',
   ),
-  // support
   {
     id: 'thieving',
     name: 'Thieving',
@@ -78,7 +69,6 @@ export const SKILLS: SkillDef[] = [
     effect: { kind: 'global_xp', value: 0.005 },
     effectLabel: '+0.5% XP to every profession per level',
   },
-  // combat
   combat('attack', 'Attack', '⚔️', 'Melee accuracy and power.'),
   combat('strength', 'Strength', '💪', 'Melee damage.'),
   {

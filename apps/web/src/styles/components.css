@@ -1,5 +1,3 @@
-/* Component classes: one file per family under `components/`. */
-
 @import './components/surfaces.css';
 @import './components/typography.css';
 @import './components/cells.css';
@@ -9,3 +7,4 @@
 @import './components/indicators.css';
 @import './components/figures.css';
 @import './components/heat.css';
+@import './components/game.css';

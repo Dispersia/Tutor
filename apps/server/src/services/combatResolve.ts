@@ -1,5 +1,3 @@
-/** Resolving one drill inside a combat encounter (docs/DESIGN.md §13.5). */
-
 import type { UserId } from '../ids'
 import { clearEncounter, getEncounter, setPlayerHp, upsertEncounter } from '../db/repo'
 import type { Db } from '../db/client'
@@ -14,12 +12,9 @@ import { awardActionXp, loadProgress, primaryActionId, type ProgressCtx } from '
 
 export interface HitOutcome {
   correct: boolean
-  /** the combat profession the equipped weapon trains */
   skill: PlayerCombat['skill']
   damage: number
-  /** True when the hit rolled a critical strike. */
   crit: boolean
-  /** True when Haste granted a second strike. */
   haste: boolean
   monsterHp: number
   monsterMaxHp: number
@@ -31,15 +26,12 @@ export interface HitOutcome {
   outcome: 'ongoing' | 'won' | 'lost'
   drops: Cost[]
   xp: number
-  /** Defence XP gained from weathering the monster's blow. */
   defenceXp: number
-  /** Constitution XP gained from weathering the monster's blow. */
   constitutionXp: number
   ate: { item: string; heal: number; playerHp: number } | null
   talentUnlocked: number | null
 }
 
-/** The live encounter plus the fallback numbers its monster definition fills in. */
 interface EncounterContext {
   monster: NonNullable<ReturnType<typeof MONSTER_BY_ID.get>>
   enc: EncounterRow
@@ -53,7 +45,6 @@ interface EncounterContext {
 
 type EncounterRow = NonNullable<ReturnType<typeof getEncounter>>
 
-/** Builds the fight context from an already-read encounter row. */
 function encounterContext(
   db: Db,
   userId: UserId,
@@ -69,7 +60,6 @@ function encounterContext(
   return { monster, enc, pc, ...fallbackNumbers(enc, monster, pc.maxHp) }
 }
 
-/** The encounter's stored numbers, with the monster definition filling gaps. */
 function fallbackNumbers(
   enc: EncounterRow,
   monster: NonNullable<ReturnType<typeof MONSTER_BY_ID.get>>,
@@ -84,7 +74,6 @@ function fallbackNumbers(
   }
 }
 
-/** Auto-eat the best food once, before the exchange, when HP is below the threshold. */
 function autoEat(
   db: Db,
   bus: EventBus,
@@ -106,7 +95,6 @@ function autoEat(
   }
 }
 
-/** The player's strike: damage, crit/haste, the monster's new HP and the Life-steal heal. */
 interface StrikeHit {
   damage: number
   crit: boolean
@@ -125,7 +113,6 @@ function playerStrike(
   const crit = pc.crit > 0 && rand() < pc.crit
   const haste = pc.haste > 0 && rand() < pc.haste
   const damage = strikeDamage(pc, ctx, crit, haste)
-  // Iron bands/enchants return a slice of the damage dealt as HP.
   const heal = pc.lifesteal > 0 ? Math.round(damage * pc.lifesteal) : 0
   return {
     damage,
@@ -137,11 +124,6 @@ function playerStrike(
   }
 }
 
-/**
- * The hit's damage: a crit multiplier and a haste extra strike on the player's
- * power. Mastery is already inside `pc.power` (`playerPower`, DESIGN §13.5), so
- * it is not applied again here.
- */
 function strikeDamage(
   pc: PlayerCombat,
   ctx: EncounterContext,
@@ -152,11 +134,6 @@ function strikeDamage(
   return Math.max(1, Math.round(pc.power * (1 + ctx.enc.powerBonus) * multiplier))
 }
 
-/**
- * The monster always swings — whether you strike it, miss, or run out of time. A
- * correct answer only adds your own hit on top; armour reduces both the damage and
- * the Defence/Constitution training it gives.
- */
 function monsterStrike(
   pc: PlayerCombat,
   playerHp: number,
@@ -176,7 +153,6 @@ interface ExchangeState {
   outcome: HitOutcome['outcome']
 }
 
-/** Writes the surviving HP + win rewards, then clears or persists the encounter. */
 function settleExchange(
   db: Db,
   bus: EventBus,
@@ -184,7 +160,6 @@ function settleExchange(
   ctx: EncounterContext,
   state: ExchangeState,
 ): void {
-  // HP persists between fights: a defeat leaves you at a sliver, not a free heal.
   setPlayerHp(
     db,
     userId,
@@ -217,7 +192,6 @@ function endFight(
   clearEncounter(db, userId)
 }
 
-/** The encounter row to persist while the fight continues. */
 function ongoingRow(ctx: EncounterContext, state: ExchangeState) {
   return {
     monsterId: ctx.monster.id,
@@ -236,7 +210,6 @@ function ongoingRow(ctx: EncounterContext, state: ExchangeState) {
   }
 }
 
-/** Awards the exchange's XP and returns the profession milestone it unlocked, if any. */
 function awardExchange(
   db: Db,
   bus: EventBus,
@@ -254,7 +227,6 @@ function awardExchange(
   return awards.find((a) => a?.talentUnlocked)?.talentUnlocked ?? null
 }
 
-/** One exchange's rolled numbers, before the outcome is decided. */
 interface Exchange {
   monsterHp: number
   playerHp: number
@@ -277,7 +249,6 @@ interface OutcomeParts extends Decided {
   talentUnlocked: number | null
 }
 
-/** Everything resolving one drill needs, already loaded. */
 interface Resolve {
   db: Db
   bus: EventBus
@@ -289,7 +260,6 @@ interface Resolve {
   rand: () => number
 }
 
-/** Resolves one drill inside an active encounter. */
 function combatResolveTx(
   db: Db,
   bus: EventBus,
@@ -310,7 +280,6 @@ function combatResolveTx(
   return runEncounter({ db, bus, userId, ctx, progress, correct, eaten, rand })
 }
 
-/** {@link combatResolveTx}, all-or-nothing. */
 export const combatResolve = atomic(combatResolveTx)
 
 function runEncounter(req: Resolve): HitOutcome {
@@ -342,13 +311,11 @@ function emitHit(req: Resolve, ex: Exchange): void {
   })
 }
 
-/** The monster's blow for this exchange. One the strike just killed does not swing back. */
 function swingBack(ctx: EncounterContext, hit: StrikeHit | undefined, playerHp: number) {
   if (hit && hit.monsterHp <= 0) return { playerDamage: 0, playerHp }
   return monsterStrike(ctx.pc, playerHp, ctx.monsterDamage)
 }
 
-/** The player's strike (when correct) and the monster's swing back. */
 function strikeExchange(
   ctx: EncounterContext,
   correct: boolean,
@@ -382,7 +349,6 @@ function decideOutcome(
   return { outcome: 'ongoing', xp: ex.xp, drops: [] }
 }
 
-/** The exchange's XP, plus the profession milestone it unlocked, if any. */
 function awardStrike(req: Resolve, ex: Exchange, decided: Decided): OutcomeParts {
   const defenceXp = Math.max(1, ex.playerDamage)
   const talentUnlocked = awardExchange(

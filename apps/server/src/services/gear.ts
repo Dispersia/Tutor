@@ -1,5 +1,3 @@
-/** Crafted gear: instances, equipping, salvage and enchanting (docs/DESIGN.md §13.5.3). */
-
 import type { UserId, GearInstanceId } from '../ids'
 import {
   addItems,
@@ -45,7 +43,6 @@ import { consumeItems } from './items'
 import { awardActionXp, skillLevelOf } from './progress'
 
 export interface GearRequirementView extends MissingRequirement {
-  /** Human skill name, e.g. `Defence`. */
   name: string
 }
 
@@ -59,20 +56,15 @@ export interface GearInstanceView {
   power: number
   gearScore: number
   equipped: boolean
-  /** Enchant tokens on this piece: a band id, or `gem:<type>` (§13.5.3.1). */
   enchant: string[]
-  /** Stat levels needed to wear this piece. */
   requirements: Partial<Record<SkillId, number>>
-  /** Requirements the player does not meet yet (empty when wearable). */
   missing: GearRequirementView[]
 }
 
-/** Adds the human skill name to a missing requirement for the inventory UI. */
 export function requirementView(missing: MissingRequirement[]): GearRequirementView[] {
   return missing.map((m) => ({ ...m, name: SKILL_BY_ID.get(m.skill)?.name ?? m.skill }))
 }
 
-/** Every crafted piece the player owns, with its rolled stats and wear state. */
 export function gearView(db: Db, userId: UserId, levels?: Map<string, number>): GearInstanceView[] {
   const worn = wornSet(db, userId)
   const levelOf = (skill: SkillId) => skillLevelOf(db, userId, skill, levels)
@@ -102,7 +94,6 @@ function instanceView(
   }
 }
 
-/** The piece's stat requirements and whichever of them the player still misses. */
 function requirementsOf(item: ItemDef | undefined, levelOf: (skill: SkillId) => number) {
   if (!item) return { requirements: {}, missing: [] }
   return {
@@ -111,7 +102,6 @@ function requirementsOf(item: ItemDef | undefined, levelOf: (skill: SkillId) => 
   }
 }
 
-/** The ids of the equipped pieces (the ones not free to re-wear). */
 function wornSet(db: Db, userId: UserId): Set<GearInstanceId> {
   const ids = listEquipment(db, userId)
     .map((e) => e.instanceId)
@@ -119,11 +109,6 @@ function wornSet(db: Db, userId: UserId): Set<GearInstanceId> {
   return new Set(ids)
 }
 
-/**
- * Equips a piece: the named instance, or the first spare one of a bare item id.
- * Wearing moves nothing — a worn piece is still an instance, so the bank's
- * count of it (the number of instances) does not change.
- */
 function equipItemTx(
   db: Db,
   bus: EventBus,
@@ -133,7 +118,6 @@ function equipItemTx(
 ): { ok: boolean; error?: string; instanceId?: GearInstanceId; missing?: GearRequirementView[] } {
   const item = ITEM_BY_ID.get(itemId)
   if (!item?.slot) return { ok: false, error: 'not equippable' }
-  // RuneScape-style gate: the piece's stat requirements must be met first.
   const gate = meetsRequirements(item, (skill) => skillLevelOf(db, userId, skill, opts.levels))
   if (!gate.ok) return gateError(gate.missing)
   const slot = resolveSlot(item.slot, opts.targetSlot)
@@ -145,10 +129,8 @@ function equipItemTx(
   return { ok: true, instanceId: resolved.instance.id }
 }
 
-/** {@link equipItemTx}, all-or-nothing. */
 export const equipItem = atomic(equipItemTx)
 
-/** A piece is worn once: moving it to `slot` empties wherever else it sat. */
 function vacateOtherSlots(db: Db, userId: UserId, instanceId: GearInstanceId, slot: string): void {
   for (const e of listEquipment(db, userId)) {
     if (e.instanceId === instanceId && e.slot !== slot) setEquipment(db, userId, e.slot, null)
@@ -161,7 +143,6 @@ function gateError(missing: MissingRequirement[]) {
   return { ok: false as const, error: `requires ${names}`, missing: view }
 }
 
-/** The slot to wear in: the requested one when it fits the piece's family. */
 function resolveSlot(itemSlot: Slot, targetSlot?: string): Slot {
   if (targetSlot && slotFamily(itemSlot).includes(targetSlot as Slot)) return targetSlot as Slot
   return itemSlot
@@ -170,7 +151,6 @@ function resolveSlot(itemSlot: Slot, targetSlot?: string): Slot {
 type InstanceResult =
   { instance: NonNullable<ReturnType<typeof getGearInstance>> } | { error: string }
 
-/** The rolled piece to wear: the named one, or a spare one of that item. */
 function resolveInstance(
   db: Db,
   userId: UserId,
@@ -190,7 +170,6 @@ export function unequipItem(db: Db, userId: UserId, slot: string): void {
   setEquipment(db, userId, normalized, null)
 }
 
-/** Removes a single crafted piece (not while worn). */
 function discardGearTx(
   db: Db,
   userId: UserId,
@@ -204,10 +183,8 @@ function discardGearTx(
   return { ok: true }
 }
 
-/** {@link discardGearTx}, all-or-nothing. */
 export const discardGear = atomic(discardGearTx)
 
-/** Materials returned by salvaging a piece, by armour family. */
 const SALVAGE_MATERIAL: Record<ArmourType, string> = {
   plate: 'iron_ore',
   leather: 'hide',
@@ -215,7 +192,6 @@ const SALVAGE_MATERIAL: Record<ArmourType, string> = {
   jewelry: 'cut_gem',
 }
 
-/** Salvage yield by quality: better pieces break into more material. */
 const SALVAGE_YIELD: Record<GearQuality, number> = {
   common: 1,
   uncommon: 2,
@@ -223,10 +199,6 @@ const SALVAGE_YIELD: Record<GearQuality, number> = {
   epic: 5,
 }
 
-/**
- * Breaks a crafted piece back into crafting materials. The piece must be
- * unequipped. Higher quality rolls return more material.
- */
 function salvageGearTx(
   db: Db,
   bus: EventBus,
@@ -245,15 +217,11 @@ function salvageGearTx(
   return { ok: true, materials }
 }
 
-/** {@link salvageGearTx}, all-or-nothing. */
 export const salvageGear = atomic(salvageGearTx)
 
-/** What a broken-down piece returns: its family material, plus the band reagent. */
 function salvageYield(item: ItemDef, quality: GearQuality): Cost[] {
   const material = SALVAGE_MATERIAL[item.armourType ?? 'plate']
   const materials: Cost[] = [{ item: material, count: SALVAGE_YIELD[quality] ?? 1 }]
-  // Deep salvage also yields the band's reagent (§13.5.3): the feedstock
-  // Enchanting spends to put that band's signature stat on a higher-tier piece.
   const band = bandForItem(item)
   if (band) materials.push({ item: band.reagent, count: 1 })
   return materials
@@ -271,11 +239,6 @@ function grantMaterials(db: Db, bus: EventBus, userId: UserId, materials: Cost[]
   }
 }
 
-/**
- * Distill an item (§13.5.3.2): burn it to learn from it and pull out its family
- * essence. Enchanting XP is a **percentage of the item's coin value**, so an endgame
- * piece levels it faster but never instantly.
- */
 function distillItemTx(
   db: Db,
   bus: EventBus,
@@ -287,7 +250,6 @@ function distillItemTx(
   if (!item) return { ok: false, error: 'unknown item' }
   const n = Math.max(1, Math.floor(count))
   if (getItemCount(db, userId, itemId) < n) return { ok: false, error: 'not in your bank' }
-  // consuming equipment removes spare pieces first; a worn one is never burned
   if (item.slot && spareCount(db, userId, itemId) < n) return STILL_WORN
   consumeItems(db, bus, userId, [{ item: itemId, count: n }])
   const xp = Math.max(1, Math.round(itemValue(item) * DISTILL_XP_PER_VALUE)) * n
@@ -297,22 +259,15 @@ function distillItemTx(
   return { ok: true, xp, essence }
 }
 
-/** {@link distillItemTx}, all-or-nothing. */
 export const distillItem = atomic(distillItemTx)
 
 const STILL_WORN = { ok: false, error: 'unequip it first' }
 
-/** How many pieces of an item are off the body, free to burn. */
 function spareCount(db: Db, userId: UserId, itemId: string): number {
   const worn = wornSet(db, userId)
   return listGearInstances(db, userId).filter((g) => g.itemId === itemId && !worn.has(g.id)).length
 }
 
-/**
- * Apply an enchant to a crafted piece (§13.5.3.2). The enchant fits the piece's slot,
- * needs its Enchanting level, and costs its own essence reagents. It grants **no** XP
- * — the training is Distill; this is the payoff. One enchant per piece (replace).
- */
 function applyEnchantTx(
   db: Db,
   bus: EventBus,
@@ -332,12 +287,10 @@ function applyEnchantTx(
   return { ok: true }
 }
 
-/** {@link applyEnchantTx}, all-or-nothing. */
 export const applyEnchant = atomic(applyEnchantTx)
 
 type EnchantDef = NonNullable<ReturnType<typeof ENCHANT_BY_ID.get>>
 
-/** The reason the enchant cannot be applied, or undefined when it can. */
 function enchantGuard(
   db: Db,
   userId: UserId,

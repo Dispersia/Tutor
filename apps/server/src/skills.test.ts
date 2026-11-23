@@ -54,7 +54,6 @@ const auth = (cookie: string, extra: RequestInit = {}): RequestInit => ({
 async function signup(app: App, db: Db, username = 'alice') {
   const res = await app.request('/api/auth/register', json({ username, password: 'password123' }))
   const cookie = res.headers.getSetCookie()[0]!.split(';')[0]!
-  // Decks are no longer pre-seeded; tests drill the curated fixture decks.
   const { user } = (await res.json()) as { user: { id: UserId } }
   seedStarterDecks(db, user.id)
   return cookie
@@ -62,17 +61,11 @@ async function signup(app: App, db: Db, username = 'alice') {
 
 type CardRow = { id: string; front: string; back: string }
 
-/**
- * The correct answer for whatever drill the server picked. `pickNextExercise`
- * randomises among the eligible exercise kinds, so the answer has to be derived
- * from the instance rather than assumed to be the card's front/back.
- */
 function correctAnswer(
   instance: { exerciseId: string; data?: Record<string, unknown> },
   card: CardRow,
 ): string | string[] {
   if (instance.exerciseId === 'translate.back_to_front') return card.front
-  // A sentence that *uses* the word (the bare word alone is not a sentence).
   if (instance.exerciseId === 'converse') return `我${card.back}`
   if (instance.exerciseId === 'sentence_build') {
     const tokens = instance.data?.tokens
@@ -105,7 +98,6 @@ test('GET /api/skills returns the profession board', async () => {
     equipment: unknown[]
   }
   expect(body.skills.length).toBeGreaterThanOrEqual(20)
-  // the profession level is the mean of its actions' levels: Mining has seven, all 1
   const mining = body.skills.find((s) => s.id === 'mining')
   expect(mining?.level).toBe(1)
   expect(mining?.actions.filter((a) => (a as { level: number }).level === 1).length).toBe(7)
@@ -116,14 +108,12 @@ test('GET /api/skills returns the profession board', async () => {
   sqlite.close()
 })
 
-/** A drill instance as the practice API returns it. */
 interface Instance {
   exerciseId: string
   cardId: string
   data?: Record<string, unknown>
 }
 
-/** The rig readout a graded drill and the board both carry. */
 interface RigView {
   completions: number
   active: boolean
@@ -154,7 +144,6 @@ async function postJson<T>(app: App, cookie: string, path: string, body: unknown
   return (await (await app.request(path, auth(cookie, json(body)))).json()) as T
 }
 
-/** The first exposure is a "teach" step, not a graded drill: clear it. */
 async function clearTeachStep(app: App, cookie: string, instance: Instance, actionId: string) {
   if (instance.exerciseId !== 'introduce') return
   await postJson(app, cookie, '/api/practice/grade', {
@@ -185,12 +174,10 @@ function expectTrainingAwarded(g: Graded) {
   expect(g.skill.skillId).toBe('mining')
   expect(g.skill.xp).toBeGreaterThan(0)
   expect(g.stats.xp).toBeGreaterThan(0)
-  // the drill powered a rig (docs/DESIGN.md §13.5.1): one completion, a 10-minute run
   expect(g.skill.idle?.completions).toBe(1)
   expect(g.skill.idle?.active).toBe(true)
   expect(g.skill.idle?.runSec).toBe(600)
   expect(g.skill.idle?.intervalSec).toBeGreaterThan(2)
-  // the client can show how far the rig is toward the 3 h cap, and when it is maxed
   expect(g.skill.idle?.maxRunSec).toBe(3 * 60 * 60)
   expect(g.skill.idle?.runFullAtCompletions).toBe(50)
   expect(g.skill.idle?.runProgress).toBeCloseTo(1 / 50, 6)
@@ -200,7 +187,6 @@ function expectTrainingAwarded(g: Graded) {
 function expectBoardCarriesRig(board: Board) {
   expect(board.inventory.find((i) => i.itemId === 'copper_ore')?.count).toBeGreaterThanOrEqual(1)
   expect(board.skills.find((s) => s.id === 'mining')?.xp).toBeGreaterThan(0)
-  // the board carries every action's rig, so the client can tick it locally
   const mine = board.skills
     .find((s) => s.id === 'mining')!
     .actions.find((a) => a.id === 'mine-copper')
@@ -240,14 +226,12 @@ test('actions are gated by unlocks, materials and equipment', async () => {
   const { app, db, sqlite } = makeApp()
   const cookie = await signup(app, db)
 
-  // locked: mine-iron needs Mining 5
   const locked = await app.request(
     '/api/practice/next',
     auth(cookie, json({ actionId: 'mine-iron' })),
   )
   expect(locked.status).toBe(403)
 
-  // needs a melee weapon equipped
   const noWeapon = await app.request(
     '/api/practice/next',
     auth(cookie, json({ actionId: 'train-attack' })),
@@ -256,7 +240,6 @@ test('actions are gated by unlocks, materials and equipment', async () => {
   const body = (await noWeapon.json()) as { equipMissing?: { tag: string } }
   expect(body.equipMissing?.tag).toBe('melee')
 
-  // artisan action needs materials
   const noMats = await app.request(
     '/api/practice/next',
     auth(cookie, json({ actionId: 'brew-attack' })),
@@ -301,7 +284,6 @@ test('GET /api/skills/:id returns one profession with its talent roadmap', async
   expect(body.skill.talent.owned).toEqual([])
   expect(body.skill.talent.nextMilestone).toBe(10)
   expect(body.skill.talent.pendingChoice).toBe(false)
-  // the web: Mining feeds Smithing, and Smithing gates Mining's capstone
   expect(body.skill.talent.synergy).toEqual({
     target: 'smithing',
     name: 'Smithing',
@@ -311,9 +293,7 @@ test('GET /api/skills/:id returns one profession with its talent roadmap', async
   expect(body.skill.talent.mastery.milestones).toEqual([50, 100])
   expect(body.skill.talent.mastery.pending).toEqual([])
   expect(body.items.length).toBeGreaterThan(20)
-  // a material's "needs" cost links to the action that supplies it
   expect(body.sources.copper_ore).toEqual({ skillId: 'mining', actionId: 'mine-copper' })
-  // the reverse edge: Smithing's synergy talent feeds Mining
   expect(body.fedBy).toEqual([
     { skillId: 'smithing', name: 'Smithing', label: 'Deep Veins', taken: [] },
   ])
@@ -340,7 +320,7 @@ test('talent + equip endpoints validate input', async () => {
     '/api/skills/equip',
     auth(cookie, json({ itemId: 'bronze_sword' })),
   )
-  expect(missingItem.status).toBe(400) // not in the bank yet
+  expect(missingItem.status).toBe(400)
   sqlite.close()
 })
 

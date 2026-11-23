@@ -9,7 +9,6 @@ import { guardError, NO_KEY_MESSAGE } from './errors'
 
 const defaults = { conversation: 'c', judge: 'j', generator: 'g', translator: 't' }
 
-/** An app with no OpenRouter key anywhere, and one signed-up member's cookie. */
 async function makeApp() {
   const { db, sqlite } = openDb(':memory:')
   const supervisor = new SpeechSupervisor({

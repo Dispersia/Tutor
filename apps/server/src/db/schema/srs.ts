@@ -1,13 +1,7 @@
-/**
- * Spaced-repetition state and its append-only review log (docs/DESIGN.md §13.6).
- * Part of the schema split (docs/ARCHITECTURE.md).
- */
-
 import type { UserId, CardId } from '../../ids'
 import { index, integer, primaryKey, real, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 import { users } from './users'
 
-/** Per-user spaced-repetition state (FSRS-6, one row per card reviewed). */
 export const srs = sqliteTable(
   'srs',
   {
@@ -31,11 +25,6 @@ export const srs = sqliteTable(
   (t) => [primaryKey({ columns: [t.userId, t.cardId] })],
 )
 
-/**
- * Append-only FSRS review log: every review that moved a schedule, practice and
- * combat alike. Enough history to replay a card (`rating` + `elapsed_days`) under
- * a future model (FSRS-7) or to train per-user weights later.
- */
 export const srsReviews = sqliteTable(
   'srs_reviews',
   {
@@ -45,7 +34,6 @@ export const srsReviews = sqliteTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     cardId: text('card_id').$type<CardId>().notNull(),
-    /** The FSRS grade (1 = Again … 4 = Easy) this review produced. */
     rating: integer('rating').notNull(),
     stateBefore: text('state_before').notNull(),
     stateAfter: text('state_after').notNull(),
@@ -54,12 +42,9 @@ export const srsReviews = sqliteTable(
     difficultyBefore: real('difficulty_before').notNull(),
     difficultyAfter: real('difficulty_after').notNull(),
     intervalDays: real('interval_days').notNull(),
-    /** Days since the previous review; fractional for same-day reviews. */
     elapsedDays: real('elapsed_days').notNull(),
-    /** The desired retention in force when this review was scheduled. */
     desiredRetention: real('desired_retention').notNull(),
     dueAt: integer('due_at').notNull(),
-    /** Which surface fed the schedule: `practice` or `combat`. */
     source: text('source').notNull().default('practice'),
     createdAt: integer('created_at').notNull(),
   },

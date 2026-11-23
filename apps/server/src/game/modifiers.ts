@@ -1,11 +1,8 @@
-/** Aggregates per-action profession effects + owned talents into concrete bonuses. */
-
 import type { Mod, ModKind, SkillId } from './skills'
 import { ACTION_BY_ID, ACTIONS, SKILL_BY_ID, skillLevelsFrom } from './skills'
 import type { TalentDef } from './talents'
 
 export interface Bonuses {
-  /** extra XP applied to every profession (fraction) */
   globalXp: number
   xp: (actionId: string) => number
   yield: (actionId: string) => number
@@ -16,19 +13,12 @@ export interface Bonuses {
   hp: number
 }
 
-/** A profession effect scaled by one action's own level. */
 interface Leveled {
   actionId: string
   skillId: SkillId
   mod: Mod
 }
 
-/**
- * `levels` maps **action** id → level. Each action carries its profession's
- * passive scaled by its *own* level, so `Mine copper` Lv 5 gives +4% copper while
- * `Mine essence` Lv 1 gives nothing. Talents stay scoped to a whole profession
- * (`mod.skill`) and boost every action under it.
- */
 export function computeBonuses(levels: Map<string, number>, talents: TalentDef[]): Bonuses {
   const leveled = leveledEffects(levels)
   const talentMods = talentModsOf(talents, levels)
@@ -47,7 +37,6 @@ export function computeBonuses(levels: Map<string, number>, talents: TalentDef[]
   }
 }
 
-/** Each action's profession passive, scaled by the action's own level. */
 function leveledEffects(levels: Map<string, number>): Leveled[] {
   const leveled: Leveled[] = []
   for (const a of ACTIONS) {
@@ -60,17 +49,13 @@ function leveledEffects(levels: Map<string, number>): Leveled[] {
   return leveled
 }
 
-/** Owned talent mods; a synergy's value scales with the other profession's level. */
 function talentModsOf(talents: TalentDef[], levels: Map<string, number>): Mod[] {
-  // A synergy talent's value scales with the *other* profession's derived level, so
-  // the derived levels have to be known before the talent mods are summed.
   const derived = skillLevelsFrom(levels)
   return talents
     .flatMap((t) => t.mods)
     .map((m) => (m.synergy ? { ...m, value: m.value * (derived.get(m.synergy) ?? 1) } : m))
 }
 
-/** The action's own passive + talents scoped to its profession. */
 function actionBonus(
   leveled: Leveled[],
   talentMods: Mod[],
@@ -87,7 +72,6 @@ function actionBonus(
   return own + scoped
 }
 
-/** Kinds that are global (they ignore scope) sum across every action + talent. */
 function globalBonus(leveled: Leveled[], talentMods: Mod[], kind: ModKind): number {
   const fromActions = leveled
     .filter((l) => l.mod.kind === kind)
@@ -96,10 +80,6 @@ function globalBonus(leveled: Leveled[], talentMods: Mod[], kind: ModKind): numb
   return fromActions + fromTalents
 }
 
-/**
- * Applies a yield bonus + a "double" roll to a base quantity.
- * `rand` is injectable so tests are deterministic.
- */
 export function applyYield(
   base: number,
   yieldBonus: number,

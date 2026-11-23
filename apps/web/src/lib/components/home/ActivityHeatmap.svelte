@@ -1,6 +1,4 @@
 <script lang="ts">
-  /** The daily-XP heat map: one column per week (Monday first), one row a weekday. */
-
   import type { ActivityDay } from '#lib/exercises'
   import {
     HEAT_EMPTY,

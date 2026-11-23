@@ -1,5 +1,3 @@
-/** Saved gear sets (docs/DESIGN.md §13.5.3). */
-
 import type { UserId, GearInstanceId, GearSetId } from '../ids'
 import {
   addGearSet,
@@ -18,8 +16,6 @@ import { loadPlayerCombat } from './combat'
 import { requirementView, type GearRequirementView } from './gear'
 import { spareGearPiece } from './gearInstances'
 import { skillLevelOf } from './progress'
-
-// --- saved gear sets ---------------------------------------------------------
 
 export interface GearSetView {
   id: GearSetId
@@ -51,7 +47,6 @@ export function gearSetsView(db: Db, userId: UserId): GearSetView[] {
   }))
 }
 
-/** Snapshots the current loadout under a name. */
 export function saveGearSet(
   db: Db,
   userId: UserId,
@@ -68,7 +63,6 @@ export function saveGearSet(
   return gearSetsView(db, userId).find((s) => s.id === id)!
 }
 
-/** A saved-set piece the player cannot wear yet. */
 export interface GearSetSkip {
   slot: string
   itemId: string
@@ -76,7 +70,6 @@ export interface GearSetSkip {
   missing: GearRequirementView[]
 }
 
-/** Swaps the worn gear to a saved set. Unknown/deleted instances are skipped. */
 function applyGearSetTx(
   db: Db,
   bus: EventBus,
@@ -98,7 +91,6 @@ function applyGearSetTx(
   return { ok: true, skipped }
 }
 
-/** {@link applyGearSetTx}, all-or-nothing. */
 export const applyGearSet = atomic(applyGearSetTx)
 
 interface SetEntry {
@@ -118,7 +110,6 @@ function equipFromSet(db: Db, bus: EventBus, req: SetSlotReq): GearSetSkip | und
   const item = ITEM_BY_ID.get(entry.itemId)
   if (item) {
     const gate = meetsRequirements(item, (skill) => skillLevelOf(db, userId, skill, req.levels))
-    // Keep whatever is worn: the rest of the set still goes on.
     if (!gate.ok) return skipView(slotId, entry.itemId, item, gate.missing)
   }
   return equipInstance(db, bus, userId, slotId, entry)
@@ -133,7 +124,6 @@ function skipView(
   return { slot, itemId, name: item.name, missing: requirementView(missing) }
 }
 
-/** Wears the saved piece, or a spare one of the same item when that piece is gone. */
 function equipInstance(
   db: Db,
   bus: EventBus,

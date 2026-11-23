@@ -9,7 +9,6 @@
   import Spinner from './Spinner.svelte'
   import { focusTrap } from '#lib/focusTrap'
 
-  /** Deck-level settings (docs/DESIGN.md §13.8): readings, pitch accent, delete. */
   let {
     deck,
     onclose,
@@ -17,12 +16,9 @@
   }: {
     deck: CurriculumDeck
     onclose: () => void
-    /** Called after a change so the page can reload its deck list. */
     onchanged: () => void | Promise<void>
   } = $props()
 
-  // The modal is mounted fresh per deck (`{#if settingsDeck}`), so seeding the
-  // editable state from the prop once is intentional.
   // svelte-ignore state_referenced_locally
   let showReadings = $state(deck.settings?.showReadings ?? true)
   // svelte-ignore state_referenced_locally
@@ -48,7 +44,6 @@
     }
   }
 
-  /** Annotate the cards the deck already has — pitch is only generated for new ones. */
   async function backfill(force = false) {
     if (backfilling) return
     backfilling = true

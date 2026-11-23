@@ -12,13 +12,13 @@ test('only the browser push services are accepted as endpoints', () => {
   }
   for (const bad of [
     'https://push.example/abc',
-    'http://fcm.googleapis.com/fcm/send/abc', // not https
+    'http://fcm.googleapis.com/fcm/send/abc',
     'https://127.0.0.1:4318/api/health',
     'https://169.254.169.254/latest/meta-data',
-    'https://fcm.googleapis.com.evil.test/x', // suffix trick
-    'https://evilpush.apple.com/x', // not a subdomain of push.apple.com
+    'https://fcm.googleapis.com.evil.test/x',
+    'https://evilpush.apple.com/x',
     'https://fcm.googleapis.com:8443/x',
-    'https://fcm.googleapis.com@internal.host/x', // userinfo trick
+    'https://fcm.googleapis.com@internal.host/x',
     'not a url',
   ]) {
     expect(isPushServiceEndpoint(bad)).toBe(false)

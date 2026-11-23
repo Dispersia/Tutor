@@ -7,7 +7,6 @@
   import { cachedResource } from '#lib/resource.svelte'
 
   const id = $derived(page.params.id)
-  // Seed from the last fetch so reopening a conversation renders at once.
   const conversation = cachedResource<{ messages: Message[] }>(() =>
     id ? `/api/sessions/${id}` : undefined,
   )

@@ -1,5 +1,3 @@
-/** Granting and consuming materials (docs/DESIGN.md §13.5). */
-
 import type { UserId } from '../ids'
 import { addItems } from '../db/repo'
 import type { Db } from '../db/client'
@@ -8,7 +6,6 @@ import { applyYield } from '../game/modifiers'
 import { type Cost } from '../game/skills'
 import { aggregateBonuses } from './progress'
 
-/** Grants materials, applying the action's own yield + double bonuses. */
 export function grantItems(
   db: Db,
   bus: EventBus,
@@ -35,18 +32,15 @@ interface GrantReq {
   rand: () => number
 }
 
-/** Grants one cost, returning what was actually credited (or nothing). */
 function grantOne(req: GrantReq): Cost | undefined {
   const { db, bus, userId, cost } = req
   const count = applyYield(
     cost.count,
-    // the coins passive (Thieving) pays on coins only
     req.bonus.yield(req.actionId) + (cost.item === 'coins' ? req.bonus.coins(req.actionId) : 0),
     req.bonus.double(req.actionId),
     req.rand,
   )
   if (count <= 0) return undefined
-  // an equipment item lands as rolled pieces (db/repo/game.ts), not a stack
   addItems(db, userId, cost.item, count, req.rand)
   bus.emit('item.gained', { userId, itemId: cost.item, count })
   return { item: cost.item, count }

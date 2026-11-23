@@ -1,8 +1,3 @@
-/**
- * A deck's cards: read them, add one by hand and edit one (docs/DESIGN.md §12.4).
- * The same "add a card" endpoint backs the automatic n+1 reinforcement.
- */
-
 import { toDeckId, toCardId, type UserId } from '../../ids'
 import { parsePitchContour } from '@tutor/core'
 import type { Context } from 'hono'
@@ -12,7 +7,6 @@ import { jsonBody, num, obj, str, strRecord } from '../body'
 import { deckView } from './view'
 import { fail } from '../errors'
 
-/** The deck row as `getDeck` returns it. */
 type Deck = NonNullable<ReturnType<typeof getDeck>>
 
 interface NewCardBody {
@@ -31,7 +25,6 @@ interface PatchBody {
   metadata?: Record<string, unknown>
 }
 
-/** Reads a hand-authored card from the request body. */
 function readNewCard(body: Record<string, unknown>): NewCardBody {
   return {
     front: str(body, 'front'),
@@ -57,12 +50,6 @@ function listCardsHandler(c: Context<AppEnv>) {
   return c.json({ deck: deckView(deck), cards: listCards(deps.db, user.id, deck.id) })
 }
 
-/**
- * Add a single card to a deck. With a `step` it joins that lesson — the n+1
- * group, so a new sentence card can sit beside the word it reinforces. Without
- * one it appends a fresh step at the end. Used by hand-authoring and by the
- * automatic reinforcement that fires when a card keeps lapsing.
- */
 async function addCardHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
@@ -74,8 +61,6 @@ async function addCardHandler(c: Context<AppEnv>) {
   if (!front || !back) return fail(c, 400, 'front and back are required')
   const step = stepFor(listCards(deps.db, user.id, deck.id), body.step)
   const card = insertCard({ deps, userId: user.id, deck, step, front, back, body })
-  // Record the card's audio now (background), so its listening card streams
-  // from disk on the first play instead of waking the TTS model.
   deps.audio?.enqueue([{ userId: user.id, text: card.back, language: card.targetLang }])
   return c.json({ card: getCard(deps.db, card.id, user.id), step }, 201)
 }
@@ -107,11 +92,6 @@ function insertCard(ctx: NewCardCtx) {
   })
 }
 
-/**
- * Update a card's own content. Metadata is the language-agnostic annotation
- * bag (pitch accent, radicals, …); it is merged by key so one annotation can
- * be edited without dropping the others.
- */
 async function patchCardHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
@@ -135,7 +115,6 @@ function cardPatch(current: Record<string, unknown>, body: Record<string, unknow
   return patch
 }
 
-/** The step a new card joins: the requested one, else one past the deck's last. */
 function stepFor(cards: { payload?: Record<string, unknown> }[], requested?: number): number {
   if (typeof requested === 'number' && Number.isFinite(requested)) {
     return Math.max(1, Math.round(requested))
@@ -147,7 +126,6 @@ function stepFor(cards: { payload?: Record<string, unknown> }[], requested?: num
   return maxStep + 1
 }
 
-/** The reading bag for a hand-typed reading, keyed by the target language. */
 function readingBag(targetLang: string, reading?: string): Record<string, string> {
   if (!reading) return {}
   if (targetLang === 'ja') return { kana: reading }
@@ -155,7 +133,6 @@ function readingBag(targetLang: string, reading?: string): Record<string, string
   return { reading }
 }
 
-/** Merge annotations by key; an explicit `null` removes one (pitch kept canonical). */
 function mergeMetadata(
   current: Record<string, unknown>,
   update: Record<string, unknown>,
@@ -168,7 +145,6 @@ function mergeMetadata(
   return canonicalPitch(merged)
 }
 
-/** Keep the built-in pitch contour canonical so the UI can render it. */
 function canonicalPitch(merged: Record<string, unknown>): Record<string, unknown> {
   if (!('pitch' in merged)) return merged
   const pitch = parsePitchContour(merged.pitch)

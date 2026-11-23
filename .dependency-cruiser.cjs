@@ -1,11 +1,3 @@
-/**
- * Architecture guardrails (docs/ARCHITECTURE.md).
- *
- * Two jobs: catch import cycles (valuable today) and hold the layer direction
- * the decomposition introduced: routes → services → db → game, never backwards.
- * The rules name the folders that exist (`game/` is the domain, `db/` the data
- * layer). Run with `bun run arch`.
- */
 module.exports = {
   forbidden: [
     {
@@ -50,7 +42,6 @@ module.exports = {
       extensions: ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.json'],
     },
     moduleSystems: ['es6', 'cjs', 'tsd'],
-    // Count `import type` edges too: layering must hold for types as well.
     tsPreCompilationDeps: true,
     doNotFollow: { path: 'node_modules' },
     exclude: { path: '(^|/)(build|dist|\\.svelte-kit|migrations\\.gen\\.ts)' },

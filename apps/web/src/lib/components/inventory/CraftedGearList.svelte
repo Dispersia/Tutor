@@ -1,6 +1,4 @@
 <script lang="ts">
-  /** The crafted-gear list: every rolled piece, its enchant picker and actions. */
-
   import { ACCENT, accentStyle, qualityAccent } from '#lib/theme'
   import { enchantsText, lockedText, requiresText, statsText } from '#lib/inventoryview'
   import type { EnchantDTO, GearInstanceDTO, ItemDTO } from '#lib/skills'

@@ -3,19 +3,6 @@ import globals from 'globals'
 import svelte from 'eslint-plugin-svelte'
 import tseslint from 'typescript-eslint'
 
-/**
- * Lint + size-budget guardrails (docs/ARCHITECTURE.md).
- *
- * The size budget is the mechanical half of the decomposition: no file over
- * `MAX_LINES`, **no function over `MAX_FN_LINES`** (small by default — if a
- * function needs more than twenty lines it is doing more than one thing), no
- * signature over `MAX_PARAMS`. Every file is now inside the budget with no
- * exemption list (docs/ARCHITECTURE.md); the only relaxations left
- * are the data-table and test ceilings.
- *
- * Errors fail `bun run lint`; warnings are advisory (they name existing rough
- * edges that the phase plan works through).
- */
 const MAX_LINES = 400
 const MAX_FN_LINES = 20
 const MAX_PARAMS = 5
@@ -29,7 +16,6 @@ const sizeRules = {
   'max-params': ['error', MAX_PARAMS],
 }
 
-/** `bun test` globals (the `globals` package has no bun preset). */
 const bunTest = {
   test: 'readonly',
   it: 'readonly',
@@ -69,8 +55,8 @@ export default tseslint.config(
       globals: { ...globals.node, ...globals.browser, Bun: 'readonly' },
     },
     rules: {
+      'no-empty': ['error', { allowEmptyCatch: true }],
       ...sizeRules,
-      // Soft ceilings on the other dimensions of "too big".
       complexity: ['warn', 20],
       'max-depth': ['warn', 4],
       'max-statements': ['warn', 40],
@@ -86,14 +72,11 @@ export default tseslint.config(
     },
   },
 
-  // Content tables (`*.data.ts`) are data, not logic: the budget is for code.
   {
     files: ['**/*.data.ts'],
     rules: { 'max-lines': 'off', 'max-lines-per-function': 'off', 'max-params': 'off' },
   },
 
-  // Tests are arrange/act/assert: long, but their bodies still obey a ceiling
-  // (a larger one than production code — a case reads as one unit).
   {
     files: ['**/*.test.ts', '**/*.test.js'],
     languageOptions: { globals: bunTest },
@@ -111,11 +94,7 @@ export default tseslint.config(
       parserOptions: { parser: tseslint.parser, extraFileExtensions: ['.svelte'] },
     },
     rules: {
-      // Every link and `goto` goes through `href()` in `#lib/paths`, which applies
-      // the base path itself (the build injects it); the rule only recognises
-      // SvelteKit's own `resolve()`, so it flagged all 43 correct call sites.
       'svelte/no-navigation-without-resolve': 'off',
-      // Svelte 5 wants SvelteMap/SvelteSet for reactive collections.
       'svelte/prefer-svelte-reactivity': 'warn',
     },
   },

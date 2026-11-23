@@ -6,7 +6,6 @@
   import { href } from '#lib/paths'
   import Spinner from '#lib/components/Spinner.svelte'
 
-  // The shared board: seeded from the last fetch, so the ledger shows at once.
   const board = useSkills()
   const itemMap = $derived(board.itemMap)
   const rigs = $derived(itemRigs(board.skills))

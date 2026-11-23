@@ -1,11 +1,3 @@
-/**
- * Recording a graded drill (docs/DESIGN.md §13.6).
- *
- * The practice grade path and the audio path share this: an attempt row, XP,
- * the activity stamp of the day's streak, the profession action, the FSRS
- * schedule and the reinforcement hook. Only how the grade was produced differs.
- */
-
 import type { UserId } from '../../ids'
 import type { ServerCard } from '../../db/repo'
 import type { ExerciseDef, GradeResult } from '@tutor/core'
@@ -22,7 +14,6 @@ import {
 } from '../../services'
 import { settleAction } from './action'
 
-/** The counters a route needs to lay out its reply (shared by grade and speak). */
 export interface ReviewOutcome {
   result: GradeResult & { xp: number; leveledUp: boolean }
   skill: ReturnType<typeof settleAction>
@@ -31,7 +22,6 @@ export interface ReviewOutcome {
   stats: ReturnType<typeof summary>
 }
 
-/** Appends the review log row. Called for every countable attempt, XP or not. */
 export interface AttemptInput {
   userId: UserId
   card: ServerCard
@@ -51,7 +41,6 @@ export function recordAttempt(deps: Deps, input: AttemptInput): void {
   })
 }
 
-/** The reply for an attempt that must not count: no XP, no schedule, no lesson. */
 export function uncountedOutcome(deps: Deps, userId: UserId, result: GradeResult): ReviewOutcome {
   return {
     result: { ...result, xp: 0, leveledUp: false },
@@ -74,11 +63,6 @@ export interface FinalizeInput {
   lessonId?: string
 }
 
-/**
- * Advances everything a counted review touches and returns the reply payload:
- * XP, the day's activity, the profession action + idle rig, the SRS schedule,
- * the reinforcement hook and lesson completion.
- */
 export function finalizeReview(deps: Deps, input: FinalizeInput): ReviewOutcome {
   const { userId, result } = input
   const leveledUp = awardReviewXp(deps, userId, input)
@@ -96,7 +80,6 @@ export function finalizeReview(deps: Deps, input: FinalizeInput): ReviewOutcome 
   }
 }
 
-/** Pays the review's XP (the reason is fixed: a graded card review). */
 function awardReviewXp(deps: Deps, userId: UserId, input: FinalizeInput): boolean {
   const { leveledUp } = awardXp(deps.db, deps.events, userId, {
     amount: input.xp,
@@ -106,7 +89,6 @@ function awardReviewXp(deps: Deps, userId: UserId, input: FinalizeInput): boolea
   return leveledUp
 }
 
-/** Advances the card's FSRS schedule for this review. */
 function reviewSchedule(deps: Deps, userId: UserId, input: FinalizeInput) {
   return recordReview(deps.db, deps.events, userId, {
     cardId: input.card.id,
@@ -125,10 +107,6 @@ function emitCompleted(deps: Deps, input: FinalizeInput): void {
   })
 }
 
-/**
- * A word that keeps slipping gets an extra card woven in beside it (n+1), in the
- * background so the learner never waits on the generator.
- */
 function maybeReinforce(deps: Deps, input: FinalizeInput, lapses: number): void {
   if (input.card.payload?.template !== 'vocab') return
   if (lapses < REINFORCE_LAPSES) return

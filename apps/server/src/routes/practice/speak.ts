@@ -1,9 +1,3 @@
-/**
- * `POST /api/practice/speak` — recorded audio -> ASR + forced alignment -> score
- * and tips (docs/DESIGN.md §9.4). Graded like any attempt, but a silent clip or
- * a retry is left out of the schedule.
- */
-
 import { toCardId, type CardId } from '../../ids'
 import type { ServerCard } from '../../db/repo'
 import type { ExerciseContext, ExerciseDef, GradeResult } from '@tutor/core'
@@ -19,7 +13,6 @@ import { judgeFor } from './judge'
 import { finalizeReview, recordAttempt, uncountedOutcome } from './record'
 import { fail, failWith } from '../errors'
 
-/** The multipart fields of a spoken attempt, read off the form. */
 interface SpokenFields {
   cardId: CardId
   exerciseId: string
@@ -27,7 +20,6 @@ interface SpokenFields {
   lessonId?: string
   choiceId?: string
   latencyMs: number
-  /** A retry (re-record after a miss) is graded but never counted. */
   retry: boolean
 }
 
@@ -81,8 +73,6 @@ async function gradeSpoken(call: SpeakCall) {
   try {
     const instance = await call.def.generate(ctx)
     const result = await call.def.gradeAudio!(ctx, instance, audio)
-    // A silent/too-short clip must not count as a wrong answer, and a retry also
-    // stays out of the schedule: just ask for another attempt.
     if (result.detail?.noSpeech || fields.retry) {
       return c.json(uncountedOutcome(deps, user.id, result))
     }
@@ -94,10 +84,6 @@ async function gradeSpoken(call: SpeakCall) {
 
 async function speakCtx(call: SpeakCall): Promise<ExerciseContext> {
   const { c, deps, user, card } = call
-  // No ASR biasing here: the deck vocabulary is deliberately kept out of the
-  // decode. Whisper would fold it into its initial prompt and read a course word
-  // back out (saying いる, hearing います), so grading stays honest and the forced
-  // aligner anchors to the expected text instead.
   const assess: AssessFn = deps.assess ?? makeAssessor(deps, card.targetLang)
   return {
     ...exerciseCtx(deps, user, card, { known: knownWords(deps.db, user.id) }),

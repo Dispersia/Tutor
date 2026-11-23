@@ -1,5 +1,3 @@
-/** Admin: manage accounts, keeping everyone's data separate (docs/DESIGN.md §12.5). */
-
 import { toUserId } from '../../ids'
 import type { Context } from 'hono'
 import { deleteUser, deleteUserAuthSessions, listUsers } from '../../db/repo'

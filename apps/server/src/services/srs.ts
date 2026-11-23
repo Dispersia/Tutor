@@ -1,5 +1,3 @@
-/** Spaced repetition: scheduling, the state map and the daily budget (docs/DESIGN.md §13.6). */
-
 import type { UserId, CardId } from '../ids'
 import {
   addSrsReview,
@@ -27,9 +25,6 @@ import {
 import { startOfDay, userOffsetMin } from './clock'
 import { readDailyExtra, readStudyPrefs } from './study'
 
-// --- spaced repetition + curriculum (Phase 9, docs/DESIGN.md §13.6) ----------
-
-/** The scheduling outcome returned to the API/UI after a review. */
 export interface ReviewSchedule {
   rating: Rating
   state: FsrsState['state']
@@ -42,14 +37,12 @@ export interface ReviewSchedule {
   lapses: number
 }
 
-/** A user's desired retention as a fraction (Anki-style percent, default 90%). */
 export function desiredRetention(db: Db, userId: UserId): number {
   const raw = Number(getUserSetting(db, userId, 'desiredRetention') ?? 90)
   const pct = Number.isFinite(raw) ? Math.min(97, Math.max(70, Math.round(raw))) : 90
   return pct / 100
 }
 
-/** The card's current FSRS state, or a fresh one for a card never reviewed. */
 function prevStateOf(row: ReturnType<typeof getSrs>): FsrsState {
   if (!row) return NEW_STATE
   return {
@@ -66,7 +59,6 @@ function prevStateOf(row: ReturnType<typeof getSrs>): FsrsState {
   }
 }
 
-/** Writes the advanced schedule back, stamping `lastReviewAt` when it is new. */
 function saveSchedule(db: Db, userId: UserId, cardId: CardId, state: FsrsState, now: number): void {
   upsertSrs(db, userId, cardId, {
     state: state.state,
@@ -82,16 +74,11 @@ function saveSchedule(db: Db, userId: UserId, cardId: CardId, state: FsrsState, 
   })
 }
 
-/** How many days since the card's previous review (0 for a new card). */
 function elapsedDaysOf(prev: FsrsState, now: number): number {
   if (prev.state === 'new' || prev.lastReviewAt == null) return 0
   return Math.max(0, (now - prev.lastReviewAt) / DAY_MS)
 }
 
-/**
- * Advances a card's FSRS-6 schedule after a review, appends to the review log
- * and emits `srs.updated`. `source` records which surface fed the schedule.
- */
 function recordReviewTx(
   db: Db,
   bus: EventBus,
@@ -110,10 +97,8 @@ function recordReviewTx(
   return scheduleResult(rating, next.state, next.intervalDays, next.dueAt)
 }
 
-/** {@link recordReviewTx}, all-or-nothing. */
 export const recordReview = atomic(recordReviewTx)
 
-/** The card's next schedule, at this member's retention and learning steps. */
 function advance(db: Db, userId: UserId, prev: FsrsState, rating: Rating, now: number) {
   return schedule(prev, rating, now, {
     desiredRetention: desiredRetention(db, userId),
@@ -133,7 +118,6 @@ interface ReviewLog {
   source: string
 }
 
-/** Appends the FSRS review log: enough history to replay the card later. */
 function logReview(r: ReviewLog): void {
   addSrsReview(r.db, {
     userId: r.userId,
@@ -171,7 +155,6 @@ function emitSrs(
   })
 }
 
-/** The wire-facing scheduling outcome of one review. */
 function scheduleResult(
   rating: Rating,
   state: FsrsState,
@@ -211,13 +194,11 @@ export function srsStateMap(db: Db, userId: UserId): Map<CardId, FsrsState> {
   )
 }
 
-/** The expensive per-user maps, when a caller has already loaded them. */
 export interface LoadedCards {
   cards: ReturnType<typeof listCards>
   srs: Map<CardId, FsrsState>
 }
 
-/** The target-language words a learner currently knows (learned cards). */
 export function knownWords(db: Db, userId: UserId, loaded?: LoadedCards): Set<string> {
   const srsMap = loaded?.srs ?? srsStateMap(db, userId)
   const known = new Set<string>()
@@ -228,24 +209,16 @@ export function knownWords(db: Db, userId: UserId, loaded?: LoadedCards): Set<st
 }
 
 export interface StudyBudget {
-  /** Effective limits; 0 means unlimited. */
   newPerDay: number
   maxReviewsPerDay: number
-  /** How much of each budget is already spent today (UTC). */
   newToday: number
   reviewsToday: number
-  /** What is left under the budget (the available count when unlimited). */
   newRemaining: number
   reviewsRemaining: number
   newUnlimited: boolean
   reviewsUnlimited: boolean
 }
 
-/**
- * Today's study budget: how many new cards and reviews are left (docs/DESIGN.md
- * §13.6). Anki-style daily limits bound a day's work; the learner can raise
- * today's allowance with "study more".
- */
 export function studyBudget(
   db: Db,
   userId: UserId,
@@ -254,7 +227,6 @@ export function studyBudget(
 ): StudyBudget {
   const prefs = readStudyPrefs(db, userId)
   const extra = readDailyExtra(db, userId, now)
-  // The budget is per day of the member's own calendar (see `clock.ts`).
   const counts = dailyReviewCounts(db, userId, startOfDay(now, userOffsetMin(db, userId, now)))
   const ids = (loaded?.cards ?? listCards(db, userId)).map((c) => c.id)
   const map = loaded?.srs ?? srsStateMap(db, userId)
@@ -275,7 +247,6 @@ interface BudgetCtx {
   counts: { newCards: number; reviews: number }
 }
 
-/** How much of each budget is left; an unlimited budget counts what is available. */
 function remaining(c: BudgetCtx) {
   const newUnlimited = c.limits.newPerDay === 0
   const reviewsUnlimited = c.limits.maxReviewsPerDay === 0
@@ -291,7 +262,6 @@ function remaining(c: BudgetCtx) {
   }
 }
 
-/** Today's effective limits: the preference plus any "study more", 0 = unlimited. */
 function dailyLimits(
   prefs: ReturnType<typeof readStudyPrefs>,
   extra: ReturnType<typeof readDailyExtra>,

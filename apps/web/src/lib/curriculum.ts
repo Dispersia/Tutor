@@ -11,7 +11,6 @@ export interface LessonDTO {
   learned: number
   due: number
   complete: boolean
-  /** the new word this step introduces (frequency path) */
   newWord?: string
   reading?: string
 }
@@ -22,12 +21,10 @@ export interface CurriculumDeck {
   level: string | null
   targetLang: string
   description?: string | null
-  /** The deck's own overrides (ruby/reading rules, variant, growth cursor). */
   settings?: import('./exercises').DeckSettings
   cardCount: number
   learned: number
   due: number
-  /** Source words still unbuilt — an interrupted import the UI can finish. */
   remaining?: number
   lessons: LessonDTO[]
 }

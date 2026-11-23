@@ -1,9 +1,4 @@
-/** Indicators — chips, bars, the live dot and the one wait signal. */
-
 @layer components {
-  /* ---- loading ----------------------------------------------------------- */
-  /* The one wait signal: an accent ring that reads on any surface, tinted from
-     the local --accent so it belongs wherever it stands. */
   .spinner {
     display: inline-block;
     flex: none;
@@ -16,7 +11,6 @@
     vertical-align: -0.15em;
   }
 
-  /* ---- chips / bars ------------------------------------------------------ */
   .chip {
     display: inline-flex;
     align-items: center;
@@ -31,15 +25,12 @@
     font-weight: 500;
   }
 
-  /* A compact chip for dense lists: same colour language, less vertical air. */
   .chip--tight {
     gap: 0.2rem;
     padding: 0.1rem 0.4rem;
     font-size: 0.72rem;
   }
 
-  /* The tail of a cost chip: how many the player already holds, split off by a
-     hairline so "−2 Copper ore" and "have 4" never read as one number. */
   .chip__have {
     margin-left: 0.1rem;
     padding-left: 0.35rem;
@@ -48,8 +39,6 @@
     opacity: 0.8;
   }
 
-  /* A chip that is also a control. The pill stays compact so a row of chips
-     still reads as one line, but the hit area grows to 44px vertically. */
   .chip--press {
     position: relative;
     cursor: pointer;
@@ -72,16 +61,10 @@
     display: block;
     height: 100%;
     border-radius: 999px;
-    background: linear-gradient(
-      180deg,
-      color-mix(in oklab, var(--accent) 80%, white),
-      var(--accent) 60%
-    );
+    background: var(--accent);
     transition: width 0.4s ease;
   }
 
-  /* A rig that is running: a small accent dot that breathes. The colour comes
-     from --accent, so it sits inside whatever surface owns it. */
   .livedot {
     display: inline-block;
     flex: none;

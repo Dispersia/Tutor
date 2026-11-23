@@ -73,7 +73,6 @@ test('a fight: hits damage the monster, a kill grants drops + XP', () => {
 
 test('the weapon decides the skill the fight trains', () => {
   const { db, bus, user, sqlite } = setup()
-  // no weapon → unarmed melee → Strength
   expect(loadPlayerCombat(db, user.id).skill).toBe('strength')
   addItems(db, user.id, 'oak_shortbow', 1)
   equipItem(db, bus, user.id, 'oak_shortbow')
@@ -87,7 +86,7 @@ test('the weapon decides the skill the fight trains', () => {
 
 test('taking a hit trains Defence and Constitution', () => {
   const { db, bus, user, sqlite } = setup()
-  startEncounter(db, bus, user.id, 'slime') // damage 2
+  startEncounter(db, bus, user.id, 'slime')
   const hit = combatResolve(db, bus, user.id, false)!
   expect(hit.playerDamage).toBe(2)
   expect(hit.defenceXp).toBe(2)
@@ -108,10 +107,8 @@ test('the monster hits you even when you strike it', () => {
   if (!start.ok) return
 
   const hit = combatResolve(db, bus, user.id, true)!
-  // You land your own hit...
   expect(hit.damage).toBe(8)
   expect(hit.monsterHp).toBe(7)
-  // ...and still take the slime's blow.
   expect(hit.playerDamage).toBe(2)
   expect(hit.playerHp).toBe(pc.maxHp - 2)
   expect(hit.defenceXp).toBe(2)
@@ -123,11 +120,10 @@ test('HP persists between fights — restarting is not a free heal', () => {
   const { db, bus, user, sqlite } = setup()
   const pc = loadPlayerCombat(db, user.id)
 
-  startEncounter(db, bus, user.id, 'slime') // damage 2
+  startEncounter(db, bus, user.id, 'slime')
   const first = combatResolve(db, bus, user.id, true)!
   expect(first.playerHp).toBe(pc.maxHp - 2)
 
-  // Flee, then start a fresh fight: HP carries over rather than resetting.
   clearEncounter(db, user.id)
   const again = startEncounter(db, bus, user.id, 'slime')
   expect(again.ok).toBe(true)
@@ -138,7 +134,7 @@ test('HP persists between fights — restarting is not a free heal', () => {
 
 test('a defeat leaves you at a sliver of HP, not a full heal', () => {
   const { db, bus, user, sqlite } = setup()
-  startEncounter(db, bus, user.id, 'goblin') // damage 3, maxHp 24
+  startEncounter(db, bus, user.id, 'goblin')
   let outcome = 'ongoing'
   for (let i = 0; i < 60 && outcome === 'ongoing'; i++) {
     outcome = combatResolve(db, bus, user.id, false)!.outcome
@@ -159,9 +155,8 @@ test('a potion is auto-drunk at the start of a fight', () => {
   expect(start.ok).toBe(true)
   if (!start.ok) return
   expect(start.drank?.item).toBe('attack_potion')
-  expect(getItemCount(db, user.id, 'attack_potion')).toBe(0) // consumed
+  expect(getItemCount(db, user.id, 'attack_potion')).toBe(0)
 
-  // +25% power: base 5 (no weapon, attack 1) → 6
   const hit = combatResolve(db, bus, user.id, true)!
   expect(hit.damage).toBe(6)
   sqlite.close()
@@ -173,7 +168,6 @@ test('a restore potion raises max HP for the fight', () => {
   const start = startEncounter(db, bus, user.id, 'goblin')
   expect(start.ok).toBe(true)
   if (!start.ok) return
-  // base max HP 24 → +25% = 30
   expect(start.encounter.playerHp).toBe(30)
   sqlite.close()
 })
@@ -182,7 +176,7 @@ test('food is auto-eaten when HP drops below the threshold', () => {
   const { db, bus, user, sqlite } = setup()
   expect(foodThreshold(db, user.id)).toBe(0.5)
   addItems(db, user.id, 'cooked_shrimp', 3)
-  startEncounter(db, bus, user.id, 'slime') // damage 2, maxHp 24
+  startEncounter(db, bus, user.id, 'slime')
 
   let ate = null
   for (let i = 0; i < 20 && !ate; i++) {
@@ -231,17 +225,16 @@ test('mastery scales a hit once: it is inside the power, not multiplied again', 
     itemId: 'bronze_sword',
     slot: 'mainHand',
     quality: 'epic',
-    statsJson: JSON.stringify({ mastery: 260 }), // 260 rating = 50% mastery
+    statsJson: JSON.stringify({ mastery: 260 }),
     armour: 0,
     power: 3,
   })
   expect(equipItem(db, bus, user.id, 'bronze_sword', { instanceId }).ok).toBe(true)
   const pc = loadPlayerCombat(db, user.id)
   expect(pc.mastery).toBeCloseTo(0.5)
-  expect(pc.power).toBeGreaterThan(8) // the bare sword gives 8; mastery is in here
+  expect(pc.power).toBeGreaterThan(8)
 
   startEncounter(db, bus, user.id, 'slime')
-  // rand = 0.99: no crit and no haste strike, so the hit is the bare power
   const hit = combatResolve(db, bus, user.id, true, () => 0.99)!
   expect(hit.damage).toBe(pc.power)
   sqlite.close()
@@ -265,7 +258,6 @@ test('a second fight cannot be started over a running one', () => {
   combatResolve(db, bus, user.id, true)
   const again = startEncounter(db, bus, user.id, 'slime')
   expect(again.ok).toBe(false)
-  // the fight in progress keeps its damage
   expect(getEncounter(db, user.id)!.monsterHp).toBeLessThan(15)
   sqlite.close()
 })
