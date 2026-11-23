@@ -170,7 +170,16 @@ test('training an action awards skill XP and materials', async () => {
       skillId: string
       xp: number
       gained: unknown[]
-      idle: { completions: number; active: boolean; intervalSec: number; runSec: number } | null
+      idle: {
+        completions: number
+        active: boolean
+        intervalSec: number
+        runSec: number
+        maxRunSec: number
+        runFullAtCompletions: number
+        runProgress: number
+        maxed: boolean
+      } | null
     }
     stats: { xp: number }
   }
@@ -183,6 +192,11 @@ test('training an action awards skill XP and materials', async () => {
   expect(graded.skill.idle?.active).toBe(true)
   expect(graded.skill.idle?.runSec).toBe(600)
   expect(graded.skill.idle?.intervalSec).toBeGreaterThan(2)
+  // the client can show how far the rig is toward the 3 h cap, and when it is maxed
+  expect(graded.skill.idle?.maxRunSec).toBe(3 * 60 * 60)
+  expect(graded.skill.idle?.runFullAtCompletions).toBe(50)
+  expect(graded.skill.idle?.runProgress).toBeCloseTo(1 / 50, 6)
+  expect(graded.skill.idle?.maxed).toBe(false)
 
   const skills = (await (await app.request('/api/skills', auth(cookie))).json()) as {
     inventory: { itemId: string; count: number }[]

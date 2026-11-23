@@ -337,7 +337,10 @@ export function isLearned(state: FsrsState | undefined): boolean {
 }
 
 /**
- * Picks the card to study next: overdue first, then new, then the soonest due.
+ * Picks the card to study next: overdue first, then new, then the soonest due —
+ * including a card that is not due yet. Callers that must always have something
+ * to show (combat wants a card for every hit) use this; practice uses
+ * `selectStudyCardId`, which never reaches past a review card's due date.
  * `cardIds` is in syllabus order; `srs` maps card id -> state.
  */
 export function selectCardId(
@@ -354,6 +357,31 @@ export function selectCardId(
   const fresh = cardIds.filter((id) => !srs.has(id))
   if (fresh.length) return fresh[0]
   return cardIds.slice().sort((a, b) => (srs.get(a)?.dueAt ?? 0) - (srs.get(b)?.dueAt ?? 0))[0]
+}
+
+/**
+ * Picks the card to study next: overdue first, then new, and nothing else.
+ *
+ * A **review card is never served ahead of its due date**. A same-day review of
+ * a review card leaves the due date untouched (see `schedule`), so reaching past
+ * a not-yet-due review card hands back the very same card again and again. A
+ * learning/relearning step that is not due yet waits too (the lesson queue moves
+ * on to the next new word instead of re-showing it). When nothing is due and no
+ * new word is left, the day is done. Combat, which must always have a card for a
+ * hit, keeps using `selectCardId`.
+ */
+export function selectStudyCardId(
+  cardIds: string[],
+  srs: Map<string, FsrsState>,
+  now: number,
+): string | undefined {
+  if (cardIds.length === 0) return undefined
+  const due = cardIds.filter((id) => {
+    const s = srs.get(id)
+    return s ? isDue(s, now) : false
+  })
+  if (due.length) return due.sort((a, b) => (srs.get(a)!.dueAt ?? 0) - (srs.get(b)!.dueAt ?? 0))[0]
+  return cardIds.find((id) => !srs.has(id))
 }
 
 export function countDue(cardIds: string[], srs: Map<string, FsrsState>, now: number): number {

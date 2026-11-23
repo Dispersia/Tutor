@@ -1,6 +1,7 @@
 import { createApp } from './app'
 import { buildDeps } from './bootstrap'
 import { env } from './env'
+import { startRigNotifier } from './push/notify'
 import { readTls } from './static'
 
 const { deps, close } = buildDeps(env)
@@ -25,6 +26,7 @@ const fetchHandler = env.basePath ? makeFetch(env.basePath) : app.fetch
 
 deps.supervisor.startWatchdog()
 if (env.speechAutostart) void deps.supervisor.ensure()
+const stopRigNotifier = startRigNotifier({ db: deps.db })
 
 const tls = readTls(env.tlsCert, env.tlsKey)
 
@@ -51,6 +53,7 @@ if (env.host !== '127.0.0.1') {
 
 async function shutdown(): Promise<void> {
   console.log('\n[server] shutting down…')
+  stopRigNotifier()
   deps.supervisor.stopWatchdog()
   await deps.supervisor.stop()
   close()

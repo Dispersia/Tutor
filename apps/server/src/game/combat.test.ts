@@ -54,5 +54,5 @@ test('equipment carries power / armour values', () => {
   expect(ITEM_BY_ID.get('iron_sword')?.power).toBe(6)
   expect(ITEM_BY_ID.get('oak_shortbow')?.power).toBe(4)
   expect(ITEM_BY_ID.get('oak_staff')?.power).toBe(5)
-  expect(ITEM_BY_ID.get('steel_platebody')?.armour).toBe(3)
+  expect(ITEM_BY_ID.get('steel_platebody')?.armour).toBe(4)
 })

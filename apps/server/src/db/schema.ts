@@ -186,8 +186,37 @@ export const actionProgress = sqliteTable('action_progress', {
   crafts: real('crafts').notNull().default(0),
   /** fractional produced items per item id, as JSON */
   remainderJson: text('remainder_json').notNull().default('{}'),
+  /**
+   * ms; the run deadline whose "30 minutes left" alert was already sent. A drill
+   * that extends the run moves `run_ends_at`, re-arming the alert (§13.5.1).
+   */
+  notifiedEndsAt: integer('notified_ends_at').notNull().default(0),
+  /** the recipe choice this action's rig runs ('' = the first choice) */
+  lastChoice: text('last_choice').notNull().default(''),
   updatedAt: integer('updated_at').notNull(),
 })
+
+/**
+ * Web Push subscriptions (docs/DESIGN.md §13.5.1), one row per installed
+ * device that opted in. `endpoint` is the push service URL; `p256dh`/`auth`
+ * are the subscription's public key and auth secret (RFC 8291).
+ */
+export const pushSubscriptions = sqliteTable(
+  'push_subscriptions',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    endpoint: text('endpoint').notNull().unique(),
+    p256dh: text('p256dh').notNull(),
+    auth: text('auth').notNull(),
+    userAgent: text('user_agent'),
+    createdAt: integer('created_at').notNull(),
+    lastOkAt: integer('last_ok_at'),
+  },
+  (t) => [index('idx_push_subscriptions_user').on(t.userId)],
+)
 
 /**
  * Append-only completion log (docs/DESIGN.md §13.5.1) — one row per drill that
@@ -231,15 +260,58 @@ export const talents = sqliteTable('talents', {
   grantedAt: integer('granted_at').notNull(),
 })
 
-/** Equipped gear, one item per slot. */
+/**
+ * Crafted gear instances. A recipe produces a *piece*, not a stack: each row
+ * carries its own quality and rolled stats. The inventory count stays the
+ * stack count, so the bank and the old equipment code keep working.
+ */
+export const gearInstances = sqliteTable(
+  'gear_instances',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    itemId: text('item_id').notNull(),
+    slot: text('slot').notNull(),
+    quality: text('quality').notNull().default('common'),
+    statsJson: text('stats_json').notNull().default('{}'),
+    /** JSON array of band ids enchanted onto this piece (docs §13.5.3). */
+    enchantJson: text('enchant_json').notNull().default('[]'),
+    armour: integer('armour').notNull().default(0),    power: integer('power').notNull().default(0),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('idx_gear_instances_user').on(t.userId, t.itemId)],
+)
+
+/** Equipped gear, one item per slot. `instance_id` points at a crafted roll. */
 export const equipment = sqliteTable('equipment', {
   userId: text('user_id')
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
   slot: text('slot').notNull(),
   itemId: text('item_id').notNull(),
+  instanceId: text('instance_id'),
   updatedAt: integer('updated_at').notNull(),
 })
+
+/** Saved gear sets for quick loadout changes. */
+export const gearSets = sqliteTable(
+  'gear_sets',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    combatStyle: text('combat_style').notNull().default('general'),
+    /** JSON: slot → { itemId, instanceId? } */
+    slotsJson: text('slots_json').notNull().default('{}'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => [index('idx_gear_sets_user').on(t.userId)],
+)
 
 /**
  * Persistent combat state (docs/DESIGN.md §13.5). HP carries between fights —
@@ -325,6 +397,11 @@ export const encounters = sqliteTable('encounters', {
   monsterHp: integer('monster_hp').notNull(),
   playerHp: integer('player_hp').notNull(),
   playerMaxHp: integer('player_max_hp').notNull().default(0),
+  /** The scaled monster's stats for this fight (0 = use the base definition). */
+  monsterMaxHp: integer('monster_max_hp').notNull().default(0),
+  monsterDamage: integer('monster_damage').notNull().default(0),
+  monsterLevel: integer('monster_level').notNull().default(0),
+  xpReward: integer('xp_reward').notNull().default(0),
   powerBonus: real('power_bonus').notNull().default(0),
   potionId: text('potion_id'),
   foodEaten: integer('food_eaten').notNull().default(0),

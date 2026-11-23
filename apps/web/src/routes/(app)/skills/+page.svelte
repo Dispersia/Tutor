@@ -1,21 +1,29 @@
 <script lang="ts">
   import { href } from '#lib/paths'
   import { onMount } from 'svelte'
-  import { getSkills, type SkillsResponse } from '#lib/skills'
-  import { rigGainedSince } from '#lib/idle'
+  import { EFFECT_SHORT, getSkills, type SkillsResponse } from '#lib/skills'
+  import { fmtInterval, rigGainedSince, rigSecondsLeft } from '#lib/idle'
   import { ACCENT, CATEGORY, accentStyle, type SkillCategory } from '#lib/theme'
   import Icon from '#lib/components/Icon.svelte'
   import Spinner from '#lib/components/Spinner.svelte'
+  import { cachedAt, peekCached } from '#lib/cache'
 
-  let data = $state<SkillsResponse | null>(null)
+  // Seed from the last fetch so returning to Skills renders the board at once.
+  const cachedSkills = peekCached<SkillsResponse>('/api/skills')
+  let data = $state<SkillsResponse | null>(cachedSkills ?? null)
   let error = $state('')
-  let loading = $state(true)
+  let loading = $state(cachedSkills === undefined)
   /** When the board was fetched — the cursor the live counters extrapolate from. */
-  let fetchedAt = $state(0)
+  let fetchedAt = $state(cachedAt('/api/skills'))
   /** Ticking clock so a running rig's counter climbs in place (§13.5.1). */
   let now = $state(Date.now())
 
   const pct = (v: number) => `${Math.round(v * 100)}%`
+  /** Like pct, but keeps the decimal for sub-1% passives (0.5%, not 1%). */
+  const pctShort = (v: number) => {
+    const n = v * 100
+    return `${n < 1 && n > 0 ? n.toFixed(1) : Math.round(n)}%`
+  }
   // the average profession level, so it also reads out of 100
   const totalLevel = $derived.by(() => {
     const skills = data?.skills ?? []
@@ -36,23 +44,58 @@
     })),
   )
 
-  /** Professions with at least one rig running, and the items they made since fetch. */
+  /**
+   * Professions with at least one rig running: the items they made since fetch,
+   * the run closest to finishing, and its rate. Drives both the summary strip at
+   * the top of the board and the live tell on each tile.
+   */
   const running = $derived.by(() => {
-    const out: { id: string; name: string; accent: string; gained: number }[] = []
+    const out: {
+      id: string
+      name: string
+      accent: string
+      gained: number
+      actionId: string
+      left: number
+      rate: string
+      count: number
+    }[] = []
     for (const s of data?.skills ?? []) {
       let gained = 0
-      let active = false
+      let left = Infinity
+      let actionId = ''
+      let rate = ''
+      let count = 0
       for (const a of s.actions) {
         if (!a.idle?.active) continue
-        active = true
+        count++
+        const l = rigSecondsLeft(a.idle, now)
+        if (l < left) {
+          left = l
+          actionId = a.id
+          rate = fmtInterval(a.idle.intervalSec)
+        }
         if (fetchedAt) {
           for (const n of Object.values(rigGainedSince(a.idle, fetchedAt, now))) gained += n
         }
       }
-      if (active) out.push({ id: s.id, name: s.name, accent: CATEGORY[s.category].accent, gained })
+      if (count)
+        out.push({
+          id: s.id,
+          name: s.name,
+          accent: CATEGORY[s.category].accent,
+          gained,
+          actionId,
+          left,
+          rate,
+          count,
+        })
     }
-    return out
+    return out.sort((a, b) => a.left - b.left)
   })
+
+  /** The running tell for one profession, by id. */
+  const runningById = $derived(new Map(running.map((r) => [r.id, r])))
 
   onMount(() => {
     void refresh()
@@ -77,10 +120,10 @@
   <div class="flex items-start justify-between gap-4">
     <h1 class="display min-w-0 text-3xl text-ink-100">Skills</h1>
     <div class="shrink-0 text-center">
-      <div class="seal h-14 w-14" aria-label="Average level {totalLevel}">
+      <div class="seal h-14 w-14" aria-label="Account level {totalLevel}">
         <span class="display text-xl leading-none font-bold">{totalLevel}</span>
       </div>
-      <p class="seal__label" aria-hidden="true">Avg</p>
+      <p class="seal__label" aria-hidden="true">Level</p>
     </div>
   </div>
   <p class="sub mt-2">Train a trade, gather materials, grow stronger.</p>
@@ -150,54 +193,71 @@
     <Spinner size={14} label="Loading skills" /> Loading…
   </p>
 {:else}
-  <div class="xl:columns-2 xl:gap-x-24">
+  <div class="xl:columns-2 xl:gap-x-10">
     {#each groups as g (g.key)}
       {#if g.skills.length}
-        <div class="mt-5 xl:break-inside-avoid">
+        <section class="mt-5 xl:break-inside-avoid">
           <div class="mb-2 flex items-center gap-2">
             <span class="h-2.5 w-2.5 rounded-[2px]" style="background: {g.accent}"></span>
             <h2 class="eyebrow" style="color: {g.accent}">{g.label}</h2>
             <span class="ml-auto text-xs text-ink-400">{g.skills.length}</span>
           </div>
-          <ul class="grid gap-2">
+          <ul class="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-2">
             {#each g.skills as s (s.id)}
               {@const pending = s.talent.pendingChoice || s.talent.mastery.pending.length > 0}
+              {@const live = runningById.get(s.id)}
               <li style={accentStyle(g.accent)}>
-                <a href={href(`/skills/${s.id}`)} class="panel panel-accent block p-3">
-                  <div class="flex items-start gap-3">
+                <a
+                  href={href(`/skills/${s.id}`)}
+                  class="panel panel-accent panel--press block p-2.5"
+                  aria-label="{s.name}, level {s.level} of 100"
+                >
+                  <div class="flex items-center gap-2.5">
                     <span
-                      class="tile grid h-11 w-11 shrink-0 place-items-center text-xl"
+                      class="grid h-11 w-11 shrink-0 place-items-center rounded-[10px] border text-xl leading-none"
+                      style="border-color: color-mix(in oklab, var(--accent) 45%, var(--color-ink-700)); background: color-mix(in oklab, var(--accent) 16%, var(--color-ink-950))"
                       aria-hidden="true">{s.icon}</span
                     >
                     <div class="min-w-0 flex-1">
-                      <div class="flex items-baseline justify-between gap-2">
-                        <span class="display truncate text-base text-ink-100">{s.name}</span>
+                      <div class="flex items-baseline justify-between gap-1.5">
+                        <span class="display truncate text-sm text-ink-100">{s.name}</span>
                         <span
-                          class="display shrink-0 text-lg font-bold tabular-nums"
+                          class="display shrink-0 text-lg leading-none font-bold tabular-nums"
                           style="color: {g.accent}">{s.level}</span
                         >
                       </div>
-                      <div class="bar mt-1.5"><i style="width: {s.progress * 100}%"></i></div>
-                      <p class="mt-1.5 line-clamp-2 text-xs text-ink-400">{s.description}</p>
-                      <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-400">
-                        <span class="tabular-nums" style="color: {g.accent}"
-                          >{pct(s.effect.value)}/lv</span
-                        >
-                        <span class="flex items-center gap-1">
-                          <Icon name="link" size={12} />
-                          {s.talent.synergy.name}
-                        </span>
-                        {#if pending}
-                          <span class="chip shrink-0" style={accentStyle(ACCENT.violet)}>Talent</span>
-                        {/if}
-                      </div>
+                      <div class="bar mt-1.5 h-1.5"><i style="width: {s.progress * 100}%"></i></div>
                     </div>
+                  </div>
+                  <div class="mt-2 flex items-center gap-1.5 text-xs text-ink-400">
+                    <span
+                      class="min-w-0 truncate tabular-nums"
+                      style="color: {g.accent}"
+                      title={s.effectLabel}
+                      >+{pctShort(s.effect.value)} {EFFECT_SHORT[s.effect.kind]}</span
+                    >
+                    {#if live}
+                      <span
+                        class="chip ml-auto shrink-0"
+                        style={accentStyle(ACCENT.jade)}
+                        title="{live.count} rig{live.count === 1
+                          ? ''
+                          : 's'} running · {live.rate} · {live.gained} made since you opened this page"
+                      >
+                        <span class="livedot"></span>
+                        {live.gained > 0 ? `+${live.gained}` : live.rate}
+                      </span>
+                    {:else if pending}
+                      <span class="chip ml-auto shrink-0" style={accentStyle(ACCENT.violet)}
+                        >Talent</span
+                      >
+                    {/if}
                   </div>
                 </a>
               </li>
             {/each}
           </ul>
-        </div>
+        </section>
       {/if}
     {/each}
   </div>

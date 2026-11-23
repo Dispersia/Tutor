@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """Rasterise the Nightforge mark into the PWA icons (no external deps).
 
-The mark is the app's own favicon: a graphite rounded square, an amber "t"
-stroke and an amber dot. This script draws it with a signed-distance test at
+The mark is the app's own favicon: a slate rounded square, an indigo "t"
+stroke and an indigo dot. This script draws it with a signed-distance test at
 4x supersampling and writes a straight RGBA PNG, so the installed app icon
-matches the design system instead of the old emerald one.
+matches the design system instead of the old emerald or amber one.
 """
 
 import struct
 import zlib
 from pathlib import Path
 
-GROUND = (0x0C, 0x0D, 0x10)
-SEAL = (0xE3, 0x81, 0x3F)
+GROUND = (0x0D, 0x11, 0x17)
+SEAL = (0x6B, 0x8E, 0xF7)
 SS = 4  # supersampling factor
 
 
@@ -76,7 +76,7 @@ def render(size, glyph_scale=1.0):
             if ground == 0:
                 row += bytes((0, 0, 0, 0))
                 continue
-            # composite amber over graphite, then alpha by rect coverage
+            # composite indigo over slate, then alpha by rect coverage
             a = ground / total
             t = seal / ground
             r = round(GROUND[0] + (SEAL[0] - GROUND[0]) * t)

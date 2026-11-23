@@ -4,9 +4,13 @@
   import { goto } from '$app/navigation'
   import { onMount, tick } from 'svelte'
   import {
+    chooseAction,
     chooseTalent,
+    distillGear,
     getSkill,
+    stopRig,
     type ActionDTO,
+    type BandDTO,
     type OwnedTalent,
     type SkillPageResponse,
     type TalentOption,
@@ -15,11 +19,15 @@
   import type { ModKind } from '#lib/types'
   import { CATEGORY, ACCENT, accentStyle, categoryAccent } from '#lib/theme'
   import Icon from '#lib/components/Icon.svelte'
+  import { peekCached } from '#lib/cache'
 
-  let data = $state<SkillPageResponse | null>(null)
+  // Seed from the last fetch so returning to a profession renders at once.
+  const initialId = page.params.id
+  const cachedSkill = peekCached<SkillPageResponse>(`/api/skills/${initialId}`)
+  let data = $state<SkillPageResponse | null>(cachedSkill ?? null)
   let error = $state('')
   let note = $state('')
-  let loading = $state(true)
+  let loading = $state(cachedSkill === undefined)
   let busy = $state(false)
   let changing = $state<string | null>(null)
   /** The action row a material link jumped to, briefly tinted so you can find it. */
@@ -48,12 +56,72 @@
   }
   const skill = $derived(data?.skill ?? null)
   const accent = $derived(skill ? categoryAccent(skill.category) : ACCENT.azure)
+  /** The live-rig cap readout (§13.5.1): how many machines may run, and how many are. */
+  const rigs = $derived(data?.rigs ?? { maxLive: 2, live: 0 })
   const catLabel = $derived(skill ? CATEGORY[skill.category].label : '')
   const itemMap = $derived(new Map((data?.items ?? []).map((i) => [i.id, i])))
+  /** How many of each material the player holds — a cost chip can say what you have. */
+  const ownedMap = $derived(new Map((data?.inventory ?? []).map((i) => [i.itemId, i.count])))
   /** Where each material is made, so a "needs" cost can link to its source action. */
   const sources = $derived(data?.sources ?? {})
-  /** The first action you can actually train — the one amber primary on the view. */
+  /** The first action you can actually train — the one indigo primary on the view. */
   const firstTrainableId = $derived(skill?.actions.find((a) => a.unlocked && a.affordable)?.id)
+
+  /** Distill panel state (Enchanting only, §13.5.3.2). */
+  let distillNote = $state('')
+  /** Inventory items you can burn to train Enchanting, richest first. */
+  const distillables = $derived.by(() => {
+    if (skill?.id !== 'enchanting') return []
+    return (data?.inventory ?? [])
+      .filter((r) => r.count > 0 && r.itemId !== 'coins')
+      .map((r) => ({
+        itemId: r.itemId,
+        count: r.count,
+        name: itemMap.get(r.itemId)?.name ?? r.itemId,
+        icon: itemMap.get(r.itemId)?.icon ?? '◆',
+        value: itemMap.get(r.itemId)?.value ?? 0,
+      }))
+      .sort((a, b) => b.value - a.value)
+  })
+
+  async function doDistill(itemId: string) {
+    busy = true
+    distillNote = ''
+    try {
+      const res = await distillGear(itemId)
+      distillNote = `+${res.xp} Enchanting XP · +1 ${res.essence.replace('_', ' ')}`
+      if (id) await load(id)
+    } catch (e) {
+      error = (e as Error).message
+    } finally {
+      busy = false
+    }
+  }
+
+  /**
+   * Actions grouped under their material band (§13.5.3). Only artisans with bands
+   * (Smithing) get the grouped view; anything else renders the flat list.
+   */
+  const bandGroups = $derived.by(() => {
+    const s = skill
+    const bands = s?.bands ?? []
+    if (!s || !bands.length) return null
+    const byBand = new Map<string, ActionDTO[]>()
+    const other: ActionDTO[] = []
+    for (const a of s.actions) {
+      if (a.band) {
+        const list = byBand.get(a.band.id) ?? []
+        list.push(a)
+        byBand.set(a.band.id, list)
+      } else {
+        other.push(a)
+      }
+    }
+    return {
+      groups: bands.map((band) => ({ band, actions: byBand.get(band.id) ?? [] })),
+      other,
+    }
+  })
 
   /**
    * The whole talent ladder in one rail: a choice every 10 levels, with a mastery
@@ -126,13 +194,20 @@
   }
 
   async function load(skillId: string) {
-    loading = true
+    // A cached profession for this id renders at once; only a cold id waits.
+    const cached = peekCached<SkillPageResponse>(`/api/skills/${skillId}`)
+    if (cached) {
+      data = cached
+      loading = false
+    } else {
+      loading = true
+    }
     error = ''
     try {
       data = await getSkill(skillId)
     } catch (e) {
       error = (e as Error).message
-      data = null
+      if (!cached) data = null
     } finally {
       loading = false
     }
@@ -154,10 +229,63 @@
   }
 
   function train(a: ActionDTO) {
-    void goto(href(`/practice?action=${a.id}`))
+    const choice = a.choices?.length ? `&choice=${encodeURIComponent(a.choice)}` : ''
+    void goto(href(`/practice?action=${a.id}${choice}`))
+  }
+
+  /** Pick which recipe a choose-input action runs (prospect ore, cut a gem). */
+  async function pickChoice(a: ActionDTO, choiceId: string) {
+    busy = true
+    error = ''
+    try {
+      await chooseAction(a.id, choiceId)
+      if (id) await load(id)
+    } catch (e) {
+      error = (e as Error).message
+    } finally {
+      busy = false
+    }
+  }
+
+  /**
+   * Stop a running rig on purpose (§13.5.1). Confirmed first: the run ends now and
+   * its slot frees, so it is how you make room for a machine you would rather run.
+   */
+  async function cancelRig(a: ActionDTO) {
+    if (!confirm(`Stop the ${a.name} rig? Its run ends now and frees a slot for another action.`))
+      return
+    busy = true
+    error = ''
+    try {
+      await stopRig(a.id)
+      if (id) await load(id)
+    } catch (e) {
+      error = (e as Error).message
+    } finally {
+      busy = false
+    }
+  }
+
+  /** The band gate blocking an action, if any (e.g. `Bronze 40`). */
+  function bandGate(a: ActionDTO): string {
+    const missing = a.missingBands ?? []
+    if (missing.length) return missing.map((b) => `${b.name} ${b.level}`).join(', ')
+    if (a.band && a.band.current < a.band.level) return `${a.band.name} ${a.band.level}`
+    return ''
+  }
+
+  /** The band's current total contribution, e.g. `+4.2% crit` or `+5 stamina`. */
+  function bandBuff(b: BandDTO): string {
+    const v = b.buffValue ?? 0
+    if (!v) return ''
+    return b.buffStat === 'stamina'
+      ? `+${Math.round(v)} stamina`
+      : `+${Math.round(v * 1000) / 10}% ${b.buffStat}`
   }
 
   function lockedReason(a: ActionDTO): string {
+    const band = bandGate(a)
+    if (band) return band
     if (a.missingUnlocks.length) {
       return a.missingUnlocks.map((u) => `${u.skill} ${u.level}`).join(', ')
     }
@@ -170,6 +298,20 @@
   // A capstone option carries a cross-profession gate; choice options never do,
   // so `blocked` is false for them and the button always reads "Choose".
   const blocked = (o: TalentOption) => (o.requires ?? []).some((r) => !r.met)
+
+  /**
+   * The gate that blocks an action, without restating missing materials that
+   * the cost chips already show. A level or equip gate is the only thing the
+   * chips cannot explain.
+   */
+  function actionGate(a: ActionDTO): string {
+    const band = bandGate(a)
+    if (band) return band
+    if (a.missingUnlocks.length)
+      return a.missingUnlocks.map((u) => `${u.skill} ${u.level}`).join(', ')
+    if (a.equipMissing) return `equip a ${a.equipMissing.tag} ${a.equipMissing.slot}`
+    return ''
+  }
   const unmet = (o: TalentOption) =>
     (o.requires ?? [])
       .filter((r) => !r.met)
@@ -210,6 +352,43 @@
     <p class="sub mt-2">{catLabel} · {skill.description}</p>
   </header>
 
+  {#if skill.id === 'enchanting'}
+    <!-- Distill (§13.5.3.2): burn an item from your inventory to train Enchanting
+         and pull out its essence. -->
+    <section class="panel mt-4 p-3" style={accentStyle(accent)}>
+      <div class="flex items-center justify-between gap-2">
+        <h2 class="eyebrow" style="color: var(--accent)">Distill</h2>
+        <span class="text-[11px] text-ink-400">+XP by coin value · yields essence</span>
+      </div>
+      {#if distillables.length === 0}
+        <p class="mt-2 text-xs text-ink-400">Nothing to distill — gather or craft something first.</p>
+      {:else}
+        <ul class="mt-2 flex max-h-96 flex-col gap-1 overflow-auto">
+          {#each distillables as d (d.itemId)}
+            <li class="flex items-center justify-between gap-2 border-b border-ink-700 pb-1">
+              <span class="min-w-0 truncate text-xs text-ink-200">
+                {d.icon}
+                {d.name}
+                <span class="text-ink-500">×{d.count} · {d.value} coins</span>
+              </span>
+              <button
+                type="button"
+                class="btn btn-ghost shrink-0 px-2 py-0.5 text-[10px]"
+                disabled={busy}
+                onclick={() => doDistill(d.itemId)}
+              >
+                Distill
+              </button>
+            </li>
+          {/each}
+        </ul>
+        {#if distillNote}
+          <p class="mt-2 text-xs" style="color: var(--color-jade)">{distillNote}</p>
+        {/if}
+      {/if}
+    </section>
+  {/if}
+
   <!-- Mobile order is ledger → actions → talents: the thing you actually do comes
        before the long-term ladder. At xl the two columns return, with the ledger
        and its talents in the left column and actions on the right. -->
@@ -240,6 +419,12 @@
         <div class="flex items-baseline justify-between gap-2 border-b border-ink-700 py-3 text-sm">
           <span class="text-ink-300">XP total</span>
           <span class="display text-lg font-bold text-gold-200 tabular-nums">{skill.xp}</span>
+        </div>
+        <div class="flex items-baseline justify-between gap-2 border-b border-ink-700 py-3 text-sm">
+          <span class="text-ink-300">Rigs running</span>
+          <span class="display shrink-0 tabular-nums" style="color: {accent}"
+            >{rigs.live}/{rigs.maxLive}</span
+          >
         </div>
         {#if skill.category === 'combat'}
           <a
@@ -396,142 +581,293 @@
     <div class="order-2 xl:order-none xl:col-start-2 xl:row-start-1 xl:row-span-2">
       <!-- Actions --------------------------------------------------------------->
       <h2 class="mt-6 eyebrow xl:mt-0" style="color: {accent}">Actions</h2>
-      <ul>
-        {#each skill.actions as a (a.id)}
+      <p class="mt-1 border-b border-ink-700 pb-2 text-xs text-ink-400">
+        {skill.actions.length} action{skill.actions.length === 1 ? '' : 's'} · {skill.actions.filter(
+          (a) => a.unlocked,
+        ).length} unlocked
+      </p>
+      {#snippet actionRow(a: ActionDTO)}
           {@const trainable = a.unlocked && a.affordable}
           {@const isPrimary = trainable && a.id === firstTrainableId}
+          {@const made = a.produces?.[0]}
+          {@const gate = actionGate(a)}
+          {@const showGate = !!gate && !a.description.toLowerCase().includes(gate.toLowerCase())}
           <li
             id="action-{a.id}"
-            class="flex items-start gap-3 border-b border-ink-700 py-3 transition-colors"
-            class:bg-ink-900={flash === a.id}
+            class="panel px-2 py-1.5 transition-colors sm:px-2.5 sm:py-2"
+            class:panel-accent={isPrimary}
+            class:bg-ink-900={!a.unlocked}
+            class:border-seal-400={flash === a.id}
             style={accentStyle(accent)}
           >
-            <div class="min-w-0 flex-1">
-              <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                <span class="text-sm font-medium text-ink-100">{a.name}</span>
-                <span class="chip" style={accentStyle(ACCENT.ink)}>Tier {a.tier}</span>
-                <span class="display ml-auto shrink-0 text-sm font-bold" style="color: {accent}"
-                  >Lv {a.level}</span
-                >
-              </div>
-              <div class="bar mt-1.5"><i style="width: {a.progress * 100}%"></i></div>
-              <div class="mt-1 flex flex-wrap items-center gap-x-3 text-xs text-ink-400">
-                {#if a.level >= 100}
-                  <span>Max level</span>
+            <div class="flex items-start gap-2.5">
+              <!-- The item you make is the row's anchor: it reads faster than a
+                   repeated tier label. Actions without an output fall back to
+                   the tier. -->
+              <div
+                class="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-ink-700 bg-ink-900 text-base"
+                aria-hidden="true"
+              >
+                {#if made}
+                  {itemMap.get(made.item)?.icon ?? '◆'}
                 {:else}
-                  <span class="tabular-nums"
-                    >{a.intoLevel} / {a.forNext} XP to Lv {a.level + 1}</span
-                  >
-                {/if}
-                <span class="text-ink-400">+{a.xp} xp a drill</span>
-                {#if a.effect.value > 0}
-                  <span style="color: {accent}"
-                    >+{pct(a.effect.value)} {EFFECT_LABEL[a.effect.kind]}</span
-                  >
+                  <span class="display text-sm font-bold text-ink-300">{a.tier}</span>
                 {/if}
               </div>
-              <div class="mt-0.5 text-xs text-ink-400">{a.description}</div>
-              {#if (a.consumes ?? []).length || (a.produces ?? []).length}
-                <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
-                  {#each a.consumes ?? [] as c (c.item)}
-                    {@const src = sources[c.item]}
-                    {#if src}
-                      <a
-                        href={href(`/skills/${src.skillId}#action-${src.actionId}`)}
-                        class="chip"
-                        style={accentStyle(ACCENT.ember)}
-                        title="Where {itemMap.get(c.item)?.name ?? c.item} comes from"
-                      >
-                        −{c.count}
-                        {itemMap.get(c.item)?.icon ?? ''}
-                        {itemMap.get(c.item)?.name ?? c.item}
-                      </a>
-                    {:else}
-                      <span class="chip" style={accentStyle(ACCENT.ember)}>
-                        −{c.count}
-                        {itemMap.get(c.item)?.icon ?? ''}
-                        {itemMap.get(c.item)?.name ?? c.item}
-                      </span>
-                    {/if}
-                  {/each}
-                  {#each a.produces ?? [] as p (p.item)}
-                    <span class="chip" style={accentStyle(ACCENT.jade)}>
-                      +{p.count}
-                      {itemMap.get(p.item)?.icon ?? ''}
-                      {itemMap.get(p.item)?.name ?? p.item}
-                    </span>
-                  {/each}
+              <div class="min-w-0 flex-1">
+                <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                  <span
+                    class="display text-base font-semibold {a.unlocked
+                      ? 'text-ink-100'
+                      : 'text-ink-300'}">{a.name}</span
+                  >
+                  {#if showGate}
+                    <span class="text-[11px] text-brass-300">needs {gate}</span>
+                  {/if}
+                  <span class="display ml-auto shrink-0 text-sm font-bold" style="color: {accent}"
+                    >Lv {a.level}</span
+                  >
                 </div>
-              {/if}
-              {#if a.idle}
-                {@const idleLeft = rigSecondsLeft(a.idle, now)}
-                {@const runPct = Math.min(1, Math.max(0, idleLeft / a.idle.runSec))}
-                <!-- The rig row: the run's rate and clock, over a bar that is the
-                     run draining — not a level. Still when the run is over. -->
+                <div class="bar mt-1 h-1.5"><i style="width: {a.progress * 100}%"></i></div>
                 <div
-                  class="mt-2"
-                  style={accentStyle(accent)}
-                  aria-label={a.idle.active
-                    ? `Rig running: ${fmtInterval(a.idle.intervalSec)} per item, ${fmtClock(idleLeft)} left`
-                    : 'Rig still'}
+                  class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-ink-400 sm:text-xs"
                 >
-                  <div class="flex items-center gap-2 text-xs text-ink-400">
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1.6"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      width="12"
-                      height="12"
-                      class="inline-block shrink-0"
-                      aria-hidden="true"
+                  <span>Tier {a.tier}</span>
+                  <span class="tabular-nums">+{a.xp} xp a drill</span>
+                  {#if (a.success ?? 1) < 1}
+                    <span style="color: {ACCENT.ember}"
+                      >{Math.round((a.success ?? 1) * 100)}% odds</span
                     >
-                      <circle cx="12" cy="12" r="3" />
-                      <path
-                        d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"
-                      />
-                    </svg>
-                    <span class="display tabular-nums" style="color: {accent}"
-                      >{fmtInterval(a.idle.intervalSec)}</span
+                  {/if}
+                  {#if a.level >= 100}
+                    <span>Max level</span>
+                  {:else}
+                    <span class="tabular-nums"
+                      >{a.intoLevel}/{a.forNext} XP to Lv {a.level + 1}</span
                     >
-                    <span class="display text-gold-200 tabular-nums"
-                      >+{a.idle.xpPerCraft} xp / item</span
+                  {/if}
+                  {#if a.effect.value > 0}
+                    <span style="color: {accent}"
+                      >+{pct(a.effect.value)} {EFFECT_LABEL[a.effect.kind]}</span
                     >
-                    {#if a.idle.active}
-                      <span class="display tabular-nums" style="color: {accent}"
-                        >{fmtClock(idleLeft)} left</span
+                  {/if}
+                  {#if a.description}
+                    <span class="text-ink-500">· {a.description}</span>
+                  {/if}
+                  {#if (a.consumes ?? []).length || (a.produces ?? []).length}
+                    <span class="flex flex-wrap items-center gap-1">
+                      {#each a.consumes ?? [] as c (c.item)}
+                        {@const src = sources[c.item]}
+                        {@const have = ownedMap.get(c.item) ?? 0}
+                        {@const short = have < c.count}
+                        {@const label = itemMap.get(c.item)?.name ?? c.item}
+                        {#if src}
+                          <a
+                            href={href(`/skills/${src.skillId}#action-${src.actionId}`)}
+                            class="chip chip--tight"
+                            style={accentStyle(short ? ACCENT.ember : ACCENT.ink)}
+                            title="You have {have} {label} · tap to see where it comes from"
+                          >
+                            −{c.count}
+                            {itemMap.get(c.item)?.icon ?? ''}
+                            {label}
+                            <span class="chip__have"
+                              ><span class="hidden sm:inline">have </span>{have}</span
+                            >
+                          </a>
+                        {:else}
+                          <span
+                            class="chip chip--tight"
+                            style={accentStyle(short ? ACCENT.ember : ACCENT.ink)}
+                            title="You have {have} {label}"
+                          >
+                            −{c.count}
+                            {itemMap.get(c.item)?.icon ?? ''}
+                            {label}
+                            <span class="chip__have"
+                              ><span class="hidden sm:inline">have </span>{have}</span
+                            >
+                          </span>
+                        {/if}
+                      {/each}
+                      {#each a.produces ?? [] as p (p.item)}
+                        <span class="chip chip--tight" style={accentStyle(ACCENT.jade)}>
+                          +{p.count}
+                          {itemMap.get(p.item)?.icon ?? ''}
+                          {itemMap.get(p.item)?.name ?? p.item}
+                        </span>
+                      {/each}
+                    </span>
+                  {/if}
+                  {#if (a.table ?? []).length}
+                    <span class="flex flex-wrap items-center gap-1">
+                      <span class="text-ink-500">finds one of:</span>
+                      {#each a.table ?? [] as e (e.item)}
+                        <span class="chip chip--tight" style={accentStyle(ACCENT.violet)}>
+                          {itemMap.get(e.item)?.icon ?? '💎'}
+                          {itemMap.get(e.item)?.name ?? e.item}
+                        </span>
+                      {/each}
+                    </span>
+                  {/if}
+                  {#if (a.choices ?? []).length}
+                    <span class="flex items-center gap-1">
+                      <span class="text-ink-500">using</span>
+                      <select
+                        class="field px-1 py-0.5 text-[10px]"
+                        value={a.choice}
+                        disabled={busy}
+                        onchange={(e) =>
+                          pickChoice(a, (e.currentTarget as HTMLSelectElement).value)}
+                        aria-label="Choose the input"
                       >
-                    {:else}
-                      <span class="text-ink-400">still</span>
-                    {/if}
-                  </div>
-                  <div class="bar mt-1.5 h-1" role="progressbar" aria-label="Rig run remaining">
-                    {#if a.idle.active}
-                      <i style="width: {runPct * 100}%; background: {accent}"></i>
-                    {/if}
-                  </div>
+                        {#each a.choices ?? [] as ch (ch.id)}
+                          <option value={ch.id}>{ch.label}</option>
+                        {/each}
+                      </select>
+                    </span>
+                  {/if}
                 </div>
-              {/if}
-              {#if !a.unlocked || !a.affordable}
-                <p class="mt-1 text-xs text-brass-300">
-                  {a.unlocked ? 'needs' : 'locked —'}
-                  {lockedReason(a)}
-                </p>
-              {/if}
+                {#if a.idle}
+                  {@const idleLeft = rigSecondsLeft(a.idle, now)}
+                  {@const runPct = Math.min(1, Math.max(0, idleLeft / a.idle.runSec))}
+                  <!-- The rig row: the run's rate and clock, over a bar that is the
+                       run draining — not a level. Still when the run is over. -->
+                  <div
+                    class="mt-1"
+                    style={accentStyle(accent)}
+                    aria-label={a.idle.active
+                      ? `Rig running: ${fmtInterval(a.idle.intervalSec)} per item, ${fmtClock(idleLeft)} left`
+                      : 'Rig still'}
+                  >
+                    <div
+                      class="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-ink-400"
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.6"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        width="11"
+                        height="11"
+                        class="inline-block shrink-0"
+                        aria-hidden="true"
+                      >
+                        <circle cx="12" cy="12" r="3" />
+                        <path
+                          d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"
+                        />
+                      </svg>
+                      <span class="display tabular-nums" style="color: {accent}"
+                        >{fmtInterval(a.idle.intervalSec)}</span
+                      >
+                      <span class="display text-gold-200 tabular-nums"
+                        >+{a.idle.xpPerCraft} xp / item</span
+                      >
+                      {#if a.idle.active}
+                        <span class="display tabular-nums" style="color: {accent}"
+                          >{fmtClock(idleLeft)} left</span
+                        >
+                      {:else}
+                        <span class="text-ink-400">still</span>
+                      {/if}
+                      {#if a.idle.maxed}
+                        <span class="display" style="color: {ACCENT.jade}" title="Run is at the cap"
+                          >maxed</span
+                        >
+                      {:else}
+                        <span class="tabular-nums"
+                          >{a.idle.completions}/{a.idle.runFullAtCompletions} to
+                          {fmtClock(a.idle.maxRunSec)}</span
+                        >
+                      {/if}
+                      {#if a.idle.active}
+                        <button
+                          type="button"
+                          class="btn btn-ghost min-h-5 px-1.5 py-0 text-[11px] text-ink-400 hover:text-ember-300"
+                          disabled={busy}
+                          onclick={() => cancelRig(a)}
+                          title="Stop this rig now and free its slot"
+                        >
+                          Stop
+                        </button>
+                      {/if}
+                    </div>
+                    <div class="bar mt-1 h-1" role="progressbar" aria-label="Rig run remaining">
+                      {#if a.idle.active}
+                        <i style="width: {runPct * 100}%; background: {accent}"></i>
+                      {/if}
+                    </div>
+                  </div>
+                {/if}
+              </div>
+              <button
+                onclick={() => train(a)}
+                disabled={!trainable}
+                title={!trainable ? lockedReason(a) : undefined}
+                class="btn {isPrimary
+                  ? 'btn-primary'
+                  : 'btn-ghost'} min-h-8 shrink-0 px-2.5 py-1 text-xs"
+              >
+                Train
+              </button>
             </div>
-            <button
-              onclick={() => train(a)}
-              disabled={!trainable}
-              class="btn {isPrimary ? 'btn-primary' : 'btn-ghost'} shrink-0 px-3 py-2 text-xs"
-            >
-              Train
-            </button>
           </li>
-        {/each}
-      </ul>
-      <div class="h-6"></div>
+      {/snippet}
+
+      {#if bandGroups}
+        <!-- A metal is a band (§13.5.3): one shared score, a dropdown of the whole
+             set, and the next metal opening at Lv 40. -->
+        <div class="mt-3 flex flex-col gap-3">
+          {#each bandGroups.groups as g (g.band.id)}
+            {@const b = g.band}
+            {@const open = b.gearUnlocked < b.gearTotal || g.actions.some((a) => a.unlocked)}
+            <details class="panel px-2.5 py-2" open={open}>
+              <summary
+                class="flex cursor-pointer flex-wrap items-center gap-x-2 gap-y-0.5 select-none"
+              >
+                <span class="text-base" aria-hidden="true">{b.icon}</span>
+                <span class="display text-sm font-semibold text-ink-100">{b.name}</span>
+                <span class="display text-sm font-bold tabular-nums" style="color: {accent}"
+                  >Lv {b.level}</span
+                >
+                <span class="text-[11px] text-ink-400"
+                  >{b.gearUnlocked}/{b.gearTotal} gear</span
+                >
+                <span class="ml-auto text-[11px]" style="color: {ACCENT.jade}"
+                  >{bandBuff(b) ? `now ${bandBuff(b)}` : b.buffLabel}</span
+                >
+              </summary>
+              <div class="bar mt-1.5 h-1.5"><i style="width: {b.progress * 100}%"></i></div>
+              <p class="mt-1 text-[11px] text-ink-400">
+                {#if b.nextUnlock}
+                  Next: {b.nextUnlock.name} at {b.name} {b.nextUnlock.level}.
+                {/if}
+                {#if b.level < b.gearUnlockLevel}
+                  All {b.name} gear by Lv {b.gearUnlockLevel}; the next metal opens then.
+                {:else}
+                  Gear unlocked · keeps giving {b.buffLabel} and {b.enchantLabel} reagents to Lv 100.
+                {/if}
+              </p>
+              <ul class="mt-2 flex flex-col gap-1.5">
+                {#each g.actions as a (a.id)}{@render actionRow(a)}{/each}
+              </ul>
+            </details>
+          {/each}
+          {#if bandGroups.other.length}
+            <ul class="flex flex-col gap-1.5">
+              {#each bandGroups.other as a (a.id)}{@render actionRow(a)}{/each}
+            </ul>
+          {/if}
+        </div>
+      {:else}
+        <ul class="mt-2 flex flex-col gap-1.5">
+          {#each skill.actions as a (a.id)}{@render actionRow(a)}{/each}
+        </ul>
+      {/if}
+      <div class="h-4"></div>
     </div>
   </div>
 {:else}

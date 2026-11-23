@@ -21,18 +21,22 @@
   import { ACCENT } from '#lib/theme'
   import Icon from '#lib/components/Icon.svelte'
   import Spinner from '#lib/components/Spinner.svelte'
+  import { peekCached } from '#lib/cache'
 
-  let data = $state<CombatResponse | null>(null)
-  let ref = $state<SkillsResponse | null>(null)
-  let encounter = $state<EncounterDTO | null>(null)
-  let instance = $state<Instance | null>(null)
+  // Seed from the last fetch so returning to Combat shows the board at once.
+  const cachedCombat = peekCached<CombatResponse>('/api/combat')
+  const cachedSkills = peekCached<SkillsResponse>('/api/skills')
+  let data = $state<CombatResponse | null>(cachedCombat ?? null)
+  let ref = $state<SkillsResponse | null>(cachedSkills ?? null)
+  let encounter = $state<EncounterDTO | null>(cachedCombat?.encounter ?? null)
+  let instance = $state<Instance | null>(cachedCombat?.instance ?? null)
   let result = $state<Grade | null>(null)
   let hit = $state<HitResult | null>(null)
   let drank = $state<{ item: string; buff: { kind: string; value: number } } | null>(null)
   let foodThreshold = $state(50)
   let busy = $state(false)
   let error = $state('')
-  let loading = $state(true)
+  let loading = $state(cachedCombat === undefined)
   /**
    * Time attack: each drill has a countdown. The first drill of a fight waits
    * for a Start click; every drill after that starts its own clock. A timeout
@@ -253,19 +257,44 @@
       <div class="mt-3 flex flex-wrap items-center gap-1.5">
         {#if fightSkill}
           <span class="chip gap-1" style="--accent: {ACCENT.ember}">
-            {fightSkillIcon} {fightSkill}
+            {fightSkillIcon}
+            {fightSkill}
           </span>
         {/if}
         <span class="chip gap-1" style="--accent: {ACCENT.gold}">
-          <Icon name="food" size={12} /> {foodCount} food
+          <Icon name="food" size={12} />
+          {foodCount} food
         </span>
         <span class="chip gap-1" style="--accent: {ACCENT.azure}">
-          <Icon name="potion" size={12} /> {potionCount} potions
+          <Icon name="potion" size={12} />
+          {potionCount} potions
         </span>
         <span class="chip gap-1" style="--accent: var(--color-ink-500)">
-          <Icon name="shield" size={12} /> {data.player.armour} ·
-          <Icon name="sword" size={12} /> {data.player.weaponPower}
+          <Icon name="shield" size={12} />
+          {data.player.armour} ·
+          <Icon name="sword" size={12} />
+          {data.player.power}
         </span>
+        <span class="chip" style="--accent: {ACCENT.ember}">
+          🎯 {Math.round(data.player.crit * 100)}% crit
+        </span>
+        <span class="chip" style="--accent: {ACCENT.azure}">
+          ⚡ {Math.round(data.player.haste * 100)}% haste
+        </span>
+        <span class="chip" style="--accent: {ACCENT.violet}">
+          ✦ {Math.round(data.player.mastery * 100)}% mastery
+        </span>
+        {#if (data.player.lifesteal ?? 0) > 0}
+          <span class="chip" style="--accent: {ACCENT.jade}">
+            ❤ {Math.round((data.player.lifesteal ?? 0) * 1000) / 10}% lifesteal
+          </span>
+        {/if}
+        <span class="chip" style="--accent: var(--color-ink-500)"
+          >score {data.player.gearScore}</span
+        >
+        {#each data.player.setBonuses.filter((set) => set.active.length > 0) as set (set.id)}
+          <span class="chip" style="--accent: {ACCENT.violet}">{set.name} {set.pieces}</span>
+        {/each}
         <span class="text-xs text-ink-400">auto-eat under {foodThreshold}%</span>
       </div>
     {/if}
@@ -328,6 +357,12 @@
           <span class="chip gap-1" style="--accent: {ACCENT.jade}"
             ><Icon name="sword" size={12} /> you hit for {hit.damage}</span
           >
+          {#if hit.crit}
+            <span class="chip" style="--accent: {ACCENT.ember}">Critical!</span>
+          {/if}
+          {#if hit.haste}
+            <span class="chip" style="--accent: {ACCENT.azure}">Haste strike</span>
+          {/if}
         {/if}
         {#if hit.playerDamage > 0}
           <span class="chip gap-1" style="--accent: {ACCENT.ember}"
@@ -438,7 +473,7 @@
             <div class="flex-1">
               <div class="flex items-baseline justify-between">
                 <span class="display text-sm text-ink-200">{m.name}</span>
-                <span class="text-xs text-ink-400">Lv {m.level} · {m.hp} HP</span>
+                <span class="text-xs text-ink-400">Lv {m.level} · {m.hp} HP · {m.damage} dmg</span>
               </div>
               <div class="text-xs text-ink-400">
                 {m.description}
@@ -473,8 +508,13 @@
         </div>
       {/each}
     </div>
-    <button onclick={() => goto(href('/skills'))} class="btn btn-ghost mt-4 w-full py-3">
-      Gather & craft gear →
-    </button>
+    <div class="mt-4 grid grid-cols-2 gap-2">
+      <button onclick={() => goto(href('/skills'))} class="btn btn-ghost py-3 text-xs">
+        Gather & craft →
+      </button>
+      <button onclick={() => goto(href('/inventory'))} class="btn btn-ghost py-3 text-xs">
+        Inventory →
+      </button>
+    </div>
   {/if}
 </div>

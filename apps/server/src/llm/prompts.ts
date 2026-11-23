@@ -37,11 +37,49 @@ export const langName = (code: string | null | undefined): string =>
  * Feedback policy for the judge (pronunciation + conversation grading). The
  * learner must be able to *read* the correction, so explanations go in their
  * native language even when the practice text is in the target language.
+ *
+ * Phrased as an explicit, last-word instruction because the judge is often a
+ * small model (e.g. a Qwen one) that otherwise drifts into the target language
+ * and explains a Mandarin card in Mandarin.
  */
-export const NATIVE_FEEDBACK_RULE = (nativeLang: string | null | undefined): string =>
-  `Write every summary, tip and explanation in the learner's native language ` +
-  `(${langName(nativeLang)}). Keep only example words and the target-language ` +
-  `text itself in the target language.`
+export const NATIVE_FEEDBACK_RULE = (
+  nativeLang: string | null | undefined,
+  targetLang?: string | null,
+): string => {
+  const native = langName(nativeLang)
+  const target = targetLang ? langName(targetLang) : 'the language being practised'
+  return (
+    `Write every summary, tip, correction and explanation in the learner's native ` +
+    `language (${native}). Never write the feedback in ${target}; only the words, ` +
+    `examples and the practised sentence itself stay in ${target}. If you are ` +
+    `unsure which language to use, answer in ${native}.`
+  )
+}
+
+/**
+ * A one-line reminder to append to a judge prompt, right beside the request, so
+ * the language rule is the last thing the model reads.
+ */
+export const NATIVE_FEEDBACK_REMINDER = (
+  nativeLang: string | null | undefined,
+  targetLang?: string | null,
+): string =>
+  `Reply in ${langName(nativeLang)} only` +
+  (targetLang ? ` — never in ${langName(targetLang)}` : '') +
+  '; only the taught words/sentence stay in the target language.'
+
+/**
+ * The conversation tutor keeps the *dialogue* in the target language for
+ * immersion, but a correction or grammar note the learner has to understand
+ * must be written in their native language.
+ */
+export const CONVERSATION_LANGUAGE_RULE = (
+  nativeLang: string | null | undefined,
+  targetLang: string | null | undefined,
+): string =>
+  `Hold the conversation in ${langName(targetLang)}, but write every explanation, ` +
+  `correction, grammar note or translation in the learner's native language ` +
+  `(${langName(nativeLang)}). Never explain in ${langName(targetLang)}.`
 
 const ROLE_HINTS: Record<Role, string> = {
   conversation: 'You are in free conversation practice. Keep the dialogue going and ask questions.',

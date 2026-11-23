@@ -13,9 +13,19 @@
   import { autoGrow } from '#lib/grow'
   import type { ChatSession, Message } from '#lib/types'
   import { speechOpts } from '#lib/voices'
+  import { peekCached } from '#lib/cache'
 
-  let messages = $state<Message[]>([])
-  let sessionId = $state<string | null>(null)
+  // Seed the latest conversation from the last fetch so reopening Chat shows it
+  // at once; the stream itself still goes to the server.
+  const cachedSessions = peekCached<{ sessions: ChatSession[] }>('/api/sessions')
+  const firstSession = cachedSessions?.sessions[0]
+  const cachedMessages = firstSession
+    ? peekCached<{ messages: Message[] }>(`/api/sessions/${firstSession.id}`)
+    : undefined
+  let messages = $state<Message[]>(
+    cachedMessages ? cachedMessages.messages.filter((m) => m.role !== 'system') : [],
+  )
+  let sessionId = $state<string | null>(firstSession?.id ?? null)
   let input = $state('')
   let busy = $state(false)
   let ttsOn = $state(true)
@@ -285,11 +295,7 @@
       </button>
     {/if}
 
-    <button
-      onclick={send}
-      disabled={busy || !input.trim()}
-      class="btn btn-primary px-4 py-2"
-    >
+    <button onclick={send} disabled={busy || !input.trim()} class="btn btn-primary px-4 py-2">
       Send
     </button>
   </div>

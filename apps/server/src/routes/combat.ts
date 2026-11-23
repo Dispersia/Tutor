@@ -11,6 +11,7 @@ import {
 import { registry } from '../exercises'
 import { MONSTERS, MONSTER_BY_ID, type MonsterDef } from '../game/combat'
 import {
+  combatLevel,
   combatResolve,
   currentHp,
   getPlayerCombat,
@@ -79,7 +80,10 @@ function encounterView(deps: Deps, userId: string) {
     monsterName: monster?.name ?? enc.monsterId,
     monsterIcon: monster?.icon ?? '👾',
     monsterHp: enc.monsterHp,
-    monsterMaxHp: monster?.hp ?? enc.monsterHp,
+    monsterMaxHp: enc.monsterMaxHp || monster?.hp || enc.monsterHp,
+    monsterDamage: enc.monsterDamage || monster?.damage || 0,
+    monsterLevel: enc.monsterLevel || monster?.level || 1,
+    xpReward: enc.xpReward || monster?.xp || 0,
     playerHp: enc.playerHp,
     playerMaxHp: enc.playerMaxHp || player.maxHp,
     potionId: enc.potionId,
@@ -92,12 +96,13 @@ export function registerCombat(app: App) {
   app.get('/api/combat', async (c) => {
     const deps = c.get('deps')
     const user = c.get('user')!
+    const player = getPlayerCombat(deps.db, user.id)
+    const level = combatLevel(deps.db, user.id)
     const monsters = MONSTERS.map((m: MonsterDef) => ({
       ...m,
       ...monsterState(deps.db, user.id, m),
     }))
     const view = encounterView(deps, user.id)
-    const player = getPlayerCombat(deps.db, user.id)
     // Resuming an in-progress fight needs a fresh drill too: the page only ever
     // gets one from `/start` or a `/hit`, so opening Combat mid-fight would sit
     // on "no drill available" with no way to continue.
@@ -109,10 +114,20 @@ export function registerCombat(app: App) {
       monsters,
       player: {
         skill: player.skill,
+        combatStyle: player.combatStyle,
         maxHp: player.maxHp,
         hp: currentHp(deps.db, user.id, player.maxHp),
         armour: player.armour,
         weaponPower: player.weaponPower,
+        power: player.power,
+        stats: player.stats,
+        crit: player.crit,
+        haste: player.haste,
+        mastery: player.mastery,
+        lifesteal: player.lifesteal,
+        gearScore: player.gearScore,
+        setBonuses: player.setBonuses,
+        level,
       },
       reviewCount,
       encounter: view,

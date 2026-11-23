@@ -12,6 +12,45 @@ test('stripMetaCommentary removes the model’s asides but keeps plain glosses',
   expect(stripMetaCommentary('I miss you. / I think about you.')).toBe(
     'I miss you. / I think about you.',
   )
+  // a leading "Translate:"/"Meaning:" is the model echoing its instruction
+  expect(stripMetaCommentary('Translate: I guarantee.')).toBe('I guarantee.')
+  expect(stripMetaCommentary('Meaning: to sleep')).toBe('to sleep')
+})
+
+test('normalizePlan drops leaked reasoning and long rule dumps', () => {
+  const leaked =
+    "Verb-Object: 劃 (draw) + 線 (line). Let's check the known list: '線' is NOT in known list. None are '線'. Correction: I cannot use it."
+  const cards = normalizePlan({
+    cards: [
+      {
+        template: 'vocab',
+        front: 'I',
+        back: '我',
+        reading: 'ㄨㄛˇ',
+        payload: { rule: leaked },
+      },
+      {
+        template: 'vocab',
+        front: 'you',
+        back: '你',
+        reading: 'ㄋㄧˇ',
+        payload: { explanation: 'x'.repeat(300) },
+      },
+      {
+        template: 'vocab',
+        front: 'Translate: to drink',
+        back: '喝',
+        reading: 'ㄏㄜ',
+        payload: { rule: 'verb' },
+      },
+    ],
+  })
+  // the leaked rule and the 300-char dump are dropped, the cards survive
+  expect(cards[0]!.payload?.rule).toBeUndefined()
+  expect(cards[1]!.payload?.explanation).toBeUndefined()
+  // a leading "Translate:" is stripped, the rest of the rule is kept
+  expect(cards[2]!.front).toBe('to drink')
+  expect(cards[2]!.payload?.rule).toBe('verb')
 })
 
 test('normalizePlan drops cards whose text is only reasoning, or whose tokens do not match', () => {

@@ -171,6 +171,9 @@ export function registerDecks(app: App) {
       payload: { ...(body.payload ?? {}), template, step },
       origin: 'manual',
     })
+    // Record the card's audio now (background), so its listening card streams
+    // from disk on the first play instead of waking the TTS model.
+    deps.audio?.enqueue([{ userId: user.id, text: card.back, language: card.targetLang }])
     return c.json({ card: getCard(deps.db, card.id, user.id), step }, 201)
   })
 
@@ -224,6 +227,7 @@ export function registerDecks(app: App) {
         // The prompt is the deck's constitution: remember it so every later
         // deck (including imports and growth batches) starts from it.
         setUserSetting(deps.db, user.id, DECK_INSTRUCTION_KEY, instruction)
+        deps.audio?.enqueueDeck(user.id, built.deckId)
         return c.json({ deck: deckView(getDeck(deps.db, built.deckId, user.id)!), ...built }, 201)
       } catch (err) {
         return c.json({ error: (err as Error).message }, 502)
@@ -277,12 +281,12 @@ export function registerDecks(app: App) {
             origin: 'llm',
           })
         }
+        deps.audio?.enqueueDeck(user.id, deck.id)
         return c.json({ deck, count: json.cards.length }, 201)
       } catch (err) {
         return c.json({ error: (err as Error).message }, 502)
       }
     }
-
     const deck = createDeck(deps.db, user.id, {
       name: body.name?.trim() || 'My deck',
       sourceLang,
@@ -412,6 +416,7 @@ export function registerDecks(app: App) {
         },
         { words: list.words, count, knownWords: [], startStep: 0 },
         planner,
+        { onFinish: () => deps.audio?.enqueueDeck(user.id, created.deckId) },
       )
       return c.json(
         {
@@ -456,6 +461,7 @@ export function registerDecks(app: App) {
           topic: body.topic,
           fetcher: deps.fetcher,
           planner,
+          onFinish: () => deps.audio?.enqueueDeck(user.id, deckId),
         })
         return c.json(
           {
@@ -478,6 +484,7 @@ export function registerDecks(app: App) {
         fetcher: deps.fetcher,
         planner,
       })
+      deps.audio?.enqueueDeck(user.id, deckId)
       return c.json({ deck: deckView(getDeck(deps.db, deckId, user.id)!), ...built })
     } catch (err) {
       return c.json({ error: (err as Error).message }, 502)

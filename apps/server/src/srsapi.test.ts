@@ -145,7 +145,7 @@ test('practising a step stays inside it and records spaced repetition', async ()
   sqlite.close()
 })
 
-test('the daily new-card limit stops the path; "study more" resumes it', async () => {
+test('the daily new-card limit no longer stops the path — pressing on serves new words', async () => {
   const { app, db, sqlite } = makeApp()
   const cookie = await signup(app, db)
   // A tiny budget keeps the test quick: 2 new cards and 2 reviews today.
@@ -172,29 +172,25 @@ test('the daily new-card limit stops the path; "study more" resumes it', async (
     )
   }
 
-  const next = (await (
+  // The budget is spent, but the deck still has new words: practice keeps
+  // serving them rather than showing the "done" screen.
+  const resumed = (await (
     await app.request('/api/practice/next', auth(cookie, json({ deckId })))
-  ).json()) as {
-    instance: unknown
-    done?: boolean
-    budget?: { newRemaining: number; reviewsRemaining: number }
-  }
-  expect(next.done).toBe(true)
-  expect(next.instance).toBeNull()
-  expect(next.budget?.newRemaining).toBe(0)
-  expect(next.budget?.reviewsRemaining).toBe(0)
+  ).json()) as { instance: { exerciseId: string; cardId: string } | null; done?: boolean }
+  expect(resumed.done).toBeFalsy()
+  expect(resumed.instance?.cardId).toBeTruthy()
 
-  // "Study more" raises today's allowance, so the drill comes back.
+  // The allowance was raised to cover it, so the header stays honest.
+  const stats = (await (await app.request('/api/srs/stats', auth(cookie))).json()) as {
+    budget: { newRemaining: number }
+  }
+  expect(stats.budget.newRemaining).toBeGreaterThan(0)
+
+  // "Study more" still works as the explicit escape hatch.
   const more = (await (
     await app.request('/api/study/more', auth(cookie, { method: 'POST' }))
   ).json()) as { budget: { newRemaining: number; reviewsRemaining: number } }
   expect(more.budget.newRemaining).toBeGreaterThan(0)
-
-  const resumed = (await (
-    await app.request('/api/practice/next', auth(cookie, json({ deckId })))
-  ).json()) as { instance: { cardId: string } | null; done?: boolean }
-  expect(resumed.done).toBeFalsy()
-  expect(resumed.instance?.cardId).toBeTruthy()
   sqlite.close()
 })
 

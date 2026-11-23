@@ -1,5 +1,6 @@
 import { api } from './api'
 import type { Grade, Instance, Stats } from './exercises'
+import type { GearStats, ActiveSetBonusDTO } from './skills'
 
 export interface DropDef {
   item: string
@@ -30,6 +31,9 @@ export interface EncounterDTO {
   monsterIcon: string
   monsterHp: number
   monsterMaxHp: number
+  monsterDamage: number
+  monsterLevel: number
+  xpReward: number
   playerHp: number
   playerMaxHp: number
   potionId?: string | null
@@ -37,9 +41,28 @@ export interface EncounterDTO {
   totalDamage: number
 }
 
+export interface CombatPlayerDTO {
+  skill: string
+  combatStyle: string
+  maxHp: number
+  hp: number
+  armour: number
+  weaponPower: number
+  power: number
+  stats: GearStats
+  crit: number
+  haste: number
+  mastery: number
+  /** fraction of damage dealt returned as HP (iron bands/enchants) */
+  lifesteal: number
+  gearScore: number
+  setBonuses: ActiveSetBonusDTO[]
+  level: number
+}
+
 export interface CombatResponse {
   monsters: MonsterDTO[]
-  player: { skill: string; maxHp: number; hp: number; armour: number; weaponPower: number }
+  player: CombatPlayerDTO
   /** Cards with a review state — combat is review only. 0 means "practise first". */
   reviewCount: number
   encounter: EncounterDTO | null
@@ -57,7 +80,12 @@ export interface HitResult {
   /** The combat profession the equipped weapon trains for this fight. */
   skill: string
   damage: number
+  crit: boolean
+  haste: boolean
   monsterHp: number
+  monsterMaxHp: number
+  monsterDamage: number
+  monsterLevel: number
   playerDamage: number
   playerHp: number
   playerMaxHp: number

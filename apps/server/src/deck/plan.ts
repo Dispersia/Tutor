@@ -145,13 +145,19 @@ Grammar cards — a real fill-in-the-blank:
 - payload.prompt = a target-language sentence with the practised word replaced by a blank written as three underscores "___". The prompt is ALWAYS in the target language, never English. Example (Mandarin): "我___茶。" with answer 喝; example (Japanese): "私は___です。" with answer 学生.
 - payload.answer = the correct target-language word or form.
 - payload.options (optional) = 2-3 candidate target-language forms, one of them the answer.
-- payload.rule = a very short English label for the grammar point (e.g. "negation with 不"). payload.explanation = one short English sentence, shown after answering.
+- payload.rule = a very short label in the learner's own language for the grammar point (e.g. "negation with 不"). payload.explanation = one short sentence in the learner's own language, shown after answering. Never write the rule or explanation in the target language.
 - Use only words already introduced in the prompt sentence. Add grammar cards whenever the instruction asks for grammar.
 
 Content rules:
 - "back" is the target-language text the learner hears in the listening exercise: the word on a vocab card, the whole sentence on a sentence card. Never put the meaning, the reading or the exercise prompt in "back".
-- Never write notes, parentheticals, reasoning, alternatives or meta-commentary in any field. Do not explain your choices. front/gloss are plain translations and nothing else. This is the single most common failure: a gloss like "I have (it)." or "My you. (grammatically valid…)" is wrong — write "I have it." and omit the card if the sentence is odd.
+- Never write notes, parentheticals, reasoning, alternatives or meta-commentary in any field. Do not explain your choices. front/gloss are plain translations and nothing else.
 - Follow the deck's reading and script rules exactly.
+
+Translation — the whole sentence's meaning, never word by word:
+- Translate what the sentence MEANS, into natural idiomatic English. Do not gloss each word in order.
+- 我想你。 is "I miss you." — never "I think you." 請坐。 is "Please sit down." If the natural translation is not obvious, omit the sentence card.
+- "front" and "payload.gloss" are the SAME single natural translation; never two different strings. No leading "Translate:", no quotes, no word-by-word hyphens ("to-sleep"), no "(classifier)".
+- Never write pinyin or any Latin transliteration anywhere — not in front, gloss, reading, prompt, options, rule or explanation. For Chinese, readings are Zhuyin only. "rule" is a very short label and "explanation" one short sentence, both in the learner's own language, never the model's reasoning.
 
 Metadata:
 - "metadata" holds language-specific annotations that do not fit front/back/reading. It is optional; omit it when you have nothing to add.
@@ -195,8 +201,8 @@ For each new word emit one "vocab" card. Weave in "sentence" cards — only when
  * card ("(Grammatically valid, though semantically odd)", "Wait, 來 is not
  * introduced yet"). A card that still contains one after cleaning is not usable.
  */
-const META_MARKERS =
-  /\b(note:|wait,|correction|corrected|grammatically|semantically|n\+1|not introduced|introduced yet|strict n|used to test|test structure|revised|oops|as an ai|let me|i'll use|i will use|however,|actually,)/i
+export const META_MARKERS =
+  /\b(note:|wait,|correction|corrected|grammatically|semantically|n\+1|not introduced|introduced yet|strict n|used to test|test structure|revised|oops|as an ai|let me|let's|i'll use|i will use|i cannot|i must|per the rules|per rules|known list|however,|actually,|skip the)/i
 
 /**
  * Strips the model's asides from a gloss or prompt: bracketed notes that read
@@ -204,7 +210,9 @@ const META_MARKERS =
  * optional words such as "I have (it)." survive, because the marker test fails.
  */
 export function stripMetaCommentary(text: string): string {
-  let out = text.replace(/[（(\[][^)）\]]*[)）\]]/g, (m) => (META_MARKERS.test(m) ? ' ' : m))
+  // A leading "Translate:" / "Meaning:" is the model echoing its instruction.
+  let out = text.replace(/^\s*(?:translate|translation|meaning|gloss|english)\s*[::]\s*/i, '')
+  out = out.replace(/[（(\[][^)）\]]*[)）\]]/g, (m) => (META_MARKERS.test(m) ? ' ' : m))
   out = out.replace(
     /\s*(?:[.。!！?？]\s*)?(?:note|wait|correction|revised|actually|hmm|oops)\b[\s\S]*$/i,
     '',
@@ -238,7 +246,9 @@ export function sanitizePlannedCard(card: PlannedCard): PlannedCard | undefined 
       const v = payload[key]
       if (typeof v !== 'string') continue
       const cleaned = stripMetaCommentary(v)
-      if (!cleaned || META_MARKERS.test(cleaned)) delete payload[key]
+      // A rule is a short label and an explanation one short sentence: anything
+      // long is the model thinking out loud, not something to show a learner.
+      if (!cleaned || cleaned.length > 200 || META_MARKERS.test(cleaned)) delete payload[key]
       else payload[key] = cleaned
     }
     if (Array.isArray(payload.options)) {

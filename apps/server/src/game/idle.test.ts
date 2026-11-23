@@ -1,10 +1,15 @@
 import { describe, expect, test } from 'bun:test'
 import {
   IDLE,
+  MAX_LIVE_RIGS,
+  capLiveRigs,
   extendRig,
+  liveRigCount,
   newRig,
   replayRig,
   rigIntervalSec,
+  rigMaxed,
+  rigRunProgress,
   rigRunSec,
   settleRig,
   type RigRecipe,
@@ -26,12 +31,12 @@ describe('idle curves', () => {
     expect(rigIntervalSec(500)).toBeCloseTo(IDLE.floorIntervalSec, 3)
   })
 
-  test('run length climbs evenly from 10 min to 6 h at 50 completions', () => {
+  test('run length climbs evenly from 10 min to 3 h at 50 completions', () => {
     expect(rigRunSec(0)).toBe(600)
     expect(rigRunSec(1)).toBe(600)
     expect(rigRunSec(IDLE.runFullAtCompletions)).toBeCloseTo(IDLE.maxRunSec, 6)
 
-    // 50 completions = 6 hours, and every step before it is the same size.
+    // 50 completions = 3 hours, and every step before it is the same size.
     const step = rigRunSec(2) - rigRunSec(1)
     expect(step).toBeCloseTo((IDLE.maxRunSec - IDLE.firstRunSec) / 49, 6)
     for (let c = 1; c < IDLE.runFullAtCompletions; c++) {
@@ -41,6 +46,19 @@ describe('idle curves', () => {
     // saturates at the ceiling and never exceeds it
     expect(rigRunSec(10_000)).toBe(IDLE.maxRunSec)
     expect(rigRunSec(IDLE.runFullAtCompletions + 1)).toBe(IDLE.maxRunSec)
+  })
+
+  test('run progress climbs to 1 at the cap and maxed flips exactly there', () => {
+    expect(rigRunProgress(0)).toBe(0)
+    expect(rigRunProgress(IDLE.runFullAtCompletions / 2)).toBeCloseTo(0.5, 6)
+    expect(rigRunProgress(IDLE.runFullAtCompletions)).toBe(1)
+    // clamped: beyond the cap it stays 1
+    expect(rigRunProgress(10_000)).toBe(1)
+
+    expect(rigMaxed(0)).toBe(false)
+    expect(rigMaxed(IDLE.runFullAtCompletions - 1)).toBe(false)
+    expect(rigMaxed(IDLE.runFullAtCompletions)).toBe(true)
+    expect(rigMaxed(10_000)).toBe(true)
   })
 
   test('deeper tiers run slower per item', () => {
@@ -103,14 +121,14 @@ describe('settleRig', () => {
   })
 
   test('the run is re-based on the count, never stacked', () => {
-    // 50 drills at the same instant reach the 6 h ceiling exactly — no more.
+    // 50 drills at the same instant reach the 3 h ceiling exactly — no more.
     let rig = newRig()
     for (let i = 0; i < 50; i++) rig = extendRig(rig, 1_000)
     expect(rig.runEndsAt).toBe(1_000 + IDLE.maxRunSec * 1000)
     const past = extendRig(rig, 1_000)
     expect(past.runEndsAt).toBe(1_000 + IDLE.maxRunSec * 1000)
 
-    // 10 completions buy ~1.2 h, not the ceiling: the old sum hit 6 h here.
+    // 10 completions buy ~40 min, not the ceiling: the old sum hit 3 h here.
     let ten = newRig()
     for (let i = 0; i < 10; i++) ten = extendRig(ten, 1_000)
     expect(ten.runEndsAt).toBe(1_000 + Math.round(rigRunSec(10) * 1000))
@@ -196,5 +214,53 @@ describe('determinism', () => {
     }
     crafted += settleRig(live, ORE, new Map(), 900_000).crafted
     expect(replayRig(times, ORE, 900_000).crafted).toBe(crafted)
+  })
+})
+
+describe('live-rig cap', () => {
+  const rig = (runEndsAt: number) => ({ ...newRig(), runEndsAt })
+
+  test('nothing stops while at or under the cap', () => {
+    const rigs = new Map([
+      ['a', rig(1_000)],
+      ['b', rig(2_000)],
+    ])
+    expect(MAX_LIVE_RIGS).toBe(2)
+    expect(capLiveRigs(rigs, 0)).toEqual([])
+    expect(rigs.get('a')!.runEndsAt).toBe(1_000)
+    expect(rigs.get('b')!.runEndsAt).toBe(2_000)
+  })
+
+  test('a third live run stops the one closest to finishing', () => {
+    const rigs = new Map([
+      ['a', rig(1_000)],
+      ['b', rig(5_000)],
+      ['c', rig(9_000)],
+    ])
+    expect(capLiveRigs(rigs, 0)).toEqual(['a'])
+    expect(rigs.get('a')!.runEndsAt).toBe(0)
+    expect(rigs.get('b')!.runEndsAt).toBe(5_000)
+    expect(rigs.get('c')!.runEndsAt).toBe(9_000)
+  })
+
+  test('a kept rig survives even when it is closest to finishing', () => {
+    // The drill's own machine must always start, so it is never the one cut.
+    const rigs = new Map([
+      ['a', rig(1_000)],
+      ['b', rig(5_000)],
+      ['c', rig(9_000)],
+    ])
+    expect(capLiveRigs(rigs, 0, ['a'])).toEqual(['b'])
+    expect(rigs.get('a')!.runEndsAt).toBe(1_000)
+    expect(rigs.get('b')!.runEndsAt).toBe(0)
+  })
+
+  test('still rigs are not live and never counted', () => {
+    const rigs = new Map([
+      ['a', rig(1_000)],
+      ['b', rig(0)],
+      ['c', rig(5_000)],
+    ])
+    expect(liveRigCount(rigs, 500)).toBe(2)
   })
 })

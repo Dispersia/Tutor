@@ -33,9 +33,9 @@ import { REINFORCE_LAPSES, reinforceLapsedCard } from '../deck/reinforce'
 import { quietState, setQuiet } from '../game/quiet'
 import { bumpDailyExtra, readStudyPrefs, showsReadings } from '../game/study'
 import { ACTION_BY_ID } from '../game/skills'
-import { selectCardId } from '../game/srs'
+import { selectCardId, selectStudyCardId } from '../game/srs'
 import { OpenRouter } from '../llm/openrouter'
-import { MANDARIN_RULE, NATIVE_FEEDBACK_RULE } from '../llm/prompts'
+import { MANDARIN_RULE, NATIVE_FEEDBACK_REMINDER, NATIVE_FEEDBACK_RULE } from '../llm/prompts'
 import { resolveUserKey } from '../llm/userkey'
 import { roleReasoning } from '../env'
 import { makeAssessor, type AssessFn } from '../pronunciation/assess'
@@ -54,7 +54,10 @@ const SITTING_GAP_MS = 30 * 60_000
  * Card selection for practice: due-first spaced repetition over the deck, except
  * that a sitting opens on a few new words before the due backlog. A card that is
  * not due is never preferred over a new word, so a word is not re-shown
- * back-to-back just because it is the only one the learner has met.
+ * back-to-back just because it is the only one the learner has met. Unlike
+ * combat's `pickReviewCard`, practice never serves a review card ahead of its
+ * due date — that card's same-day review does not move the due date, so it would
+ * come straight back again (and again).
  */
 function pickStudyCard(deps: Deps, userId: string, ids: string[]): Card | undefined {
   const srs = srsStateMap(deps.db, userId)
@@ -68,9 +71,9 @@ function pickStudyCard(deps: Deps, userId: string, ids: string[]): Card | undefi
     if (id) return getCard(deps.db, id, userId)
   }
 
-  // Due-first, then the next new word, then (only when nothing else is left) the
-  // soonest card.
-  const id = selectCardId(ids, srs, now)
+  // Overdue first, then the next new word, then a learning step that is due
+  // within the learn-ahead window. Nothing to do -> the day is done.
+  const id = selectStudyCardId(ids, srs, now)
   return id ? getCard(deps.db, id, userId) : undefined
 }
 
@@ -232,9 +235,12 @@ async function judgeFor(c: Context<AppEnv>) {
   const or = new OpenRouter(key, deps.or.baseUrl)
   const system = [
     'You are a strict but encouraging language tutor. Reply with only the requested JSON.',
-    NATIVE_FEEDBACK_RULE(user.nativeLang),
+    NATIVE_FEEDBACK_RULE(user.nativeLang, user.targetLang),
     MANDARIN_RULE,
   ].join('\n')
+  // The language rule is repeated next to the request: small models follow the
+  // last instruction far more reliably than one buried in the system prompt.
+  const reminder = NATIVE_FEEDBACK_REMINDER(user.nativeLang, user.targetLang)
   return async (prompt: string, schema: object): Promise<unknown> => {
     const { json } = await or.chatJSON({
       model,
@@ -243,7 +249,7 @@ async function judgeFor(c: Context<AppEnv>) {
       reasoning: roleReasoning.judge,
       messages: [
         { role: 'system', content: system },
-        { role: 'user', content: prompt },
+        { role: 'user', content: `${prompt}\n\n${reminder}` },
       ],
     })
     return json
@@ -256,6 +262,7 @@ function settleAction(
   userId: string,
   actionId: string | undefined,
   result: { correct: boolean; score: number },
+  choiceId?: string,
 ) {
   const action = actionId ? ACTION_BY_ID.get(actionId) : undefined
   if (!action) return null
@@ -281,7 +288,7 @@ function settleAction(
   // to now, lands the strike, then makes this action's run faster and longer. What
   // `gained` reports is the whole windfall — the strike plus what the runs made —
   // and `idleXp` is the XP those runs earned on their own while you were away.
-  const rig = completeAction(deps.db, deps.events, userId, action.id)
+  const rig = completeAction(deps.db, deps.events, userId, action.id, Date.now(), { choiceId })
   return {
     actionId: award.actionId,
     skillId: award.skillId,
@@ -293,6 +300,9 @@ function settleAction(
     consumed: rig.consumed,
     idle: rig.idle,
     idleXp: rig.xp,
+    rigsRunning: rig.rigsRunning,
+    maxLiveRigs: rig.maxLiveRigs,
+    stoppedRig: rig.stoppedRig,
     talentUnlocked: award.talentUnlocked,
   }
 }
@@ -324,6 +334,8 @@ export function registerPractice(app: App) {
       lessonId?: string
       /** Drill this card specifically (a targeted drill; the budget still applies). */
       cardId?: string
+      /** the recipe choice for a choose-input action (prospect/cut) */
+      choiceId?: string
     }
     const quiet = quietState(deps.db, user.id)
     // The learner's own switches: readings visibility + exercise kinds they turned off.
@@ -335,12 +347,13 @@ export function registerPractice(app: App) {
 
     let deckId = body.deckId
     if (action) {
-      const state = actionState(deps.db, user.id, action)
+      const state = actionState(deps.db, user.id, action, body.choiceId)
       if (!state.unlocked) {
         return c.json(
           {
             error: 'action locked',
             missingUnlocks: state.missingUnlocks,
+            missingBands: state.missingBands,
             equipMissing: state.equipMissing,
           },
           403,
@@ -373,13 +386,29 @@ export function registerPractice(app: App) {
     // Daily budget (Anki-style limits): new cards and reviews are capped per UTC
     // day; "study more" raises today's allowance. A new card is one with no SRS
     // state yet, everything else (learning + review) draws on the review budget.
-    const budget = studyBudget(deps.db, user.id)
+    const srsForBudget = srsStateMap(deps.db, user.id)
+    const deckIds = listCards(deps.db, user.id, deckId).map((c) => c.id)
+    const now = Date.now()
+    let budget = studyBudget(deps.db, user.id)
+    // The daily budget is a goal, not a wall. If it blocks the very next card
+    // while the deck still has one to give (a due card or a new word), raise
+    // today's allowance and keep going — "done" waits for a deck with nothing
+    // left. A targeted drill is exempt: it still draws on the day's budget.
+    if (!body.cardId) {
+      const next = selectStudyCardId(deckIds, srsForBudget, now)
+      const blocked =
+        next !== undefined &&
+        (srsForBudget.has(next)
+          ? !(budget.reviewsUnlimited || budget.reviewsRemaining > 0)
+          : !(budget.newUnlimited || budget.newRemaining > 0))
+      if (blocked) {
+        bumpDailyExtra(deps.db, user.id, srsForBudget.has(next) ? { reviewsExtra: 1 } : { newExtra: 1 })
+        budget = studyBudget(deps.db, user.id)
+      }
+    }
     const allowNew = budget.newUnlimited || budget.newRemaining > 0
     const allowReview = budget.reviewsUnlimited || budget.reviewsRemaining > 0
-    const srsForBudget = srsStateMap(deps.db, user.id)
-    let allowedIds = listCards(deps.db, user.id, deckId)
-      .map((c) => c.id)
-      .filter((id) => (srsForBudget.has(id) ? allowReview : allowNew))
+    let allowedIds = deckIds.filter((id) => (srsForBudget.has(id) ? allowReview : allowNew))
     // A specific card can be drilled directly; it still draws on the day's budget.
     if (body.cardId) {
       if (!getCard(deps.db, body.cardId, user.id)) return c.json({ error: 'card not found' }, 404)
@@ -389,7 +418,11 @@ export function registerPractice(app: App) {
       return c.json({ instance: null, action: null, done: true, budget })
     }
 
-    const card = pickStudyCard(deps, user.id, allowedIds)
+    // A targeted drill serves that card whatever its due date; free practice
+    // only ever serves what is due (or a new word).
+    const card = body.cardId
+      ? getCard(deps.db, body.cardId, user.id)
+      : pickStudyCard(deps, user.id, allowedIds)
     if (!card) return c.json({ instance: null, action: null, done: true, budget })
     // The queue moves along the path; the practice header follows the card.
     const servedLessonId = body.lessonId ? lessonOfCard(deps, user.id, card) : undefined
@@ -491,6 +524,8 @@ export function registerPractice(app: App) {
       latencyMs?: number
       actionId?: string
       lessonId?: string
+      /** the recipe choice for a choose-input action (prospect/cut) */
+      choiceId?: string
     }
     const card = body.cardId ? getCard(deps.db, body.cardId, user.id) : undefined
     if (!card) return c.json({ error: 'card not found' }, 404)
@@ -501,12 +536,13 @@ export function registerPractice(app: App) {
     if (body.actionId) {
       const action = ACTION_BY_ID.get(body.actionId)
       if (!action) return c.json({ error: 'unknown action' }, 404)
-      const state = actionState(deps.db, user.id, action)
+      const state = actionState(deps.db, user.id, action, body.choiceId)
       if (!state.unlocked) {
         return c.json(
           {
             error: 'action locked',
             missingUnlocks: state.missingUnlocks,
+            missingBands: state.missingBands,
             equipMissing: state.equipMissing,
           },
           403,
@@ -558,7 +594,7 @@ export function registerPractice(app: App) {
       score: result.score,
       correct: result.correct,
     })
-    const skill = settleAction(deps, user.id, body.actionId, result)
+    const skill = settleAction(deps, user.id, body.actionId, result, body.choiceId)
     const srs = recordReview(deps.db, deps.events, user.id, card.id, result.score, result.correct)
     // A word that keeps slipping gets an extra card woven in beside it (n+1),
     // in the background so the learner never waits on the generator.
@@ -593,6 +629,8 @@ export function registerPractice(app: App) {
     const actionId = form.get('actionId') ? String(form.get('actionId')) : undefined
     const lessonId = form.get('lessonId') ? String(form.get('lessonId')) : undefined
     const latencyMs = Number(form.get('latencyMs') ?? 0)
+    /** the recipe choice for a choose-input action (prospect/cut) */
+    const choiceId = form.get('choiceId') ? String(form.get('choiceId')) : undefined
     // A retry is the learner re-recording the same card after a miss, to keep
     // practising until it lands (§9.4). It is graded like any attempt but never
     // counted: no review row, no XP, no schedule — only the first attempt counts.
@@ -607,12 +645,13 @@ export function registerPractice(app: App) {
     if (actionId) {
       const action = ACTION_BY_ID.get(actionId)
       if (!action) return c.json({ error: 'unknown action' }, 404)
-      const state = actionState(deps.db, user.id, action)
+      const state = actionState(deps.db, user.id, action, choiceId)
       if (!state.unlocked) {
         return c.json(
           {
             error: 'action locked',
             missingUnlocks: state.missingUnlocks,
+            missingBands: state.missingBands,
             equipMissing: state.equipMissing,
           },
           403,
@@ -673,7 +712,7 @@ export function registerPractice(app: App) {
         score: result.score,
         correct: result.correct,
       })
-      const skill = settleAction(deps, user.id, actionId, result)
+      const skill = settleAction(deps, user.id, actionId, result, choiceId)
       const srs = recordReview(deps.db, deps.events, user.id, card.id, result.score, result.correct)
       const lessonCompleted = lessonId
         ? checkLessonCompletion(deps.db, deps.events, user.id, lessonId)

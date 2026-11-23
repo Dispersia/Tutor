@@ -7,9 +7,11 @@ import {
   getItemCount,
   listEquipment,
   listGatherLog,
+  listRigStates,
   listTalents,
 } from '../db/repo'
 import { EventBus } from '../events'
+import { liveRigCount } from './idle'
 import {
   ACTION_BY_ID,
   ACTION_MAX_LEVEL,
@@ -31,6 +33,7 @@ import {
   grantItems,
   settleAll,
   skillLevelOf,
+  stopRig,
   talentView,
   unequipItem,
 } from './service'
@@ -245,11 +248,12 @@ test('equip / unequip moves gear between bank and slots', () => {
   const res = equipItem(db, bus, user.id, 'bronze_sword')
   expect(res.ok).toBe(true)
   expect(listEquipment(db, user.id)).toEqual([
-    expect.objectContaining({ slot: 'weapon', itemId: 'bronze_sword' }),
+    expect.objectContaining({ slot: 'mainHand', itemId: 'bronze_sword' }),
   ])
-  expect(getItemCount(db, user.id, 'bronze_sword')).toBe(0)
+  // The stack count is "pieces owned"; worn gear stays in the inventory.
+  expect(getItemCount(db, user.id, 'bronze_sword')).toBe(1)
 
-  unequipItem(db, user.id, 'weapon')
+  unequipItem(db, user.id, 'mainHand')
   expect(listEquipment(db, user.id).length).toBe(0)
   expect(getItemCount(db, user.id, 'bronze_sword')).toBe(1)
 
@@ -343,6 +347,51 @@ test('an artisan rig turns stock into product and runs out when the bank does', 
     (c) => c.item === 'copper_ore',
   )!.count
   expect(getItemCount(db, user.id, 'copper_ore')).toBe(20 - bars * perBar)
+  sqlite.close()
+})
+
+test('only two rigs run at once: a third drill stops the one closest to finishing', () => {
+  const { db, bus, user, sqlite } = setup()
+  const t0 = 3_000_000_000_000
+  const first = completeAction(db, bus, user.id, 'mine-copper', t0)
+  const second = completeAction(db, bus, user.id, 'chop-oak', t0 + 1)
+  expect(first.idle?.active).toBe(true)
+  expect(second.idle?.active).toBe(true)
+  expect(second.stoppedRig).toBe(null)
+  expect(second.rigsRunning).toBe(2)
+  expect(second.maxLiveRigs).toBe(2)
+
+  // the third drill powers its own machine and pushes the earliest-ending rig out
+  const third = completeAction(db, bus, user.id, 'fish-shrimp', t0 + 2)
+  expect(third.idle?.active).toBe(true)
+  expect(third.rigsRunning).toBe(2)
+  expect(third.stoppedRig?.actionId).toBe('mine-copper')
+
+  const rigs = listRigStates(db, user.id)
+  expect(rigs.get('mine-copper')!.runEndsAt).toBe(0)
+  expect(rigs.get('chop-oak')!.runEndsAt).toBeGreaterThan(t0 + 2)
+  expect(rigs.get('fish-shrimp')!.runEndsAt).toBeGreaterThan(t0 + 2)
+  sqlite.close()
+})
+
+test('a rig can be stopped on purpose to free its slot for another', () => {
+  const { db, bus, user, sqlite } = setup()
+  const t0 = 4_000_000_000_000
+  completeAction(db, bus, user.id, 'mine-copper', t0)
+  completeAction(db, bus, user.id, 'chop-oak', t0 + 1)
+  expect(liveRigCount(listRigStates(db, user.id), t0 + 2)).toBe(2)
+
+  // stopping settles the run, then falls still; a second stop is a no-op
+  expect(stopRig(db, bus, user.id, 'mine-copper', t0 + 2)).toBe(true)
+  expect(stopRig(db, bus, user.id, 'mine-copper', t0 + 3)).toBe(false)
+  const rigs = listRigStates(db, user.id)
+  expect(rigs.get('mine-copper')!.runEndsAt).toBe(0)
+  expect(liveRigCount(rigs, t0 + 3)).toBe(1)
+
+  // the freed slot lets a third rig start without displacing anything
+  const third = completeAction(db, bus, user.id, 'fish-shrimp', t0 + 4)
+  expect(third.stoppedRig).toBe(null)
+  expect(liveRigCount(listRigStates(db, user.id), t0 + 5)).toBe(2)
   sqlite.close()
 })
 

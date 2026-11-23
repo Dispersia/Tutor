@@ -1,7 +1,9 @@
 import { expect, test } from 'bun:test'
 import { openDb } from './client'
 import {
+  addCard,
   addMessage,
+  addReview,
   clearDeckBuilds,
   countUsers,
   createDeck,
@@ -14,6 +16,7 @@ import {
   getUserByUsername,
   listMessages,
   listSessions,
+  otherBacks,
   setRole,
   setSetting,
   updateDeckSettings,
@@ -95,5 +98,33 @@ test('clearDeckBuilds lifts a build flag left behind by a restart', () => {
   // a deck that is not building is left alone
   updateDeckSettings(db, deck.id, user.id, { building: false })
   expect(clearDeckBuilds(db)).toBe(0)
+  sqlite.close()
+})
+
+test('otherBacks only offers words the learner has already met', () => {
+  const { db, sqlite } = openDb(':memory:')
+  const user = createUser(db, { username: 'alice', passwordHash: 'x' })
+  const deck = createDeck(db, user.id, { name: 'd', sourceLang: 'en', targetLang: 'zh' })
+  const mk = (back: string) =>
+    addCard(db, user.id, { deckId: deck.id, sourceLang: 'en', targetLang: 'zh', front: `f-${back}`, back })
+  const [a, b, c, d] = ['一', '二', '三', '四'].map(mk)
+
+  // Nothing seen yet, so there is nothing to offer — a random unseen word would
+  // be a guess, not a choice.
+  expect(otherBacks(db, user.id, 'zh', a!.back)).toEqual([])
+
+  // Two of the other cards have been met: the teach step and a graded review.
+  addReview(db, { cardId: b!.id, userId: user.id, exerciseId: 'introduce', score: 100 })
+  addReview(db, {
+    cardId: c!.id,
+    userId: user.id,
+    exerciseId: 'translate.front_to_back',
+    score: 100,
+  })
+
+  const backs = otherBacks(db, user.id, 'zh', a!.back).sort()
+  expect(backs).toEqual([b!.back, c!.back].sort())
+  expect(backs).not.toContain(d!.back) // 四 has never been seen
+  expect(backs).not.toContain(a!.back) // the answer is never a distractor
   sqlite.close()
 })

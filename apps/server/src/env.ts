@@ -77,6 +77,9 @@ export const env = {
   tlsCert: process.env.TUTOR_TLS_CERT,
   tlsKey: process.env.TUTOR_TLS_KEY,
 
+  /** VAPID contact for Web Push (a `mailto:` or `https:` URL). */
+  pushSubject: process.env.TUTOR_PUSH_SUBJECT ?? 'mailto:push@localhost',
+
   defaultRoles: {
     conversation: process.env.TUTOR_MODEL_CONVERSATION ?? 'qwen/qwen3.8-27b',
     judge: process.env.TUTOR_MODEL_JUDGE ?? 'qwen/qwen3.8-27b',

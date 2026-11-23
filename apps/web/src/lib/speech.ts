@@ -72,6 +72,26 @@ export async function speak(
   }
 }
 
+/**
+ * Plays a card's pre-recorded audio. The server holds ten recorded voices per
+ * card and hands back a random one per request, so a listening card never wakes
+ * the TTS model; a card whose clips are still being recorded is synthesized and
+ * cached on the server the first time it is played.
+ */
+export async function speakCard(cardId: string, signal?: AbortSignal): Promise<void> {
+  const res = await fetch(apiPath(`/api/cards/${encodeURIComponent(cardId)}/audio`), {
+    credentials: 'same-origin',
+    signal,
+  })
+  if (!res.ok) throw new Error(`audio failed: ${await res.text().catch(() => res.status)}`)
+  const url = URL.createObjectURL(await res.blob())
+  try {
+    await play(url)
+  } finally {
+    URL.revokeObjectURL(url)
+  }
+}
+
 export interface Speaker {
   /** Queues a sentence; its audio is synthesised immediately, in the background. */
   push(text: string): void

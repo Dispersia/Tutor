@@ -9,12 +9,15 @@ import type { Fetcher } from './frequency/source'
 import type { OpenRouter } from './llm/openrouter'
 import type { AssessFn } from './pronunciation/assess'
 import type { SpeechSupervisor } from './speech/supervisor'
+import type { AudioService } from './audio/service'
 
 export interface Deps {
   db: Db
   /** Shared client (catalogue + fallback when a user has no key). */
   or: OpenRouter
   supervisor: SpeechSupervisor
+  /** Pre-recorded card audio; absent in most tests (routes degrade to 503). */
+  audio?: AudioService
   /** Domain event bus for game systems (DESIGN §11.4). */
   events: EventBus
   defaults: Record<Role, string>

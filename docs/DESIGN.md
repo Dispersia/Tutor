@@ -627,6 +627,16 @@ Simplified or pinyin deck keeps the generator's reading.
 Cards come from: a curated starter deck, LLM generation ("give me 20 HSK-1
 food words"), or manual entry.
 
+**Listening audio is pre-recorded.** A listening card plays files, not a fresh
+TTS call: when a card is created (or on the first play of an older one) its
+target text is recorded in four voices — two female and two male, pitched high
+and low — and stored content-addressed under `$TUTOR_DATA_DIR/audio/`
+(§12). `GET /api/cards/:id/audio` streams one voice (a random one per play, or
+`?variant=N`), so playback never wakes the speech model. Recording runs through
+a serial background queue (`apps/server/src/audio/`), and
+`POST /api/audio/backfill` (or `scripts/backfill-audio.ts`) records a whole
+existing library, resuming wherever it stopped.
+
 ### 11.2 Exercise definitions (the plugin contract)
 
 ```ts
@@ -875,32 +885,80 @@ Talent ids encode skill + milestone + tier (`<skill>:t:<milestone>:<n>` for choi
 `<skill>:m:<milestone>:<n>` for masteries), so progression continues indefinitely.
 All effects aggregate through `computeBonuses(actionLevels, talents)`.
 
-**Equipment & combat:** Smithing forges weapons, body and leg armour, Fletching
-makes bows, arrows and staffs, Crafting makes leather armour, and Enchanting binds
-gems and runes into amulets, robes and blessed blades. A fight uses **whatever you
-have equipped** — you never pick a weapon or a skill: power and armour are summed
-across every worn piece (weapon, body, legs, neck). The equipped weapon's tag decides
-the combat profession the fight trains: a melee weapon (sword) trains **Strength**,
-a bow trains **Ranged**, a staff trains **Magic**, and bare hands are still melee
-(Strength). `actionState()` reports `locked / affordable / equipOk` for every
-profession-board action (those still gate on gear).
+**Equipment & combat:** the paper doll has 13 slots — head, neck, chest, waist,
+legs, feet, hands, ring 1, ring 2, trinket 1, trinket 2, main hand and off hand.
+Rings and trinkets share a slot family, so any ring fits either finger. Smithing
+forges plate weapons and armour for melee, Leatherworking makes leather for ranged,
+Tailoring weaves cloth for magic, and Crafting/Enchanting make jewellery. A fight
+uses **whatever you have equipped** — you never pick a weapon or a skill. The
+equipped main-hand's tag decides the combat profession the fight trains: a melee
+weapon (sword) trains **Strength**, a bow trains **Ranged**, a staff trains
+**Magic**, and bare hands are still melee (Strength). `actionState()` reports
+`locked / affordable / equipOk` for every profession-board action (those still gate
+on gear).
+
+**Crafted gear rolls its own stats.** Every craftable piece is an *instance*, not a
+stack: the recipe produces one piece and `game/gear.ts` rolls a quality (common →
+epic) plus 1–3 random affixes from the piece's stat pool. The base stats are scaled
+by quality; affix values are budgeted by the piece's item level. A piece carries
+`strength`, `agility`, `intellect`, `stamina`, `haste`, `crit` and `mastery`:
+
+- **Primaries** (Strength/Agility/Intellect) scale the combat style the piece is
+  built for: melee → Strength, ranged → Agility, magic → Intellect. They add to
+  `playerPower` at half weight.
+- **Stamina** adds raw HP (`+3 HP` per point).
+- **Haste**, **Crit** and **Mastery** are rating-style: diminishing curves convert
+  them to percentages. Crit multiplies a landed hit, Haste can grant a second
+  strike, and Mastery boosts the weapon's own style damage.
+
+The **Inventory** screen shows the paper doll and saved loadouts; the **Bank**
+screen holds materials and consumables. The Inventory screen shows every crafted
+piece, its rolled stats and its gear score, and lets you save named **gear sets**
+(loadouts) for quick swapping between melee, ranged and magic. A set snapshots the
+slot → instance map; applying it swaps the whole loadout in one click. Equipping
+an instance keeps its rolled stats; the inventory stack count is "pieces owned",
+so worn gear stays visible in the bank.
+
+**Set bonuses and salvage.** Wearing 2, 4 or 6 pieces of the same armour family
+unlocks a set bonus: Vanguard (plate) grants armour, crit and power; Trailblazer
+(leather) grants haste, crit and power; Arcanist (cloth) grants mastery, haste and
+power; Jeweler's (jewellery) grants stamina and crit. The Inventory screen shows
+each set's current pieces, active tiers and the next tier. A piece you do not
+need can be **salvaged** back into its crafting material, scaled by quality
+(common → epic), instead of being discarded. Past a band's gear-unlock point the
+salvage also yields that band's **reagent** (§13.5.3) — the feedstock Enchanting
+spends to improve higher-tier gear.
+
+**Equipment requirements.** Gear is gated by combat stats, RuneScape-style:
+weapons need the skill they train (melee → Attack, bow → Ranged, staff → Magic),
+armour and shields need Defence, and quivers/tomes/orbs need their own style.
+Rings, necks and trinkets are not gated. The level scales with the item's tier:
+bronze 1, iron 5, steel 10, mythril 20, adamant 30. Crafting stays a step ahead of
+the combat gate, so a smith can forge adamant long before they can wear it. The
+Inventory screen shows each piece's requirement and greys out its Equip button
+until the player qualifies; applying a saved set skips locked pieces and reports
+them instead of failing the whole swap.
 
 **Fights (active, language-driven):** 6 monsters with HP, damage and drop tables.
 Any monster can be fought with any gear — difficulty is its HP and damage, not a
-gate. Combat drills are **review only**: a fight never introduces a new card, it
-drills cards that already have a spaced-repetition state (due ones first). Drills
-run as a **time attack**: the first drill waits for a Start click, then each drill
-gets 20 seconds and the next drill's clock starts as soon as the previous exchange
-resolves. A timeout counts as a miss. **The monster lands a blow on every
-exchange** — whether you strike it, miss, or run out of time — for
-`monster.damage − armour` (min 1), and that damage trains **Defence and
+gate. Monsters are **fixed** — their numbers never move — so the buffs a player
+stacks (§13.5.3) read as *power*, not as a modifier that quietly cancels itself
+out. Progression is a **ladder**: you climb to higher monsters and bosses, the
+buffs are what make the next rung winnable, and the top rung is tuned against a
+fully stacked player. Combat drills are **review only**: a fight never
+introduces a new card, it drills cards that already have a spaced-repetition state
+(due ones first). Drills run as a **time attack**: the first drill waits for a
+Start click, then each drill gets 20 seconds and the next drill's clock starts as
+soon as the previous exchange resolves. A timeout counts as a miss. **The monster
+lands a blow on every exchange** — whether you strike it, miss, or run out of time
+— for `monster.damage − armour` (min 1), and that damage trains **Defence and
 Constitution**. A drill you answer **correctly** also lands your own hit for
-`playerPower = (3 + skillLevel*1.5 + weaponPower) * (1 + damageBonus)` (`skillLevel`
-is the spawned profession's **derived** level, the one your weapon trains). Your HP
-is `20 + constitution*4 + hpBonus*20 + armour*2` and **carries between fights**;
-**only food and potions heal it** — there is no passive regeneration, and a defeat
-leaves you at 1 HP rather than a free heal. **Win** → drops (with the Slayer
-bonus) + combat XP (credited to the trained profession) + overall XP;
+`playerPower = (3 + skillLevel*1.5 + weaponPower + primary*0.5) * (1 + damageBonus + mastery)`,
+multiplied by a crit and possibly a haste strike. Your HP is
+`20 + constitution*4 + hpBonus*20 + armour*2 + stamina*3` and **carries between
+fights**; **only food and potions heal it** — there is no passive regeneration, and
+a defeat leaves you at 1 HP rather than a free heal. **Win** → drops (with the
+Slayer bonus) + combat XP (credited to the trained profession) + overall XP;
 **lose** → the fight ends with nothing. One active encounter per player
 (`encounters` table). Events: `combat.hit`, `combat.ended`.
 
@@ -928,10 +986,10 @@ item; stop, and the run drains out and the rig falls still. This is what makes t
 game reward *taking a break* and *coming back*.
 
 ```
-   complete 1 drill          complete 10 more             come back in 4h
+   complete 1 drill          complete 10 more             come back in 3h
    ─────────────────         ─────────────────            ──────────────
    +1 ore  (the strike)      +1 ore  (the strike)         bank is full
-   run: 1 / 10s for 10 min   run: 1 / 7s for 48 min       pick new drills
+   run: 1 / 10s for 10 min   run: 1 / 7s for 45 min       pick new drills
 ```
 
 **Nothing ticks.** There is no scheduler, no worker, no timer. A run is *not* a
@@ -958,12 +1016,12 @@ be rebalanced later without rewriting anyone's bank.
 **The curves.** The *rate* is a saturating exponential; the *run length* is a
 **straight, equally-stepped climb**. Both are tunable in `game/idle.ts` (`IDLE`
 constants): the first drill is slow and short, a long-lived action approaches a
-2-second ceiling, and **50 completions buy the full 6 hours** — every completion
+2-second ceiling, and **50 completions buy the full 3 hours** — every completion
 before that adds the same slice of time.
 
 ```
 intervalSeconds(c, tier) = tierFactor(tier) · (2 + 8 · 2^(−c/15))   // 10s → 2s per item
-runSeconds(c)            = 600 + (21600 − 600) · min(c−1, 49)/49    // 10 min → 6 h at c=50
+runSeconds(c)            = 600 + (10800 − 600) · min(c−1, 49)/49    // 10 min → 3 h at c=50
 tierFactor(tier)         = 1 + 0.35·(tier − 1)                      // tier 1 ×1 … tier 5 ×2.4
 xpPerCraft               = 0.5                                      // action XP per completed craft
 ```
@@ -977,9 +1035,9 @@ that is what makes "leave it running and come back" pay in levels, not only in o
 `settleAll` accrues it in the same closed-form pass as the items (a completion
 count already *is* the craft count, so nothing new is stored), and the action XP
 curve is scaled **10×** against the drill-only era to absorb the new income (see
-§13.5: ~58.4k XP to cap an action). `xpPerCraft` is `0.5`, so a full 6-hour maxed
-run pays ~5.4k XP — enough that the machines carry most of the leveling, but capping
-an action takes ~11 such runs rather than a couple.
+§13.5: ~58.4k XP to cap an action). `xpPerCraft` is `0.5`, so a full 3-hour maxed
+run pays ~2.7k XP — enough that the machines carry most of the leveling, but capping
+an action takes ~22 such runs rather than a couple.
 
 **Tier slows the rig, not the run.** Higher-tier actions run proportionally slower
 per item (`tierFactor`) but keep the same run length, so deep content (adamant,
@@ -990,18 +1048,25 @@ table below is tier 1; multiply the interval by `tierFactor` for deeper rigs.
 **A flurry of drills can't buy unlimited time.** A drill does not *stack* onto
 the previous end; it **re-bases** the run to `rigRunSec(completions)` from that
 drill. So a burst of completions makes the next run longer *in step with the
-count* — 10 buy ~1.2 h, the 50th buys the full 6 h, and it never exceeds
+count* — 10 buy ~40 min, the 50th buys the full 3 h, and it never exceeds
 `maxRunSec`. (`extendRig` sets the end outright, and `settleRig` re-clamps on
 every read, so any older row written before this held is trimmed on its next
-settle.) Summing a per-drill slice instead reached the 6-hour ceiling after only
+settle.) Summing a per-drill slice instead reached the 3-hour ceiling after only
 ~10 rapid drills, which is why a handful of cards used to buy a full night.
 
 | completions | 1 | 10 | 30 | 50 | 100 | 300 |
 | --- | --- | --- | --- | --- | --- | --- |
 | one item every | 9.6s | 7.0s | 4.0s | 2.8s | 2.1s | 2.0s |
-| a run lasts | 10m | 1.2h | 3.6h | 6h | 6h | 6h |
-| items per run | 62 | 630 | 3.3k | 7.7k | 10.4k | 10.8k |
-| XP per run | 31 | 315 | 1.6k | 3.9k | 5.2k | 5.4k |
+| a run lasts | 10m | 0.7h | 1.8h | 3h | 3h | 3h |
+| items per run | 62 | 351 | 1.7k | 3.9k | 5.2k | 5.4k |
+| XP per run | 31 | 176 | 830 | 1.9k | 2.6k | 2.7k |
+
+**The climb is visible.** A rig's view carries how far it is toward the cap —
+`runProgress` (0 → 1) and a `maxed` flag the moment a completion buys the full 3
+hours. The practice result draws it as a bar with `N/50 to 3h`, and once the rig is
+maxed it says so outright: the run is as long and fast as it will ever be, so the
+next drills are better spent on a different action. The profession page shows the
+same `N/50` count per action, so the board is where you decide what to power next.
 
 **Every action is a rig**, including the artisans. A gathering rig makes something
 from nothing; an artisan rig *transforms* — its run consumes the recipe inputs and
@@ -1011,6 +1076,17 @@ runs; drill `Forge iron sword` and your forge runs. Raw materials are effectivel
 free now, so the game's real currencies are **time** (run length), **attention**
 (which rigs you power) and **XP** (levels). XP is no longer drill-only: a run pays
 it as it works, so *which rigs you keep alive* is a leveling decision too.
+
+**Only a couple of machines run at once.** You may keep `MAX_LIVE_RIGS` (**2**) runs
+alive at a time. Drilling a third action starts its own machine and, when every slot
+is full, **stops the run closest to finishing** — the machine that was about to stop
+anyway, so the least real time is thrown away. Nothing else is lost: the drill still
+lands its strike and logs the completion. To swap on purpose, a live rig can be
+**cancelled** from its row (confirmed first): it settles up to now and falls still,
+freeing the slot for the action you would rather run. This cap is what makes the
+idler study-friendly: with only two machines to tend there is no third, fourth or
+sixty-seventh rig to keep alive, so nothing is gained by drilling non-stop — you
+power the two you want and leave them running.
 
 **Settlement order is fixed and deterministic.** `settleAll` walks every action in
 one canonical order — `gathering → support → artisan → combat` — against a single
@@ -1032,15 +1108,15 @@ fetch.
 alive), tier (deep rigs run up to 2.4× slower) and XP (levels, which now climb from
 the runs themselves, still gate recipes, gear and power). Second, **recipe inputs
 were scaled up against an explicit time budget, because this is an idler**: you are
-*meant* to leave a 6-hour run going and come back. So the pace is set by how long the
+*meant* to leave a 3-hour run going and come back. So the pace is set by how long the
 supply rigs must run — a few hours for starter gear, and **roughly a whole day for
-the deep gear**, which is four or five "leave it running" sessions spread across days
+the deep gear**, which is seven or eight "leave it running" sessions spread across days
 of study.
 
 The budget is legible, not vibes: an action needs `⌈58410 / xp⌉` drills to reach 100
 *if you only drill* — but a live rig also pays `xpPerCraft` per item, so the levels
-come from the machines too (a full 6-hour run of a maxed rig is ~5.4k XP, about a
-tenth of a cap). Material costs are chosen so the **scarcest raw material** it
+come from the machines too (a full 3-hour run of a maxed rig is ~2.7k XP, about a
+twentieth of a cap). Material costs are chosen so the **scarcest raw material** it
 consumes works out to the tier's target. Refinement is deliberately the *cheap,
 fast* feeder layer (a bar costs 2 ore); the **goal** actions carry the time.
 
@@ -1075,6 +1151,129 @@ substitute for studying: you have to drill to **start** the machines, and the ac
 XP curve is scaled 10× so passive income sharpens the loop instead of replacing it.
 The runs reward *coming back*; the drills remain the reason to open the app.
 
+### 13.5.2 Rig alerts — a nudge before the machine stops
+
+A run that expires silently is wasted time: the player has to drill again to keep
+the machine alive. So when a run drops **under 30 minutes**, the app sends one
+notification — "Mine copper is running low — 22 minutes left — drill to keep it
+going" — with a tap that opens Home. The alert is a *come back and drill* nudge, not
+a completion receipt. Runs shorter than the lead time (the first drill's 10-minute
+run) are ignored, because there is nothing to extend yet.
+
+**Two paths, one switch.** The server pushes through the browser's push service, so
+the alert arrives with the app closed. While the app is open, a local timer arms the
+same moment from `/api/rigs` (a pure read — no settle) and shows the notification
+from the page. The service worker suppresses the server copy when a window is
+focused and the page suppresses its timer when it is not, so the two paths never
+double-notify. The switch is **per device**: turning it on for the phone leaves the
+laptop quiet. It lives in Settings → Rig alerts, and each device grants its own
+notification permission.
+
+**Nothing polls the rigs.** The server scan is one indexed query a minute
+(`run_ends_at` within the lead, `notified_ends_at` not already this deadline); the
+`notified_ends_at` column records the deadline that was announced, so a restart or a
+second scan stays quiet, and a drill that extends the run re-arms it. The client
+polls `/api/rigs` only while alerts are on. There is still no per-rig timer on the
+server — the scan is a read, not a settle.
+
+**No new dependency.** Payload encryption is RFC 8291 (`aes128gcm`: ECDH P-256 →
+HKDF → AES-GCM) and authorization is RFC 8292 VAPID (ES256), both on WebCrypto. The
+VAPID keypair is generated lazily and kept in the `settings` table; devices live in
+`push_subscriptions` (one row per installed PWA, keyed by endpoint). A revoked
+subscription answers 410 and its row is dropped. The VAPID contact defaults to
+`mailto:push@localhost` and can be set with `TUTOR_PUSH_SUBJECT`.
+
+**Platform limits.** Android Chrome and desktop browsers need the app installed
+(or at least a permission grant) and a secure context; iOS 16.4+ only delivers push
+to a PWA installed on the home screen. A closed browser that never granted
+permission cannot be reached by any web API — that is the one case the local timer
+covers only while the app is open.
+
+### 13.5.3 Tier bands, tier buffs & reagents
+
+Gear runs along a **material axis** — bronze → iron → steel → mythril → adamant —
+and each material is a **tier band**, not a skill per item. A band owns **one**
+level track: its recipes unlock at thresholds *inside* the band, so Bronze is a
+single progress bar (bars at 1, boots at 6, plate at 12, …), shown on the actions
+page as a **dropdown** that expands to the whole bronze set. Crafting any bronze
+item feeds the same bronze score — you never level a dozen near-identical actions
+to move on.
+
+**All of a band's gear unlocks by ~level 40; the band still runs to 100.** The
+front half (1–40) hands out the tier's equipment. The back half (40–100) is why the
+tier stays worth playing forever, and it pays out two things:
+
+- **A per-level buff for the whole account.** Each material grants one *distinct*,
+  *additive* stat per band level — bronze **crit**, iron **lifesteal**, steel
+  **haste**, … — so more bronze levels mean more crit, full stop. The **level cap
+  is the ceiling**: `+0.2% crit/level` makes bronze 100 a finite `+20%`. Bands
+  stack, and the stacking is the point; the sum over five bands is finite and
+  tunable because nothing re-levels the monsters to cancel it (§13.5).
+- **The band's reagent.** Smelting down the band's gear yields a **bronze / iron /
+  … reagent**, and **Enchanting** spends it to apply that band's signature buff to
+  *any higher-tier piece*. Each band's reagent is a *different* effect, so a build
+  wants a mix and the deepest reagent you can farm is not automatically the only one
+  worth farming.
+
+**The loop closes and no tier goes dead.** Level bronze to 40 → unlock bronze gear
+→ keep going to 60/80/100 → more crit and bronze reagent → enchant iron gear (new
+gear needs re-enchanting, so reagents stay in demand) → iron gear farms iron
+reagent faster → enchant steel. A deep tier's *gear* is superseded, but its
+**passive** and its **reagent** keep paying into every tier above it.
+
+**More material, more reward.** A deeper item in a band costs more material but
+awards proportionally more XP and coins — **~10% more per material** over the item
+below it — so the deepest thing you can afford is always the most rewarding thing
+to make, and the climb *accelerates* into the next band's unlock instead of
+slogging through it.
+
+This supersedes the per-item action level for gear tiers: the mean-of-actions
+readout (§13.5) still scores professions whose content is not a material band, but
+a smith's bronze score is **one** track, not seven. (The mined `essence` item is
+unaffected; a band **reagent** is a distinct, crafted feedstock.)
+
+### 13.5.3.1 Prospecting & gem-binding (Jewellery)
+
+Gems do not fall out of the ground — they are **prospected** out of ore. A gem's
+**type is its stat**, the same at every tier (ruby always crit, emerald always haste,
+sapphire always mastery); a gem's **tier is the ore** it came from — cracked (copper),
+chipped (iron), perfect (mythril/adamant). One ore drops any type of its tier.
+
+`Prospect ore` is **one action**: pick which ore you hold to crush, and its tier
+decides the table of rough gems. The ore is **always spent**; a rough gem only appears
+at that ore's odds (40–55%, `+3%/level`, capped at 100%), so a miss is a real cost and
+a skilled prospector wastes less. The same odds fold into an idle rig's rate. Because
+it is one action, *every* ore you prospect raises the **same** level.
+
+The gems then flow: `Cut … gems` is **one action per tier** (pick any rough gem of the
+tier), and the cut gem has three uses — **set** it into a metal band (Smithing's
+`forge-*-band` + the gem → a ring whose stat is the gem's type), **craft** it into
+better jewellery, or **crush** it to **dust** for Enchanting. Dust is the gem-side
+enchant currency: it stamps that gem's stat onto any crafted piece, alongside the
+band reagents that stamp a band's signature stat. Both halves run on the tier bands
+every artisan shares (§13.5.3).
+
+### 13.5.3.2 Distillation & enchants (Enchanting)
+
+Enchanting has **one** track: `Distill`. You pick an item from your inventory, burn it,
+and learn from it — XP is a **percentage of the item's coin value**
+(`DISTILL_XP_PER_VALUE`, 6 XP per coin), so an endgame piece levels Enchanting faster
+than a raw ore but never instantly. The rate is priced against the curve: level 100
+costs **58,410 XP**, so capping Enchanting takes ~9,735 coins of burned value — about
+**975 coins a day over 10 days**. Distilling also yields the item's **family essence**
+(metal, cloth, leather, wood or gem), the reagent every enchant is built from. Burning
+is the point: Distill is the sink that eats surplus materials and gear.
+
+**Enchants** are catalogued **by slot** (`ENCHANTS`) and unlocked at Enchanting levels
+— all chest enchants sit together, so you unlock +stamina at Lv 2 and +strength at Lv
+5. Every enchantable slot (head, neck, chest, waist, legs, feet, hands, main hand, off
+hand, rings, trinkets) carries a menu of stats running from Lv 2 up to Lv 50, and both
+the essence cost and the stat points scale with the level, so Distill keeps having a
+reason to climb. Applying one fits the piece's slot, needs its level, and costs its own
+essence reagents, and it grants **no XP**: the training is Distill, the enchant is the
+payoff. An enchant adds its stat points straight onto the piece (one per piece,
+replaceable), so it flows through the normal gear maths.
+
 ## 13.6 Spaced repetition (FSRS-6, Anki-style) & guided curriculum
 
 Scheduling uses **FSRS-6** — the algorithm Anki 25.07+ uses — through the
@@ -1084,9 +1283,10 @@ reference TypeScript implementation (`ts-fsrs`, FSRS-6 model) with Anki's
 a handful of times before it graduates) and **relearning steps** (`10m`), and
 intervals derived from a **desired retention** (default `0.9`, per-user). An
 Anki-style **daily budget** — new cards/day and reviews/day (default 20 / 200),
-with a "study more" override — bounds how much a day asks for. The state machine
-around the memory math — steps, due dates, card selection, curriculum graduation
-— is ours (`apps/server/src/game/srs.ts`).
+with a "study more" override — bounds how much a day *asks* for; practice treats
+it as a soft goal and keeps serving what the deck still has (below). The state
+machine around the memory math — steps, due dates, card selection, curriculum
+graduation — is ours (`apps/server/src/game/srs.ts`).
 
 ```
    rating  ──┐
@@ -1097,10 +1297,10 @@ around the memory math — steps, due dates, card selection, curriculum graduati
    │  schedule()    │ │  lapses, intervalDays, dueAt, lastRating   │
    └─────────┬──────┘ └────────────────────────────────────────────┘
              │
-   dueAt + intervalDays ──► selectCardId() (overdue → new → soonest)
+   dueAt + intervalDays ──► selectStudyCardId() (overdue → new → done)
 ```
 
-- **A sitting opens on a few new words.** `selectCardId()` puts the due backlog
+- **A sitting opens on a few new words.** `selectStudyCardId()` puts the due backlog
   first, which is right in the middle of a sitting but feels like grinding at the
   start. So practice warms up: while fewer than **3 cards have been graded in the
   last 30 minutes** (i.e. the sitting is young), the next card is a new one in
@@ -1110,7 +1310,7 @@ around the memory math — steps, due dates, card selection, curriculum graduati
   falls straight through to the review queue. Combat is unaffected — it is
   review-only by design (`pickReviewCard`).
 - **A lesson picks the path, not a card pool.** Starting the next step of the
-  frequency path drills the **whole deck** (due → new → soonest), not just that
+  frequency path drills the **whole deck** (due → new → done), not just that
   step's cards. A one-word step has nothing else in it, so a lesson-scoped queue
   used to re-show the same word four or five times while its `1m → 10m → 60m →
   240m` learning steps waited. Now the queue moves on to the path's next new word
@@ -1119,6 +1319,20 @@ around the memory math — steps, due dates, card selection, curriculum graduati
   `lessonId`), and lesson completion fires only on the transition, not every time
   an already-finished lesson is reviewed. `POST /api/practice/next` also takes an
   optional `cardId` for a targeted drill; the daily budget still applies.
+- **Practice never serves a card ahead of its due date.** When the due backlog is
+  empty and no new word is left, the day is **done** — the queue returns nothing
+  rather than the soonest scheduled card. Reaching past a review card's due date
+  looked harmless but was a trap: a same-day review leaves the due date untouched
+  (`schedule`), so the "soonest card" fallback handed back the very same card
+  forever (the "This is not that." loop). Combat keeps `selectCardId`, whose
+  soonest-card fallback gives every hit a card to fight with.
+- **The daily budget is a goal, not a wall.** Hitting the day's new/review cap does
+  not stop practice while the deck still has something to give: the next `next`
+  call raises today's allowance for the kind that is blocked and serves the card,
+  so a motivated learner keeps getting new words instead of an early "done". The
+  header stays honest — `newRemaining` climbs by one each time. "Done" now means
+  the deck itself is finished (nothing due, no new words), and "study more"
+  remains for a targeted drill that the budget is holding back.
 
 - **Ratings are two-way**: a wrong answer is **Again**, a right answer is
   **Good** — deliberately never Hard/Easy. FSRS is best trained on that honest

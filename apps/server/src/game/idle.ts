@@ -30,7 +30,7 @@ export const IDLE = {
   /** seconds a run lasts after the first completion */
   firstRunSec: 10 * 60,
   /** the longest a run ever gets — also the hard cap on how far ahead a run may end */
-  maxRunSec: 6 * 60 * 60,
+  maxRunSec: 3 * 60 * 60,
   /** completions at which a run reaches `maxRunSec`; the climb is linear before it */
   runFullAtCompletions: 50,
   /** each tier above 1 multiplies the interval by this much (deeper = rarer) */
@@ -41,9 +41,9 @@ export const IDLE = {
    * Action XP the rig earns for **every craft it completes on its own** (before
    * talent bonuses). A drill hands over `action.xp`; a live run hands this per
    * item, so a machine left running levels the profession the same way drilling
-   * does — just by the clock. Halved from `1` so a full 6 h maxed run is ~5.4k
-   * XP (about a tenth of a cap) instead of ~10.8k (a fifth): the machines still
-   * do most of the leveling, but capping an action now takes ~11 runs, not ~5.
+   * does — just by the clock. Halved from `1` so a full 3 h maxed run is ~2.7k
+   * XP (about a twentieth of a cap) instead of ~5.4k (a tenth): the machines still
+   * do most of the leveling, but capping an action now takes ~22 runs, not ~11.
    * See docs/DESIGN.md §13.5.1.
    */
   xpPerCraft: 0.5,
@@ -66,7 +66,7 @@ export function rigIntervalSec(completions: number, tier = 1): number {
 /**
  * Drills → how long one completion's run lasts. A **straight, equally-stepped
  * climb**: the first completion lands on 10 minutes, every completion after adds
- * the same slice, and the 50th reaches the full 6 hours — then it holds. `c − 1`
+ * the same slice, and the 50th reaches the full 3 hours — then it holds. `c − 1`
  * so the first completion is `firstRunSec`, matching "do just one and it gathers
  * for 10 minutes".
  */
@@ -75,6 +75,21 @@ export function rigRunSec(completions: number): number {
   const c = clamp(completions - 1, 0, steps)
   const span = IDLE.maxRunSec - IDLE.firstRunSec
   return IDLE.firstRunSec + (span * c) / steps
+}
+
+/**
+ * How far a rig is toward the run-length cap: `0` at no drills, `1` once a
+ * completion buys the full `maxRunSec`. It is the same equal-step climb as
+ * `rigRunSec`, so it reads plainly as "drills done / drills to the ceiling" —
+ * the client's progress bar and the "maxed" tell both come from it (§13.5.1).
+ */
+export function rigRunProgress(completions: number): number {
+  return clamp(completions, 0, IDLE.runFullAtCompletions) / IDLE.runFullAtCompletions
+}
+
+/** Whether a rig's run has reached the cap — further drills buy no more time. */
+export function rigMaxed(completions: number): boolean {
+  return completions >= IDLE.runFullAtCompletions
 }
 
 /** The recorded state of one rig (mirrors the `action_progress` idle columns). */
@@ -89,6 +104,8 @@ export interface RigState {
   crafts: number
   /** fractional produced items carried per item id (no rounding loss) */
   remainder: Record<string, number>
+  /** the choice a multi-recipe action's rig is running ('' = the first choice) */
+  choice: string
 }
 
 /** What an action makes and needs, plus its expected-value bonuses. */
@@ -101,6 +118,12 @@ export interface RigRecipe {
   yieldBonus?: number
   /** expected-value bonus-product chance, folded into yield (see docs) */
   doubleBonus?: number
+  /**
+   * Chance each craft actually yields its `produces` (1 = always). Consumers still
+   * pay their `consumes` on a miss — that is what makes prospecting a gamble (§13.5.3).
+   * Folded into the rate as an expected-value multiplier on output only.
+   */
+  successChance?: number
 }
 
 export interface RigSettle {
@@ -123,6 +146,7 @@ const EMPTY_STATE: RigState = {
   settledAt: 0,
   crafts: 0,
   remainder: {},
+  choice: '',
 }
 
 export function newRig(): RigState {
@@ -222,7 +246,8 @@ function emitProduced(
   bank: BankView,
   next: RigState,
 ): void {
-  const bonus = 1 + (recipe.yieldBonus ?? 0) + (recipe.doubleBonus ?? 0)
+  const bonus =
+    (recipe.successChance ?? 1) * (1 + (recipe.yieldBonus ?? 0) + (recipe.doubleBonus ?? 0))
   for (const p of recipe.produces ?? []) {
     const carried = next.remainder[p.item] ?? 0
     const raw = done * p.count * bonus + carried
@@ -235,13 +260,54 @@ function emitProduced(
 }
 
 /**
+ * How many rigs a player may keep **running at once** (docs/DESIGN.md §13.5.1).
+ * Only a couple of machines can be live at a time, so powering a new action is a
+ * choice — you keep the rigs you care about and let the rest fall still — instead
+ * of an obligation to drill every action non-stop.
+ */
+export const MAX_LIVE_RIGS = 2
+
+/**
+ * Enforce the live-rig cap (§13.5.1). `keep` names rigs that must survive — the
+ * action a drill just powered, so a drill always starts its own machine. When more
+ * than `MAX_LIVE_RIGS` runs are alive, the ones with the **earliest** `runEndsAt`
+ * are stopped first: the machines that were about to stop anyway, so the least run
+ * time is thrown away. Pure: clears `runEndsAt` on the losers in place and returns
+ * their action ids.
+ */
+export function capLiveRigs(
+  rigs: Map<string, RigState>,
+  now: number,
+  keep: readonly string[] = [],
+): string[] {
+  const live = [...rigs.entries()].filter(([, r]) => r.runEndsAt > now)
+  if (live.length <= MAX_LIVE_RIGS) return []
+  const kept = new Set(keep)
+  const keepCount = live.reduce((n, [id]) => n + (kept.has(id) ? 1 : 0), 0)
+  const slots = Math.max(0, MAX_LIVE_RIGS - keepCount)
+  const pool = live
+    .filter(([id]) => !kept.has(id))
+    .sort((a, b) => a[1].runEndsAt - b[1].runEndsAt)
+  const losers = pool.slice(0, pool.length - slots)
+  for (const [id, r] of losers) rigs.set(id, { ...r, runEndsAt: 0 })
+  return losers.map(([id]) => id)
+}
+
+/** How many rigs are alive at `now` (drives the "N / 2 running" readout). */
+export function liveRigCount(rigs: Map<string, RigState>, now: number): number {
+  let n = 0
+  for (const r of rigs.values()) if (r.runEndsAt > now) n++
+  return n
+}
+
+/**
  * Power the rig: bump the completion count and re-base the run. Call *after*
  * `settleRig(now)` so the old rate is paid up to the instant of the drill.
  *
  * The run length is a **function of the completion count** (`rigRunSec`), not a
  * sum of per-drill slices: a drill sets the run to end `rigRunSec(completions)`
- * from now, so 10 completions buy ~1.2 h and the 50th buys the full 6 h (the
- * ceiling). Stacking `+ rigRunSec` onto the previous end reached the 6 h cap
+ * from now, so 10 completions buy ~40 min and the 50th buys the full 3 h (the
+ * ceiling). Stacking `+ rigRunSec` onto the previous end reached the 3 h cap
  * after ~10 rapid drills — far too fast — so the run is *re-based*, never
  * accumulated. The clamp is belt-and-braces: `rigRunSec` already tops out at
  * `maxRunSec`, and `settleRig` re-clamps on every read.

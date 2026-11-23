@@ -156,7 +156,7 @@ const translateBackToFront: ExerciseDef<string> = {
     if (g.score < 70 && typed.trim() && ctx.judge) {
       const reading = displayReading(ctx)
       const out = (await ctx.judge(
-        `The learner is studying ${label(ctx.card.targetLang)}. The card shows the word “${ctx.card.back}”${reading ? ` (${reading})` : ''}, whose meaning in ${label(ctx.card.sourceLang)} is given as “${ctx.card.front}” — a list of its senses separated by “/”. The learner answered with: “${typed}”. Decide whether the learner's answer is an acceptable meaning of the word. Accept any one of the listed senses or a standard synonym/paraphrase; reject answers that mean something else or are too vague.`,
+        `The learner is studying ${label(ctx.card.targetLang)}. The card shows the word “${ctx.card.back}”${reading ? ` (${reading})` : ''}, whose meaning in ${label(ctx.card.sourceLang)} is given as “${ctx.card.front}” — a list of its senses separated by “/”. The learner answered with: “${typed}”. Decide whether the learner's answer is an acceptable meaning of the word. Accept any one of the listed senses or a standard synonym/paraphrase; reject answers that mean something else or are too vague. Give the feedback in the learner's native language (${label(ctx.card.sourceLang)}), not in ${label(ctx.card.targetLang)}.`,
         JUDGE_SCHEMA,
       )) as { score?: number; correct?: boolean; feedback?: string } | undefined
       if (out && out.correct) {
@@ -186,6 +186,9 @@ const multipleChoice: ExerciseDef<string> = {
   title: 'Pick the right answer',
   modality: 'text',
   supports: (card) => card.back.length <= 12,
+  // Only meaningful when there is at least one other *seen* word to confuse it
+  // with (see `otherBacks`): a one-option question is not a choice.
+  available: (ctx) => ctx.distractors.length >= 1,
   async generate(ctx) {
     const choices = shuffle([ctx.card.back, ...ctx.distractors]).slice(0, 4)
     return {
@@ -362,7 +365,8 @@ How to grade pronunciation:
 - The reading above is authoritative: when you mention it, copy it exactly (it is Zhuyin / kana). Never write pinyin, and never describe a sound with a Latin-letter look-alike such as “shee”, “sh” or “see” — those misdescribe the sound and confuse the learner.
 - The ASR transcript is only a guess and often mis-hears a short clip. The learner is practising a ${label(ctx.card.targetLang)} accent where this is standard; do not assume a syllable was wrong just because the transcript shows another word.
 - If Mandarin: this is the Taiwan standard. A learner whose ㄓ/ㄔ/ㄕ come out as ㄗ/ㄘ/ㄙ (or the reverse) is speaking a correct accent — never mark that as an error.
-- If the transcript is a different word entirely and nothing matches the expected text, say you could not hear it clearly and ask the learner to say it once more. Do not invent a detailed pronunciation diagnosis.`,
+- If the transcript is a different word entirely and nothing matches the expected text, say you could not hear it clearly and ask the learner to say it once more. Do not invent a detailed pronunciation diagnosis.
+Write the summary and every word tip in the learner's native language (${label(ctx.learner.nativeLang)}), never in ${label(ctx.card.targetLang)}.`,
         PRON_SCHEMA,
       )) as
         | {
@@ -404,11 +408,29 @@ How to grade pronunciation:
 /** Strip spaces, punctuation and symbols so “你好。” and “你好” compare equal. */
 const bare = (s: string) => s.replace(/[\s\p{P}\p{S}]/gu, '').toLowerCase()
 
+/** Ordered target-language tokens a sentence card carries in its payload. */
+function payloadTokens(card: Card): string[] {
+  const t = card.payload?.tokens
+  return Array.isArray(t) ? t.filter((x): x is string => typeof x === 'string' && x.length > 0) : []
+}
+
+/** True when the card carries its own segmented sentence (works in any language). */
+const hasPayloadSentence = (card: Card): boolean => payloadTokens(card).length >= 2
+
+/**
+ * True when the card already teaches a whole utterance rather than a word. A
+ * phrase card, or a sentence card with payload tokens, needs no "make a sentence
+ * using it" drill — the card *is* the sentence.
+ */
+const isUtterance = (card: Card): boolean => card.type === 'phrase' || hasPayloadSentence(card)
+
 const converse: ExerciseDef<string> = {
   id: 'converse',
   title: 'Use it in conversation',
   modality: 'mixed',
-  supports: () => true,
+  // Single words only: "make a sentence using …" is meaningless for a card
+  // whose target text is already a full sentence (DESIGN §11.3).
+  supports: (card) => !isUtterance(card),
   async generate(ctx) {
     return {
       exerciseId: this.id,
@@ -442,7 +464,7 @@ const converse: ExerciseDef<string> = {
       }
     if (ctx.judge) {
       const out = (await ctx.judge(
-        `The learner is practising ${label(ctx.card.targetLang)}. They must write or say a full sentence that *uses* the word “${ctx.card.back}” (${ctx.card.front}). Judge only whether the word is used correctly for the sentence — its meaning fits the sentence — NOT whether the sentence is grammatical. Set correct=true whenever the learner makes a genuine attempt to use the word with its intended meaning, even if the sentence has grammar, word-order, spelling or particle mistakes; correct those mistakes briefly in the feedback instead of failing the card. Set correct=false only when the word is missing or clearly does not fit the sentence's meaning (the wrong word for that sentence). Repeating the word alone is not a sentence and must score low. The learner wrote/said: “${text}”. Grade the attempt (0-100) and give one short tip.`,
+        `The learner is practising ${label(ctx.card.targetLang)}. They must write or say a full sentence that *uses* the word “${ctx.card.back}” (${ctx.card.front}). Judge only whether the word is used correctly for the sentence — its meaning fits the sentence — NOT whether the sentence is grammatical. Set correct=true whenever the learner makes a genuine attempt to use the word with its intended meaning, even if the sentence has grammar, word-order, spelling or particle mistakes; correct those mistakes briefly in the feedback instead of failing the card. Set correct=false only when the word is missing or clearly does not fit the sentence's meaning (the wrong word for that sentence). Repeating the word alone is not a sentence and must score low. The learner wrote/said: “${text}”. Grade the attempt (0-100) and give a short feedback. Only suggest a "tip" when the learner can still improve: never repeat, quote or lightly extend the learner's own sentence as the suggested version — it must not be the sentence they already wrote. If their sentence is already correct and natural, praise it and stop; do not invent a longer sentence, and do not tell them to use a sentence they just used. Write the feedback in the learner's native language (${label(ctx.learner.nativeLang)}), never in ${label(ctx.card.targetLang)}; only the word and any target-language example stay in ${label(ctx.card.targetLang)}.`,
         JUDGE_SCHEMA,
       )) as { score?: number; correct?: boolean; feedback?: string } | undefined
       if (out && typeof out.score === 'number') {
@@ -500,15 +522,6 @@ function hashSeed(s: string): number {
 function normalizeSentence(s: string): string {
   return s.replace(/[\s.,!?。，！？、；：；'"]/g, '').trim()
 }
-
-/** Ordered target-language tokens a sentence card carries in its payload. */
-function payloadTokens(card: Card): string[] {
-  const t = card.payload?.tokens
-  return Array.isArray(t) ? t.filter((x): x is string => typeof x === 'string' && x.length > 0) : []
-}
-
-/** True when the card carries its own segmented sentence (works in any language). */
-const hasPayloadSentence = (card: Card): boolean => payloadTokens(card).length >= 2
 
 const sentenceBuild: ExerciseDef<unknown> = {
   id: 'sentence_build',

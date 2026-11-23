@@ -19,12 +19,17 @@
   import CharCell from '#lib/components/CharCell.svelte'
   import CardEditor from '#lib/components/CardEditor.svelte'
   import DeckSettings from '#lib/components/DeckSettings.svelte'
+  import { peekCached } from '#lib/cache'
 
-  let decks = $state<CurriculumDeck[]>([])
-  let stats = $state<SrsStats | null>(null)
-  let ref = $state<SkillsResponse | null>(null)
+  // Seed from the last fetch so returning to Learn renders the path at once.
+  const cachedCurriculum = peekCached<{ decks: CurriculumDeck[] }>('/api/curriculum')
+  const cachedSrs = peekCached<SrsStats>('/api/srs/stats')
+  const cachedSkills = peekCached<SkillsResponse>('/api/skills')
+  let decks = $state<CurriculumDeck[]>(cachedCurriculum?.decks ?? [])
+  let stats = $state<SrsStats | null>(cachedSrs ?? null)
+  let ref = $state<SkillsResponse | null>(cachedSkills ?? null)
   let actionId = $state('')
-  let loading = $state(true)
+  let loading = $state(cachedCurriculum === undefined && cachedSrs === undefined)
   let error = $state('')
   /** Deck builder: the instruction the user types. */
   let instruction = $state('')

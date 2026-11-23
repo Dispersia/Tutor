@@ -9,13 +9,16 @@
   import { ACCENT, CATEGORY, accentStyle, type CategoryStyle } from '#lib/theme'
   import { LANG_NAMES } from '#lib/voices'
   import { htmlLang } from '#lib/lang'
+  import { cachedAt, peekCached } from '#lib/cache'
 
-  let stats = $state<Stats | null>(null)
+  // Seed from the last fetch so returning to Home shows the numbers at once
+  // instead of blanking to the loading skeleton (see lib/cache.ts).
+  let stats = $state<Stats | null>(peekCached<Stats>('/api/stats') ?? null)
   let error = $state('')
   /** The idle panel is optional: Home works even if the board fails to load. */
-  let skills = $state<SkillsResponse | null>(null)
+  let skills = $state<SkillsResponse | null>(peekCached<SkillsResponse>('/api/skills') ?? null)
   /** When the board was fetched — the cursor the live counters extrapolate from. */
-  let fetchedAt = $state(0)
+  let fetchedAt = $state(cachedAt('/api/skills'))
   /** Ticking clock so a rig's counter climbs in place (§13.5.1). */
   let now = $state(Date.now())
 
@@ -166,9 +169,8 @@
     </div>
   </div>
   <p class="sub mt-2">
-    {LANG_NAMES[lang] ?? lang} · {levelLabel}{#if deckName} · studying <span
-        lang={htmlLang(lang)}>{deckName}</span
-      >{/if}
+    {LANG_NAMES[lang] ?? lang} · {levelLabel}{#if deckName}
+      · studying <span lang={htmlLang(lang)}>{deckName}</span>{/if}
   </p>
 </header>
 
@@ -372,10 +374,8 @@
       </ul>
     {:else}
       <p class="mt-2 text-xs text-ink-400">
-        No rigs running — complete a drill in <a
-          href={href('/skills')}
-          class="link">Skills</a
-        > to power one, then leave it be.
+        No rigs running — complete a drill in <a href={href('/skills')} class="link">Skills</a> to power
+        one, then leave it be.
       </p>
     {/if}
   </section>
@@ -392,9 +392,7 @@
     <span class="text-xs text-ink-400">coins</span>
     <span class="ml-auto flex items-center gap-3 text-xs text-ink-400">
       <span
-        ><span class="display text-sm font-bold text-ink-200 tabular-nums"
-          >{inventory.length}</span
-        >
+        ><span class="display text-sm font-bold text-ink-200 tabular-nums">{inventory.length}</span>
         kinds</span
       >
       <span

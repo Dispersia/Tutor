@@ -6,6 +6,78 @@ export interface Cost {
   count: number
 }
 
+/** A material tier band (docs/DESIGN.md §13.5.3). */
+export type BandId = 'bronze' | 'iron' | 'steel' | 'mythril' | 'adamant'
+
+/** One band's unlock requirement against an action, or the action's own band gate. */
+export interface BandGate {
+  id: BandId
+  name: string
+  /** the level asked for */
+  level: number
+  /** the player's current band score */
+  current: number
+}
+
+/** A band and its shared score, for the artisan board. */
+export interface BandDTO {
+  id: BandId
+  name: string
+  icon: string
+  tier: number
+  xp: number
+  level: number
+  intoLevel: number
+  forNext: number
+  progress: number
+  /** the level a band's gear is fully unlocked by; the band still runs to 100 */
+  gearUnlockLevel: number
+  buffLabel: string
+  /** which stat the band's passive grows */
+  buffStat: 'crit' | 'haste' | 'mastery' | 'stamina' | 'lifesteal'
+  /** the account-wide bonus this band grants right now (fraction/flat by stat) */
+  buffValue: number
+  enchantLabel: string
+  /** Enchanting level needed to spend this band's reagent */
+  enchantLevel: number
+  gearTotal: number
+  gearUnlocked: number
+  /** the next gear this band unlocks */
+  nextUnlock: { level: number; name: string } | null
+}
+
+/** Combat buffs from tier bands (§13.5.3). */
+export interface BandBuffs {
+  crit: number
+  haste: number
+  mastery: number
+  stamina: number
+  lifesteal: number
+}
+
+/** One catalog enchant (§13.5.3.2): fits a slot, costs essence reagents. */
+export interface EnchantDTO {
+  id: string
+  name: string
+  slot: string
+  stat: string
+  value: number
+  level: number
+  reagents: Cost[]
+}
+
+/** Compact label for a profession's passive, so a value reads as a meaning. */
+export const EFFECT_SHORT: Record<ModKind, string> = {
+  yield: 'yield',
+  double: 'bonus item',
+  xp: 'XP',
+  coins: 'coins',
+  global_xp: 'XP',
+  damage: 'power',
+  drop: 'drops',
+  hp: 'HP',
+}
+
 /** One action's idle rig as the UI needs it (docs/DESIGN.md §13.5.1). */
 export interface IdleRigDTO {
   actionId: string
@@ -19,6 +91,14 @@ export interface IdleRigDTO {
   secondsLeft: number
   /** whole seconds a fresh completion's run lasts at this level */
   runSec: number
+  /** the run-length cap (seconds): the longest a run can ever get */
+  maxRunSec: number
+  /** completions at which a run reaches `maxRunSec` — the end of the climb */
+  runFullAtCompletions: number
+  /** how far the rig is toward the cap: 0 → 1 */
+  runProgress: number
+  /** whether the run has reached the cap — the rig is as good as it gets */
+  maxed: boolean
   /** seconds between items right now (tier-scaled) */
   intervalSec: number
   /** fraction already baked into a run (yield + double) */
@@ -54,6 +134,18 @@ export interface ActionDTO {
   affordable: boolean
   missing: Cost[]
   missingUnlocks: { skill: string; level: number }[]
+  /** the band this action feeds and the level it unlocks at (§13.5.3) */
+  band: BandGate | null
+  /** cross-band gates not yet met (e.g. iron needs Bronze 40) */
+  missingBands: BandGate[]
+  /** chance this action yields its output (1 = always); a prospect can miss */
+  success: number
+  /** a weighted gem table — a prospect rolls one entry instead of fixed `produces` */
+  table?: { item: string; count?: number; weight: number }[]
+  /** recipes this action lets you choose between (prospect any ore, cut any gem) */
+  choices?: { id: string; label: string }[]
+  /** the currently selected recipe ('' = the first choice) */
+  choice: string
   equipOk: boolean
   equipMissing: { slot: string; tag: string } | null
 }
@@ -138,6 +230,8 @@ export interface SkillDTO {
   effect: { kind: ModKind; value: number }
   effectLabel: string
   talent: SkillTalentDTO
+  /** material bands this profession's actions feed (empty for non-artisans) */
+  bands: BandDTO[]
   actions: ActionDTO[]
 }
 
@@ -151,17 +245,135 @@ export interface ItemDTO {
   tags?: string[]
   heal?: number
   buff?: { kind: string; value: number }
+  /** gear metadata (present on equipment) */
+  armour?: number
+  power?: number
+  armourType?: string
+  combatStyle?: string
+  itemLevel?: number
+  stats?: Partial<GearStats>
+  /** coin value (§13.5.3.2) — drives Distill XP and selling */
+  value?: number
 }
 
-export interface SkillsResponse {
+export type GearStatId =
+  'strength' | 'agility' | 'intellect' | 'stamina' | 'haste' | 'crit' | 'mastery'
+
+export interface GearStats {
+  strength: number
+  agility: number
+  intellect: number
+  stamina: number
+  haste: number
+  crit: number
+  mastery: number
+}
+
+export interface GearInstanceDTO {
+  id: string
+  itemId: string
+  slot: string
+  quality: 'common' | 'uncommon' | 'rare' | 'epic'
+  stats: GearStats
+  armour: number
+  power: number
+  gearScore: number
+  equipped: boolean
+  /** enchant tokens on this piece: a band id, or `gem:<type>` (§13.5.3.1) */
+  enchant: string[]
+  /** Stat levels needed to wear this piece. */
+  requirements: Record<string, number>
+  /** Requirements the player does not meet yet (empty when wearable). */
+  missing: GearRequirementDTO[]
+}
+
+export interface GearRequirementDTO {
+  skill: string
+  /** Human skill name, e.g. `Defence`. */
+  name: string
+  /** The level the piece demands. */
+  level: number
+  /** The player's current level in that skill. */
+  current: number
+}
+
+export interface EquippedDTO {
+  slot: string
+  itemId: string
+  instanceId: string | null
+}
+
+export interface GearSetDTO {
+  id: string
+  name: string
+  combatStyle: 'melee' | 'ranged' | 'magic' | 'general'
+  slots: Record<string, { itemId: string; instanceId: string | null }>
+  createdAt: number
+  updatedAt: number
+}
+
+export interface SetBonusTierDTO {
+  pieces: number
+  label: string
+  stats?: Partial<GearStats>
+  armourPct?: number
+  powerPct?: number
+}
+
+export interface ActiveSetBonusDTO {
+  id: string
+  name: string
+  armourType: string
+  pieces: number
+  active: SetBonusTierDTO[]
+  next: SetBonusTierDTO | null
+}
+
+export interface GearResponse {
+  equipment: EquippedDTO[]
+  gear: GearInstanceDTO[]
+  sets: GearSetDTO[]
+  setBonuses: ActiveSetBonusDTO[]
+  bands: BandDTO[]
+  /** the enchant catalog, grouped by slot (§13.5.3.2) */
+  enchants: EnchantDTO[]
+  /** the player's Enchanting level, to gate enchants in the UI */
+  enchantingLevel: number
+  buffs: { band: BandBuffs }
+  items: ItemDTO[]
+  inventory: { itemId: string; count: number }[]
+}
+
+/** A saved-set piece the player cannot wear yet. */
+export interface GearSetSkipDTO {
+  slot: string
+  itemId: string
+  name: string
+  missing: GearRequirementDTO[]
+}
+
+export interface GearSetApplyResponse extends GearResponse {
+  skipped: GearSetSkipDTO[]
+}
+
+/** The live-rig cap readout (§13.5.1): how many machines may run at once. */
+export interface RigsSummary {
+  maxLive: number
+  live: number
+}
+
+export interface SkillsResponse extends GearResponse {
   skills: SkillDTO[]
   items: ItemDTO[]
   inventory: { itemId: string; count: number }[]
-  equipment: { slot: string; itemId: string }[]
   bonuses: { globalXp: number; damage: number; drop: number; hp: number }
+  rigs: RigsSummary
 }
 
 export const getSkills = () => api<SkillsResponse>('/api/skills')
+
+/** The gear screen's own payload (worn, rolled and saved sets). */
+export const getGear = () => api<GearResponse>('/api/skills/gear')
 
 /** One cross-training edge: a talent in `skillId` that feeds this profession. */
 export interface FedBy {
@@ -173,7 +385,7 @@ export interface FedBy {
   taken: number[]
 }
 
-export interface SkillPageResponse {
+export interface SkillPageResponse extends GearResponse {
   skill: SkillDTO
   /** professions whose synergy talent feeds this one (the reverse edge of the web) */
   fedBy: FedBy[]
@@ -181,8 +393,8 @@ export interface SkillPageResponse {
   /** where each material is produced: itemId → the action that makes it */
   sources: Record<string, { skillId: string; actionId: string }>
   inventory: { itemId: string; count: number }[]
-  equipment: { slot: string; itemId: string }[]
   bonuses: { globalXp: number; damage: number; drop: number; hp: number }
+  rigs: RigsSummary
 }
 
 export const getSkill = (id: string) =>
@@ -191,11 +403,82 @@ export const getSkill = (id: string) =>
 export const chooseTalent = (talentId: string) =>
   api('/api/skills/talents', { method: 'POST', body: JSON.stringify({ talentId }) })
 
+/** Pick which recipe a choose-input action runs (prospect any ore, cut any gem). */
+export const chooseAction = (actionId: string, choiceId: string) =>
+  api('/api/skills/choice', { method: 'POST', body: JSON.stringify({ actionId, choiceId }) })
+
+export interface StopRigResponse extends GearResponse {
+  /** whether a live run was actually stopped */
+  ok: boolean
+  skills: SkillDTO[]
+  rigs: RigsSummary
+}
+
+/** Stop a running rig on purpose (§13.5.1): frees its slot for another action. */
+export const stopRig = (actionId: string) =>
+  api<StopRigResponse>('/api/skills/rigs/stop', {
+    method: 'POST',
+    body: JSON.stringify({ actionId }),
+  })
+
 export const equipItem = (itemId: string) =>
-  api('/api/skills/equip', { method: 'POST', body: JSON.stringify({ itemId }) })
+  api<GearResponse>('/api/skills/equip', { method: 'POST', body: JSON.stringify({ itemId }) })
+
+export const equipInstance = (instanceId: string, slot?: string) =>
+  api<GearResponse>('/api/skills/equip', {
+    method: 'POST',
+    body: JSON.stringify({ instanceId, slot }),
+  })
 
 export const unequipSlot = (slot: string) =>
-  api('/api/skills/equip', { method: 'POST', body: JSON.stringify({ slot, unequip: true }) })
+  api<GearResponse>('/api/skills/equip', {
+    method: 'POST',
+    body: JSON.stringify({ slot, unequip: true }),
+  })
+
+export const discardGear = (instanceId: string) =>
+  api<GearResponse>('/api/skills/gear/discard', {
+    method: 'POST',
+    body: JSON.stringify({ instanceId }),
+  })
+
+export const salvageGear = (instanceId: string) =>
+  api<GearResponse & { materials: { item: string; count: number }[] }>('/api/skills/gear/salvage', {
+    method: 'POST',
+    body: JSON.stringify({ instanceId }),
+  })
+
+/** Apply a catalog enchant to a crafted piece (§13.5.3.2). */
+export const applyEnchant = (instanceId: string, enchantId: string) =>
+  api<GearResponse>('/api/skills/gear/enchant', {
+    method: 'POST',
+    body: JSON.stringify({ instanceId, enchantId }),
+  })
+
+/** Distill an item: burn it for Enchanting XP (by value) and its essence (§13.5.3.2). */
+export const distillGear = (itemId: string, count = 1) =>
+  api<GearResponse & { xp: number; essence: string }>('/api/skills/gear/distill', {
+    method: 'POST',
+    body: JSON.stringify({ itemId, count }),
+  })
+
+export const saveGearSet = (name: string, combatStyle?: string) =>
+  api<GearResponse & { set: GearSetDTO }>('/api/skills/gear/sets', {
+    method: 'POST',
+    body: JSON.stringify({ name, combatStyle }),
+  })
+
+export const applyGearSet = (setId: string) =>
+  api<GearSetApplyResponse>('/api/skills/gear/sets/apply', {
+    method: 'POST',
+    body: JSON.stringify({ setId }),
+  })
+
+export const deleteGearSet = (setId: string) =>
+  api<GearResponse>('/api/skills/gear/sets/delete', {
+    method: 'POST',
+    body: JSON.stringify({ setId }),
+  })
 
 export interface SkillOutcome {
   actionId: string
@@ -212,6 +495,12 @@ export interface SkillOutcome {
   idle: IdleRigDTO | null
   /** XP the running rigs earned on their own since the last settle */
   idleXp: number
+  /** rigs alive right now, after the live-rig cap (§13.5.1); absent on a failed drill */
+  rigsRunning?: number
+  /** how many rigs may run at once */
+  maxLiveRigs?: number
+  /** the rig this drill pushed over the cap and stopped, if any */
+  stoppedRig?: { actionId: string; name: string; skillId: string } | null
   /** the profession milestone whose talent choice just opened (or null) */
   talentUnlocked: number | null
 }

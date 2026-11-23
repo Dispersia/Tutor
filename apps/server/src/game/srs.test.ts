@@ -20,6 +20,7 @@ import {
   sameDayStability,
   schedule,
   selectCardId,
+  selectStudyCardId,
   type FsrsState,
 } from './srs'
 
@@ -193,6 +194,40 @@ test('selectCardId prefers overdue, then new, then soonest due', () => {
   expect(selectCardId(['b', 'c'], all, now)).toBe('c')
 
   expect(selectCardId([], all, now)).toBeUndefined()
+})
+
+test('selectStudyCardId never serves a card ahead of its due date', () => {
+  const state = (dueAt: number, s: FsrsState['state'] = 'review'): FsrsState => ({
+    ...NEW_STATE,
+    state: s,
+    dueAt,
+  })
+
+  // Nothing overdue and nothing new: a future review card is not studyable.
+  const future = new Map<string, FsrsState>([['a', state(now + DAY)]])
+  expect(selectStudyCardId(['a'], future, now)).toBeUndefined()
+
+  // A learning step that is not due yet waits its turn too.
+  const soon = new Map<string, FsrsState>([
+    ['a', { ...state(now + 10 * MIN_MS, 'learning'), step: 1 }],
+  ])
+  expect(selectStudyCardId(['a'], soon, now)).toBeUndefined()
+
+  // Once the step comes due, it is served.
+  const dueStep = new Map<string, FsrsState>([
+    ['a', { ...state(now - 1, 'learning'), step: 1 }],
+  ])
+  expect(selectStudyCardId(['a'], dueStep, now)).toBe('a')
+
+  // Overdue comes first, then a new word, never a scheduled-but-not-due card.
+  const mixed = new Map<string, FsrsState>([
+    ['a', state(now + DAY)],
+    ['b', state(now - 1)],
+    ['c', state(now + 2 * DAY)],
+  ])
+  expect(selectStudyCardId(['a', 'b', 'c', 'd'], mixed, now)).toBe('b')
+  expect(selectStudyCardId(['a', 'c', 'd'], mixed, now)).toBe('d')
+  expect(selectStudyCardId(['a', 'c'], mixed, now)).toBeUndefined()
 })
 
 test('countDue / countNew', () => {

@@ -1,7 +1,8 @@
 import { join } from 'node:path'
 import type { Deps } from './context'
+import { AUDIO_BACKFILL_KEY, createAudioService, gatewayTts } from './audio/service'
 import { openDb } from './db/client'
-import { clearDeckBuilds } from './db/repo'
+import { clearDeckBuilds, getSetting, listUsers } from './db/repo'
 import { env } from './env'
 import { EventBus } from './events'
 import { OpenRouter } from './llm/openrouter'
@@ -27,11 +28,21 @@ export function buildDeps(cfg: typeof env): Built {
     idleTimeoutMs: cfg.speechIdleTimeoutMs,
     autostart: cfg.speechAutostart,
   })
+  const audio = createAudioService({ db, dataDir: cfg.dataDir, tts: gatewayTts(supervisor) })
+  // A full library recording runs for hours and lives in memory, so a restart
+  // would abandon it. When the backfill flag is set, pick it back up on boot —
+  // already-recorded clips are skipped, so it resumes where it stopped.
+  if (getSetting(db, AUDIO_BACKFILL_KEY) === '1') {
+    let queued = 0
+    for (const user of listUsers(db)) queued += audio.enqueueUser(user.id)
+    console.log(`[audio] resuming the library backfill (${queued} cards queued)`)
+  }
   return {
     deps: {
       db,
       or,
       supervisor,
+      audio,
       events: new EventBus(),
       defaults: cfg.defaultRoles,
       serverKey: cfg.openrouterKey,

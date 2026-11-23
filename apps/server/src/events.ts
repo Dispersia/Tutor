@@ -47,7 +47,16 @@ export interface GameEventMap {
     tier: 'choice' | 'mastery'
   }
   'item.equipped': { userId: string; itemId: string; slot: string }
-  'combat.hit': { userId: string; monsterId: string; damage: number; monsterHp: number }
+  /** A band reagent enchanted a piece (docs §13.5.3). */
+  'item.enchanted': { userId: string; instanceId: string; band: string }
+  'combat.hit': {
+    userId: string
+    monsterId: string
+    damage: number
+    monsterHp: number
+    crit?: boolean
+    haste?: boolean
+  }
   'combat.ended': { userId: string; monsterId: string; outcome: 'won' | 'lost' }
   'srs.updated': {
     userId: string

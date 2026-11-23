@@ -77,6 +77,20 @@ export const SYNERGY: Record<SkillId, SynergyDef> = {
     name: 'Lapidary',
     blurb: 'Enchanting',
   },
+  leatherworking: {
+    target: 'ranged',
+    kind: 'xp',
+    value: 0.005,
+    name: 'Hidecraft',
+    blurb: 'Ranged',
+  },
+  tailoring: {
+    target: 'magic',
+    kind: 'xp',
+    value: 0.005,
+    name: 'Weave',
+    blurb: 'Magic',
+  },
   firemaking: { target: 'cooking', kind: 'xp', value: 0.005, name: 'Embers', blurb: 'Cooking' },
   construction: {
     target: 'crafting',

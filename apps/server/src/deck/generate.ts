@@ -17,7 +17,8 @@ import {
 import type { PlannedCard, Planner } from './plan'
 import type { DeckSettings } from './settings'
 import { kanjiumContour } from './kanjium'
-import { mandarinZhuyin } from './mandarin'
+import { mandarinSentenceZhuyin, mandarinZhuyin } from './mandarin'
+import { pinyinToZhuyin } from '../seed/zhuyin'
 
 /**
  * Builds and grows decks from a user instruction (docs/DESIGN.md §13.7).
@@ -139,14 +140,19 @@ export interface DeckContext {
 }
 
 /** The stored reading for a planned card, in the deck's script. */
-function readingsForPlanned(
+export function readingsForPlanned(
   targetLang: string,
   reading: string | undefined,
   script: string | undefined,
 ): Record<string, string> {
   if (!reading) return {}
   if (targetLang === 'zh' || targetLang === 'yue') {
-    return script === 'pinyin' ? { pinyin: reading } : { zhuyin: reading }
+    if (script === 'pinyin') return { pinyin: reading }
+    // The deck wants Zhuyin. A reading that came back as pinyin (the model
+    // ignored the script rule, or a sentence the dictionary does not cover) is
+    // converted, so the learner never sees Latin letters where Zhuyin belongs.
+    const zhuyin = /[a-zA-Z]/.test(reading) ? pinyinToZhuyin(reading) : reading
+    return zhuyin ? { zhuyin } : {}
   }
   if (targetLang === 'ja') return { kana: reading }
   return { reading }
@@ -191,8 +197,12 @@ function applyDictionaryReading(
   if (targetLang !== 'zh' || readingScript === 'pinyin') return
   for (const card of planned) {
     if (hints?.[card.back]?.reading) continue
-    const zhuyin = mandarinZhuyin(card.back)
-    if (zhuyin) card.reading = zhuyin
+    // A dictionary word (or multi-character term) wins. A sentence — which the
+    // dictionary has no whole entry for — only gets a composed reading when it
+    // arrived with none, so a good generator reading is never downgraded.
+    const word = mandarinZhuyin(card.back)
+    if (word) card.reading = word
+    else if (!card.reading) card.reading = mandarinSentenceZhuyin(card.back)
   }
 }
 
@@ -632,7 +642,7 @@ export async function startDeckGrowth(
   db: Db,
   userId: string,
   deckId: string,
-  opts: { topic?: string; fetcher?: Fetcher; planner: Planner },
+  opts: { topic?: string; fetcher?: Fetcher; planner: Planner; onFinish?: () => void },
 ): Promise<number | undefined> {
   const plan = await growthPlan(db, userId, deckId, {
     topic: opts.topic,
@@ -662,7 +672,7 @@ export async function startDeckGrowth(
       startStep: plan.startStep,
     },
     opts.planner,
-    { cursorStart: plan.cursor, total },
+    { cursorStart: plan.cursor, total, onFinish: opts.onFinish },
   )
   return plan.words.length
 }
@@ -686,7 +696,8 @@ export function awaitDeckBuild(deckId: string): Promise<void> {
  * it too — see `clearDeckBuilds`).
  *
  * `base` places the run inside the deck's source list — an import starts at 0,
- * a resume continues from the cursor it stopped at.
+ * a resume continues from the cursor it stopped at. `base.onFinish` runs after
+ * the run settles (success or error), e.g. to queue the deck's audio recording.
  */
 export function startDeckBuild(
   db: Db,
@@ -695,7 +706,7 @@ export function startDeckBuild(
   ctx: DeckContext,
   opts: FillDeckOptions,
   planner: Planner,
-  base: { cursorStart?: number; total?: number } = {},
+  base: { cursorStart?: number; total?: number; onFinish?: () => void } = {},
 ): void {
   const start = base.cursorStart ?? 0
   const total = base.total ?? opts.count
@@ -728,6 +739,7 @@ export function startDeckBuild(
       })
     } finally {
       builds.delete(deckId)
+      base.onFinish?.()
     }
   })()
   builds.set(deckId, run)

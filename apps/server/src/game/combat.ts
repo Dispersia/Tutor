@@ -134,23 +134,41 @@ export const MONSTER_BY_ID = new Map(MONSTERS.map((m) => [m.id, m]))
 export function playerMaxHp(
   constitutionLevel: number,
   hpBonus: number,
-  bodyArmour: number,
+  totalArmour: number,
+  stamina = 0,
 ): number {
-  return Math.round(20 + constitutionLevel * 4 + hpBonus * 20 + bodyArmour * 2)
+  return Math.round(20 + constitutionLevel * 4 + hpBonus * 20 + totalArmour * 2 + stamina * 3)
 }
 
 export function playerPower(
   combatSkillLevel: number,
   weaponPower: number,
   damageBonus: number,
+  primary = 0,
+  mastery = 0,
 ): number {
-  return Math.max(1, Math.round((3 + combatSkillLevel * 1.5 + weaponPower) * (1 + damageBonus)))
+  return Math.max(
+    1,
+    Math.round(
+      (3 + combatSkillLevel * 1.5 + weaponPower + primary * 0.5) * (1 + damageBonus + mastery),
+    ),
+  )
 }
 
-/** Damage a monster deals to you, reduced by armour (never below 1). */
+/**
+ * Damage a monster deals to you, reduced by armour (never below 1).
+ */
 export function incomingDamage(monsterDamage: number, armour: number): number {
   return Math.max(1, monsterDamage - armour)
 }
+
+/**
+ * Monsters are **fixed** (docs/DESIGN.md §13.5): their numbers never move with the
+ * player, so a buff you stack reads as power instead of being cancelled out.
+ * Progression is a **ladder** — you climb to higher monsters and bosses — so
+ * `MONSTERS` is ordered from weakest to strongest and the top is tuned against a
+ * fully stacked player. There is deliberately no per-monster scaling.
+ */
 
 /** Rolls a monster's drop table, applying the Slayer drop bonus. */
 export function rollDrops(

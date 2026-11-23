@@ -313,6 +313,17 @@ test('converse rejects the bare word without a sentence', async () => {
   expect(padded.correct).toBe(false)
 })
 
+test('converse is not offered for cards that already are a sentence', () => {
+  const def = registry.get('converse')!
+  // A generated sentence card carries payload.tokens.
+  const sentence = ctx({ type: 'phrase', back: '你要什麼？', payload: { tokens: ['你', '要', '什麼'] } })
+  expect(def.supports(sentence.card, learner)).toBe(false)
+  // Any phrase card teaches a whole utterance, not a word.
+  expect(def.supports(ctx({ type: 'phrase', back: '你好嗎？' }).card, learner)).toBe(false)
+  // Single words keep the free-sentence drill.
+  expect(def.supports(ctx().card, learner)).toBe(true)
+})
+
 test('converse uses the injected judge when present', async () => {
   const def = registry.get('converse')!
   const c = ctx()
@@ -321,6 +332,35 @@ test('converse uses the injected judge when present', async () => {
   const r = await def.grade(c, inst, '我喜歡你好嗎')
   expect(r.score).toBe(91)
   expect(r.feedback).toContain('Great')
+})
+
+test("converse asks the judge for the tip in the learner's native language", async () => {
+  const def = registry.get('converse')!
+  const c = ctx()
+  let prompt = ''
+  c.judge = async (p) => {
+    prompt = p
+    return { score: 90, correct: true, feedback: 'ok' }
+  }
+  const inst = await def.generate(c)
+  await def.grade(c, inst, '我喜歡你好嗎')
+  expect(prompt).toContain('native language (English)')
+  expect(prompt).toContain('never in Mandarin')
+  // The tip must not recycle the learner's own sentence as the suggestion.
+  expect(prompt).toContain('never repeat, quote or lightly extend')
+})
+
+test('translate.back_to_front asks the judge for native-language feedback', async () => {
+  const def = registry.get('translate.back_to_front')!
+  const c = ctx({ back: '的', front: 'of / possessive particle / nominalizer' })
+  let prompt = ''
+  c.judge = async (p) => {
+    prompt = p
+    return { score: 88, correct: true, feedback: 'ok' }
+  }
+  const inst = await def.generate(c)
+  await def.grade(c, inst, 'genitive marker')
+  expect(prompt).toContain('native language (English)')
 })
 
 test('speak_word.gradeAudio uses the injected assessor', async () => {

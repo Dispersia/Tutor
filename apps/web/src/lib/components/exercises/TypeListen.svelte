@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Instance } from '#lib/exercises'
   import { typingAttrs } from '#lib/lang'
-  import { speak } from '#lib/speech'
+  import { speak, speakCard } from '#lib/speech'
   import { speechOpts } from '#lib/voices'
   import Icon from '../Icon.svelte'
   import Spinner from '../Spinner.svelte'
@@ -16,6 +16,7 @@
   let playing = $state(false)
   let err = $state('')
 
+  const cardId = $derived(instance.cardId)
   const audioText = $derived((instance.data.audioText as string) ?? '')
   const language = $derived((instance.data.language as string) ?? undefined)
   const answerLang = $derived((instance.data.answerLang as string) ?? language)
@@ -24,6 +25,16 @@
     err = ''
     playing = true
     try {
+      // Pre-recorded voices stream from the server (no TTS call). If that is
+      // unavailable, fall back to the live gateway so the card still speaks.
+      if (cardId) {
+        try {
+          await speakCard(cardId)
+          return
+        } catch {
+          // fall through to live TTS
+        }
+      }
       await speak(audioText, speechOpts(language))
     } catch (e) {
       err = (e as Error).message

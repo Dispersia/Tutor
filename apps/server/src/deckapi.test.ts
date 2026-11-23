@@ -451,8 +451,8 @@ test('POST /api/decks/:id/pitch backfills pitch for cards that lack it', async (
 test('a generated Chinese deck reads words from the Taiwan dictionary', async () => {
   // the planner's readings are wrong on purpose: the dictionary must win
   const zhPlanner: Planner = async () => [
-    { template: 'vocab', front: 'possessive particle', back: '的', reading: 'r-de' },
-    { template: 'vocab', front: 'nonsense', back: 'x-test', reading: 'r-test' },
+    { template: 'vocab', front: 'possessive particle', back: '的', reading: 'de' },
+    { template: 'vocab', front: 'nonsense', back: 'x-test', reading: 'mā' },
   ]
   const { app, sqlite } = makeApp({ planner: zhPlanner })
   const cookie = await signup(app)
@@ -465,9 +465,10 @@ test('a generated Chinese deck reads words from the Taiwan dictionary', async ()
   const cards = (await (
     await app.request(`/api/decks/${created.deck.id}/cards`, auth(cookie))
   ).json()) as { cards: { back: string; readings: Record<string, string> }[] }
-  // 的 resolves to its Taiwan Zhuyin; an unknown word keeps the planner's reading
+  // 的 resolves to its Taiwan Zhuyin; an unknown word keeps the planner's
+  // reading — converted from pinyin, so the learner never sees Latin letters.
   expect(cards.cards.find((c) => c.back === '的')?.readings.zhuyin).toBe('ㄉㄜ˙')
-  expect(cards.cards.find((c) => c.back === 'x-test')?.readings.zhuyin).toBe('r-test')
+  expect(cards.cards.find((c) => c.back === 'x-test')?.readings.zhuyin).toBe('ㄇㄚ')
   sqlite.close()
 })
 

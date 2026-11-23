@@ -1,6 +1,8 @@
 import type { Db } from '../db/client'
 import {
   addGatherLog,
+  addGearInstance,
+  addGearSet,
   addItems,
   addSrsReview,
   addTalent,
@@ -9,8 +11,11 @@ import {
   completeLesson,
   dailyReviewCounts,
   deckKey,
+  deleteGearInstance,
+  deleteGearSet,
   getActionXp,
   getEncounter,
+  getGearInstance,
   getItemCount,
   getPlayerHp,
   getRigState,
@@ -21,6 +26,8 @@ import {
   listCards,
   listDecks,
   listEquipment,
+  listGearInstances,
+  listGearSets,
   listInventory,
   listLessonProgress,
   listRigStates,
@@ -29,9 +36,11 @@ import {
   replaceTalent,
   setActionXp,
   setEquipment,
+  setGearInstanceEnchant,
   setPlayerHp,
   setRigState,
   sumXp,
+  updateGearSet,
   upsertEncounter,
   upsertSrs,
   upsertStats,
@@ -61,12 +70,27 @@ import {
   rollDrops,
   type MonsterDef,
 } from './combat'
+import {
+  BANDS,
+  BAND_BY_ID,
+  bandBonuses,
+  bandLevelInfo,
+  type BandBonuses,
+  type BandDef,
+  type BandId,
+  type BandStat,
+} from './bands'
 import { levelInfo } from './levels'
 import {
   IDLE,
+  MAX_LIVE_RIGS,
+  capLiveRigs,
   extendRig,
+  liveRigCount,
   newRig,
   rigIntervalSec,
+  rigMaxed,
+  rigRunProgress,
   rigRunSec,
   settleRig,
   type RigState,
@@ -80,17 +104,60 @@ import {
   ITEM_BY_ID,
   SKILLS,
   SKILL_BY_ID,
+  SLOTS,
   type ActionDef,
+  type ArmourType,
+  type CombatStyle,
   type Cost,
+  type GearQuality,
+  type GearStats,
   type ItemDef,
   type SkillId,
+  type Slot,
   type UnlockReq,
+  actionChoice,
+  actionConsumes,
+  actionExpected,
   actionLevelInfo,
+  actionOdds,
+  actionRoll,
   actionsForSkill,
-  missingMaterials,
+  armourTypeForStyle,
+  combatStyleForTags,
   missingUnlocks,
+  dustId,
+  slotFamily,
   weaponSkill,
+  GEM_BY_TYPE,
+  GEM_TYPES,
+  DISTILL_XP_PER_VALUE,
+  ENCHANT_BY_ID,
+  essenceFamily,
+  essenceId,
+  itemValue,
+  type EnchantDef,
+  type GemType,
 } from './skills'
+import {
+  addStats,
+  activeSetBonuses,
+  applySetBonuses,
+  combatStyleForSkill,
+  critPercent,
+  deriveStats,
+  emptyStats,
+  gearScore,
+  hastePercent,
+  itemRequirements,
+  masteryPercent,
+  meetsRequirements,
+  parseStats,
+  rollGearStats,
+  statsOf,
+  sumStats,
+  type ActiveSetBonus,
+  type MissingRequirement,
+} from './gear'
 import {
   MASTERY_MILESTONES,
   SYNERGY,
@@ -291,6 +358,124 @@ export function primaryActionOf(skillId: SkillId): string {
 
 export function aggregateBonuses(db: Db, userId: string): Bonuses {
   return computeBonuses(actionLevelMap(db, userId), resolveTalents(listTalents(db, userId)))
+}
+
+// --- tier bands (docs/DESIGN.md §13.5.3) -------------------------------------
+
+/** Parse a gear instance's enchant list (band ids, or `gem:<type>` tokens). */
+export function parseEnchants(json: string | null | undefined): string[] {
+  if (!json) return []
+  try {
+    const raw = JSON.parse(json) as unknown
+    if (!Array.isArray(raw)) return []
+    return raw.filter((v): v is string => typeof v === 'string')
+  } catch {
+    return []
+  }
+}
+
+/** The enchant a crafted piece carries (one per piece; §13.5.3.2). */
+export function enchantOf(instance: { enchantJson: string }): EnchantDef | undefined {
+  const id = parseEnchants(instance.enchantJson)[0]
+  return id ? ENCHANT_BY_ID.get(id) : undefined
+}
+
+/**
+ * Every band's **score** for a user — the summed XP of that band's actions,
+ * levelled on the same curve an action uses. Any item of the band feeds the same
+ * score, so you never level a dozen near-identical actions to move on.
+ */
+export function bandXpMap(db: Db, userId: string): Map<BandId, number> {
+  const out = new Map<BandId, number>()
+  for (const row of listActionProgress(db, userId)) {
+    const action = ACTION_BY_ID.get(row.actionId)
+    if (!action?.band) continue
+    out.set(action.band, (out.get(action.band) ?? 0) + row.xp)
+  }
+  return out
+}
+
+export function bandLevelMap(db: Db, userId: string): Map<BandId, number> {
+  const xp = bandXpMap(db, userId)
+  const out = new Map<BandId, number>()
+  // Every band reads at least level 1, so its entry action is never gated away.
+  for (const band of BANDS) out.set(band.id, bandLevelInfo(xp.get(band.id) ?? 0).level)
+  return out
+}
+
+export interface BandView {
+  id: BandId
+  name: string
+  icon: string
+  tier: number
+  xp: number
+  level: number
+  intoLevel: number
+  forNext: number
+  progress: number
+  gearUnlockLevel: number
+  buffLabel: string
+  /** which stat the band's passive grows */
+  buffStat: BandStat
+  /** the account-wide bonus this band grants *right now* (fraction/flat by stat) */
+  buffValue: number
+  enchantLabel: string
+  /** Enchanting level needed to spend this band's reagent */
+  enchantLevel: number
+  gearTotal: number
+  gearUnlocked: number
+  /** the next gear this band unlocks, so the page can tease it */
+  nextUnlock: { level: number; name: string } | null
+}
+
+/** The band board for an artisan page: each metal with its shared score. */
+export function bandView(db: Db, userId: string): BandView[] {
+  const xpByBand = bandXpMap(db, userId)
+  return BANDS.map((band) => {
+    const xp = xpByBand.get(band.id) ?? 0
+    const info = bandLevelInfo(xp)
+    const gear = ACTIONS.filter((a) => a.band === band.id)
+    const gearUnlocked = gear.filter((a) => (a.bandLevel ?? 1) <= info.level).length
+    const locked = gear.filter((a) => (a.bandLevel ?? 1) > info.level)
+    const next = locked.length
+      ? locked.reduce((m, a) => ((a.bandLevel ?? 1) < (m.bandLevel ?? 1) ? a : m))
+      : null
+    return {
+      id: band.id,
+      name: band.name,
+      icon: band.icon,
+      tier: band.tier,
+      xp,
+      ...info,
+      gearUnlockLevel: band.gearUnlockLevel,
+      buffLabel: band.buff.label,
+      buffStat: band.buff.stat,
+      buffValue: band.buff.value * Math.max(0, info.level - 1),
+      enchantLabel: band.enchant.label,
+      enchantLevel: band.enchantLevel,
+      gearTotal: gear.length,
+      gearUnlocked,
+      nextUnlock: next ? { level: next.bandLevel ?? 1, name: next.name } : null,
+    }
+  })
+}
+
+/** The account-wide passive every band level grants (crit, lifesteal, …). */
+export function bandBonusesFor(db: Db, userId: string): BandBonuses {
+  return bandBonuses(bandLevelMap(db, userId))
+}
+
+/**
+ * The band a piece of gear belongs to, by its crafting line and item level. Bows and
+ * staves form the `wood` line; armour families map 1:1. Used to pick the salvage
+ * reagent, so a salvaged piece yields its own tier's feedstock.
+ */
+export function bandForItem(item: ItemDef): BandDef | undefined {
+  const line =
+    item.tags?.includes('bow') || item.tags?.includes('staff') ? 'wood' : item.armourType
+  if (!line) return undefined
+  const tier = Math.max(1, Math.round(item.itemLevel ?? 1))
+  return BANDS.find((b) => b.line === line && b.tier === tier)
 }
 
 // --- action XP + talents -----------------------------------------------------
@@ -582,6 +767,7 @@ export function grantItems(
     const count = applyYield(c.count, bonus.yield(actionId), bonus.double(actionId), rand)
     if (count <= 0) continue
     addItems(db, userId, c.item, count)
+    recordGearCrafts(db, userId, c.item, count, rand)
     granted.push({ item: c.item, count })
     bus.emit('item.gained', {
       userId,
@@ -636,6 +822,14 @@ export interface IdleRigView {
   secondsLeft: number
   /** whole seconds a fresh completion's run lasts at this level */
   runSec: number
+  /** the run-length cap (seconds): the longest a run can ever get */
+  maxRunSec: number
+  /** completions at which a run reaches `maxRunSec` — the end of the climb */
+  runFullAtCompletions: number
+  /** how far the rig is toward the cap: 0 → 1 (§13.5.1) */
+  runProgress: number
+  /** whether the run has reached the cap — the rig is as good as it gets */
+  maxed: boolean
   /** seconds between items right now */
   intervalSec: number
   /** expected-value bonus already baked into a run (yield + double) */
@@ -644,6 +838,8 @@ export interface IdleRigView {
   xpPerCraft: number
   produces: Cost[]
   consumes: Cost[]
+  /** the recipe choice the rig is running ('' = the action's first choice) */
+  choice: string
 }
 
 export interface SettleReport {
@@ -671,11 +867,16 @@ export function idleView(
     runEndsAt: rig.runEndsAt,
     secondsLeft: Math.max(0, Math.round((rig.runEndsAt - now) / 1000)),
     runSec: Math.round(rigRunSec(rig.completions)),
+    maxRunSec: IDLE.maxRunSec,
+    runFullAtCompletions: IDLE.runFullAtCompletions,
+    runProgress: rigRunProgress(rig.completions),
+    maxed: rigMaxed(rig.completions),
     intervalSec: rigIntervalSec(rig.completions, action.tier),
     yieldBonus,
     xpPerCraft: IDLE.xpPerCraft,
-    produces: action.produces ?? [],
-    consumes: action.consumes ?? [],
+    produces: actionProduces(action, rig.choice || undefined),
+    consumes: actionConsumes(action, rig.choice || undefined),
+    choice: rig.choice ?? '',
   }
 }
 
@@ -690,6 +891,10 @@ export function settleAll(db: Db, bus: EventBus, userId: string, now = Date.now(
   const before = new Map(bank)
   const rigs = listRigStates(db, userId)
   const bonuses = aggregateBonuses(db, userId)
+  const levels = actionLevelMap(db, userId)
+  /** A prospect's odds at the current level (per choice); 1 if it cannot miss. */
+  const successOf = (a: ActionDef, choiceId?: string): number =>
+    actionOdds(a, choiceId, levels.get(a.id) ?? 1)
 
   const produced: Record<string, number> = {}
   const consumed: Record<string, number> = {}
@@ -700,14 +905,17 @@ export function settleAll(db: Db, bus: EventBus, userId: string, now = Date.now(
   for (const action of SETTLE_ORDER) {
     const rig = rigs.get(action.id)
     if (!rig) continue
+    const choiceId = rig.choice || undefined
     const res = settleRig(
       rig,
       {
-        produces: action.produces,
-        consumes: action.consumes,
+        produces: actionProduces(action, choiceId),
+        consumes: actionConsumes(action, choiceId),
         tier: action.tier,
         // an artisan's expected bonus product is folded into the run's rate
         yieldBonus: bonuses.yield(action.id) + bonuses.double(action.id),
+        // a prospect consumes its ore but only pays out at its odds (§13.5.3.1)
+        successChance: successOf(action, choiceId),
       },
       bank,
       now,
@@ -721,16 +929,38 @@ export function settleAll(db: Db, bus: EventBus, userId: string, now = Date.now(
     if (res.crafted > 0) xp.set(action.id, res.crafted * IDLE.xpPerCraft)
   }
 
+  // The live-rig cap (§13.5.1): never more than `MAX_LIVE_RIGS` runs at once. Trim
+  // here too, so a save written before the cap (or one that raced a drill) settles
+  // back to the rule on its next read.
+  for (const id of capLiveRigs(rigs, now)) setRigState(db, userId, id, rigs.get(id)!)
+
   for (const [item, count] of bank) {
     const delta = count - (before.get(item) ?? 0)
     if (delta !== 0) addItems(db, userId, item, delta)
   }
+
+  // Idle crafts also roll gear instances. Only the newly produced pieces are
+  // recorded, so repeated settles never duplicate an earlier run's gear.
+  for (const [item, count] of Object.entries(produced)) recordGearCrafts(db, userId, item, count)
 
   const gained = toCosts(produced)
   const spent = toCosts(consumed)
   for (const [actionId, amount] of xp) awardActionXp(db, bus, userId, actionId, amount)
   if (gained.length || spent.length) bus.emit('idle.settled', { userId, gained, spent })
   return { gained, spent, xp, rigs }
+}
+
+export interface DrillRigResult {
+  gained: Cost[]
+  consumed: Cost[]
+  idle: IdleRigView | null
+  xp: number
+  /** rigs alive right now, after the cap (§13.5.1) */
+  rigsRunning: number
+  /** the live-rig cap — how many rigs may run at once */
+  maxLiveRigs: number
+  /** the rig this drill pushed over the cap and stopped, if any (§13.5.1) */
+  stoppedRig: { actionId: string; name: string; skillId: string } | null
 }
 
 /**
@@ -744,20 +974,49 @@ export function completeAction(
   userId: string,
   actionId: string,
   now = Date.now(),
-): { gained: Cost[]; consumed: Cost[]; idle: IdleRigView | null; xp: number } {
+  opts: { rand?: () => number; choiceId?: string } = {},
+): DrillRigResult {
+  const rand = opts.rand ?? Math.random
   const report = settleAll(db, bus, userId, now)
   const action = ACTION_BY_ID.get(actionId)
   const settledXp = [...report.xp.values()].reduce((n, v) => n + v, 0)
-  if (!action) return { gained: report.gained, consumed: report.spent, idle: null, xp: settledXp }
+  if (!action) {
+    return {
+      gained: report.gained,
+      consumed: report.spent,
+      idle: null,
+      xp: settledXp,
+      rigsRunning: liveRigCount(report.rigs, now),
+      maxLiveRigs: MAX_LIVE_RIGS,
+      stoppedRig: null,
+    }
+  }
 
-  const struckGained = grantItems(db, bus, userId, actionId, action.produces ?? [])
-  const struckSpent = action.consumes ?? []
+  // Which recipe the drill ran (prospect this ore / cut that gem): the one the UI
+  // passed, else whatever the rig last ran, else the action's first choice.
+  const current = getRigState(db, userId, actionId) ?? newRig()
+  const choiceId = opts.choiceId ?? (current.choice || undefined)
+
+  // A prospect consumes its input but only *pays out* at its odds (§13.5.3.1), and a
+  // `table` action rolls a single gem. The strike still powers the rig either way.
+  const chance = actionSuccessChance(db, userId, action, choiceId)
+  const hit = chance >= 1 || rand() < chance
+  let struckGained: Cost[] = []
+  if (hit) struckGained = grantItems(db, bus, userId, actionId, actionRoll(action, choiceId, rand))
+  const struckSpent = actionConsumes(action, choiceId)
   if (struckSpent.length) consumeItems(db, bus, userId, struckSpent)
 
-  const current = getRigState(db, userId, actionId) ?? newRig()
-  const powered = extendRig({ ...current, settledAt: now }, now)
+  const powered = extendRig({ ...current, settledAt: now, choice: choiceId ?? '' }, now)
   setRigState(db, userId, actionId, powered)
   addGatherLog(db, userId, actionId, powered.completions)
+
+  // The drill always powers its own machine: if that makes a third run live, the
+  // cap stops the rig closest to finishing (§13.5.1). `report.rigs` already carries
+  // the post-settle (and post-cap) states, so no second query is needed.
+  report.rigs.set(actionId, powered)
+  const stopped = capLiveRigs(report.rigs, now, [actionId])
+  for (const id of stopped) setRigState(db, userId, id, report.rigs.get(id)!)
+  const stoppedRig = stopped[0] ? ACTION_BY_ID.get(stopped[0]) : undefined
 
   const bonus = aggregateBonuses(db, userId)
   return {
@@ -765,7 +1024,42 @@ export function completeAction(
     consumed: mergeCosts(report.spent, struckSpent),
     idle: idleView(powered, action, now, bonus.yield(actionId) + bonus.double(actionId)),
     xp: settledXp,
+    rigsRunning: liveRigCount(report.rigs, now),
+    maxLiveRigs: MAX_LIVE_RIGS,
+    stoppedRig: stoppedRig
+      ? { actionId: stoppedRig.id, name: stoppedRig.name, skillId: stoppedRig.skillId }
+      : null,
   }
+}
+
+/**
+ * Stop a running rig on purpose (§13.5.1): settle its run up to now (so no work is
+ * lost), then let it fall still so its slot frees for another machine. The player's
+ * escape hatch from the live-rig cap — the UI confirms before calling this.
+ * Returns false when the action has no live run.
+ */
+export function stopRig(
+  db: Db,
+  bus: EventBus,
+  userId: string,
+  actionId: string,
+  now = Date.now(),
+): boolean {
+  const report = settleAll(db, bus, userId, now)
+  const rig = report.rigs.get(actionId)
+  if (!rig || rig.runEndsAt <= now) return false
+  setRigState(db, userId, actionId, { ...rig, runEndsAt: 0, settledAt: now })
+  return true
+}
+
+/** Remember which recipe a choose-input action's rig runs (§13.5.3.1). */
+export function setRigChoice(db: Db, userId: string, actionId: string, choiceId: string): boolean {
+  const action = ACTION_BY_ID.get(actionId)
+  if (!action?.choices?.length) return false
+  if (!action.choices.some((c) => c.id === choiceId)) return false
+  const current = getRigState(db, userId, actionId) ?? newRig()
+  setRigState(db, userId, actionId, { ...current, choice: choiceId })
+  return true
 }
 
 function toCosts(map: Record<string, number>): Cost[] {
@@ -842,6 +1136,15 @@ export function inventoryView(db: Db, userId: string) {
   return ITEMS.map((i) => ({ itemId: i.id, count: counts.get(i.id) ?? 0 }))
 }
 
+export interface BandGate {
+  id: BandId
+  name: string
+  /** the level this action asks for */
+  level: number
+  /** the player's current band score */
+  current: number
+}
+
 export interface ActionState {
   unlocked: boolean
   missingUnlocks: UnlockReq[]
@@ -849,11 +1152,41 @@ export interface ActionState {
   missing: Cost[]
   equipOk: boolean
   equipMissing: { slot: string; tag: string } | null
+  /** the band this action belongs to and the level it unlocks at, or null */
+  band: BandGate | null
+  /** cross-band gates not yet met (e.g. iron needs Bronze 40) */
+  missingBands: BandGate[]
 }
 
-export function actionState(db: Db, userId: string, action: ActionDef): ActionState {
+export function actionState(db: Db, userId: string, action: ActionDef, choiceId?: string): ActionState {
   const missingUnlocksList = missingUnlocks(action, (s) => skillLevelOf(db, userId, s))
-  const missing = missingMaterials(action, (i) => getItemCount(db, userId, i))
+  // Cost depends on the chosen recipe (prospect this ore, cut that gem).
+  const consumes = actionConsumes(action, choiceId)
+  const missing = consumes.filter((c) => getItemCount(db, userId, c.item) < c.count)
+  const bandLevels = bandLevelMap(db, userId)
+  let band: BandGate | null = null
+  const missingBands: BandGate[] = []
+  if (action.band) {
+    const def = BAND_BY_ID.get(action.band)
+    band = {
+      id: action.band,
+      name: def?.name ?? action.band,
+      level: action.bandLevel ?? 1,
+      current: bandLevels.get(action.band) ?? 1,
+    }
+    // A tier's whole band stays shut until the tier below reached 40 (§13.5.3).
+    if (def?.after) {
+      const current = bandLevels.get(def.after.band) ?? 1
+      if (current < def.after.level) {
+        missingBands.push({
+          id: def.after.band,
+          name: BAND_BY_ID.get(def.after.band)?.name ?? def.after.band,
+          level: def.after.level,
+          current,
+        })
+      }
+    }
+  }
   let equipOk = true
   let equipMissing: { slot: string; tag: string } | null = null
   if (action.equip) {
@@ -862,39 +1195,458 @@ export function actionState(db: Db, userId: string, action: ActionDef): ActionSt
     equipOk = Boolean(item?.tags?.includes(action.equip.tag))
     if (!equipOk) equipMissing = action.equip
   }
+  const bandOk = !band || band.current >= band.level
   return {
-    unlocked: missingUnlocksList.length === 0 && equipOk,
+    unlocked: missingUnlocksList.length === 0 && bandOk && missingBands.length === 0 && equipOk,
     missingUnlocks: missingUnlocksList,
     affordable: missing.length === 0,
     missing,
     equipOk,
     equipMissing,
+    band,
+    missingBands,
   }
+}
+
+/**
+ * The chance an action actually yields its output, at the player's current level
+ * (§13.5.3.1). Prospecting always consumes its ore, so a miss is a real cost — the
+ * odds rise with the action's level, so skill beats the gamble.
+ */
+export function actionSuccessChance(
+  db: Db,
+  userId: string,
+  action: ActionDef,
+  choiceId?: string,
+): number {
+  const level = actionLevelOf(db, userId, action.id)
+  return actionOdds(action, choiceId, level)
+}
+
+/** The items an action yields — fixed, or the expected value of its gem table. */
+export function actionProduces(action: ActionDef, choiceId?: string): Cost[] {
+  return actionExpected(action, choiceId)
 }
 
 // --- equipment ---------------------------------------------------------------
 
+export interface GearRequirementView extends MissingRequirement {
+  /** Human skill name, e.g. `Defence`. */
+  name: string
+}
+
+export interface GearInstanceView {
+  id: string
+  itemId: string
+  slot: Slot
+  quality: GearQuality
+  stats: GearStats
+  armour: number
+  power: number
+  gearScore: number
+  equipped: boolean
+  /** Enchant tokens on this piece: a band id, or `gem:<type>` (§13.5.3.1). */
+  enchant: string[]
+  /** Stat levels needed to wear this piece. */
+  requirements: Partial<Record<SkillId, number>>
+  /** Requirements the player does not meet yet (empty when wearable). */
+  missing: GearRequirementView[]
+}
+
+/** Adds the human skill name to a missing requirement for the inventory UI. */
+function requirementView(missing: MissingRequirement[]): GearRequirementView[] {
+  return missing.map((m) => ({ ...m, name: SKILL_BY_ID.get(m.skill)?.name ?? m.skill }))
+}
+
+/**
+ * Older equipment rows predate gear instances. Give every worn piece a base
+ * instance once, so the paper doll and saved sets can show its stats.
+ */
+export function materializeWornGear(db: Db, userId: string): void {
+  for (const row of listEquipment(db, userId)) {
+    if (row.instanceId) continue
+    const item = ITEM_BY_ID.get(row.itemId)
+    if (!item?.slot) continue
+    const id = baseGearInstance(db, userId, item)
+    setEquipment(db, userId, row.slot, row.itemId, id)
+  }
+}
+
+/** Every crafted piece the player owns, with its rolled stats and wear state. */
+export function gearView(db: Db, userId: string): GearInstanceView[] {
+  materializeWornGear(db, userId)
+  const worn = new Set(
+    listEquipment(db, userId)
+      .map((e) => e.instanceId)
+      .filter((id): id is string => Boolean(id)),
+  )
+  const levelOf = (skill: SkillId) => skillLevelOf(db, userId, skill)
+  return listGearInstances(db, userId).map((row) => {
+    const stats = parseStats(row.statsJson)
+    const item = ITEM_BY_ID.get(row.itemId)
+    return {
+      id: row.id,
+      itemId: row.itemId,
+      slot: row.slot as Slot,
+      quality: row.quality as GearQuality,
+      stats,
+      armour: row.armour,
+      power: row.power,
+      gearScore: gearScore(stats, row.armour, row.power),
+      equipped: worn.has(row.id),
+      enchant: parseEnchants(row.enchantJson),
+      requirements: item ? itemRequirements(item) : {},
+      missing: item ? requirementView(meetsRequirements(item, levelOf).missing) : [],
+    }
+  })
+}
+
+/** The first unequipped instance of an item, if one exists. */
+function freeInstanceFor(db: Db, userId: string, itemId: string): string | undefined {
+  const worn = new Set(
+    listEquipment(db, userId)
+      .map((e) => e.instanceId)
+      .filter((id): id is string => Boolean(id)),
+  )
+  return listGearInstances(db, userId).find((g) => g.itemId === itemId && !worn.has(g.id))?.id
+}
+
+/** Creates a crafted instance for an item, rolling its quality and affixes. */
+export function craftGearInstance(
+  db: Db,
+  userId: string,
+  item: ItemDef,
+  rand: () => number = Math.random,
+): string {
+  const roll = rollGearStats(item, rand)
+  return addGearInstance(db, {
+    userId,
+    itemId: item.id,
+    slot: item.slot!,
+    quality: roll.quality,
+    statsJson: JSON.stringify(roll.stats),
+    armour: roll.armour,
+    power: roll.power,
+  })
+}
+
+/**
+ * A deterministic common instance from an item's base stats. Used when an old
+ * bank stack (or a test fixture) equips a piece that was never rolled.
+ */
+export function baseGearInstance(db: Db, userId: string, item: ItemDef): string {
+  return addGearInstance(db, {
+    userId,
+    itemId: item.id,
+    slot: item.slot!,
+    quality: 'common',
+    statsJson: JSON.stringify(statsOf(item)),
+    armour: item.armour ?? 0,
+    power: item.power ?? 0,
+  })
+}
+
+/** Rolls one instance per piece produced. Non-equipment items are ignored. */
+export function recordGearCrafts(
+  db: Db,
+  userId: string,
+  itemId: string,
+  count: number,
+  rand: () => number = Math.random,
+): void {
+  const item = ITEM_BY_ID.get(itemId)
+  if (!item?.slot || item.tier !== 'equipment' || count <= 0) return
+  for (let i = 0; i < count; i++) craftGearInstance(db, userId, item, rand)
+}
+
+/**
+ * Equips a piece. Crafted gear equips by instance so its rolled stats follow it;
+ * legacy gear (or a bare item id) equips the first free instance, or creates one
+ * from the base definition. The inventory count stays as "pieces owned".
+ */
 export function equipItem(
   db: Db,
   bus: EventBus,
   userId: string,
   itemId: string,
-): { ok: boolean; error?: string } {
+  instanceId?: string,
+  targetSlot?: string,
+): { ok: boolean; error?: string; instanceId?: string; missing?: GearRequirementView[] } {
   const item = ITEM_BY_ID.get(itemId)
   if (!item?.slot) return { ok: false, error: 'not equippable' }
-  if (getItemCount(db, userId, itemId) < 1) return { ok: false, error: 'not in your bank' }
-  const current = listEquipment(db, userId).find((e) => e.slot === item.slot)
-  addItems(db, userId, itemId, -1)
-  if (current) addItems(db, userId, current.itemId, 1)
-  setEquipment(db, userId, item.slot, itemId)
-  bus.emit('item.equipped', { userId, itemId, slot: item.slot })
-  return { ok: true }
+
+  // RuneScape-style gate: the piece's stat requirements must be met first.
+  const gate = meetsRequirements(item, (skill) => skillLevelOf(db, userId, skill))
+  if (!gate.ok) {
+    const missing = requirementView(gate.missing)
+    return {
+      ok: false,
+      error: `requires ${missing.map((m) => `${m.name} ${m.level}`).join(', ')}`,
+      missing,
+    }
+  }
+
+  const slot =
+    targetSlot && slotFamily(item.slot).includes(targetSlot as Slot)
+      ? (targetSlot as Slot)
+      : item.slot
+
+  let instance = instanceId ? getGearInstance(db, userId, instanceId) : undefined
+  if (instance && instance.itemId !== itemId) return { ok: false, error: 'wrong item' }
+  if (!instance) {
+    const owned = listGearInstances(db, userId).filter((g) => g.itemId === itemId)
+    if (owned.length > 0) {
+      const free = freeInstanceFor(db, userId, itemId)
+      if (!free) return { ok: false, error: 'every piece is already worn' }
+      instance = getGearInstance(db, userId, free)
+    } else {
+      if (getItemCount(db, userId, itemId) < 1) return { ok: false, error: 'not in your bank' }
+      const id = baseGearInstance(db, userId, item)
+      instance = getGearInstance(db, userId, id)
+    }
+  }
+
+  setEquipment(db, userId, slot, itemId, instance?.id ?? null)
+  bus.emit('item.equipped', { userId, itemId, slot })
+  return { ok: true, instanceId: instance?.id }
 }
 
 export function unequipItem(db: Db, userId: string, slot: string): void {
-  const current = listEquipment(db, userId).find((e) => e.slot === slot)
-  if (current) addItems(db, userId, current.itemId, 1)
-  setEquipment(db, userId, slot, null)
+  const normalized = slot === 'weapon' ? 'mainHand' : slot === 'body' ? 'chest' : slot
+  setEquipment(db, userId, normalized, null)
+}
+
+// --- saved gear sets ---------------------------------------------------------
+
+export interface GearSetView {
+  id: string
+  name: string
+  combatStyle: CombatStyle
+  slots: Record<string, { itemId: string; instanceId: string | null }>
+  createdAt: number
+  updatedAt: number
+}
+
+function parseSetSlots(
+  json: string,
+): Record<string, { itemId: string; instanceId: string | null }> {
+  try {
+    return JSON.parse(json) as Record<string, { itemId: string; instanceId: string | null }>
+  } catch {
+    return {}
+  }
+}
+
+export function gearSetsView(db: Db, userId: string): GearSetView[] {
+  return listGearSets(db, userId).map((row) => ({
+    id: row.id,
+    name: row.name,
+    combatStyle: row.combatStyle as CombatStyle,
+    slots: parseSetSlots(row.slotsJson),
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  }))
+}
+
+/** Snapshots the current loadout under a name. */
+export function saveGearSet(
+  db: Db,
+  userId: string,
+  name: string,
+  combatStyle?: CombatStyle,
+): GearSetView {
+  const slots: GearSetView['slots'] = {}
+  for (const e of listEquipment(db, userId)) {
+    slots[e.slot] = { itemId: e.itemId, instanceId: e.instanceId ?? null }
+  }
+  const style = combatStyle ?? getPlayerCombat(db, userId).combatStyle
+  const id = addGearSet(db, { userId, name, combatStyle: style, slotsJson: JSON.stringify(slots) })
+  return gearSetsView(db, userId).find((s) => s.id === id)!
+}
+
+/** A saved-set piece the player cannot wear yet. */
+export interface GearSetSkip {
+  slot: string
+  itemId: string
+  name: string
+  missing: GearRequirementView[]
+}
+
+/** Swaps the worn gear to a saved set. Unknown/deleted instances are skipped. */
+export function applyGearSet(
+  db: Db,
+  bus: EventBus,
+  userId: string,
+  setId: string,
+): { ok: boolean; error?: string; skipped: GearSetSkip[] } {
+  const set = gearSetsView(db, userId).find((s) => s.id === setId)
+  if (!set) return { ok: false, error: 'set not found', skipped: [] }
+  const skipped: GearSetSkip[] = []
+  for (const slot of SLOTS) {
+    const entry = set.slots[slot.id]
+    if (!entry) {
+      setEquipment(db, userId, slot.id, null)
+      continue
+    }
+    const item = ITEM_BY_ID.get(entry.itemId)
+    if (item) {
+      const gate = meetsRequirements(item, (skill) => skillLevelOf(db, userId, skill))
+      if (!gate.ok) {
+        // Keep whatever is worn: the rest of the set still goes on.
+        skipped.push({
+          slot: slot.id,
+          itemId: entry.itemId,
+          name: item.name,
+          missing: requirementView(gate.missing),
+        })
+        continue
+      }
+    }
+    const instance = entry.instanceId ? getGearInstance(db, userId, entry.instanceId) : undefined
+    if (instance) {
+      setEquipment(db, userId, slot.id, instance.itemId, instance.id)
+      bus.emit('item.equipped', { userId, itemId: instance.itemId, slot: slot.id })
+    } else if (ITEM_BY_ID.has(entry.itemId) && getItemCount(db, userId, entry.itemId) > 0) {
+      setEquipment(db, userId, slot.id, entry.itemId, null)
+    }
+  }
+  return { ok: true, skipped }
+}
+
+export function removeGearSet(db: Db, userId: string, setId: string): void {
+  deleteGearSet(db, userId, setId)
+}
+
+/** Removes a single crafted piece (not while worn). */
+export function discardGearInstance(
+  db: Db,
+  userId: string,
+  instanceId: string,
+): { ok: boolean; error?: string } {
+  const worn = listEquipment(db, userId).some((e) => e.instanceId === instanceId)
+  if (worn) return { ok: false, error: 'unequip it first' }
+  const instance = getGearInstance(db, userId, instanceId)
+  if (!instance) return { ok: false, error: 'not found' }
+  deleteGearInstance(db, userId, instanceId)
+  addItems(db, userId, instance.itemId, -1)
+  return { ok: true }
+}
+
+/** Materials returned by salvaging a piece, by armour family. */
+const SALVAGE_MATERIAL: Record<ArmourType, string> = {
+  plate: 'iron_ore',
+  leather: 'hide',
+  cloth: 'cloth',
+  jewelry: 'cut_gem',
+}
+
+/** Salvage yield by quality: better pieces break into more material. */
+const SALVAGE_YIELD: Record<GearQuality, number> = {
+  common: 1,
+  uncommon: 2,
+  rare: 3,
+  epic: 5,
+}
+
+/**
+ * Breaks a crafted piece back into crafting materials. The piece must be
+ * unequipped. Higher quality rolls return more material.
+ */
+export function salvageGearInstance(
+  db: Db,
+  bus: EventBus,
+  userId: string,
+  instanceId: string,
+): { ok: boolean; error?: string; materials?: Cost[] } {
+  const worn = listEquipment(db, userId).some((e) => e.instanceId === instanceId)
+  if (worn) return { ok: false, error: 'unequip it first' }
+  const instance = getGearInstance(db, userId, instanceId)
+  if (!instance) return { ok: false, error: 'not found' }
+  const item = ITEM_BY_ID.get(instance.itemId)
+  if (!item) return { ok: false, error: 'unknown item' }
+  const material = SALVAGE_MATERIAL[item.armourType ?? 'plate']
+  const count = SALVAGE_YIELD[instance.quality as GearQuality] ?? 1
+  const materials: Cost[] = [{ item: material, count }]
+  // Deep salvage also yields the band's reagent (§13.5.3): the feedstock
+  // Enchanting spends to put that band's signature stat on a higher-tier piece.
+  const band = bandForItem(item)
+  if (band) materials.push({ item: band.reagent, count })
+  deleteGearInstance(db, userId, instanceId)
+  addItems(db, userId, instance.itemId, -1)
+  for (const m of materials) {
+    addItems(db, userId, m.item, m.count)
+    bus.emit('item.gained', {
+      userId,
+      itemId: m.item,
+      count: m.count,
+      total: getItemCount(db, userId, m.item),
+    })
+  }
+  return { ok: true, materials }
+}
+
+/**
+ * Distill an item (§13.5.3.2): burn it to learn from it and pull out its family
+ * essence. Enchanting XP is a **percentage of the item's coin value**, so an endgame
+ * piece levels it faster but never instantly.
+ */
+export function distillItem(
+  db: Db,
+  bus: EventBus,
+  userId: string,
+  itemId: string,
+  count = 1,
+): { ok: boolean; error?: string; xp?: number; essence?: string } {
+  const item = ITEM_BY_ID.get(itemId)
+  if (!item) return { ok: false, error: 'unknown item' }
+  const n = Math.max(1, Math.floor(count))
+  if (getItemCount(db, userId, itemId) < n) return { ok: false, error: 'not in your bank' }
+  consumeItems(db, bus, userId, [{ item: itemId, count: n }])
+  const xp = Math.max(1, Math.round(itemValue(item) * DISTILL_XP_PER_VALUE)) * n
+  awardActionXp(db, bus, userId, 'distill', xp)
+  const essence = essenceId(essenceFamily(item))
+  addItems(db, userId, essence, n)
+  bus.emit('item.gained', {
+    userId,
+    itemId: essence,
+    count: n,
+    total: getItemCount(db, userId, essence),
+  })
+  return { ok: true, xp, essence }
+}
+
+/**
+ * Apply an enchant to a crafted piece (§13.5.3.2). The enchant fits the piece's slot,
+ * needs its Enchanting level, and costs its own essence reagents. It grants **no** XP
+ * — the training is Distill; this is the payoff. One enchant per piece (replace).
+ */
+export function applyEnchant(
+  db: Db,
+  bus: EventBus,
+  userId: string,
+  instanceId: string,
+  enchantId: string,
+): { ok: boolean; error?: string; enchantingLevel?: number } {
+  const def = ENCHANT_BY_ID.get(enchantId)
+  if (!def) return { ok: false, error: 'unknown enchant' }
+  const instance = getGearInstance(db, userId, instanceId)
+  if (!instance) return { ok: false, error: 'not found' }
+  const item = ITEM_BY_ID.get(instance.itemId)
+  if (!item?.slot || !(def.slot === item.slot || slotFamily(def.slot).includes(item.slot))) {
+    return { ok: false, error: `${def.name} does not fit ${item?.slot ?? 'that piece'}` }
+  }
+  const level = skillLevelOf(db, userId, 'enchanting')
+  if (level < def.level) {
+    return { ok: false, error: `requires Enchanting ${def.level}`, enchantingLevel: level }
+  }
+  const missing = def.reagents.filter((r) => getItemCount(db, userId, r.item) < r.count)
+  if (missing.length) {
+    return { ok: false, error: `needs ${missing.map((m) => m.item).join(', ')}` }
+  }
+  consumeItems(db, bus, userId, def.reagents)
+  setGearInstanceEnchant(db, userId, instanceId, JSON.stringify([def.id]))
+  bus.emit('item.enchanted', { userId, instanceId, band: def.id })
+  return { ok: true }
 }
 
 // --- combat (Phase 8, docs/DESIGN.md §13.5) ----------------------------------
@@ -902,35 +1654,121 @@ export function unequipItem(db: Db, userId: string, slot: string): void {
 export interface PlayerCombat {
   /** The combat profession this loadout trains (from the equipped weapon). */
   skill: SkillId
+  combatStyle: CombatStyle
   maxHp: number
   power: number
   armour: number
   weaponPower: number
   bodyArmour: number
+  stats: GearStats
+  stamina: number
+  crit: number
+  haste: number
+  mastery: number
+  /** fraction of damage dealt returned as HP (from iron bands/enchants). */
+  lifesteal: number
+  gearScore: number
+  /** Active armour-set bonuses for the current loadout. */
+  setBonuses: ActiveSetBonus[]
+}
+
+/** The player's effective combat level, used to scale monsters. */
+export function combatLevel(db: Db, userId: string): number {
+  return Math.max(
+    skillLevelOf(db, userId, 'attack'),
+    skillLevelOf(db, userId, 'strength'),
+    skillLevelOf(db, userId, 'ranged'),
+    skillLevelOf(db, userId, 'magic'),
+    skillLevelOf(db, userId, 'defence'),
+    skillLevelOf(db, userId, 'constitution'),
+  )
+}
+
+/** The active set bonuses for the current loadout (without the full combat maths). */
+export function activeSetBonusesFor(db: Db, userId: string): ActiveSetBonus[] {
+  materializeWornGear(db, userId)
+  const counts: Partial<Record<ArmourType, number>> = {}
+  for (const row of listEquipment(db, userId)) {
+    const item = ITEM_BY_ID.get(row.itemId)
+    if (item?.armourType) {
+      counts[item.armourType] = (counts[item.armourType] ?? 0) + 1
+    }
+  }
+  return activeSetBonuses(counts)
 }
 
 /**
  * The player's combat numbers for their current loadout. The equipped weapon
  * decides the trained skill (sword → Strength, bow → Ranged, staff → Magic), so
- * fights always use what you have — no per-monster choice.
+ * fights always use what you have — no per-monster choice. Every worn piece
+ * contributes its rolled stats, armour and power.
  */
 export function getPlayerCombat(db: Db, userId: string): PlayerCombat {
+  materializeWornGear(db, userId)
   const b = aggregateBonuses(db, userId)
   const eq = listEquipment(db, userId)
-  const weapon = eq.find((e) => e.slot === 'weapon')
+  const weapon = eq.find((e) => e.slot === 'mainHand' || e.slot === 'weapon')
   const weaponItem = weapon ? ITEM_BY_ID.get(weapon.itemId) : undefined
   const skill = weaponSkill(weaponItem?.tags)
-  // Power and armour come from *every* equipped piece, so legs and jewellery count.
-  const worn = eq.map((e) => ITEM_BY_ID.get(e.itemId)).filter((i): i is ItemDef => Boolean(i))
-  const totalPower = worn.reduce((n, i) => n + (i.power ?? 0), 0)
-  const totalArmour = worn.reduce((n, i) => n + (i.armour ?? 0), 0)
+  const combatStyle = combatStyleForTags(weaponItem?.tags)
+
+  let stats = emptyStats()
+  let totalPower = 0
+  let totalArmour = 0
+  const armourCounts: Partial<Record<ArmourType, number>> = {}
+  for (const row of eq) {
+    const item = ITEM_BY_ID.get(row.itemId)
+    if (!item) continue
+    if (item.armourType) {
+      armourCounts[item.armourType] = (armourCounts[item.armourType] ?? 0) + 1
+    }
+    const instance = row.instanceId ? getGearInstance(db, userId, row.instanceId) : undefined
+    stats = addStats(stats, instance ? parseStats(instance.statsJson) : statsOf(item))
+    // An enchant adds its stat points straight onto the piece (§13.5.3.2).
+    const def = instance ? enchantOf(instance) : undefined
+    if (def) stats = { ...stats, [def.stat]: stats[def.stat] + def.value }
+    totalPower += instance?.power ?? item.power ?? 0
+    totalArmour += instance?.armour ?? item.armour ?? 0
+  }
+
+  const setBonuses = activeSetBonuses(armourCounts)
+  const boosted = applySetBonuses(stats, totalArmour, totalPower, setBonuses)
+  stats = boosted.stats
+  totalArmour = boosted.armour
+  totalPower = boosted.power
+
+  const derived = deriveStats(stats, skill)
+  // Tier bands grant an account-wide passive (§13.5.3), on top of the rolled and
+  // enchanted piece stats.
+  const band = bandBonusesFor(db, userId)
+  const crit = derived.crit + band.crit
+  const haste = derived.haste + band.haste
+  const mastery = derived.mastery + band.mastery
+  const lifesteal = band.lifesteal
+  const stamina = Math.round(stats.stamina + band.stamina)
+  stats = { ...stats, stamina }
   return {
     skill,
-    maxHp: playerMaxHp(skillLevelOf(db, userId, 'constitution'), b.hp, totalArmour),
-    power: playerPower(skillLevelOf(db, userId, skill), totalPower, b.damage),
+    combatStyle,
+    maxHp: playerMaxHp(skillLevelOf(db, userId, 'constitution'), b.hp, totalArmour, stamina),
+    power: playerPower(
+      skillLevelOf(db, userId, skill),
+      totalPower,
+      b.damage,
+      derived.primary,
+      mastery,
+    ),
     armour: totalArmour,
     weaponPower: totalPower,
     bodyArmour: totalArmour,
+    stats,
+    stamina,
+    crit,
+    haste,
+    mastery,
+    lifesteal,
+    gearScore: gearScore(stats, totalArmour, totalPower),
+    setBonuses,
   }
 }
 
@@ -1009,7 +1847,16 @@ export function startEncounter(
   | {
       ok: true
       monster: MonsterDef
-      encounter: { monsterId: string; monsterHp: number; playerHp: number; playerMaxHp: number }
+      encounter: {
+        monsterId: string
+        monsterHp: number
+        monsterMaxHp: number
+        monsterDamage: number
+        monsterLevel: number
+        xpReward: number
+        playerHp: number
+        playerMaxHp: number
+      }
       drank: { item: string; buff: { kind: 'power' | 'maxHp'; value: number } } | null
     }
   | {
@@ -1049,11 +1896,19 @@ export function startEncounter(
   // max HP (which a restore potion may have raised).
   const startHp = currentHp(db, userId, maxHp)
 
+  // Monsters are **fixed** (docs §13.5): their numbers never move, so the buffs a
+  // player stacks read as power, not as a modifier that cancels itself out.
+  // Progression is a ladder — you climb to higher monsters, and the top is tuned
+  // against a fully stacked player.
   upsertEncounter(db, userId, {
     monsterId,
     monsterHp: m.hp,
     playerHp: startHp,
     playerMaxHp: maxHp,
+    monsterMaxHp: m.hp,
+    monsterDamage: m.damage,
+    monsterLevel: m.level,
+    xpReward: m.xp,
     powerBonus,
     potionId,
     foodEaten: 0,
@@ -1063,7 +1918,16 @@ export function startEncounter(
   return {
     ok: true,
     monster: m,
-    encounter: { monsterId, monsterHp: m.hp, playerHp: startHp, playerMaxHp: maxHp },
+    encounter: {
+      monsterId,
+      monsterHp: m.hp,
+      monsterMaxHp: m.hp,
+      monsterDamage: m.damage,
+      monsterLevel: m.level,
+      xpReward: m.xp,
+      playerHp: startHp,
+      playerMaxHp: maxHp,
+    },
     drank,
   }
 }
@@ -1072,6 +1936,7 @@ export function grantExactItems(db: Db, bus: EventBus, userId: string, costs: Co
   for (const c of costs) {
     if (c.count <= 0) continue
     addItems(db, userId, c.item, c.count)
+    recordGearCrafts(db, userId, c.item, c.count)
     bus.emit('item.gained', {
       userId,
       itemId: c.item,
@@ -1086,7 +1951,14 @@ export interface HitOutcome {
   /** the combat profession the equipped weapon trains */
   skill: SkillId
   damage: number
+  /** True when the hit rolled a critical strike. */
+  crit: boolean
+  /** True when Haste granted a second strike. */
+  haste: boolean
   monsterHp: number
+  monsterMaxHp: number
+  monsterDamage: number
+  monsterLevel: number
   playerDamage: number
   playerHp: number
   playerMaxHp: number
@@ -1118,10 +1990,16 @@ export function combatResolve(
   }
   const pc = getPlayerCombat(db, userId)
   const maxHp = enc.playerMaxHp || pc.maxHp
+  const monsterMaxHp = enc.monsterMaxHp || m.hp
+  const monsterDamage = enc.monsterDamage || m.damage
+  const monsterLevel = enc.monsterLevel || m.level
+  const xpReward = enc.xpReward || m.xp
   let monsterHp = enc.monsterHp
   let playerHp = enc.playerHp
   let foodEaten = enc.foodEaten
   let damage = 0
+  let crit = false
+  let haste = false
   let playerDamage = 0
   let xp = 0
   let defenceXp = 0
@@ -1141,17 +2019,26 @@ export function combatResolve(
   }
 
   if (correct) {
-    damage = Math.max(1, Math.round(pc.power * (1 + enc.powerBonus)))
+    const base = pc.power * (1 + enc.powerBonus)
+    crit = pc.crit > 0 && rand() < pc.crit
+    haste = pc.haste > 0 && rand() < pc.haste
+    const multiplier = (crit ? 1.75 : 1) * (1 + pc.mastery) * (haste ? 1.5 : 1)
+    damage = Math.max(1, Math.round(base * multiplier))
     monsterHp = Math.max(0, monsterHp - damage)
-    xp = Math.max(1, Math.round(m.xp / 4))
-    bus.emit('combat.hit', { userId, monsterId: m.id, damage, monsterHp })
+    // Iron bands/enchants return a slice of the damage dealt as HP.
+    if (pc.lifesteal > 0) {
+      const heal = Math.round(damage * pc.lifesteal)
+      if (heal > 0) playerHp = Math.min(maxHp, playerHp + heal)
+    }
+    xp = Math.max(1, Math.round(xpReward / 4))
+    bus.emit('combat.hit', { userId, monsterId: m.id, damage, monsterHp, crit, haste })
   }
 
   // The monster swings on every exchange — whether you strike it, miss, or run
   // out of time. A correct answer only adds your own hit on top. Weathering the
   // blow trains Defence and Constitution; XP scales with what actually landed
   // (armour reduces both damage and training).
-  playerDamage = incomingDamage(m.damage, pc.armour)
+  playerDamage = incomingDamage(monsterDamage, pc.armour)
   playerHp = Math.max(0, playerHp - playerDamage)
   defenceXp = Math.max(1, playerDamage)
   constitutionXp = Math.max(1, playerDamage)
@@ -1159,7 +2046,7 @@ export function combatResolve(
   let outcome: HitOutcome['outcome'] = 'ongoing'
   if (monsterHp <= 0) {
     outcome = 'won'
-    xp += m.xp
+    xp += xpReward
     drops.push(...rollDrops(m.drops, aggregateBonuses(db, userId).drop, rand))
   } else if (playerHp <= 0) {
     outcome = 'lost'
@@ -1180,7 +2067,7 @@ export function combatResolve(
 
   if (outcome === 'won') {
     grantExactItems(db, bus, userId, drops)
-    awardXp(db, bus, userId, m.xp, 'combat', m.id)
+    awardXp(db, bus, userId, xpReward, 'combat', m.id)
     bus.emit('combat.ended', { userId, monsterId: m.id, outcome: 'won' })
     clearEncounter(db, userId)
   } else if (outcome === 'lost') {
@@ -1192,6 +2079,10 @@ export function combatResolve(
       monsterHp,
       playerHp,
       playerMaxHp: maxHp,
+      monsterMaxHp,
+      monsterDamage,
+      monsterLevel,
+      xpReward,
       powerBonus: enc.powerBonus,
       potionId: enc.potionId,
       foodEaten,
@@ -1204,7 +2095,12 @@ export function combatResolve(
     correct,
     skill: pc.skill,
     damage,
+    crit,
+    haste,
     monsterHp,
+    monsterMaxHp,
+    monsterDamage,
+    monsterLevel,
     playerDamage,
     playerHp,
     playerMaxHp: maxHp,

@@ -6,11 +6,13 @@
   import { api } from '#lib/api'
   import { ACCENT } from '#lib/theme'
   import type { Message } from '#lib/types'
-
-  let messages = $state<Message[]>([])
-  let error = $state('')
+  import { peekCached } from '#lib/cache'
 
   const id = $derived(page.params.id)
+  // Seed from the last fetch so reopening a conversation renders at once.
+  const cached = peekCached<{ messages: Message[] }>(`/api/sessions/${page.params.id}`)
+  let messages = $state<Message[]>(cached ? cached.messages.filter((m) => m.role !== 'system') : [])
+  let error = $state('')
 
   onMount(async () => {
     try {
@@ -23,12 +25,16 @@
 </script>
 
 <div class="flex items-center gap-3 border-b border-ink-700 pt-4 pb-4 lg:mx-auto lg:max-w-3xl">
-  <button onclick={() => goto(href('/history'))} class="link link-btn shrink-0 text-sm">← Back</button>
+  <button onclick={() => goto(href('/history'))} class="link link-btn shrink-0 text-sm"
+    >← Back</button
+  >
   <h1 class="display truncate text-lg text-ink-100">Conversation</h1>
 </div>
 
 {#if error}
-  <p class="banner lg:mx-auto lg:max-w-3xl" style="--accent: {ACCENT.ember}" role="alert">{error}</p>
+  <p class="banner lg:mx-auto lg:max-w-3xl" style="--accent: {ACCENT.ember}" role="alert">
+    {error}
+  </p>
 {:else}
   <div class="space-y-3 pb-10 lg:mx-auto lg:max-w-3xl">
     {#each messages as m (m.id)}

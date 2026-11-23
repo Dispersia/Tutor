@@ -8,6 +8,7 @@
   import { href, stripBase } from '#lib/paths'
   import { setVoicePrefs, type VoicePrefs } from '#lib/voices'
   import { htmlLang } from '#lib/lang'
+  import { startRigAlerts } from '#lib/rigAlerts'
   import Icon from '#lib/components/Icon.svelte'
   import type { LayoutProps } from './$types'
 
@@ -36,12 +37,14 @@
     // The deck chosen everywhere (free practice, Learn) lives in the profile
     // menu; load it once so every screen shares the same choice.
     void loadActiveDeck()
+    // Rig alerts are per device; the timer checks the switch on each tick.
+    return startRigAlerts()
   })
 
-  // Three destinations stay in the thumb zone on a phone; the tutor, the bank,
-  // the archive and the account sit behind the profile stamp in the title bar.
-  // On desktop the same destinations move into a persistent left rail — the
-  // dictionary's spine — and both bars disappear.
+  // Three destinations stay in the thumb zone on a phone; the tutor, inventory,
+  // the bank, the archive and the account sit behind the profile stamp in the
+  // title bar. On desktop the same destinations move into a persistent left
+  // rail — the dictionary's spine — and both bars disappear.
   const tabs = [
     { href: '/home', label: 'Home', icon: 'home' },
     { href: '/skills', label: 'Skills', icon: 'skills' },
@@ -49,6 +52,7 @@
   ]
   const account = [
     { href: '/chat', label: 'Chat', icon: 'chat' },
+    { href: '/inventory', label: 'Inventory', icon: 'shield' },
     { href: '/bank', label: 'Bank', icon: 'bank' },
     { href: '/history', label: 'History', icon: 'history' },
     { href: '/settings', label: 'Settings', icon: 'settings' },
@@ -95,8 +99,9 @@
     aria-label="Primary"
   >
     <div class="px-5 pt-6 pb-5">
-      <a href={href('/home')} class="display inline-flex min-h-11 items-center text-xl leading-none text-ink-100"
-        >Tutor</a
+      <a
+        href={href('/home')}
+        class="display inline-flex min-h-11 items-center text-xl leading-none text-ink-100">Tutor</a
       >
     </div>
 
@@ -142,11 +147,7 @@
       {#if activeDeck.decks.length}
         <label class="mb-2 block px-1.5">
           <span class="eyebrow text-ink-400">Studying</span>
-          <select
-            value={activeDeck.id ?? ''}
-            onchange={onDeckChange}
-            class="field mt-1 text-xs"
-          >
+          <select value={activeDeck.id ?? ''} onchange={onDeckChange} class="field mt-1 text-xs">
             <option value="">All decks</option>
             {#each activeDeck.decks as d (d.id)}
               <option value={d.id}>{d.name}</option>
@@ -183,8 +184,7 @@
     <div class="mx-auto flex w-full max-w-2xl items-center justify-between gap-3 px-4 pb-1.5">
       <a
         href={href('/home')}
-        class="display inline-flex min-h-11 items-center text-lg leading-none text-ink-200"
-        >Tutor</a
+        class="display inline-flex min-h-11 items-center text-lg leading-none text-ink-200">Tutor</a
       >
 
       <div class="relative">

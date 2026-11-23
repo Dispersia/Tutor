@@ -78,3 +78,50 @@ scope.addEventListener('fetch', (event: FetchEvent) => {
     ),
   )
 })
+
+// --- rig alerts (docs/DESIGN.md §13.5.1) -------------------------------------
+// The server pushes when a rig's run crosses the lead time. A focused window
+// already shows the same alert from its own timer, so skip the duplicate there.
+
+scope.addEventListener('push', (event: PushEvent) => {
+  let data: { title?: string; body?: string; url?: string; tag?: string; force?: boolean } = {}
+  try {
+    data = (event.data?.json() ?? {}) as typeof data
+  } catch {
+    data = { body: event.data?.text() ?? '' }
+  }
+  event.waitUntil(
+    (async () => {
+      // A focused window shows its own timer, so skip the duplicate — except for
+      // a test push, where the user is watching this very page and expects it.
+      if (!data.force) {
+        const windows = await scope.clients.matchAll({ type: 'window', includeUncontrolled: true })
+        if (windows.some((c) => c.focused)) return
+      }
+      await scope.registration.showNotification(data.title ?? 'Tutor', {
+        body: data.body ?? '',
+        tag: data.tag ?? 'tutor',
+        icon: `${base}/icons/icon-192.png`,
+        badge: `${base}/icons/icon-192.png`,
+        data: { url: data.url ?? '/home' },
+      })
+    })(),
+  )
+})
+
+scope.addEventListener('notificationclick', (event: NotificationEvent) => {
+  event.notification.close()
+  const target = `${base}${(event.notification.data as { url?: string } | undefined)?.url ?? '/home'}`
+  event.waitUntil(
+    (async () => {
+      const windows = await scope.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      for (const client of windows) {
+        if ('focus' in client) {
+          await client.focus()
+          return
+        }
+      }
+      await scope.clients.openWindow(target)
+    })(),
+  )
+})

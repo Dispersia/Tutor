@@ -8,6 +8,7 @@ import {
   SKILLS,
   SKILL_BY_ID,
   actionLevelInfo,
+  actionRequiredLevel,
   actionsForSkill,
   missingMaterials,
   missingUnlocks,
@@ -44,7 +45,7 @@ test('content integrity: ids, references and coverage', () => {
     }
     for (const r of a.requires ?? []) expect(skillIds.has(r.skill)).toBe(true)
     if (a.equip) {
-      expect(['weapon', 'body', 'legs', 'neck']).toContain(a.equip.slot)
+      expect(['mainHand', 'chest', 'legs', 'neck']).toContain(a.equip.slot)
       const anyItem = ITEMS.some((i) => i.slot === a.equip!.slot && i.tags?.includes(a.equip!.tag))
       expect(anyItem).toBe(true)
     }
@@ -53,9 +54,9 @@ test('content integrity: ids, references and coverage', () => {
 
 test('combat actions are gated by forged/fletched gear', () => {
   const melee = ACTIONS.find((a) => a.id === 'train-attack')!
-  expect(melee.equip).toEqual({ slot: 'weapon', tag: 'melee' })
+  expect(melee.equip).toEqual({ slot: 'mainHand', tag: 'melee' })
   const ranged = ACTIONS.find((a) => a.id === 'train-ranged')!
-  expect(ranged.equip).toEqual({ slot: 'weapon', tag: 'bow' })
+  expect(ranged.equip).toEqual({ slot: 'mainHand', tag: 'bow' })
   expect(ranged.consumes?.some((c) => c.item === 'arrow')).toBe(true)
   // swords come from Smithing, bows from Fletching
   expect(ACTIONS.some((a) => a.id === 'forge-bronze-sword')).toBe(true)
@@ -264,7 +265,7 @@ test('applyYield applies yield bonus and double chance deterministically', () =>
 })
 
 test('items expose equipment slots + tags', () => {
-  expect(ITEM_BY_ID.get('bronze_sword')?.slot).toBe('weapon')
+  expect(ITEM_BY_ID.get('bronze_sword')?.slot).toBe('mainHand')
   expect(ITEM_BY_ID.get('bronze_sword')?.tags).toContain('melee')
   expect(ITEM_BY_ID.get('oak_shortbow')?.tags).toContain('bow')
   expect(ITEM_BY_ID.get('steel_platebody')?.tags).toContain('armour')
@@ -273,11 +274,38 @@ test('items expose equipment slots + tags', () => {
   expect(SKILL_BY_ID.get('attack')?.category).toBe('combat')
 })
 
+test('actions are listed in progression order: level required, then tier', () => {
+  for (const s of SKILLS) {
+    const acts = actionsForSkill(s.id)
+    for (let i = 1; i < acts.length; i++) {
+      const prev = acts[i - 1]!
+      const cur = acts[i]!
+      const prevKey = actionRequiredLevel(prev)
+      const curKey = actionRequiredLevel(cur)
+      expect(curKey).toBeGreaterThanOrEqual(prevKey)
+      // Within one level band a lower tier (cheaper material) comes first, so a
+      // metal's whole set reads together before the next metal starts.
+      if (curKey === prevKey) expect(cur.tier).toBeGreaterThanOrEqual(prev.tier)
+    }
+  }
+
+  // The smithing line the order exists for: bronze bar → bronze gear → iron.
+  const order = actionsForSkill('smithing').map((a) => a.id)
+  const firstIron = order.indexOf('smelt-iron')
+  expect(order[0]).toBe('smelt-bronze')
+  for (const a of actionsForSkill('smithing')) {
+    if (a.id.includes('bronze')) expect(order.indexOf(a.id)).toBeLessThan(firstIron)
+  }
+})
+
 test('the chains build on each other: multi-profession gates and new slots', () => {
-  // Enchanting is the rune-bound artisan: gems (Crafting) + runes (Runecrafting).
+  // Enchanting is the rune-bound artisan turned scholar: its one track is Distill.
   expect(SKILL_BY_ID.get('enchanting')?.category).toBe('artisan')
+  const distill = ACTIONS.find((a) => a.id === 'distill')!
+  expect(distill.skillId).toBe('enchanting')
+  // The old enchant crafts are Crafting now (Enchanting has one action only).
   const enchant = ACTIONS.find((a) => a.id === 'enchant-amulet')!
-  expect(enchant.skillId).toBe('enchanting')
+  expect(enchant.skillId).toBe('crafting')
   expect(enchant.consumes?.map((c) => c.item).sort()).toEqual([
     'air_rune',
     'nature_rune',
@@ -286,8 +314,18 @@ test('the chains build on each other: multi-profession gates and new slots', () 
   // a cross-gated recipe needs a level in *two* professions
   const superAttack = ACTIONS.find((a) => a.id === 'brew-super-attack')!
   expect(superAttack.requires?.map((r) => r.skill).sort()).toEqual(['farming', 'herblore'])
-  // every recipe's inputs are themselves craftable or gathered somewhere
-  const produced = new Set(ACTIONS.flatMap((a) => (a.produces ?? []).map((c) => c.item)))
+  // every recipe's inputs are themselves craftable or gathered somewhere (gem
+  // tables and choose-the-input recipes count as sources too — §13.5.3.1)
+  const produced = new Set(
+    ACTIONS.flatMap((a) => [
+      ...(a.produces ?? []).map((c) => c.item),
+      ...(a.table ?? []).map((e) => e.item),
+      ...(a.choices ?? []).flatMap((ch) => [
+        ...(ch.produces ?? []).map((c) => c.item),
+        ...(ch.table ?? []).map((e) => e.item),
+      ]),
+    ]),
+  )
   for (const a of ACTIONS) for (const c of a.consumes ?? []) expect(produced.has(c.item)).toBe(true)
   // legs and neck are worn, and their power/armour is real equipment
   expect(ITEM_BY_ID.get('steel_legs')?.slot).toBe('legs')

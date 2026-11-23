@@ -215,6 +215,7 @@ export const nextExercise = (body: {
   exerciseId?: string
   actionId?: string
   lessonId?: string
+  choiceId?: string
 }) =>
   api<{
     instance: Instance | null
@@ -247,6 +248,7 @@ export const gradeExercise = (body: {
   latencyMs?: number
   actionId?: string
   lessonId?: string
+  choiceId?: string
 }) =>
   api<{
     result: Grade

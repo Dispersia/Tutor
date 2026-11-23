@@ -40,3 +40,33 @@ export function mandarinZhuyin(word: string): string | undefined {
   if (!word) return undefined
   return table().get(word)
 }
+
+let maxKeyLength = 0
+
+/**
+ * Zhuyin for a whole sentence, built by matching the longest dictionary entry at
+ * each position (so 什麼 keeps its word reading). Gives a sentence card a reading
+ * when the generator supplied none. Punctuation and unknown characters are
+ * dropped; `undefined` when nothing matches.
+ */
+export function mandarinSentenceZhuyin(text: string): string | undefined {
+  if (!text) return undefined
+  const t = table()
+  if (maxKeyLength === 0) for (const key of t.keys()) maxKeyLength = Math.max(maxKeyLength, key.length)
+  const out: string[] = []
+  let i = 0
+  while (i < text.length) {
+    let matched = false
+    for (let len = Math.min(maxKeyLength, text.length - i); len >= 1; len--) {
+      const reading = t.get(text.slice(i, i + len))
+      if (reading) {
+        out.push(reading)
+        i += len
+        matched = true
+        break
+      }
+    }
+    if (!matched) i++
+  }
+  return out.length ? out.join(' ') : undefined
+}

@@ -35,6 +35,16 @@ log = logging.getLogger("speech.server")
 
 manager = Manager()
 
+# A bulk recording run (thousands of clips back to back) grows MLX's Metal
+# buffer cache until the GPU hits "Insufficient Memory"; freeing it every few
+# clips keeps the cache bounded. Single interactive clips barely notice.
+_TTS_CLEAR_EVERY = max(1, int(os.environ.get("TUTOR_TTS_CLEAR_EVERY", "5")))
+_tts_since_clear = 0
+
+# Peak level and gain ceiling for card-clip normalisation (see `tts`).
+_NORM_TARGET = 0.9
+_NORM_MAX_GAIN = 6.0
+
 app = FastAPI(title="tutor speech gateway", version="0.0.0")
 
 
@@ -288,6 +298,9 @@ class TtsRequest(BaseModel):
     language: str | None = None
     instruct: str | None = None
     mode: str = "preset"  # "preset" | "design"
+    # Card audio is peak-normalised so every recorded voice plays at a similar
+    # level; chat playback leaves it off and keeps the model's own dynamics.
+    normalize: bool = False
 
 
 @app.post("/v1/tts")
@@ -328,11 +341,28 @@ def tts(req: TtsRequest) -> Response:
     if best is None:
         raise HTTPException(status_code=500, detail="TTS produced no audio")
     _, arr, sr = best
+    if req.normalize:
+        # The deep voices in particular can come out very quiet; lift every clip
+        # toward a common peak, but cap the gain so a near-silent take is not
+        # turned into amplified noise.
+        peak = float(abs(arr).max()) if len(arr) else 0.0
+        if peak > 1e-4:
+            arr = arr * min(_NORM_TARGET / peak, _NORM_MAX_GAIN)
     fd, name = tempfile.mkstemp(suffix=".wav")
     os.close(fd)
     models.write_wav(name, arr, sr)
     data = Path(name).read_bytes()
     Path(name).unlink(missing_ok=True)
+
+    # Keep the MLX buffer cache from growing without bound across a long
+    # recording run (see _TTS_CLEAR_EVERY). The reference to `arr` above is
+    # already materialised, so nothing in flight is freed.
+    global _tts_since_clear
+    _tts_since_clear += 1
+    if _tts_since_clear >= _TTS_CLEAR_EVERY:
+        _tts_since_clear = 0
+        models.clear_mlx_cache()
+
     return Response(content=data, media_type="audio/wav", headers={"x-sample-rate": str(sr)})
 
 

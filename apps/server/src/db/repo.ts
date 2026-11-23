@@ -1,5 +1,5 @@
 import type { Card, CardMetadata, CardType } from '@tutor/core'
-import { and, asc, desc, eq, gte, inArray, like, ne, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, gte, inArray, like, lte, ne, sql } from 'drizzle-orm'
 import {
   DECK_INSTRUCTION_KEY,
   mergeDeckSettings,
@@ -18,10 +18,13 @@ import {
   encounters,
   equipment,
   gatherLog,
+  gearInstances,
+  gearSets,
   inventory,
   lessonProgress,
   messages,
   playerState,
+  pushSubscriptions,
   reviews,
   sessions,
   settings,
@@ -461,6 +464,8 @@ export function updateCard(
     front?: string
     back?: string
     readings?: Record<string, string>
+    /** Replaces the whole payload bag when given (merge by key at the caller). */
+    payload?: Record<string, unknown>
     /** Replaces the whole metadata bag when given (merge by key at the caller). */
     metadata?: CardMetadata
   },
@@ -471,6 +476,7 @@ export function updateCard(
   if (patch.front !== undefined) set.front = patch.front
   if (patch.back !== undefined) set.back = patch.back
   if (patch.readings !== undefined) set.readingsJson = JSON.stringify(patch.readings)
+  if (patch.payload !== undefined) set.payloadJson = JSON.stringify(patch.payload)
   if (patch.metadata !== undefined) set.metadataJson = JSON.stringify(patch.metadata)
   if (Object.keys(set).length > 0) db.update(cards).set(set).where(eq(cards.id, cardId)).run()
 }
@@ -586,23 +592,35 @@ export function pickCard(db: Db, userId: string, deckId?: string): Card | undefi
   return row ? toCard(row) : undefined
 }
 
-/** Wrong answers for multiple-choice: other cards' target text. */
+/**
+ * Wrong answers for multiple-choice: other cards' target text.
+ *
+ * Only words the learner has already met are eligible — the ones they were
+ * introduced to (the teach step) or have reviewed. A choice among four strings
+ * the learner has never seen is a guess, not recall, so an unseen word is never
+ * offered as a distractor. The pool can therefore be small (or empty) early on;
+ * the multiple-choice exercise gates itself on having at least one.
+ */
 export function otherBacks(
   db: Db,
   userId: string,
   targetLang: string,
-  excludeCardId: string,
+  excludeBack: string,
   limit = 3,
 ): string[] {
+  const met = sql`(
+    exists (select 1 from ${reviews} where ${reviews.cardId} = ${cards.id} and ${reviews.userId} = ${cards.userId})
+    or exists (select 1 from ${srs} where ${srs.cardId} = ${cards.id} and ${srs.userId} = ${cards.userId})
+  )`
   return db
-    .select({ back: cards.back })
+    .selectDistinct({ back: cards.back })
     .from(cards)
-    .where(and(eq(cards.userId, userId), eq(cards.targetLang, targetLang)))
+    .where(and(eq(cards.userId, userId), eq(cards.targetLang, targetLang), met))
     .orderBy(sql`random()`)
     .limit(limit + 1)
     .all()
     .map((r) => r.back)
-    .filter((b) => b !== excludeCardId)
+    .filter((b) => b !== excludeBack)
     .slice(0, limit)
 }
 
@@ -737,6 +755,7 @@ export function listRigStates(db: Db, userId: string): Map<string, RigState> {
         settledAt: r.settledAt,
         crafts: r.crafts,
         remainder: parseRemainder(r.remainderJson),
+        choice: r.lastChoice ?? '',
       } satisfies RigState,
     ]),
   )
@@ -774,6 +793,7 @@ export function getRigState(db: Db, userId: string, actionId: string): RigState 
     settledAt: row.settledAt,
     crafts: row.crafts,
     remainder: parseRemainder(row.remainderJson),
+    choice: row.lastChoice ?? '',
   }
 }
 
@@ -785,6 +805,7 @@ export function setRigState(db: Db, userId: string, actionId: string, rig: RigSt
     settledAt: rig.settledAt,
     crafts: rig.crafts,
     remainderJson: JSON.stringify(rig.remainder),
+    lastChoice: rig.choice ?? '',
     updatedAt: now(),
   }
   db.insert(actionProgress)
@@ -907,7 +928,13 @@ export function listEquipment(db: Db, userId: string) {
   return db.select().from(equipment).where(eq(equipment.userId, userId)).all()
 }
 
-export function setEquipment(db: Db, userId: string, slot: string, itemId: string | null): void {
+export function setEquipment(
+  db: Db,
+  userId: string,
+  slot: string,
+  itemId: string | null,
+  instanceId: string | null = null,
+): void {
   if (itemId === null) {
     db.delete(equipment)
       .where(and(eq(equipment.userId, userId), eq(equipment.slot, slot)))
@@ -915,11 +942,131 @@ export function setEquipment(db: Db, userId: string, slot: string, itemId: strin
     return
   }
   db.insert(equipment)
-    .values({ userId, slot, itemId, updatedAt: now() })
+    .values({ userId, slot, itemId, instanceId, updatedAt: now() })
     .onConflictDoUpdate({
       target: [equipment.userId, equipment.slot],
-      set: { itemId, updatedAt: now() },
+      set: { itemId, instanceId, updatedAt: now() },
     })
+    .run()
+}
+
+// --- crafted gear instances + saved sets -------------------------------------
+
+export interface GearInstanceRow {
+  id: string
+  userId: string
+  itemId: string
+  slot: string
+  quality: string
+  statsJson: string
+  /** JSON array of band ids enchanted onto the piece (docs §13.5.3). */
+  enchantJson: string
+  armour: number
+  power: number
+  createdAt: number
+}
+
+export function listGearInstances(db: Db, userId: string) {
+  return db.select().from(gearInstances).where(eq(gearInstances.userId, userId)).all()
+}
+
+export function getGearInstance(db: Db, userId: string, id: string) {
+  return db
+    .select()
+    .from(gearInstances)
+    .where(and(eq(gearInstances.userId, userId), eq(gearInstances.id, id)))
+    .get()
+}
+
+export function addGearInstance(
+  db: Db,
+  row: Omit<GearInstanceRow, 'id' | 'createdAt' | 'enchantJson'> & {
+    id?: string
+    createdAt?: number
+    enchantJson?: string
+  },
+): string {
+  const gearId = row.id ?? id()
+  db.insert(gearInstances)
+    .values({
+      id: gearId,
+      userId: row.userId,
+      itemId: row.itemId,
+      slot: row.slot,
+      quality: row.quality,
+      statsJson: row.statsJson,
+      enchantJson: row.enchantJson ?? '[]',
+      armour: row.armour,
+      power: row.power,
+      createdAt: row.createdAt ?? now(),
+    })
+    .run()
+  return gearId
+}
+
+/** Replaces a piece's enchant list (a JSON array of band ids). */
+export function setGearInstanceEnchant(
+  db: Db,
+  userId: string,
+  id: string,
+  enchantJson: string,
+): void {
+  db.update(gearInstances)
+    .set({ enchantJson })
+    .where(and(eq(gearInstances.userId, userId), eq(gearInstances.id, id)))
+    .run()
+}
+
+export function deleteGearInstance(db: Db, userId: string, id: string): void {
+  db.delete(gearInstances)
+    .where(and(eq(gearInstances.userId, userId), eq(gearInstances.id, id)))
+    .run()
+}
+
+export function listGearSets(db: Db, userId: string) {
+  return db.select().from(gearSets).where(eq(gearSets.userId, userId)).all()
+}
+
+export function addGearSet(
+  db: Db,
+  row: {
+    userId: string
+    name: string
+    combatStyle: string
+    slotsJson: string
+  },
+): string {
+  const setId = id()
+  const stamp = now()
+  db.insert(gearSets)
+    .values({
+      id: setId,
+      userId: row.userId,
+      name: row.name,
+      combatStyle: row.combatStyle,
+      slotsJson: row.slotsJson,
+      createdAt: stamp,
+      updatedAt: stamp,
+    })
+    .run()
+  return setId
+}
+
+export function updateGearSet(
+  db: Db,
+  userId: string,
+  setId: string,
+  patch: { name?: string; combatStyle?: string; slotsJson?: string },
+): void {
+  db.update(gearSets)
+    .set({ ...patch, updatedAt: now() })
+    .where(and(eq(gearSets.userId, userId), eq(gearSets.id, setId)))
+    .run()
+}
+
+export function deleteGearSet(db: Db, userId: string, setId: string): void {
+  db.delete(gearSets)
+    .where(and(eq(gearSets.userId, userId), eq(gearSets.id, setId)))
     .run()
 }
 
@@ -1017,6 +1164,10 @@ export function upsertEncounter(
     monsterHp: number
     playerHp: number
     playerMaxHp?: number
+    monsterMaxHp?: number
+    monsterDamage?: number
+    monsterLevel?: number
+    xpReward?: number
     powerBonus?: number
     potionId?: string | null
     foodEaten?: number
@@ -1026,6 +1177,10 @@ export function upsertEncounter(
 ): void {
   const extras = {
     ...(patch.playerMaxHp !== undefined ? { playerMaxHp: patch.playerMaxHp } : {}),
+    ...(patch.monsterMaxHp !== undefined ? { monsterMaxHp: patch.monsterMaxHp } : {}),
+    ...(patch.monsterDamage !== undefined ? { monsterDamage: patch.monsterDamage } : {}),
+    ...(patch.monsterLevel !== undefined ? { monsterLevel: patch.monsterLevel } : {}),
+    ...(patch.xpReward !== undefined ? { xpReward: patch.xpReward } : {}),
     ...(patch.powerBonus !== undefined ? { powerBonus: patch.powerBonus } : {}),
     ...(patch.potionId !== undefined ? { potionId: patch.potionId } : {}),
     ...(patch.foodEaten !== undefined ? { foodEaten: patch.foodEaten } : {}),
@@ -1157,4 +1312,116 @@ export function completeLesson(db: Db, userId: string, lessonId: string): void {
     .values({ userId, lessonId, completedAt: now() })
     .onConflictDoNothing()
     .run()
+}
+
+// --- web push (docs/DESIGN.md §13.5.1) ---------------------------------------
+
+export interface PushSubscriptionRow {
+  endpoint: string
+  p256dh: string
+  auth: string
+}
+
+/**
+ * Stores a device's subscription. The endpoint identifies the device, so a
+ * re-subscribe (permission granted again, key rotated) replaces the old row
+ * instead of piling up dead ones.
+ */
+export function upsertPushSubscription(
+  db: Db,
+  sub: PushSubscriptionRow & { userId: string; userAgent?: string },
+): void {
+  db.insert(pushSubscriptions)
+    .values({
+      id: id(),
+      userId: sub.userId,
+      endpoint: sub.endpoint,
+      p256dh: sub.p256dh,
+      auth: sub.auth,
+      userAgent: sub.userAgent,
+      createdAt: now(),
+    })
+    .onConflictDoUpdate({
+      target: pushSubscriptions.endpoint,
+      set: {
+        userId: sub.userId,
+        p256dh: sub.p256dh,
+        auth: sub.auth,
+        userAgent: sub.userAgent,
+      },
+    })
+    .run()
+}
+
+export function deletePushSubscription(db: Db, endpoint: string): void {
+  db.delete(pushSubscriptions).where(eq(pushSubscriptions.endpoint, endpoint)).run()
+}
+
+export function listPushSubscriptions(db: Db, userId: string): PushSubscriptionRow[] {
+  return db.select().from(pushSubscriptions).where(eq(pushSubscriptions.userId, userId)).all()
+}
+
+export function touchPushSubscription(db: Db, endpoint: string): void {
+  db.update(pushSubscriptions)
+    .set({ lastOkAt: now() })
+    .where(eq(pushSubscriptions.endpoint, endpoint))
+    .run()
+}
+
+/** An active rig as the alert scan needs it. */
+export interface DueRigRow {
+  userId: string
+  actionId: string
+  completions: number
+  runEndsAt: number
+}
+
+/**
+ * Rigs whose run ends within `leadMs` and that have not been announced yet.
+ * Pure read: settling happens on the next board fetch, so this never writes.
+ */
+export function dueRigAlerts(db: Db, at: number, leadMs: number): DueRigRow[] {
+  return db
+    .select({
+      userId: actionProgress.userId,
+      actionId: actionProgress.actionId,
+      completions: actionProgress.completions,
+      runEndsAt: actionProgress.runEndsAt,
+    })
+    .from(actionProgress)
+    .where(
+      and(
+        gt(actionProgress.runEndsAt, at),
+        lte(actionProgress.runEndsAt, at + leadMs),
+        ne(actionProgress.notifiedEndsAt, actionProgress.runEndsAt),
+      ),
+    )
+    .all()
+}
+
+/** Records that this deadline has been announced (so a later scan skips it). */
+export function markRigAlerted(db: Db, userId: string, actionId: string, runEndsAt: number): void {
+  db.update(actionProgress)
+    .set({ notifiedEndsAt: runEndsAt })
+    .where(
+      and(
+        eq(actionProgress.userId, userId),
+        eq(actionProgress.actionId, actionId),
+        eq(actionProgress.runEndsAt, runEndsAt),
+      ),
+    )
+    .run()
+}
+
+/** Every rig still running right now, for the client's local timer. */
+export function listActiveRigs(db: Db, userId: string, at: number) {
+  return db
+    .select({
+      actionId: actionProgress.actionId,
+      completions: actionProgress.completions,
+      runEndsAt: actionProgress.runEndsAt,
+    })
+    .from(actionProgress)
+    .where(and(eq(actionProgress.userId, userId), gt(actionProgress.runEndsAt, at)))
+    .all()
 }

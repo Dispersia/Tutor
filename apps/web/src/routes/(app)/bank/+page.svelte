@@ -1,39 +1,40 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { equipItem, getSkills, unequipSlot, type SkillsResponse } from '#lib/skills'
+  import { getSkills, type SkillsResponse } from '#lib/skills'
   import { itemRigs, rigGainedSince } from '#lib/idle'
   import { ACCENT, accentStyle, tierAccent } from '#lib/theme'
+  import { href } from '#lib/paths'
   import Spinner from '#lib/components/Spinner.svelte'
+  import { cachedAt, peekCached } from '#lib/cache'
 
-  let data = $state<SkillsResponse | null>(null)
+  // Seed from the last fetch so returning to Bank shows the ledger at once.
+  const cachedSkills = peekCached<SkillsResponse>('/api/skills')
+  let data = $state<SkillsResponse | null>(cachedSkills ?? null)
   let error = $state('')
-  let loading = $state(true)
-  /** When the bank was fetched — the cursor the live figures extrapolate from. */
-  let fetchedAt = $state(0)
-  /** Ticking clock so a running rig's count climbs in place (§13.5.1). */
+  let loading = $state(cachedSkills === undefined)
+  /** Tick so running rigs keep counting up. */
+  let fetchedAt = $state(cachedAt('/api/skills'))
   let now = $state(Date.now())
 
   const itemMap = $derived(new Map((data?.items ?? []).map((i) => [i.id, i])))
-  const bank = $derived((data?.inventory ?? []).filter((i) => i.count > 0))
-  const worn = $derived(data?.equipment ?? [])
-  /** itemId → the active rig that produces it, so a count can live-advance. */
   const rigs = $derived(itemRigs(data?.skills ?? []))
 
-  // Stored goods read best by kind: raw first, then what you refined, forged
-  // and brewed, so a full bank stays scannable.
   const GROUPS = [
     { key: 'raw', label: 'Raw' },
     { key: 'refined', label: 'Refined' },
-    { key: 'equipment', label: 'Crafted' },
     { key: 'consumable', label: 'Consumables' },
     { key: 'coin', label: 'Coin' },
     { key: 'other', label: 'Other' },
   ] as const
+
   const groups = $derived.by(() =>
-    GROUPS.map((g) => ({
-      ...g,
-      items: bank.filter((b) => (itemMap.get(b.itemId)?.tier ?? 'other') === g.key),
-    })).filter((g) => g.items.length > 0),
+    GROUPS.map((group) => ({
+      ...group,
+      rows: (data?.inventory ?? []).filter((row) => {
+        const item = itemMap.get(row.itemId)
+        return row.count > 0 && item?.tier === group.key
+      }),
+    })).filter((g) => g.rows.length > 0),
   )
 
   onMount(() => {
@@ -44,43 +45,24 @@
 
   async function refresh() {
     try {
-      const res = await getSkills()
+      data = await getSkills()
       fetchedAt = Date.now()
-      data = res
     } catch (e) {
       error = (e as Error).message
     } finally {
       loading = false
     }
   }
-
-  async function equip(itemId: string) {
-    error = ''
-    try {
-      await equipItem(itemId)
-      await refresh()
-    } catch (e) {
-      error = (e as Error).message
-    }
-  }
-
-  async function unequip(slot: string) {
-    await unequipSlot(slot).catch(() => {})
-    await refresh()
-  }
 </script>
 
 <div class="border-b border-ink-700 pt-4 pb-4">
   <div class="flex items-start justify-between gap-4">
-    <h1 class="display min-w-0 text-3xl text-ink-100">Bank</h1>
-    <div class="shrink-0 text-center">
-      <div class="seal h-14 w-14" aria-label="{bank.length} kinds stored">
-        <span class="display text-xl leading-none font-bold">{bank.length}</span>
-      </div>
-      <p class="seal__label" aria-hidden="true">Kinds</p>
+    <div class="min-w-0">
+      <h1 class="display text-3xl text-ink-100">Bank</h1>
+      <p class="sub mt-2">Your materials and consumables.</p>
     </div>
+    <a href={href('/inventory')} class="btn btn-ghost shrink-0 px-3 py-2 text-xs"> Inventory → </a>
   </div>
-  <p class="sub mt-2">The gear you wear and the goods you keep.</p>
 </div>
 
 {#if error}
@@ -89,85 +71,39 @@
 
 {#if loading}
   <p class="banner mt-4 flex items-center gap-2" style={accentStyle(ACCENT.brass)}>
-    <Spinner size={14} label="Loading your bank" /> Loading…
+    <Spinner size={14} label="Loading your inventory" /> Loading…
   </p>
 {:else}
-  <div class="xl:grid xl:grid-cols-2 xl:items-start xl:gap-x-24">
-    <!-- Equipment -->
-    <section class="mt-5" style={accentStyle(ACCENT.gold)}>
-      <div class="flex items-center justify-between border-b border-ink-700 pb-2">
-        <h2 class="eyebrow" style="color: var(--accent)">Equipment</h2>
-        <span class="text-xs text-ink-400">{worn.length} worn</span>
-      </div>
-      <div class="pt-3">
-        {#if worn.length === 0}
-          <p class="text-xs text-ink-400">
-            Nothing equipped. Forge a weapon (Smithing) or a bow (Fletching) to train combat.
-          </p>
-        {/if}
-        <div class="flex flex-wrap gap-2">
-          {#each worn as e (e.slot)}
-            {@const eq = itemMap.get(e.itemId)}
-            <button
-              onclick={() => unequip(e.slot)}
-              class="chip"
-              style={accentStyle(tierAccent(eq?.tier))}
-            >
-              {eq?.icon ?? ''}
-              {eq?.name ?? e.itemId}
-              <span class="text-ink-300">· {e.slot} ✕</span>
-            </button>
+  <section class="mt-6" style={accentStyle(ACCENT.brass)}>
+    <div class="flex items-center justify-between border-b border-ink-700 pb-2">
+      <h2 class="eyebrow" style="color: var(--accent)">Materials</h2>
+      <span class="text-xs text-ink-400">Bank</span>
+    </div>
+    {#each groups as group (group.key)}
+      <div class="pt-4">
+        <h3 class="eyebrow" style="color: var(--accent)">{group.label}</h3>
+        <div class="mt-2 flex flex-wrap gap-1.5">
+          {#each group.rows as row (row.itemId)}
+            {@const item = itemMap.get(row.itemId)}
+            {@const rig = rigs.get(row.itemId)}
+            {@const delta = rig ? (rigGainedSince(rig, fetchedAt, now)[row.itemId] ?? 0) : 0}
+            <span class="chip" style={accentStyle(tierAccent(item?.tier))}>
+              {item?.icon ?? ''}
+              {item?.name ?? row.itemId}
+              <span class="display text-gold-100 tabular-nums">×{row.count + delta}</span>
+            </span>
           {/each}
         </div>
       </div>
-    </section>
+    {/each}
+    {#if groups.length === 0}
+      <p class="mt-4 text-xs text-ink-400">
+        Nothing here yet. Gather, craft and cook to fill your bank.
+      </p>
+    {/if}
+  </section>
 
-    <!-- Bank -->
-    <section class="mt-6 xl:mt-5" style={accentStyle(ACCENT.brass)}>
-      <div class="flex items-center justify-between border-b border-ink-700 pb-2">
-        <h2 class="eyebrow" style="color: var(--accent)">Bank</h2>
-        <span class="text-xs text-ink-400">{bank.length} kinds</span>
-      </div>
-      {#if bank.length === 0}
-        <p class="pt-3 text-xs text-ink-400">
-          Empty. Train a gathering profession to gather materials.
-        </p>
-      {:else}
-        {#each groups as g (g.key)}
-          <div class="pt-3">
-            <div class="flex items-center gap-2">
-              <span class="h-2 w-2 rounded-[2px]" style="background: {tierAccent(g.key)}"></span>
-              <h3 class="eyebrow">{g.label}</h3>
-            </div>
-            <div class="mt-2 flex flex-wrap gap-1.5">
-              {#each g.items as b (b.itemId)}
-                {@const it = itemMap.get(b.itemId)}
-                {@const rig = rigs.get(b.itemId)}
-                {@const delta =
-                  rig && fetchedAt ? (rigGainedSince(rig, fetchedAt, now)[b.itemId] ?? 0) : 0}
-                <span class="chip" style={accentStyle(tierAccent(it?.tier))}>
-                  {it?.icon ?? ''}
-                  {it?.name ?? b.itemId}
-                  <span class="display text-gold-300 tabular-nums">×{b.count + delta}</span>
-                  {#if delta > 0}
-                    <span class="display tabular-nums" style="color: var(--color-jade-300)"
-                      >+{delta}</span
-                    >
-                  {/if}
-                  {#if it?.slot}
-                    <button
-                      onclick={() => equip(b.itemId)}
-                      class="link ml-1 font-semibold"
-                    >
-                      equip
-                    </button>
-                  {/if}
-                </span>
-              {/each}
-            </div>
-          </div>
-        {/each}
-      {/if}
-    </section>
-  </div>
+  <p class="mt-6 text-xs text-ink-400">
+    Equip gear and save loadouts on the <a href={href('/inventory')} class="link">Inventory</a> screen.
+  </p>
 {/if}

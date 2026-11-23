@@ -33,8 +33,16 @@
   import { ACCENT, categoryAccent } from '#lib/theme'
   import Icon from '#lib/components/Icon.svelte'
   import Spinner from '#lib/components/Spinner.svelte'
+  import { peekCached } from '#lib/cache'
 
-  let decks = $state<Deck[]>([])
+  // Seed the header and deck picker from the last fetch, so entering Practice
+  // shows them at once; the drill itself still comes from the server.
+  const cachedDecks = peekCached<{ decks: Deck[] }>('/api/decks')
+  const cachedStats = peekCached<Stats>('/api/stats')
+  const cachedSrs = peekCached<SrsStats>('/api/srs/stats')
+  const cachedSkills = peekCached<SkillsResponse>('/api/skills')
+  const cachedCurriculum = peekCached<{ decks: CurriculumDeck[] }>('/api/curriculum')
+  let decks = $state<Deck[]>(cachedDecks?.decks ?? [])
   let deckId = $state<string>('')
   let instance = $state<Instance | null>(null)
   /** True when the day's new/review budget is spent and nothing can be served. */
@@ -42,7 +50,7 @@
   let result = $state<Grade | null>(null)
   let skill = $state<SkillOutcome | null>(null)
   let srs = $state<SrsOutcome | null>(null)
-  let stats = $state<Stats | null>(null)
+  let stats = $state<Stats | null>(cachedStats ?? null)
   /**
    * True once a countable attempt for this card has been recorded. After a miss
    * on a speaking card the learner can re-record as often as they like; those
@@ -54,12 +62,12 @@
   /** True when the current result came from a recorded spoken answer. */
   let spoke = $state(false)
   /** Spaced-repetition totals (due / new), so the header can show what is left. */
-  let srsStats = $state<SrsStats | null>(null)
-  let ref = $state<SkillsResponse | null>(null)
+  let srsStats = $state<SrsStats | null>(cachedSrs ?? null)
+  let ref = $state<SkillsResponse | null>(cachedSkills ?? null)
   let lesson = $state<LessonDTO | null>(null)
   let lessonCompleted = $state(false)
   /** The full path, so we can find the lesson that follows the current one. */
-  let curriculum = $state<CurriculumDeck[]>([])
+  let curriculum = $state<CurriculumDeck[]>(cachedCurriculum?.decks ?? [])
   /** The next unfinished lesson after the current one, if the path continues. */
   let nextLessonId = $state<string | undefined>(undefined)
   let loading = $state(true)
@@ -71,11 +79,13 @@
   /** Speech-model warm-up state while a listen / speaking card is on screen (§8.1). */
   let speechWarm = $state<'idle' | 'warming' | 'ready' | 'error'>('idle')
   /** "Can't speak or listen right now": epoch ms when listen/speak cards return. */
-  let quietUntil = $state(0)
+  let quietUntil = $state(cachedStats?.quietUntil ?? 0)
   /** Ticking clock so the quiet countdown and expiry update live. */
   let now = $state(Date.now())
 
   const actionId = $derived(page.url.searchParams.get('action') ?? undefined)
+  /** The recipe choice for a choose-input action (prospect/cut), from the URL. */
+  const choiceId = $derived(page.url.searchParams.get('choice') ?? undefined)
   const deckParam = $derived(page.url.searchParams.get('deck') ?? undefined)
   /** The lesson being drilled; starts from the URL and advances as one finishes. */
   let lessonId = $state<string | undefined>(page.url.searchParams.get('lesson') ?? undefined)
@@ -155,8 +165,9 @@
     attempt = 0
     spoke = false
     try {
-      const body: { actionId?: string; lessonId?: string; deckId?: string } = {}
+      const body: { actionId?: string; lessonId?: string; deckId?: string; choiceId?: string } = {}
       if (actionId) body.actionId = actionId
+      if (actionId && choiceId) body.choiceId = choiceId
       if (lessonId) body.lessonId = lessonId
       if (!actionId && !lessonId && deckId) body.deckId = deckId
       const r = await nextExercise(body)
@@ -242,6 +253,7 @@
         latencyMs: Date.now() - startedAt,
         actionId,
         lessonId,
+        choiceId,
       })
       // A first-exposure teach step has no result screen: it records that the
       // card was introduced, then moves straight to the drill for that word.
@@ -280,6 +292,7 @@
       form.set('latencyMs', String(Date.now() - startedAt))
       if (isRetry) form.set('retry', 'true')
       if (actionId) form.set('actionId', actionId)
+      if (choiceId) form.set('choiceId', choiceId)
       if (lessonId) form.set('lessonId', lessonId)
       const r = await gradeSpeak(form)
       result = r.result
@@ -426,7 +439,9 @@
 <svelte:window onkeydown={onKeydown} />
 
 <div class="lg:mx-auto lg:max-w-2xl">
-  <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-ink-700 pt-4 pb-4 mb-4">
+  <div
+    class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-ink-700 pt-4 pb-4 mb-4"
+  >
     <div class="min-w-0">
       <h1 class="display text-3xl text-ink-100">
         {actionId ? skillName : lesson ? lesson.title : 'Free practice'}
@@ -521,7 +536,7 @@
     <button onclick={loadNext} class="btn btn-ghost mt-3 px-3 py-2 text-xs">Back</button>
   {:else if doneToday}
     <div class="panel panel-accent p-5 text-center" style="--accent: {ACCENT.jade}">
-      <p class="display text-lg text-jade-300">Today’s goal reached</p>
+      <p class="display text-lg text-jade-300">That’s everything for now</p>
       <p class="mt-2 text-sm text-ink-300">
         {#if srsStats?.budget}
           {#if !srsStats.budget.newUnlimited}
@@ -534,7 +549,7 @@
         {/if}
       </p>
       <p class="mt-1 text-xs text-ink-400">
-        Everything due is done. Come back tomorrow, or keep going.
+        Nothing is due and no new words are left in this deck.
       </p>
       <div class="mt-4 flex flex-col gap-2">
         <button onclick={doStudyMore} class="btn btn-primary w-full py-3">Study more</button>
@@ -567,19 +582,6 @@
             {itemMap.get(g.item)?.name ?? g.item}
           </span>
         {/each}
-        {#if skill.idle}
-          <!-- The drill powered a machine: its rate and run length (§13.5.1). -->
-          <span
-            class="chip"
-            style="--accent: {categoryAccent(skillMap.get(skill.skillId)?.category ?? '')}"
-          >
-            Rig powered · <span class="display tabular-nums"
-              >{fmtInterval(skill.idle.intervalSec)}</span
-            >
-            · <span class="display tabular-nums">{fmtClock(Math.round(skill.idle.runSec))}</span>
-            run · +{skill.idle.xpPerCraft} xp/item
-          </span>
-        {/if}
         {#if skill.idleXp > 0}
           <span class="chip" style="--accent: {ACCENT.gold}">
             Rigs earned +{skill.idleXp} xp
@@ -591,6 +593,63 @@
           </a>
         {/if}
       </div>
+      {#if skill.idle}
+        {@const rig = skill.idle}
+        {@const rigAccent = rig.maxed
+          ? ACCENT.jade
+          : categoryAccent(skillMap.get(skill.skillId)?.category ?? '')}
+        <!-- The drill powered a machine (§13.5.1): its rate and run length, plus
+             how far it is toward the run-length cap, so the learner can see when
+             a rig is about done — and when it is maxed and worth switching. -->
+        <div class="panel panel-accent mb-3 p-3" style="--accent: {rigAccent}">
+          <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-xs">
+            <span class="text-ink-300">
+              Rig powered ·
+              <span class="display tabular-nums" style="color: {rigAccent}"
+                >{fmtInterval(rig.intervalSec)}</span
+              >
+              ·
+              <span class="display tabular-nums" style="color: {rigAccent}"
+                >{fmtClock(rig.runSec)}</span
+              >
+              run · +{rig.xpPerCraft} xp/item
+            </span>
+            <span class="display tabular-nums text-ink-300">
+              {rig.maxed ? 'maxed' : `${rig.completions}/${rig.runFullAtCompletions}`}
+            </span>
+          </div>
+          <div
+            class="bar mt-2 h-1.5"
+            role="progressbar"
+            aria-label="Rig progress toward the {fmtClock(rig.maxRunSec)} run cap"
+            aria-valuenow={Math.round(rig.runProgress * 100)}
+            aria-valuemin="0"
+            aria-valuemax="100"
+          >
+            <i style="width: {rig.runProgress * 100}%; background: {rigAccent}"></i>
+          </div>
+          {#if rig.maxed}
+            <p class="mt-2 text-xs text-jade-300">
+              Maxed at {fmtClock(rig.maxRunSec)} — this rig runs as long and as fast as it ever will.
+              Switch to another action to power a fresh one.
+            </p>
+          {:else}
+            <p class="mt-2 text-xs text-ink-400">
+              {rig.runFullAtCompletions - rig.completions} more
+              {rig.runFullAtCompletions - rig.completions === 1 ? 'drill' : 'drills'} to the full
+              {fmtClock(rig.maxRunSec)} run.
+            </p>
+          {/if}
+          <!-- The live-rig cap (§13.5.1): only a couple of machines run at once, so
+               drilling a fresh action stops the rig closest to finishing. -->
+          <p class="mt-2 text-xs text-ink-400">
+            {skill.rigsRunning ?? 1}/{skill.maxLiveRigs ?? 2} rigs running — only two run at once.
+            {#if skill.stoppedRig}
+              This drill stopped {skill.stoppedRig.name}.
+            {/if}
+          </p>
+        </div>
+      {/if}
     {/if}
 
     <div
@@ -637,29 +696,17 @@
         <button onclick={retry} class="btn btn-primary w-full py-3">
           <Icon name="mic" size={15} /> Try again
         </button>
-        <button
-          onclick={nextStep}
-          disabled={advancing}
-          class="btn btn-ghost w-full py-3"
-        >
+        <button onclick={nextStep} disabled={advancing} class="btn btn-ghost w-full py-3">
           {#if advancing}<Spinner size={15} label="Loading the next card" />{:else}Next →{/if}
         </button>
       </div>
     {:else if lessonCompleted && nextLessonId}
-      <button
-        onclick={nextStep}
-        disabled={advancing}
-        class="btn btn-primary mt-4 w-full py-3"
-      >
+      <button onclick={nextStep} disabled={advancing} class="btn btn-primary mt-4 w-full py-3">
         {#if advancing}<Spinner size={15} label="Loading the next lesson" />{:else}Next lesson →
           {nextLessonTitle ? ` ${nextLessonTitle}` : ''}{/if}
       </button>
     {:else if !lessonCompleted}
-      <button
-        onclick={nextStep}
-        disabled={advancing}
-        class="btn btn-primary mt-4 w-full py-3"
-      >
+      <button onclick={nextStep} disabled={advancing} class="btn btn-primary mt-4 w-full py-3">
         {#if advancing}<Spinner size={15} label="Loading the next card" />{:else}Next →{/if}
       </button>
     {/if}

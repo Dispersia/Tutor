@@ -2,7 +2,7 @@ import { streamSSE } from 'hono/streaming'
 import { addMessage, createSession, getOwnedSession, getRoles, listMessages } from '../db/repo'
 import { roleReasoning, type Role } from '../env'
 import { OpenRouter, type ChatMessage, type Usage } from '../llm/openrouter'
-import { systemPrompt } from '../llm/prompts'
+import { CONVERSATION_LANGUAGE_RULE, NATIVE_FEEDBACK_RULE, systemPrompt } from '../llm/prompts'
 import { resolveUserKey } from '../llm/userkey'
 import type { App } from '../context'
 
@@ -36,11 +36,20 @@ export function registerChat(app: App) {
     if (body.messages?.length) {
       msgs = body.messages
     } else {
+      // Keep the dialogue in the target language, but any correction or grammar
+      // note the learner has to read in their native language.
+      const nativeLang = user.nativeLang
+      const targetLang = user.targetLang ?? 'zh'
+      const langRule =
+        role === 'conversation'
+          ? CONVERSATION_LANGUAGE_RULE(nativeLang, targetLang)
+          : NATIVE_FEEDBACK_RULE(nativeLang, targetLang)
+      const extra = [body.system, langRule].filter(Boolean).join('\n')
       const history = listMessages(deps.db, sid).map((m) => ({
         role: m.role as ChatMessage['role'],
         content: m.text,
       }))
-      msgs = [...systemPrompt(role, body.system), ...history]
+      msgs = [...systemPrompt(role, extra), ...history]
       if (body.text?.trim()) msgs.push({ role: 'user', content: body.text })
     }
     if (body.text?.trim()) addMessage(deps.db, { sessionId: sid, role: 'user', text: body.text })

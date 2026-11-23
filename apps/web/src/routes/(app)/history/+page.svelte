@@ -6,10 +6,13 @@
   import { KIND_ACCENT, ACCENT } from '#lib/theme'
   import type { ChatSession } from '#lib/types'
   import Spinner from '#lib/components/Spinner.svelte'
+  import { peekCached } from '#lib/cache'
 
-  let sessions = $state<ChatSession[]>([])
+  // Seed from the last fetch so returning to History lists at once.
+  const cached = peekCached<{ sessions: ChatSession[] }>('/api/sessions')
+  let sessions = $state<ChatSession[]>(cached?.sessions ?? [])
   let error = $state('')
-  let loading = $state(true)
+  let loading = $state(cached === undefined)
 
   onMount(async () => {
     try {

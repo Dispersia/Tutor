@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { mandarinZhuyin } from './mandarin'
+import { mandarinSentenceZhuyin, mandarinZhuyin } from './mandarin'
 
 test('Taiwan readings come from the dictionary, not the model', () => {
   // every one of these differs from the Mainland reading or the model's guess
@@ -22,4 +22,12 @@ test('single characters use their preferred reading', () => {
 test('unknown input yields no reading', () => {
   expect(mandarinZhuyin('')).toBeUndefined()
   expect(mandarinZhuyin('zzz')).toBeUndefined()
+})
+
+test('a sentence gets a composed Zhuyin reading, word entries winning', () => {
+  expect(mandarinSentenceZhuyin('我想你。')).toBe('ㄨㄛˇ ㄒㄧㄤˇ ㄋㄧˇ')
+  expect(mandarinSentenceZhuyin('我喝茶。')).toBe('ㄨㄛˇ ㄏㄜ ㄔㄚˊ')
+  // 什麼 matches as a whole word, not 什 + 麼
+  expect(mandarinSentenceZhuyin('這是什麼')).toBe('ㄓㄜˋ ㄕˋ ㄕㄣˊ ˙ㄇㄜ')
+  expect(mandarinSentenceZhuyin('zzz')).toBeUndefined()
 })

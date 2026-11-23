@@ -3,6 +3,7 @@ import { createApp } from './app'
 import type { App, Deps } from './context'
 import { openDb } from './db/client'
 import type { Db } from './db/client'
+import { upsertSrs } from './db/repo'
 import type { Role } from './env'
 import { EventBus } from './events'
 import { OpenRouter } from './llm/openrouter'
@@ -567,5 +568,95 @@ test('active deck: the profile choice drives free practice', async () => {
     )
   ).json()) as { study: { activeDeckId: string | null } }
   expect(cleared.study.activeDeckId).toBeNull()
+  sqlite.close()
+})
+
+test('practice: nothing due and no new words means done, never the same card again', async () => {
+  const { app, db, sqlite } = makeApp()
+  const res = await app.request(
+    '/api/auth/register',
+    json({ username: 'loop', password: 'password123' }),
+  )
+  const cookie = res.headers.getSetCookie()[0]!.split(';')[0]!
+  const { user } = (await res.json()) as { user: { id: string } }
+  seedStarterDecks(db, user.id)
+
+  const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
+    decks: { id: string; level: string }[]
+  }
+  const deckId = decks.decks.find((d) => d.level === 'zhfreq')!.id
+  const cards = (await (await app.request(`/api/decks/${deckId}/cards`, auth(cookie))).json()) as {
+    cards: { id: string }[]
+  }
+
+  // Every card is in review, due a week out: the due backlog and the new-word
+  // pool are both empty. The old "soonest card" fallback kept handing back the
+  // same not-due card (the "This is not that." loop the learner reported).
+  const now = Date.now()
+  for (const c of cards.cards) {
+    upsertSrs(db, user.id, c.id, {
+      state: 'review',
+      step: 0,
+      stability: 5,
+      difficulty: 5,
+      reps: 3,
+      lapses: 0,
+      intervalDays: 7,
+      dueAt: now + 7 * 86_400_000,
+      lastRating: 3,
+      lastReviewAt: now - 86_400_000,
+    })
+  }
+
+  const done = (await (
+    await app.request('/api/practice/next', auth(cookie, json({ deckId })))
+  ).json()) as { instance: unknown; done?: boolean }
+  expect(done.done).toBe(true)
+  expect(done.instance ?? null).toBeNull()
+  sqlite.close()
+})
+
+test('practice keeps giving new words past the daily budget instead of stopping', async () => {
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
+  const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
+    decks: { id: string; level: string }[]
+  }
+  const deckId = decks.decks.find((d) => d.level === 'zhfreq')!.id
+
+  // Cap the day at a single new word.
+  await app.request(
+    '/api/settings',
+    auth(cookie, { ...json({ study: { newPerDay: 1 } }), method: 'PUT' }),
+  )
+
+  const next = async () =>
+    (await (await app.request('/api/practice/next', auth(cookie, json({ deckId })))).json()) as {
+      instance: { exerciseId: string; cardId: string } | null
+      done?: boolean
+    }
+  const grade = async (exerciseId: string, cardId: string) =>
+    app.request('/api/practice/grade', auth(cookie, json({ exerciseId, cardId, answer: '~' })))
+
+  // The day's one new word: teach, then its first graded drill.
+  const taught = await next()
+  expect(taught.instance!.exerciseId).toBe('introduce')
+  await grade('introduce', taught.instance!.cardId)
+  const drilled = await next()
+  expect(drilled.instance!.cardId).toBe(taught.instance!.cardId)
+  await grade(drilled.instance!.exerciseId, drilled.instance!.cardId)
+
+  // The new-card budget is spent, but the deck still has words to give: pressing
+  // on serves the next new word rather than the "today's goal reached" screen.
+  const again = await next()
+  expect(again.done).toBeFalsy()
+  expect(again.instance!.exerciseId).toBe('introduce')
+  expect(again.instance!.cardId).not.toBe(taught.instance!.cardId)
+
+  // The allowance was raised to match, so the header stays honest.
+  const stats = (await (await app.request('/api/srs/stats', auth(cookie))).json()) as {
+    budget: { newRemaining: number }
+  }
+  expect(stats.budget.newRemaining).toBeGreaterThan(0)
   sqlite.close()
 })

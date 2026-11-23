@@ -3,6 +3,7 @@ import { logger } from 'hono/logger'
 import type { App, AppEnv, Deps } from './context'
 import { publicUser } from './db/repo'
 import { registerAuth, currentUser } from './routes/auth'
+import { registerAudio } from './routes/audio'
 import { registerChat } from './routes/chat'
 import { registerCombat } from './routes/combat'
 import { registerCurriculum } from './routes/curriculum'
@@ -10,6 +11,7 @@ import { registerDecks } from './routes/decks'
 import { registerHealth } from './routes/health'
 import { registerModels } from './routes/models'
 import { registerPractice } from './routes/practice'
+import { registerPush } from './routes/push'
 import { registerSessions } from './routes/sessions'
 import { registerSettings } from './routes/settings'
 import { registerSkills } from './routes/skills'
@@ -49,6 +51,7 @@ export function createApp(deps: Deps, opts: { staticDir: string; log?: boolean }
   registerSettings(app)
   registerDecks(app)
   registerPractice(app)
+  registerAudio(app)
   registerCurriculum(app)
   registerSkills(app)
   registerCombat(app)
@@ -56,6 +59,7 @@ export function createApp(deps: Deps, opts: { staticDir: string; log?: boolean }
   registerChat(app)
   registerSessions(app)
   registerSpeech(app)
+  registerPush(app)
   registerStatic(app, opts.staticDir)
 
   app.onError((err, c) => {

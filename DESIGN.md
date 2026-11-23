@@ -1,44 +1,44 @@
 ---
 name: tutor
-description: A local-first, game-flavoured language tutor — Nightforge: a graphite ground, one warm amber action, muted category hues, and a self-hosted type system that covers every target script.
+description: A local-first, game-flavoured language tutor — Nightforge: a cool slate ground, one indigo action, muted category hues, and a self-hosted type system that covers every target script.
 colors:
-  ink-950: 'oklch(0.16 0.006 258)'
-  ink-900: 'oklch(0.196 0.007 258)'
-  ink-850: 'oklch(0.226 0.008 258)'
-  ink-800: 'oklch(0.272 0.009 258)'
-  ink-700: 'oklch(0.34 0.01 258)'
-  ink-600: 'oklch(0.45 0.012 258)'
-  ink-500: 'oklch(0.58 0.012 258)'
-  ink-400: 'oklch(0.7 0.01 258)'
-  ink-300: 'oklch(0.81 0.008 258)'
-  ink-200: 'oklch(0.9 0.005 258)'
-  ink-100: 'oklch(0.955 0.004 258)'
-  gold-200: 'oklch(0.9 0.06 88)'
-  gold-300: 'oklch(0.8 0.105 88)'
-  gold-400: 'oklch(0.72 0.11 86)'
-  gold-500: 'oklch(0.62 0.1 84)'
-  gold-600: 'oklch(0.52 0.08 82)'
-  seal-300: 'oklch(0.79 0.125 58)'
-  seal-400: 'oklch(0.7 0.145 52)'
-  seal-500: 'oklch(0.6 0.14 50)'
-  seal-600: 'oklch(0.5 0.13 48)'
+  ink-950: 'oklch(0.175 0.014 258)'
+  ink-900: 'oklch(0.21 0.016 258)'
+  ink-850: 'oklch(0.242 0.018 258)'
+  ink-800: 'oklch(0.288 0.02 258)'
+  ink-700: 'oklch(0.358 0.022 258)'
+  ink-600: 'oklch(0.465 0.022 258)'
+  ink-500: 'oklch(0.59 0.02 258)'
+  ink-400: 'oklch(0.7 0.018 258)'
+  ink-300: 'oklch(0.81 0.014 258)'
+  ink-200: 'oklch(0.9 0.01 258)'
+  ink-100: 'oklch(0.955 0.007 258)'
+  gold-200: 'oklch(0.92 0.08 95)'
+  gold-300: 'oklch(0.85 0.13 93)'
+  gold-400: 'oklch(0.78 0.145 90)'
+  gold-500: 'oklch(0.68 0.135 88)'
+  gold-600: 'oklch(0.56 0.11 86)'
+  seal-300: 'oklch(0.79 0.11 268)'
+  seal-400: 'oklch(0.67 0.16 268)'
+  seal-500: 'oklch(0.57 0.16 267)'
+  seal-600: 'oklch(0.47 0.15 266)'
   jade-300: 'oklch(0.82 0.09 158)'
   jade-400: 'oklch(0.73 0.1 158)'
   jade-500: 'oklch(0.63 0.1 156)'
   jade-950: 'oklch(0.24 0.04 158)'
-  brass-300: 'oklch(0.84 0.09 70)'
-  brass-400: 'oklch(0.76 0.1 68)'
-  brass-500: 'oklch(0.66 0.1 66)'
-  brass-950: 'oklch(0.25 0.04 68)'
+  brass-300: 'oklch(0.86 0.11 80)'
+  brass-400: 'oklch(0.79 0.125 78)'
+  brass-500: 'oklch(0.69 0.12 76)'
+  brass-950: 'oklch(0.26 0.045 76)'
   violet-300: 'oklch(0.8 0.09 300)'
   violet-400: 'oklch(0.71 0.1 300)'
   violet-500: 'oklch(0.61 0.1 300)'
-  ember-300: 'oklch(0.8 0.11 25)'
-  ember-400: 'oklch(0.66 0.14 25)'
-  ember-500: 'oklch(0.58 0.14 24)'
-  ember-600: 'oklch(0.5 0.13 23)'
-  ember-800: 'oklch(0.32 0.08 22)'
-  ember-950: 'oklch(0.2 0.04 22)'
+  ember-300: 'oklch(0.78 0.14 20)'
+  ember-400: 'oklch(0.67 0.2 22)'
+  ember-500: 'oklch(0.59 0.2 21)'
+  ember-600: 'oklch(0.51 0.18 20)'
+  ember-800: 'oklch(0.33 0.1 20)'
+  ember-950: 'oklch(0.21 0.05 20)'
   azure-300: 'oklch(0.82 0.09 245)'
   azure-400: 'oklch(0.73 0.1 245)'
   azure-500: 'oklch(0.63 0.1 245)'
@@ -113,11 +113,11 @@ components:
 **Creative North Star: "Nightforge."**
 
 A game you actually want to open every day. The room is **graphite** — a neutral
-dark with the faintest cool cast, never warm brown — and the interface is
-**flat**: colour, borders and type do the work, and nothing glows.
+dark with a cool blue cast, never warm brown — and the interface is **flat**:
+colour, borders and type do the work, and nothing glows.
 
-One **amber** carries the single action that moves the session forward. Everything
-the player earned is set in **brass gold**. The professions keep four muted
+One **indigo** carries the single action that moves the session forward.
+Everything the player earned is set in **gold**. The professions keep four muted
 category hues — jade grows, brass is the artisan, violet is support, ember is
 combat — and azure is the academy. Colour is a role, never a mood.
 
@@ -127,8 +127,8 @@ script.
 
 **Key characteristics:**
 
-- Neutral graphite ladder (`ink-950` → `ink-100`), no warm cast, no gradients
-- One amber action; brass gold for earned figures; four muted category hues
+- Cool slate ladder (`ink-950` → `ink-100`), no warm cast, no gradients
+- One indigo action; gold for earned figures; four muted category hues
 - Generous radii (10–14px), hairline borders, one soft shadow — flat, not skeuomorphic
 - Mobile-first single column with a bottom tab bar; desktop opens into a rail + wider spread
 - A self-hosted type system that covers Latin, CJK, kana, Hangul, Bopomofo and Cyrillic
@@ -137,18 +137,18 @@ script.
 
 ### Primary
 
-- **Seal Amber** (`oklch(0.7 0.145 52)`): the action colour. Primary buttons, the
-  active tab, the level stamp. The one thing that moves the session forward.
+- **Seal Indigo** (`oklch(0.67 0.16 268)`): the action colour. Primary buttons,
+  the active tab, the level stamp. The one thing that moves the session forward.
 
 ### Secondary
 
-- **Brass Gold** (`oklch(0.8 0.105 88)`): the reward colour. Every number the
+- **Gold** (`oklch(0.85 0.13 93)`): the reward colour. Every number the
   player earned — XP, streak, ranks, currency, the level figure.
 
 ### Tertiary
 
 - **Jade** (`oklch(0.73 0.1 158)`): what grows — daily goal, player health, gathering, success.
-- **Brass Amber** (`oklch(0.76 0.1 68)`): artisan, streak, coins, warnings.
+- **Brass** (`oklch(0.79 0.125 78)`): artisan, streak, coins, warnings.
 - **Azure** (`oklch(0.73 0.1 245)`): the academy — levels, chat, the next word.
 - **Violet** (`oklch(0.71 0.1 300)`): support and talents.
 - **Ember** (`oklch(0.66 0.14 25)`): combat, damage, danger.
@@ -249,8 +249,8 @@ the language and is the system's game tell.
 - **Shape:** 10px radius, inline-flex, `0.45rem` icon gap, `0.6rem × 1rem`
   padding, `0.92rem` text at weight 600, uppercase with `0.06em` tracking, and a
   44px minimum height for touch.
-- **Primary:** Seal Amber fill, near-black text — the one action that moves forward.
-- **Gold:** Brass Gold fill — spending, claiming, rewarding.
+- **Primary:** Seal Indigo fill, near-black text — the one action that moves forward.
+- **Gold:** Gold fill — spending, claiming, rewarding.
 - **Ghost:** transparent fill, `ink-600` border, `ink-200` text.
 - **Hover:** `brightness(1.08)`; active translates down 1px.
 - **Disabled:** drops to a neutral surface with `ink-400` text — never a faded
@@ -271,16 +271,16 @@ the language and is the system's game tell.
 ### Inputs / Fields
 
 - `ink-900` fill, 1px `ink-600` border, 9px radius, generous padding; focus
-  shifts the border to Seal Amber with a 3px amber ring.
+  shifts the border to Seal Indigo with a 3px indigo ring.
 
 ### Signature Components
 
 - **Character cell:** an accent-tinted square with faint cross guides, holding one
   character in the display face — a serif that matches the glyph's script.
-- **Level seal:** a circular stamp, 2px amber border, amber-tinted fill, display
+- **Level seal:** a circular stamp, 2px indigo border, indigo-tinted fill, display
   numeral with a tracked `LEVEL` label.
 - **Rank badge:** pill, `ink-900` fill, 1px gold border at 55%, gold numerals.
-- **Profile stamp:** a small square holding the member's initial; amber when its
+- **Profile stamp:** a small square holding the member's initial; indigo when its
   menu is open.
 - **Progress bar:** 9px tall, pill, `ink-900` groove with a 1px `ink-700` border,
   fill in the panel's accent.
@@ -293,7 +293,7 @@ the language and is the system's game tell.
   from one hue.
 - **Do** set earned numbers in the display face with tabular figures, brass gold
   when they are XP, streak, rank or currency.
-- **Do** keep the character cell for language only, and Seal Amber for the one
+- **Do** keep the character cell for language only, and Seal Indigo for the one
   forward action.
 - **Do** convey depth with one lightness step plus a 1px hairline.
 - **Do** keep colour semantic: jade grows, brass earns, azure is the academy,

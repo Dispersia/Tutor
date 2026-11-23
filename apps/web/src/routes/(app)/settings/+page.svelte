@@ -19,6 +19,9 @@
   } from '#lib/types'
   import { LANG_NAMES, setVoicePrefs } from '#lib/voices'
   import Spinner from '#lib/components/Spinner.svelte'
+  import { alertsEnabled, disableRigAlerts, enableRigAlerts, testRigAlert } from '#lib/rigAlerts'
+  import { pushSupported } from '#lib/push'
+  import { peekCached } from '#lib/cache'
 
   const ROLE_KEYS: Role[] = ['conversation', 'judge', 'generator', 'translator']
   const ROLE_LABEL: Record<Role, string> = {
@@ -63,6 +66,12 @@
   let users = $state<PublicUser[]>([])
   let note = $state('')
   let error = $state('')
+  /** Rig alerts are per device: the switch lives in localStorage, not the account. */
+  let alertsOn = $state(false)
+  let alertsBusy = $state(false)
+  let alertsMsg = $state('')
+  let alertsErr = $state('')
+  const canNotify = pushSupported()
 
   const isAdmin = $derived(session.user?.role === 'admin')
 
@@ -75,30 +84,41 @@
     return () => clearTimeout(timer)
   })
 
+  type SettingsPayload = {
+    roles: Roles
+    roleDefaults: Roles
+    voice: { mode: 'preset' | 'design'; voices: Record<string, string> }
+    study?: StudyPrefs
+    openrouter: { key: 'user' | 'server' | false }
+    foodThreshold?: number
+    desiredRetention?: number
+  }
+
+  /** Applies a settings payload to the form — from the cache or the server. */
+  function applySettings(s: SettingsPayload) {
+    roles = s.roles
+    roleDefaults = s.roleDefaults
+    voiceMode = s.voice.mode
+    voices = s.voice.voices
+    setVoicePrefs({ mode: voiceMode, voices })
+    if (s.study) {
+      study = s.study
+      stepsText = (s.study.learningSteps ?? []).join(', ')
+    }
+    keyStatus = s.openrouter.key
+    foodThreshold = s.foodThreshold ?? 50
+    desiredRetention = s.desiredRetention ?? 90
+  }
+
+  // Seed the form from the last fetch so fields don't pop in from defaults.
+  const cachedSettings = peekCached<SettingsPayload>('/api/settings')
+  if (cachedSettings) applySettings(cachedSettings)
+
   onMount(async () => {
     handle = session.user?.handle ?? ''
+    alertsOn = alertsEnabled()
     try {
-      const s = await api<{
-        roles: Roles
-        roleDefaults: Roles
-        voice: { mode: 'preset' | 'design'; voices: Record<string, string> }
-        study?: StudyPrefs
-        openrouter: { key: 'user' | 'server' | false }
-        foodThreshold?: number
-        desiredRetention?: number
-      }>('/api/settings')
-      roles = s.roles
-      roleDefaults = s.roleDefaults
-      voiceMode = s.voice.mode
-      voices = s.voice.voices
-      setVoicePrefs({ mode: voiceMode, voices })
-      if (s.study) {
-        study = s.study
-        stepsText = (s.study.learningSteps ?? []).join(', ')
-      }
-      keyStatus = s.openrouter.key
-      foodThreshold = s.foodThreshold ?? 50
-      desiredRetention = s.desiredRetention ?? 90
+      applySettings(await api<SettingsPayload>('/api/settings'))
     } catch (e) {
       error = (e as Error).message
     }
@@ -318,6 +338,45 @@
     void goto(href('/login'))
   }
 
+  async function toggleAlerts() {
+    if (alertsBusy) return
+    alertsBusy = true
+    alertsMsg = ''
+    alertsErr = ''
+    try {
+      if (alertsOn) {
+        await disableRigAlerts()
+        alertsOn = false
+        alertsMsg = 'Rig alerts are off on this device.'
+      } else {
+        const res = await enableRigAlerts()
+        if (!res.ok) {
+          alertsErr = res.error ?? 'Could not enable notifications.'
+          alertsOn = false
+          return
+        }
+        alertsOn = true
+        alertsMsg = 'Rig alerts are on for this device.'
+      }
+    } catch (e) {
+      alertsErr = (e as Error).message
+      alertsOn = alertsEnabled()
+    } finally {
+      alertsBusy = false
+    }
+  }
+
+  async function sendTestAlert() {
+    alertsMsg = ''
+    alertsErr = ''
+    try {
+      await testRigAlert()
+      alertsMsg = 'Test notification sent.'
+    } catch (e) {
+      alertsErr = (e as Error).message
+    }
+  }
+
   async function removeUser(id: string) {
     if (!confirm('Delete this user and all their history?')) return
     await api(`/api/users/${id}`, { method: 'DELETE' }).catch(() => {})
@@ -406,20 +465,15 @@
       {#each ROLE_KEYS as role (role)}
         <label class="block">
           <span class="mb-1 block text-xs text-ink-400">{ROLE_LABEL[role]}</span>
-          <input
-            list="models"
-            bind:value={roles[role]}
-            class="field"
-          />
+          <input list="models" bind:value={roles[role]} class="field" />
         </label>
       {/each}
     </div>
     <div class="mt-3 flex items-center justify-between">
       <button onclick={saveRoles} class="btn btn-ghost px-3 py-2 text-xs">Save models</button>
       {#if roleDefaults}
-        <button
-          onclick={() => (roles = { ...roleDefaults! })}
-          class="link link-btn text-xs">reset to defaults</button
+        <button onclick={() => (roles = { ...roleDefaults! })} class="link link-btn text-xs"
+          >reset to defaults</button
         >
       {/if}
     </div>
@@ -556,30 +610,16 @@
     <div class="mt-2 grid grid-cols-2 gap-3">
       <label class="block text-xs text-ink-400">
         New cards / day <span class="text-ink-400">(0 = ∞)</span>
-        <input
-          type="number"
-          min="0"
-          bind:value={study.newPerDay}
-          class="field mt-1"
-        />
+        <input type="number" min="0" bind:value={study.newPerDay} class="field mt-1" />
       </label>
       <label class="block text-xs text-ink-400">
         Max reviews / day <span class="text-ink-400">(0 = ∞)</span>
-        <input
-          type="number"
-          min="0"
-          bind:value={study.maxReviewsPerDay}
-          class="field mt-1"
-        />
+        <input type="number" min="0" bind:value={study.maxReviewsPerDay} class="field mt-1" />
       </label>
     </div>
     <label class="mt-3 block text-xs text-ink-400">
       Learning steps (minutes, comma-separated)
-      <input
-        bind:value={stepsText}
-        placeholder="1, 10, 60, 240"
-        class="field mt-1"
-      />
+      <input bind:value={stepsText} placeholder="1, 10, 60, 240" class="field mt-1" />
     </label>
     <p class="mt-1 text-xs text-ink-400">
       A new card repeats once per step before it graduates (Anki’s default is <code>1, 10</code>).
@@ -610,9 +650,7 @@
           <div class="mt-2 space-y-1.5">
             {#each group.items as ex (ex.id)}
               <label class="flex min-h-11 items-center justify-between gap-3 py-1">
-                <span
-                  class="text-sm {ex.disabled || isDisabled(ex.id) ? 'text-ink-400' : ''}"
-                >
+                <span class="text-sm {ex.disabled || isDisabled(ex.id) ? 'text-ink-400' : ''}">
                   {ex.title}{#if ex.disabled}<span class="text-ink-500"> · off for now</span>{/if}
                 </span>
                 <input
@@ -655,16 +693,46 @@
     </div>
   </section>
 
+  <!-- Rig alerts ----------------------------------------------------------->
+  <section class="mb-5 panel panel-accent p-4" style={accentStyle(ACCENT.jade)}>
+    <h2 class="display text-sm text-ink-100">Rig alerts</h2>
+    <p class="mt-1 text-xs text-ink-400">
+      A notification when a rig's run drops under 30 minutes, so you can drill once more and keep it
+      going. This switch is per device: turn it on for your phone and your computer separately.
+    </p>
+    {#if !canNotify}
+      <p class="mt-3 text-xs text-ink-400">This browser cannot show notifications.</p>
+    {:else}
+      <label class="mt-3 flex min-h-11 items-center justify-between gap-3">
+        <span class="text-sm">Notify me on this device</span>
+        <input
+          type="checkbox"
+          checked={alertsOn}
+          disabled={alertsBusy}
+          onchange={toggleAlerts}
+          class="h-4 w-4 accent-seal-400"
+        />
+      </label>
+      {#if alertsOn}
+        <button onclick={sendTestAlert} class="btn btn-ghost mt-2 px-3 py-2 text-xs">
+          Send a test
+        </button>
+      {/if}
+      <p class="mt-2 text-xs text-ink-500">
+        On Android, install the app to your home screen first; iOS needs it installed too.
+      </p>
+    {/if}
+    {#if alertsMsg}<p class="mt-2 text-xs text-jade-300">{alertsMsg}</p>{/if}
+    {#if alertsErr}<p class="mt-2 text-xs text-ember-300">{alertsErr}</p>{/if}
+  </section>
+
   <!-- Account -------------------------------------------------------------->
   <section class="mb-5 panel panel-accent p-4" style={accentStyle(ACCENT.violet)}>
     <h2 class="display text-sm text-ink-100">Account</h2>
     <label class="mt-3 block">
       <span class="mb-1 block text-xs text-ink-400">Display name</span>
       <div class="flex gap-2">
-        <input
-          bind:value={handle}
-          class="field flex-1"
-        />
+        <input bind:value={handle} class="field flex-1" />
         <button onclick={saveProfile} class="btn btn-ghost px-3 py-2 text-xs">Save</button>
       </div>
     </label>
@@ -680,15 +748,16 @@
       <h2 class="display text-sm text-ink-100">Users ({users.length})</h2>
       <ul class="mt-3 space-y-2">
         {#each users as u (u.id)}
-          <li class="flex items-center justify-between rounded-[12px] border border-ink-700 px-3 py-2">
+          <li
+            class="flex items-center justify-between rounded-[12px] border border-ink-700 px-3 py-2"
+          >
             <div>
               <div class="text-sm">{u.handle}</div>
               <div class="text-xs text-ink-400">@{u.username} · {u.role}</div>
             </div>
             {#if u.id !== session.user?.id}
-              <button
-                onclick={() => removeUser(u.id)}
-                class="btn btn-danger px-3 py-2 text-xs">Delete</button
+              <button onclick={() => removeUser(u.id)} class="btn btn-danger px-3 py-2 text-xs"
+                >Delete</button
               >
             {/if}
           </li>
