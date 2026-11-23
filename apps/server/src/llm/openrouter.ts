@@ -132,50 +132,16 @@ export class OpenRouter {
     if (this.#models && this.#modelsPath === path) return this.#models
     const res = await fetch(`${this.baseUrl}${path}`, { headers: this.#headers() })
     if (!res.ok) throw new Error(`openrouter models${opts.user ? '/user' : ''} -> ${res.status}`)
-    const json = (await res.json()) as { data?: Record<string, never>[] }
+    const json = (await res.json()) as { data?: RawModel[] }
     this.#modelsPath = path
-    this.#models = (json.data ?? []).map((m) => {
-      const raw = m as unknown as {
-        id: string
-        name: string
-        context_length?: number
-        pricing?: { prompt?: string; completion?: string }
-        architecture?: { input_modalities?: string[]; output_modalities?: string[] }
-      }
-      return {
-        id: raw.id,
-        name: raw.name,
-        contextLength: raw.context_length ?? 0,
-        promptPricePerM: Number(raw.pricing?.prompt ?? 0) * 1e6,
-        completionPricePerM: Number(raw.pricing?.completion ?? 0) * 1e6,
-        inputModalities: raw.architecture?.input_modalities ?? ['text'],
-        outputModalities: raw.architecture?.output_modalities ?? ['text'],
-      }
-    })
+    this.#models = (json.data ?? []).map(toModelInfo)
     return this.#models
   }
 
   async *streamChat(opts: ChatOptions): AsyncGenerator<ChatEvent> {
     if (!this.#key) throw new Error('OPENROUTER_API_KEY is not set')
-    const res = await fetch(`${this.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: this.#headers(),
-      signal: opts.signal,
-      body: JSON.stringify({
-        model: opts.model,
-        messages: opts.messages,
-        stream: true,
-        usage: { include: true },
-        reasoning: { effort: opts.reasoning ?? 'none' },
-        ...(opts.temperature != null ? { temperature: opts.temperature } : {}),
-        ...(opts.maxTokens != null ? { max_tokens: opts.maxTokens } : {}),
-      }),
-    })
-    if (!res.ok || !res.body) {
-      const detail = await res.text().catch(() => '')
-      throw new Error(`openrouter chat -> ${res.status}: ${detail.slice(0, 400)}`)
-    }
-    for await (const line of lines(res.body)) {
+    const res = await sendStream(this.baseUrl, this.#headers(), opts)
+    for await (const line of lines(res.body!)) {
       if (!line.startsWith('data:')) continue
       const ev = parseSseData(line.slice(5).trim())
       if (!ev) continue
@@ -201,46 +167,115 @@ export class OpenRouter {
     usage: Usage
   }> {
     if (!this.#key) throw new Error('OPENROUTER_API_KEY is not set')
-    const res = await fetch(`${this.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: this.#headers(),
-      signal: opts.signal,
-      body: JSON.stringify({
-        model: opts.model,
-        messages: opts.messages,
-        usage: { include: true },
-        reasoning: { effort: opts.reasoning ?? 'none' },
-        response_format: {
-          type: 'json_schema',
-          json_schema: {
-            name: opts.schemaName ?? 'result',
-            strict: true,
-            schema: opts.schema,
-          },
-        },
-      }),
-    })
-    if (!res.ok) {
-      const detail = await res.text().catch(() => '')
-      throw new Error(`openrouter json -> ${res.status}: ${detail.slice(0, 400)}`)
-    }
-    const json = (await res.json()) as {
-      choices?: { message?: { content?: string }; finish_reason?: string }[]
-      usage?: Record<string, unknown>
-    }
+    const res = await sendJson(this.baseUrl, this.#headers(), opts)
+    const json = (await res.json()) as JsonResponse
     const choice = json.choices?.[0]
     // A response cut off by the output cap is not recoverable JSON — say so
     // plainly so a caller (the deck builder) can retry with a smaller batch.
     if (choice?.finish_reason === 'length') {
       throw new Error('the model ran out of output space before its JSON was complete')
     }
-    const content = choice?.message?.content ?? '{}'
-    try {
-      return { json: JSON.parse(content) as T, usage: mapUsage(json.usage) }
-    } catch (err) {
-      throw new Error(`the model did not return valid JSON (${(err as Error).message})`, {
-        cause: err,
-      })
-    }
+    return parseJson<T>(choice?.message?.content ?? '{}', json.usage)
+  }
+}
+
+/** The streaming request, through the shared completions endpoint. */
+async function sendStream(
+  baseUrl: string,
+  headers: Record<string, string>,
+  opts: ChatOptions,
+): Promise<Response> {
+  const res = await fetch(`${baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers,
+    signal: opts.signal,
+    body: JSON.stringify(streamBody(opts)),
+  })
+  if (!res.ok || !res.body) {
+    const detail = await res.text().catch(() => '')
+    throw new Error(`openrouter chat -> ${res.status}: ${detail.slice(0, 400)}`)
+  }
+  return res
+}
+
+function streamBody(opts: ChatOptions) {
+  return {
+    model: opts.model,
+    messages: opts.messages,
+    stream: true,
+    usage: { include: true },
+    reasoning: { effort: opts.reasoning ?? 'none' },
+    ...(opts.temperature != null ? { temperature: opts.temperature } : {}),
+    ...(opts.maxTokens != null ? { max_tokens: opts.maxTokens } : {}),
+  }
+}
+
+type JsonOptions = ChatOptions & { schema: object; schemaName?: string }
+
+/** The JSON-schema request, through the shared completions endpoint. */
+async function sendJson(
+  baseUrl: string,
+  headers: Record<string, string>,
+  opts: JsonOptions,
+): Promise<Response> {
+  const res = await fetch(`${baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers,
+    signal: opts.signal,
+    body: JSON.stringify(jsonBody(opts)),
+  })
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '')
+    throw new Error(`openrouter json -> ${res.status}: ${detail.slice(0, 400)}`)
+  }
+  return res
+}
+
+function jsonBody(opts: JsonOptions) {
+  return {
+    model: opts.model,
+    messages: opts.messages,
+    usage: { include: true },
+    reasoning: { effort: opts.reasoning ?? 'none' },
+    response_format: {
+      type: 'json_schema',
+      json_schema: { name: opts.schemaName ?? 'result', strict: true, schema: opts.schema },
+    },
+  }
+}
+
+interface JsonResponse {
+  choices?: { message?: { content?: string }; finish_reason?: string }[]
+  usage?: Record<string, unknown>
+}
+
+function parseJson<T>(content: string, usage: Record<string, unknown> | undefined) {
+  try {
+    return { json: JSON.parse(content) as T, usage: mapUsage(usage) }
+  } catch (err) {
+    throw new Error(`the model did not return valid JSON (${(err as Error).message})`, {
+      cause: err,
+    })
+  }
+}
+
+/** One catalogue entry as the raw OpenRouter API returns it. */
+interface RawModel {
+  id: string
+  name: string
+  context_length?: number
+  pricing?: { prompt?: string; completion?: string }
+  architecture?: { input_modalities?: string[]; output_modalities?: string[] }
+}
+
+function toModelInfo(raw: RawModel): ModelInfo {
+  return {
+    id: raw.id,
+    name: raw.name,
+    contextLength: raw.context_length ?? 0,
+    promptPricePerM: Number(raw.pricing?.prompt ?? 0) * 1e6,
+    completionPricePerM: Number(raw.pricing?.completion ?? 0) * 1e6,
+    inputModalities: raw.architecture?.input_modalities ?? ['text'],
+    outputModalities: raw.architecture?.output_modalities ?? ['text'],
   }
 }
