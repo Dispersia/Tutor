@@ -141,43 +141,48 @@ async function show(n: { title: string; body: string; tag: string; url: string }
  * without a reload. Returns a stop function.
  */
 export function startRigAlerts(): () => void {
-  let stopped = false
-  let cancel: (() => void) | null = null
-  let timer: ReturnType<typeof setInterval> | null = null
-
-  const refresh = async () => {
-    if (stopped) return
-    if (!alertsEnabled() || pushPermission() !== 'granted') {
-      cancel?.()
-      cancel = null
-      return
-    }
-    try {
-      const { leadSec, rigs } = await api<{ leadSec: number; rigs: RigClock[] }>('/api/rigs')
-      cancel?.()
-      cancel = scheduleRigAlerts(rigs, leadSec)
-    } catch {
-      // offline or logged out: the next tick tries again
-    }
-  }
-
+  const state: RigAlertState = { stopped: false, cancel: null, timer: null }
+  const refresh = () => void refreshRigs(state)
   void syncPush()
-  void refresh()
-  timer = setInterval(() => void refresh(), 60_000)
+  refresh()
+  state.timer = setInterval(refresh, 60_000)
   const onVisible = () => {
-    if (document.visibilityState === 'visible') void refresh()
+    if (document.visibilityState === 'visible') refresh()
   }
-  const onToggle = () => void refresh()
   document.addEventListener('visibilitychange', onVisible)
-  window.addEventListener(EVENT, onToggle)
+  window.addEventListener(EVENT, refresh)
+  return () => stopRigAlerts(state, onVisible, refresh)
+}
 
-  return () => {
-    stopped = true
-    cancel?.()
-    if (timer) clearInterval(timer)
-    document.removeEventListener('visibilitychange', onVisible)
-    window.removeEventListener(EVENT, onToggle)
+interface RigAlertState {
+  stopped: boolean
+  cancel: (() => void) | null
+  timer: ReturnType<typeof setInterval> | null
+}
+
+/** One tick: fetch the live rigs and reschedule alerts for them. */
+async function refreshRigs(state: RigAlertState): Promise<void> {
+  if (state.stopped) return
+  if (!alertsEnabled() || pushPermission() !== 'granted') {
+    state.cancel?.()
+    state.cancel = null
+    return
   }
+  try {
+    const { leadSec, rigs } = await api<{ leadSec: number; rigs: RigClock[] }>('/api/rigs')
+    state.cancel?.()
+    state.cancel = scheduleRigAlerts(rigs, leadSec)
+  } catch {
+    // offline or logged out: the next tick tries again
+  }
+}
+
+function stopRigAlerts(state: RigAlertState, onVisible: () => void, refresh: () => void): void {
+  state.stopped = true
+  state.cancel?.()
+  if (state.timer) clearInterval(state.timer)
+  document.removeEventListener('visibilitychange', onVisible)
+  window.removeEventListener(EVENT, refresh)
 }
 
 /** Turns alerts on for this device: permission, subscription, then the timer. */

@@ -24,28 +24,11 @@ export class Recorder {
   }
 
   async start(): Promise<void> {
-    this.#stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        channelCount: 1,
-        // Raw-ish mic: browser noise suppression is tuned for phone calls and
-        // smears the consonants the ASR needs. Keep echo cancellation (TTS may be
-        // playing) but leave gain/level to the browser.
-        echoCancellation: true,
-        noiseSuppression: false,
-        autoGainControl: true,
-      },
-    })
+    this.#stream = await navigator.mediaDevices.getUserMedia({ audio: micConstraints() })
     this.#chunks = []
-    const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg']
-    const mimeType = candidates.find((t) => MediaRecorder.isTypeSupported?.(t))
-    this.#rec = new MediaRecorder(this.#stream, {
-      ...(mimeType ? { mimeType } : {}),
-      // Opus defaults can be voice-narrowband; give the ASR real bandwidth.
-      audioBitsPerSecond: 128_000,
+    this.#rec = createRecorder(this.#stream, (data) => {
+      if (data.size) this.#chunks.push(data)
     })
-    this.#rec.ondataavailable = (e) => {
-      if (e.data.size) this.#chunks.push(e.data)
-    }
     this.#startedAt = Date.now()
     this.#rec.start()
     // Fetch the VAD weights while the user is talking, not after.
@@ -59,15 +42,7 @@ export class Recorder {
   async stop(): Promise<Take> {
     const rec = this.#rec
     if (!rec) return { blob: null, durationMs: 0, speechMs: 0 }
-    const raw = await new Promise<Blob>((resolve) => {
-      rec.onstop = () => {
-        this.#stream?.getTracks().forEach((t) => t.stop())
-        this.#stream = null
-        this.#rec = null
-        resolve(new Blob(this.#chunks, { type: rec.mimeType || 'audio/webm' }))
-      }
-      rec.stop()
-    })
+    const raw = await this.#finish(rec)
     const durationMs = this.#startedAt ? Date.now() - this.#startedAt : 0
     this.#startedAt = 0
     this.#chunks = []
@@ -78,6 +53,43 @@ export class Recorder {
       speechMs: trim.speechMs,
     }
   }
+
+  /** Stops the MediaRecorder, tears down the mic and resolves the raw clip. */
+  #finish(rec: MediaRecorder): Promise<Blob> {
+    return new Promise<Blob>((resolve) => {
+      rec.onstop = () => {
+        this.#stream?.getTracks().forEach((t) => t.stop())
+        this.#stream = null
+        this.#rec = null
+        resolve(new Blob(this.#chunks, { type: rec.mimeType || 'audio/webm' }))
+      }
+      rec.stop()
+    })
+  }
+}
+
+function micConstraints(): MediaTrackConstraints {
+  return {
+    channelCount: 1,
+    // Raw-ish mic: browser noise suppression is tuned for phone calls and smears
+    // the consonants the ASR needs. Keep echo cancellation (TTS may be playing)
+    // but leave gain/level to the browser.
+    echoCancellation: true,
+    noiseSuppression: false,
+    autoGainControl: true,
+  }
+}
+
+function createRecorder(stream: MediaStream, onData: (data: Blob) => void): MediaRecorder {
+  const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg']
+  const mimeType = candidates.find((t) => MediaRecorder.isTypeSupported?.(t))
+  const rec = new MediaRecorder(stream, {
+    ...(mimeType ? { mimeType } : {}),
+    // Opus defaults can be voice-narrowband; give the ASR real bandwidth.
+    audioBitsPerSecond: 128_000,
+  })
+  rec.ondataavailable = (e) => onData(e.data)
+  return rec
 }
 
 export function micSupported(): boolean {

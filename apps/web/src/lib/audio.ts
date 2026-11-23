@@ -32,9 +32,12 @@ export function speechWindows(
   durationMs: number,
   opts: WindowOptions = {},
 ): Segment[] {
-  const mergeGapMs = opts.mergeGapMs ?? WINDOW_DEFAULTS.mergeGapMs
-  const padMs = opts.padMs ?? WINDOW_DEFAULTS.padMs
-  const padded = segments
+  const padded = paddedSegments(segments, durationMs, opts.padMs ?? WINDOW_DEFAULTS.padMs)
+  return mergeWindows(padded, opts.mergeGapMs ?? WINDOW_DEFAULTS.mergeGapMs)
+}
+
+function paddedSegments(segments: Segment[], durationMs: number, padMs: number): Segment[] {
+  return segments
     .filter((s) => s.end > s.start)
     .map((s) => ({
       start: Math.max(0, s.start - padMs),
@@ -42,7 +45,9 @@ export function speechWindows(
     }))
     .filter((s) => s.end > s.start)
     .sort((a, b) => a.start - b.start)
+}
 
+function mergeWindows(padded: Segment[], mergeGapMs: number): Segment[] {
   const out: Segment[] = []
   for (const seg of padded) {
     const last = out.at(-1)
@@ -64,15 +69,8 @@ export function spliceWindows(
   sampleRate: number,
   windows: Segment[],
 ): Float32Array {
-  const perMs = sampleRate / 1000
-  const spans = windows
-    .map((w) => ({
-      from: Math.max(0, Math.round(w.start * perMs)),
-      to: Math.min(pcm.length, Math.round(w.end * perMs)),
-    }))
-    .filter((s) => s.to > s.from)
-  const total = spans.reduce((n, s) => n + (s.to - s.from), 0)
-  const out = new Float32Array(total)
+  const spans = spansOf(windows, sampleRate / 1000, pcm.length)
+  const out = new Float32Array(spans.reduce((n, s) => n + (s.to - s.from), 0))
   let at = 0
   for (const span of spans) {
     out.set(pcm.subarray(span.from, span.to), at)
@@ -81,17 +79,31 @@ export function spliceWindows(
   return out
 }
 
+/** The sample spans a set of ms windows covers, clamped to the buffer. */
+function spansOf(windows: Segment[], perMs: number, length: number) {
+  return windows
+    .map((w) => ({
+      from: Math.max(0, Math.round(w.start * perMs)),
+      to: Math.min(length, Math.round(w.end * perMs)),
+    }))
+    .filter((s) => s.to > s.from)
+}
+
 /** 16-bit PCM WAV container for mono float samples in [-1, 1]. */
 export function encodeWav(pcm: Float32Array, sampleRate: number): Blob {
-  const bytes = 44 + pcm.length * 2
-  const buf = new ArrayBuffer(bytes)
+  const buf = new ArrayBuffer(44 + pcm.length * 2)
   const view = new DataView(buf)
+  writeWavHeader(view, sampleRate, pcm.length)
+  writeSamples(view, pcm)
+  return new Blob([buf], { type: 'audio/wav' })
+}
+
+function writeWavHeader(view: DataView, sampleRate: number, samples: number): void {
   const ascii = (at: number, text: string) => {
     for (let i = 0; i < text.length; i++) view.setUint8(at + i, text.charCodeAt(i))
   }
-
   ascii(0, 'RIFF')
-  view.setUint32(4, bytes - 8, true)
+  view.setUint32(4, 36 + samples * 2, true)
   ascii(8, 'WAVE')
   ascii(12, 'fmt ')
   view.setUint32(16, 16, true) // fmt chunk size
@@ -102,10 +114,12 @@ export function encodeWav(pcm: Float32Array, sampleRate: number): Blob {
   view.setUint16(32, 2, true) // block align
   view.setUint16(34, 16, true) // bits per sample
   ascii(36, 'data')
-  view.setUint32(40, pcm.length * 2, true)
+  view.setUint32(40, samples * 2, true)
+}
+
+function writeSamples(view: DataView, pcm: Float32Array): void {
   for (let i = 0; i < pcm.length; i++) {
-    const s = Math.max(-1, Math.min(1, pcm[i]))
+    const s = Math.max(-1, Math.min(1, pcm[i]!))
     view.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true)
   }
-  return new Blob([buf], { type: 'audio/wav' })
 }

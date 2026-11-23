@@ -512,9 +512,10 @@ catalogue route and the pinyin-to-Zhuyin converter. That took the list from 127
 files / 255 functions to **30 files / 44 functions**. The biggest left are
 exercise graders, the web VAD/audio helpers and two Svelte components, all under
 40 lines, then the VAD trimmer, the SpeakWord/Converse recorders and the card
-editor. That took the list from 127 files / 255 functions to **25 files / 37
-functions**. The list shrinks; it never grows, and new code is held to 20 from day
-one.
+editor, then the web client helpers (rig alerts, push, audio, recorder,
+skill/inventory views), the metadata parser and the curriculum builder. That took
+the list from 127 files / 255 functions to **17 files / 25 functions**. The list
+shrinks; it never grows, and new code is held to 20 from day one.
 
 **Phase 15 — the web shells & route validation (open).**
 The remaining `+page.svelte` files over ~250 lines (`practice`, `settings`,

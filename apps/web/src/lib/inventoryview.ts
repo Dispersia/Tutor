@@ -129,19 +129,29 @@ export function totalsOf(
     armour += g.armour
     power += g.power
   }
-  for (const set of setBonuses ?? []) {
+  const boosted = withSetBonuses(stats, armour, power, setBonuses ?? [])
+  const total = STAT_ORDER.reduce((sum, id) => sum + boosted.stats[id], 0)
+  return {
+    ...boosted,
+    score: Math.round(total + boosted.armour * 2 + boosted.power * 2),
+  }
+}
+
+/** Applies the active set-bonus tiers to the worn totals, rounded. */
+function withSetBonuses(
+  stats: GearStats,
+  armour: number,
+  power: number,
+  setBonuses: NonNullable<GearResponse['setBonuses']>,
+): { stats: GearStats; armour: number; power: number } {
+  for (const set of setBonuses) {
     for (const tier of set.active) {
       if (tier.stats) for (const id of STAT_ORDER) stats[id] += tier.stats[id] ?? 0
       if (tier.armourPct) armour *= 1 + tier.armourPct
       if (tier.powerPct) power *= 1 + tier.powerPct
     }
   }
-  armour = Math.round(armour)
-  power = Math.round(power)
-  const score = Math.round(
-    STAT_ORDER.reduce((sum, id) => sum + stats[id], 0) + armour * 2 + power * 2,
-  )
-  return { stats, armour, power, score }
+  return { stats, armour: Math.round(armour), power: Math.round(power) }
 }
 
 /** The account-wide combat buffs from tier bands, positive only. */

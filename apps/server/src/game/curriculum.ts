@@ -43,31 +43,39 @@ export const STEP_SIZE = 1
  * own lesson (the curated path's behaviour).
  */
 export function buildLessons(key: string, cards: StepCard[]): Lesson[] {
+  return groupByStep(cards).map((group, i) => lessonOf(key, group, i))
+}
+
+/** Cards sharing a `step` form one group, wherever they sit in the list. */
+function groupByStep(cards: StepCard[]): StepCard[][] {
   const groups: StepCard[][] = []
-  const groupByStep = new Map<number, number>()
+  const index = new Map<number, number>()
   for (const card of cards) {
     if (card.step === undefined) {
       groups.push([card])
       continue
     }
-    const existing = groupByStep.get(card.step)
+    const existing = index.get(card.step)
     if (existing !== undefined) groups[existing]!.push(card)
     else {
-      groupByStep.set(card.step, groups.length)
+      index.set(card.step, groups.length)
       groups.push([card])
     }
   }
-  return groups.map((group, i) => {
-    const head = group[0]!
-    return {
-      id: `${key}:${i + 1}`,
-      index: i,
-      title: head.back,
-      description: [head.front, head.reading].filter(Boolean).join(' · '),
-      level: key,
-      cardIds: group.map((c) => c.id),
-      newWord: head.back,
-      reading: head.reading,
-    }
-  })
+  return groups
+}
+
+/** One lesson from its group: the head card names the step and glosses it. */
+function lessonOf(key: string, group: StepCard[], i: number): Lesson {
+  const head = group[0]!
+  return {
+    id: `${key}:${i + 1}`,
+    index: i,
+    title: head.back,
+    description: [head.front, head.reading].filter(Boolean).join(' · '),
+    level: key,
+    cardIds: group.map((c) => c.id),
+    newWord: head.back,
+    reading: head.reading,
+  }
 }

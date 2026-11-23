@@ -89,27 +89,36 @@ export interface TalentRow {
 export function buildTalentRail(s: SkillDTO): TalentRow[] {
   const rows: TalentRow[] = []
   for (let m = 10; m <= 100; m += 10) {
-    const chosen = s.talent.owned.find((t) => t.milestone === m)
-    const open = s.talent.pendingChoice && s.talent.milestone === m
-    rows.push({
-      milestone: m,
-      kind: 'choice',
-      state: chosen ? 'done' : open ? 'open' : 'locked',
-      owned: chosen,
-      options: open ? s.talent.options : [],
-    })
-    if (!s.talent.mastery.milestones.includes(m)) continue
-    const capstone = s.talent.mastery.owned.find((t) => t.milestone === m)
-    const capstoneOpen = s.talent.mastery.pending.find((p) => p.milestone === m)
-    rows.push({
-      milestone: m,
-      kind: 'mastery',
-      state: capstone ? 'done' : capstoneOpen ? 'open' : 'locked',
-      owned: capstone,
-      options: capstoneOpen?.options ?? [],
-    })
+    rows.push(choiceRow(s, m))
+    const mastery = masteryRow(s, m)
+    if (mastery) rows.push(mastery)
   }
   return rows
+}
+
+function choiceRow(s: SkillDTO, m: number): TalentRow {
+  const chosen = s.talent.owned.find((t) => t.milestone === m)
+  const open = s.talent.pendingChoice && s.talent.milestone === m
+  return {
+    milestone: m,
+    kind: 'choice',
+    state: chosen ? 'done' : open ? 'open' : 'locked',
+    owned: chosen,
+    options: open ? s.talent.options : [],
+  }
+}
+
+function masteryRow(s: SkillDTO, m: number): TalentRow | undefined {
+  if (!s.talent.mastery.milestones.includes(m)) return undefined
+  const capstone = s.talent.mastery.owned.find((t) => t.milestone === m)
+  const open = s.talent.mastery.pending.find((p) => p.milestone === m)
+  return {
+    milestone: m,
+    kind: 'mastery',
+    state: capstone ? 'done' : open ? 'open' : 'locked',
+    owned: capstone,
+    options: open?.options ?? [],
+  }
 }
 
 /**
@@ -121,9 +130,17 @@ export function buildBandGroups(
 ): { groups: { band: BandDTO; actions: ActionDTO[] }[]; other: ActionDTO[] } | null {
   const bands = s.bands ?? []
   if (!bands.length) return null
+  const { byBand, other } = groupByBand(s.actions)
+  return {
+    groups: bands.map((band) => ({ band, actions: byBand.get(band.id) ?? [] })),
+    other,
+  }
+}
+
+function groupByBand(actions: ActionDTO[]) {
   const byBand = new Map<string, ActionDTO[]>()
   const other: ActionDTO[] = []
-  for (const a of s.actions) {
+  for (const a of actions) {
     if (a.band) {
       const list = byBand.get(a.band.id) ?? []
       list.push(a)
@@ -132,8 +149,5 @@ export function buildBandGroups(
       other.push(a)
     }
   }
-  return {
-    groups: bands.map((band) => ({ band, actions: byBand.get(band.id) ?? [] })),
-    other,
-  }
+  return { byBand, other }
 }

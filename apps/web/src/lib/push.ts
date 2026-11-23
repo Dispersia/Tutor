@@ -49,35 +49,39 @@ export async function enablePush(): Promise<{ ok: boolean; error?: string }> {
   if (permission !== 'granted') {
     return { ok: false, error: 'Notifications are blocked in the browser settings.' }
   }
-
   const reg = await navigator.serviceWorker.ready.catch(() => null)
   if (!reg) return { ok: false, error: 'The app is not ready yet. Reload and try again.' }
-
   const { publicKey } = await api<{ publicKey: string }>('/api/push/key')
-  const key = decodeKey(publicKey)
-
-  let sub = await reg.pushManager.getSubscription()
-  // A subscription minted under an older VAPID key cannot be reused: the server
-  // would sign with a key the push service no longer trusts.
-  if (sub && !sameKey(sub.options.applicationServerKey, key)) {
-    await sub.unsubscribe().catch(() => {})
-    sub = null
-  }
-  if (!sub) {
-    sub = await reg.pushManager
-      .subscribe({ userVisibleOnly: true, applicationServerKey: key })
-      .catch(async () => {
-        // Some browsers keep a stale subscription around; drop it and retry once.
-        const stale = await reg.pushManager.getSubscription()
-        if (stale) await stale.unsubscribe().catch(() => {})
-        return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key })
-      })
-  }
+  const sub = await ensureSubscription(reg, decodeKey(publicKey))
   await api('/api/push/subscribe', {
     method: 'POST',
     body: JSON.stringify(sub.toJSON()),
   })
   return { ok: true }
+}
+
+/** The device's subscription under the server's current VAPID key. */
+async function ensureSubscription(
+  reg: ServiceWorkerRegistration,
+  key: Uint8Array<ArrayBuffer>,
+): Promise<PushSubscription> {
+  const sub = await reg.pushManager.getSubscription()
+  // A subscription minted under an older VAPID key cannot be reused: the server
+  // would sign with a key the push service no longer trusts.
+  if (sub && sameKey(sub.options.applicationServerKey, key)) return sub
+  if (sub) await sub.unsubscribe().catch(() => {})
+  return subscribeNew(reg, key)
+}
+
+async function subscribeNew(reg: ServiceWorkerRegistration, key: Uint8Array<ArrayBuffer>) {
+  return reg.pushManager
+    .subscribe({ userVisibleOnly: true, applicationServerKey: key })
+    .catch(async () => {
+      // Some browsers keep a stale subscription around; drop it and retry once.
+      const stale = await reg.pushManager.getSubscription()
+      if (stale) await stale.unsubscribe().catch(() => {})
+      return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key })
+    })
 }
 
 /** Compares the subscription's key with the server's current key. */
