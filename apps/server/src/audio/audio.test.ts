@@ -1,3 +1,4 @@
+import { toUserId } from '../ids'
 import { expect, test } from 'bun:test'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -102,13 +103,13 @@ test('the voice set is two female and two male, all distinct', () => {
 
 test('ensure records every voice once, content-addressed and deduped', async () => {
   const { db, sqlite, audio, calls } = makeApp()
-  await audio.ensure({ text: '你好', language: 'zh', userId: 'user-1' })
+  await audio.ensure({ text: '你好', language: 'zh', userId: toUserId('user-1') })
   expect(calls.length).toBe(4)
   expect(audio.complete('你好', 'zh')).toBe(true)
   for (const v of CARD_VOICES) expect(audio.clip('你好', 'zh', v.id)).toBeTruthy()
 
   // Recording the same text again is a no-op — the clips are already there.
-  await audio.ensure({ text: '你好', language: 'zh', userId: 'user-1' })
+  await audio.ensure({ text: '你好', language: 'zh', userId: toUserId('user-1') })
   expect(calls.length).toBe(4)
 
   // Every clip is keyed by (voice, language, text), so a different voice is a new clip.
@@ -122,16 +123,28 @@ test('enqueueUser queues only the cards that still lack clips', async () => {
   const { db, sqlite, audio } = makeApp()
   const { addCard } = await import('../db/repo')
   const { createDeck } = await import('../db/repo')
-  const deck = createDeck(db, 'u1', { name: 'd', sourceLang: 'en', targetLang: 'zh' })
-  addCard(db, 'u1', { deckId: deck.id, sourceLang: 'en', targetLang: 'zh', front: 'a', back: '一' })
-  addCard(db, 'u1', { deckId: deck.id, sourceLang: 'en', targetLang: 'zh', front: 'b', back: '二' })
-  await audio.ensure({ text: '一', language: 'zh', userId: 'u1' })
-  const queued = audio.enqueueUser('u1')
+  const deck = createDeck(db, toUserId('u1'), { name: 'd', sourceLang: 'en', targetLang: 'zh' })
+  addCard(db, toUserId('u1'), {
+    deckId: deck.id,
+    sourceLang: 'en',
+    targetLang: 'zh',
+    front: 'a',
+    back: '一',
+  })
+  addCard(db, toUserId('u1'), {
+    deckId: deck.id,
+    sourceLang: 'en',
+    targetLang: 'zh',
+    front: 'b',
+    back: '二',
+  })
+  await audio.ensure({ text: '一', language: 'zh', userId: toUserId('u1') })
+  const queued = audio.enqueueUser(toUserId('u1'))
   expect(queued).toBe(1)
   await drain(audio)
   expect(audio.complete('一', 'zh')).toBe(true)
   expect(audio.complete('二', 'zh')).toBe(true)
-  expect(audio.enqueueUser('u1')).toBe(0)
+  expect(audio.enqueueUser(toUserId('u1'))).toBe(0)
   sqlite.close()
 })
 
@@ -197,11 +210,11 @@ test('POST /api/audio/backfill queues the user cards and reports the queue', asy
 
 test('a word two languages share gets its own clip per language', async () => {
   const { sqlite, audio, calls } = makeApp()
-  await audio.ensure({ text: '先生', language: 'zh', userId: 'u1' })
+  await audio.ensure({ text: '先生', language: 'zh', userId: toUserId('u1') })
   expect(audio.complete('先生', 'zh')).toBe(true)
   // the Mandarin recording must not satisfy the Japanese card
   expect(audio.complete('先生', 'ja')).toBe(false)
-  await audio.ensure({ text: '先生', language: 'ja', userId: 'u1' })
+  await audio.ensure({ text: '先生', language: 'ja', userId: toUserId('u1') })
   expect(calls.filter((c) => c.language === 'ja').length).toBe(CARD_VOICES.length)
   sqlite.close()
 })
@@ -210,14 +223,14 @@ test('a clip recorded before the language was keyed is adopted only when unambig
   const { db, sqlite, audio, dataDir } = makeApp()
   const { addCard, createDeck } = await import('../db/repo')
   const old = new TextEncoder().encode('old-recording')
-  const zh = createDeck(db, 'u1', { name: 'zh', sourceLang: 'en', targetLang: 'zh' })
-  const ja = createDeck(db, 'u1', { name: 'ja', sourceLang: 'en', targetLang: 'ja' })
+  const zh = createDeck(db, toUserId('u1'), { name: 'zh', sourceLang: 'en', targetLang: 'zh' })
+  const ja = createDeck(db, toUserId('u1'), { name: 'ja', sourceLang: 'en', targetLang: 'ja' })
   const card = { sourceLang: 'en', front: 'x' }
-  addCard(db, 'u1', { ...card, deckId: zh.id, targetLang: 'zh', back: '你好' })
-  addCard(db, 'u1', { ...card, deckId: zh.id, targetLang: 'zh', back: '水' })
-  addCard(db, 'u1', { ...card, deckId: ja.id, targetLang: 'ja', back: '水' })
-  writeClip(db, dataDir, 'u1', legacyClipHash('你好', 'f1'), old)
-  writeClip(db, dataDir, 'u1', legacyClipHash('水', 'f1'), old)
+  addCard(db, toUserId('u1'), { ...card, deckId: zh.id, targetLang: 'zh', back: '你好' })
+  addCard(db, toUserId('u1'), { ...card, deckId: zh.id, targetLang: 'zh', back: '水' })
+  addCard(db, toUserId('u1'), { ...card, deckId: ja.id, targetLang: 'ja', back: '水' })
+  writeClip(db, dataDir, toUserId('u1'), legacyClipHash('你好', 'f1'), old)
+  writeClip(db, dataDir, toUserId('u1'), legacyClipHash('水', 'f1'), old)
 
   // only Mandarin cards say 你好: the old clip is theirs, moved to the new key
   expect(audio.clip('你好', 'zh', 'f1')).toEqual(old)
@@ -243,10 +256,10 @@ test('only the admin may cancel the shared queue, start a backfill or stop the g
 
 test('each clip is recorded in its language’s accent, and spoken as written', async () => {
   const { sqlite, audio, calls } = makeApp()
-  await audio.ensureVoice({ text: '你好', language: 'zh', userId: 'u1', voiceId: 'f1' })
+  await audio.ensureVoice({ text: '你好', language: 'zh', userId: toUserId('u1'), voiceId: 'f1' })
   expect(calls[0]!.instruct).toContain('Taiwanese accent')
   // a Japanese word keeps its kanji: the kanji carries the word, and so its pitch
-  await audio.ensureVoice({ text: '橋', language: 'ja', userId: 'u1', voiceId: 'f1' })
+  await audio.ensureVoice({ text: '橋', language: 'ja', userId: toUserId('u1'), voiceId: 'f1' })
   expect(calls[1]!.text).toBe('橋')
   expect(calls[1]!.instruct).toContain('Japanese')
   sqlite.close()
@@ -264,7 +277,7 @@ function gradedService(heard: string[]) {
 test('a take that says more than the word is thrown away and recorded again', async () => {
   // take 1 rambles on after the word, take 2 is clean
   const { sqlite, audio, calls } = gradedService(['茶，我喜歡喝茶。', '茶'])
-  await audio.ensureVoice({ text: '茶', language: 'zh', userId: 'u1', voiceId: 'f1' })
+  await audio.ensureVoice({ text: '茶', language: 'zh', userId: toUserId('u1'), voiceId: 'f1' })
   expect(calls.length).toBe(2)
   expect(audio.clip('茶', 'zh', 'f1')).toBeTruthy()
   expect(audio.status().rejected).toBe(0)
@@ -273,7 +286,7 @@ test('a take that says more than the word is thrown away and recorded again', as
 
 test('when no take says the word, no clip is stored and it is not retried', async () => {
   const { sqlite, audio, calls } = gradedService(['嗯', '好的', ''])
-  const job = { text: '茶', language: 'zh', userId: 'u1', voiceId: 'f1' }
+  const job = { text: '茶', language: 'zh', userId: toUserId('u1'), voiceId: 'f1' }
   await audio.ensureVoice(job)
   expect(calls.length).toBe(3)
   expect(audio.clip('茶', 'zh', 'f1')).toBeUndefined()

@@ -274,3 +274,39 @@ test('placeholder page is served when no build exists', async () => {
   expect(res.status).toBe(200)
   expect(await res.text()).toContain('Tutor')
 })
+
+test('sign-in is throttled after repeated wrong passwords, per username', async () => {
+  const { app, sqlite } = makeApp()
+  const body = (password: string, username = 'carol') => ({
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  })
+  await app.request('/api/auth/register', body('password123'))
+  for (let i = 0; i < 8; i++) {
+    expect((await app.request('/api/auth/login', body('wrong-password'))).status).toBe(401)
+  }
+  // even the right password is refused while the username is locked
+  const locked = await app.request('/api/auth/login', body('password123'))
+  expect(locked.status).toBe(429)
+  expect(Number(locked.headers.get('retry-after'))).toBeGreaterThan(0)
+  // another username is unaffected, and an unknown one is a plain 401
+  expect((await app.request('/api/auth/login', body('x', 'nobody'))).status).toBe(401)
+  sqlite.close()
+})
+
+test('two registrations at once make exactly one admin', async () => {
+  const { app, sqlite } = makeApp()
+  const register = (username: string) =>
+    app.request('/api/auth/register', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username, password: 'password123' }),
+    })
+  const replies = await Promise.all([register('first'), register('second')])
+  const roles = await Promise.all(
+    replies.map(async (r) => ((await r.json()) as { user: { role: string } }).user.role),
+  )
+  expect(roles.sort()).toEqual(['admin', 'user'])
+  sqlite.close()
+})

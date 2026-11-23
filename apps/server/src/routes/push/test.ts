@@ -9,6 +9,7 @@ import { ACTION_BY_ID } from '../../game/skills'
 import { rigRunSec } from '../../game/idle'
 import { RIG_ALERT_LEAD_SEC } from '../../push/notify'
 import { sendPush } from '../../push/webpush'
+import { fail } from '../errors'
 
 export function registerPushTest(app: App) {
   // A settings-page button: proves the whole path works before a rig matters.
@@ -22,7 +23,7 @@ async function testHandler(c: Context<AppEnv>) {
   const user = c.get('user')!
   const db = c.get('deps').db
   const subs = listPushSubscriptions(db, user.id)
-  if (!subs.length) return c.json({ error: 'no subscription on this device' }, 400)
+  if (!subs.length) return fail(c, 400, 'no subscription on this device')
   let sent = 0
   for (const sub of subs) {
     const res = await sendPush(db, sub, {
@@ -36,7 +37,7 @@ async function testHandler(c: Context<AppEnv>) {
     if (res.ok) sent++
     else if (res.gone) deletePushSubscription(db, sub.userId, sub.endpoint)
   }
-  if (!sent) return c.json({ error: 'the push service rejected the notification' }, 502)
+  if (!sent) return fail(c, 502, 'the push service rejected the notification')
   return c.json({ ok: true, sent })
 }
 

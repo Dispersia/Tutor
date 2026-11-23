@@ -22,6 +22,8 @@
  * `skills.ts` can depend on it without a cycle.
  */
 
+import { curveLevelInfo, curveXpForLevel, type LevelCurve } from './curve'
+
 /** A crafting line — the family whose tiers form one axis. */
 export type BandLine = 'plate' | 'leather' | 'cloth' | 'wood' | 'jewelry'
 
@@ -244,10 +246,12 @@ export const BAND_BY_ID = new Map<BandId, BandDef>(BANDS.map((b) => [b.id, b]))
 
 /** `100 + (level−1)·10` per level — the same curve an action uses (§13.5). */
 export function bandXpForLevel(level: number): number {
-  return 100 + (Math.max(1, Math.round(level)) - 1) * 10
+  return curveXpForLevel(BAND_CURVE, Math.max(1, Math.round(level)))
 }
 
 export const BAND_MAX_LEVEL = 100
+
+const BAND_CURVE: LevelCurve = { base: 100, step: 10, max: BAND_MAX_LEVEL }
 
 /** Total XP to reach a band level (mirrors the action ladder). */
 export function bandXpToLevel(level: number): number {
@@ -265,17 +269,7 @@ export interface BandLevelInfo {
 
 /** Level info for a band's summed XP, capped at 100 (progress pinned at 100%). */
 export function bandLevelInfo(xp: number): BandLevelInfo {
-  let level = 1
-  let remaining = Math.max(0, xp)
-  while (level < BAND_MAX_LEVEL && remaining >= bandXpForLevel(level)) {
-    remaining -= bandXpForLevel(level)
-    level++
-  }
-  const forNext = bandXpForLevel(level)
-  if (level >= BAND_MAX_LEVEL) {
-    return { level: BAND_MAX_LEVEL, intoLevel: forNext, forNext, progress: 1 }
-  }
-  return { level, intoLevel: remaining, forNext, progress: Math.min(1, remaining / forNext) }
+  return curveLevelInfo(BAND_CURVE, xp)
 }
 
 /** The passive a set of band levels grants (all values are fractions/flat as labelled). */

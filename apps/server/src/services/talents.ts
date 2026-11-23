@@ -1,5 +1,6 @@
 /** Choosing a talent at a milestone, and the talent board (docs/DESIGN.md §13.5). */
 
+import type { UserId } from '../ids'
 import { addTalent, listTalents, replaceTalent } from '../db/repo'
 import type { Db } from '../db/client'
 import type { EventBus } from '../events'
@@ -15,7 +16,7 @@ import {
   talentOptions,
   type TalentDef,
 } from '../game/talents'
-import { skillLevelOf } from './progress'
+import { actionLevelMap, skillLevelOf } from './progress'
 
 interface TalentRow {
   talentId: string
@@ -28,7 +29,7 @@ interface TalentRow {
 function applyTalent(
   db: Db,
   bus: EventBus,
-  userId: string,
+  userId: UserId,
   option: TalentDef,
   mine: TalentRow[],
 ): { ok: boolean; talent: TalentDef } {
@@ -38,7 +39,7 @@ function applyTalent(
   return { ok: true, talent: option }
 }
 
-function insertTalent(db: Db, bus: EventBus, userId: string, option: TalentDef) {
+function insertTalent(db: Db, bus: EventBus, userId: UserId, option: TalentDef) {
   addTalent(db, userId, talentRow(option))
   bus.emit('talent.chosen', {
     userId,
@@ -53,7 +54,7 @@ function insertTalent(db: Db, bus: EventBus, userId: string, option: TalentDef) 
 function replaceExisting(
   db: Db,
   bus: EventBus,
-  userId: string,
+  userId: UserId,
   option: TalentDef,
   fromTalentId: string,
 ): void {
@@ -87,7 +88,7 @@ function talentRow(option: TalentDef) {
 export function chooseTalent(
   db: Db,
   bus: EventBus,
-  userId: string,
+  userId: UserId,
   talentId: string,
 ): { ok: boolean; error?: string; talent?: TalentDef } {
   const req = chooseRequest(db, userId, talentId)
@@ -108,7 +109,7 @@ interface ChooseReq {
 }
 
 /** Resolves the requested option and the current state, or the reason it is bad. */
-function chooseRequest(db: Db, userId: string, talentId: string): ChooseReq | { error: string } {
+function chooseRequest(db: Db, userId: UserId, talentId: string): ChooseReq | { error: string } {
   const parsed = parseTalentId(talentId)
   if (!parsed) return { error: 'not a talent' }
   const option = optionsFor(parsed.skillId, parsed.milestone, parsed.kind).find(
@@ -126,7 +127,7 @@ function chooseRequest(db: Db, userId: string, talentId: string): ChooseReq | { 
 /** A mastery capstone: Lv 50/100, plus the feeding profession's level. */
 function masteryGuard(
   db: Db,
-  userId: string,
+  userId: UserId,
   milestone: number,
   level: number,
   option: TalentDef,
@@ -149,7 +150,7 @@ function choiceGuard(level: number, milestone: number, mine: TalentRow[]): strin
 }
 
 /** The shape `talentView` returns for one owned talent (choice or mastery). */
-function ownedTalents(db: Db, userId: string, rows: TalentRow[]) {
+function ownedTalents(rows: TalentRow[], levelOf: LevelOf) {
   return resolveTalents(rows).map((t) => ({
     id: t.id,
     name: t.name,
@@ -157,34 +158,41 @@ function ownedTalents(db: Db, userId: string, rows: TalentRow[]) {
     milestone: t.milestone,
     tier: t.tier,
     mods: t.mods,
-    requires: requiresView(db, userId, t.requires),
+    requires: requiresView(t.requires, levelOf),
     // the other options at the same tier + milestone (so it can be changed)
-    options: optionsFor(t.skillId, t.milestone, t.tier).map((o) => optionView(db, userId, o)),
+    options: optionsFor(t.skillId, t.milestone, t.tier).map((o) => optionView(o, levelOf)),
   }))
 }
 
-function optionView(db: Db, userId: string, o: TalentDef) {
+function optionView(o: TalentDef, levelOf: LevelOf) {
   return {
     id: o.id,
     name: o.name,
     description: o.description,
     mods: o.mods,
-    requires: requiresView(db, userId, o.requires),
+    requires: requiresView(o.requires, levelOf),
   }
 }
 
-function requiresView(db: Db, userId: string, reqs: TalentDef['requires']) {
-  return reqs.map((r) => ({ ...r, met: skillLevelOf(db, userId, r.skill) >= r.level }))
+function requiresView(reqs: TalentDef['requires'], levelOf: LevelOf) {
+  return reqs.map((r) => ({ ...r, met: levelOf(r.skill) >= r.level }))
 }
+
+/** A profession's level, resolved against one action-level map for the whole view. */
+type LevelOf = (skill: SkillId) => number
 
 /** Per-skill talent state for the UI (choice milestone + mastery capstones). */
-export function talentView(db: Db, userId: string) {
+export function talentView(db: Db, userId: UserId, levels?: Map<string, number>) {
   const owned = listTalents(db, userId) as TalentRow[]
-  return SKILLS.map((s) => skillTalentView(db, userId, s, owned))
+  // One action-level map for every profession and requirement in the view: each
+  // lookup used to scan `action_progress` again (25+ scans per board).
+  const map = levels ?? actionLevelMap(db, userId)
+  const levelOf: LevelOf = (skill) => skillLevelOf(db, userId, skill, map)
+  return SKILLS.map((s) => skillTalentView(s, owned, levelOf))
 }
 
-function skillTalentView(db: Db, userId: string, s: SkillDef, owned: TalentRow[]) {
-  const level = skillLevelOf(db, userId, s.id)
+function skillTalentView(s: SkillDef, owned: TalentRow[], levelOf: LevelOf) {
+  const level = levelOf(s.id)
   const mine = owned.filter((r) => r.skillId === s.id)
   const choices = mine.filter((r) => r.tier === 'choice')
   const { pending, nextMilestone, nextChoice } = choiceState(level, choices)
@@ -196,8 +204,8 @@ function skillTalentView(db: Db, userId: string, s: SkillDef, owned: TalentRow[]
     options: nextMilestone ? talentOptions(s.id, nextMilestone) : [],
     nextMilestone: nextChoice,
     synergy: synergyView(s.id, mine),
-    owned: ownedTalents(db, userId, choices),
-    mastery: masteryView(db, userId, s.id, level, mine),
+    owned: ownedTalents(choices, levelOf),
+    mastery: masteryView({ skillId: s.id, level, mine }, levelOf),
   }
 }
 
@@ -231,19 +239,20 @@ function isSynergy(row: TalentRow, skillId: SkillId): boolean {
   return resolveTalents([row])[0]?.mods.some((m) => m.synergy === skillId) ?? false
 }
 
-function masteryView(db: Db, userId: string, skillId: SkillId, level: number, mine: TalentRow[]) {
+function masteryView(of: { skillId: SkillId; level: number; mine: TalentRow[] }, levelOf: LevelOf) {
+  const { skillId, level, mine } = of
   const masteries = mine.filter((r) => r.tier === 'mastery')
   const pending = MASTERY_MILESTONES.filter(
     (m) => level >= m && !masteries.some((t) => t.milestone === m),
   ).map((m) => ({
     milestone: m,
-    options: masteryOptions(skillId, m).map((o) => optionView(db, userId, o)),
+    options: masteryOptions(skillId, m).map((o) => optionView(o, levelOf)),
   }))
   return {
     milestones: MASTERY_MILESTONES,
     // the next not-yet-reached capstone, or null once both are done
     next: MASTERY_MILESTONES.find((m) => level < m) ?? null,
     pending,
-    owned: ownedTalents(db, userId, masteries),
+    owned: ownedTalents(masteries, levelOf),
   }
 }

@@ -1,5 +1,10 @@
 import { expect, test } from 'bun:test'
-import { fetchFrequencyWords, frequencySourceFor, parseFrequencyList } from './source'
+import {
+  defaultFetcher,
+  fetchFrequencyWords,
+  frequencySourceFor,
+  parseFrequencyList,
+} from './source'
 
 const SAMPLE = `的 3957141
 我 3669472
@@ -47,4 +52,29 @@ test('fetchFrequencyWords pulls through the injected fetcher (no network)', asyn
 
 test('fetchFrequencyWords errors when there is no list for the language', async () => {
   await expect(fetchFrequencyWords('zz-zz')).rejects.toThrow(/no frequency list/)
+})
+
+test('the default fetcher downloads a list once, with a timeout, and retries a failure', async () => {
+  const orig = globalThis.fetch
+  let calls = 0
+  let fail = true
+  const signals: (AbortSignal | null | undefined)[] = []
+  globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+    calls++
+    signals.push(init?.signal)
+    return fail ? new Response('nope', { status: 503 }) : new Response('的 100\n我 90')
+  }) as unknown as typeof fetch
+  try {
+    const url = 'http://frequency.test/once.txt'
+    await expect(defaultFetcher(url)).rejects.toThrow(/-> 503/)
+    fail = false
+    expect(await defaultFetcher(url)).toBe('的 100\n我 90') // the failure was not cached
+    expect(await defaultFetcher(url)).toBe('的 100\n我 90')
+    expect(calls).toBe(2)
+    expect(signals[0]).toBeInstanceOf(AbortSignal)
+    await defaultFetcher('http://frequency.test/other.txt')
+    expect(calls).toBe(3)
+  } finally {
+    globalThis.fetch = orig
+  }
 })

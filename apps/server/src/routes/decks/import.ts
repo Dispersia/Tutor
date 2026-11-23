@@ -6,6 +6,7 @@
  * deck by default), in the background because it is dozens of LLM calls.
  */
 
+import type { UserId } from '../../ids'
 import type { Context } from 'hono'
 import type { App, AppEnv, Deps } from '../../context'
 import {
@@ -16,10 +17,16 @@ import {
 } from '../../db/repo'
 import { detectLanguage, inspectAnki, wordsFromAnki } from '../../anki/words'
 import { readApkg } from '../../anki/parse'
-import { createDeckForBuild, parseInstruction, startDeckBuild } from '../../deck/generate'
+import {
+  MAX_DECK_WORDS,
+  createDeckForBuild,
+  parseInstruction,
+  startDeckBuild,
+} from '../../deck/generate'
 import { plannerFor } from '../../deck/planner'
 import { DECK_INSTRUCTION_KEY } from '../../deck/settings'
 import { deckView } from './view'
+import { fail, needKey } from '../errors'
 
 type Parsed = Awaited<ReturnType<typeof readApkg>>
 type AnkiList = ReturnType<typeof wordsFromAnki>
@@ -36,12 +43,12 @@ async function inspectHandler(c: Context<AppEnv>) {
   const user = c.get('user')!
   const form = await c.req.formData()
   const file = form.get('file')
-  if (!(file instanceof File)) return c.json({ error: 'an .apkg file is required' }, 400)
+  if (!(file instanceof File)) return fail(c, 400, 'an .apkg file is required')
   try {
     const parsed = await readApkg(new Uint8Array(await file.arrayBuffer()))
     return c.json(inspectAnki(parsed, targetLangOf(form, parsed, user.targetLang)))
   } catch (err) {
-    return c.json({ error: (err as Error).message }, 502)
+    return fail(c, 502, (err as Error).message)
   }
 }
 
@@ -50,25 +57,25 @@ async function importHandler(c: Context<AppEnv>) {
   const user = c.get('user')!
   const form = await c.req.formData()
   const file = form.get('file')
-  if (!(file instanceof File)) return c.json({ error: 'an .apkg file is required' }, 400)
+  if (!(file instanceof File)) return fail(c, 400, 'an .apkg file is required')
   const planner = await plannerFor(deps, user.id)
-  if (!planner) return c.json({ error: 'No OpenRouter key — add one in Settings.' }, 502)
+  if (!planner) return needKey(c)
   try {
     const parsed = await readApkg(new Uint8Array(await file.arrayBuffer()))
     const targetLang = targetLangOf(form, parsed, user.targetLang)
     const list = wordsFromAnki(parsed, targetLang, fieldIndices(form))
-    if (list.words.length === 0) return c.json({ error: 'no words found in that deck' }, 422)
+    if (list.words.length === 0) return fail(c, 422, 'no words found in that deck')
     const payload = await startImport({ deps, user, form, parsed, targetLang, list, planner })
     return c.json(payload, 201)
   } catch (err) {
-    return c.json({ error: (err as Error).message }, 502)
+    return fail(c, 502, (err as Error).message)
   }
 }
 
 /** Everything an import needs once the upload has been parsed. */
 interface ImportReq {
   deps: Deps
-  user: { id: string; nativeLang: string }
+  user: { id: UserId; nativeLang: string }
   form: FormData
   parsed: Parsed
   targetLang: string
@@ -137,14 +144,30 @@ async function startImport(req: ImportReq) {
   const { deps, user, parsed, list } = req
   // A full import is many LLM calls, well past Bun's request idle timeout. The UI
   // watches `settings.building` + the growth cursor.
-  updateDeckSettings(deps.db, setup.created.deckId, user.id, {
+  updateDeckSettings(deps.db, setup.created.deckId, {
     building: true,
     buildTotal: setup.count,
     cursor: 0,
     buildError: undefined,
+    ...importRules(setup, list),
   })
   startBuildJob(req, setup)
   return importReply(deps, user.id, parsed, list, setup.created)
+}
+
+/**
+ * The rules this import builds under, stored on the deck. The build runs in the
+ * background and every deploy restarts the server, so a resumed build has only
+ * the deck's settings to go on: the hints cover the whole word list, not just
+ * the words this run introduces.
+ */
+function importRules(setup: ImportSetup, list: AnkiList) {
+  return {
+    variant: setup.rules.variant,
+    readingScript: setup.rules.readingScript,
+    pitchAccent: setup.rules.pitchAccent,
+    hints: buildHints(list, MAX_DECK_WORDS),
+  }
 }
 
 function startBuildJob(req: ImportReq, setup: ImportSetup): void {
@@ -157,6 +180,7 @@ function startBuildJob(req: ImportReq, setup: ImportSetup): void {
       sourceLang: setup.sourceLang,
       variant: setup.rules.variant,
       readingScript: setup.rules.readingScript,
+      pitchAccent: setup.rules.pitchAccent,
       hints: buildHints(list, setup.count),
     },
     opts: { words: list.words, count: setup.count, knownWords: [], startStep: 0 },
@@ -165,9 +189,9 @@ function startBuildJob(req: ImportReq, setup: ImportSetup): void {
   })
 }
 
-function importReply(deps: Deps, userId: string, parsed: Parsed, list: AnkiList, created: Built) {
+function importReply(deps: Deps, userId: UserId, parsed: Parsed, list: AnkiList, created: Built) {
   return {
-    deck: deckView(getDeck(deps.db, created.deckId, userId)!),
+    deck: deckView(getDeck(deps.db, created.deckId)!),
     deckId: created.deckId,
     name: created.name,
     cardCount: 0,
@@ -220,7 +244,7 @@ function buildHints(
  * gave on an earlier deck. Otherwise the generic wording asks the generator to
  * weave sentences and grammar through the imported words.
  */
-function rememberInstruction(deps: Deps, userId: string, form: FormData, name: string): string {
+function rememberInstruction(deps: Deps, userId: UserId, form: FormData, name: string): string {
   const typed = String(form.get('instruction') ?? '').trim()
   const remembered = rememberedDeckInstruction(deps.db, userId) ?? ''
   if (typed) setUserSetting(deps.db, userId, DECK_INSTRUCTION_KEY, typed)

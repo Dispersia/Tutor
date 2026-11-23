@@ -1,5 +1,6 @@
 /** Auth sessions: the signed-in user and starting a session (docs/DESIGN.md §12.5). */
 
+import type { UserId } from '../../ids'
 import type { Context } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import { SESSION_COOKIE, newSessionToken, tokenId } from '../../auth'
@@ -26,7 +27,7 @@ export function currentUser(c: Context<AppEnv>) {
   return getAuthSessionUser(deps.db, tokenId(token))
 }
 
-export function startSession(c: Context<AppEnv>, userId: string): void {
+export function startSession(c: Context<AppEnv>, userId: UserId): void {
   const deps = c.get('deps')
   const token = newSessionToken()
   insertAuthSession(deps.db, tokenId(token), userId, deps.sessionTtlMs, c.req.header('user-agent'))

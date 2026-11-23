@@ -3,9 +3,11 @@
  * (docs/DESIGN.md §13.5, §13.5.1). The route only hands the grade over.
  */
 
+import type { UserId } from '../../ids'
 import type { AppEnv, Deps } from '../../context'
 import { ACTION_BY_ID, type ActionDef } from '../../game/skills'
 import { actionState, awardActionXp, completeAction } from '../../services'
+import { guardError, type GuardError } from '../errors'
 
 /** The action/recipe a request names (a drill can settle one). */
 export interface ActionRequest {
@@ -14,24 +16,24 @@ export interface ActionRequest {
   choiceId?: string
 }
 
-/** An error a guard returns before the handler runs its use case. */
-export type GuardError = { status: 403 | 404 | 409; body: Record<string, unknown> }
+/** Re-exported for the handlers that gate on an action (`routes/errors.ts` owns it). */
+export type { GuardError }
 
 /** The action the request names, gated for unlock and affordability. */
 export function actionGate(
   deps: Deps,
-  userId: string,
+  userId: UserId,
   body: ActionRequest,
 ): { action?: ActionDef; error?: GuardError } {
   const action = body.actionId ? ACTION_BY_ID.get(body.actionId) : undefined
-  if (body.actionId && !action) return { error: { status: 404, body: { error: 'unknown action' } } }
+  if (body.actionId && !action) return { error: guardError(404, 'unknown action') }
   if (!action) return {}
   return gateAction(deps, userId, action, body.choiceId)
 }
 
 function gateAction(
   deps: Deps,
-  userId: string,
+  userId: UserId,
   action: ActionDef,
   choiceId?: string,
 ): { action?: ActionDef; error?: GuardError } {
@@ -44,25 +46,21 @@ function gateAction(
 type ActionState = ReturnType<typeof actionState>
 
 function lockedError(state: ActionState): GuardError {
-  return {
-    status: 403,
-    body: {
-      error: 'action locked',
-      missingUnlocks: state.missingUnlocks,
-      missingBands: state.missingBands,
-      equipMissing: state.equipMissing,
-    },
-  }
+  return guardError(403, 'action locked', {
+    missingUnlocks: state.missingUnlocks,
+    missingBands: state.missingBands,
+    equipMissing: state.equipMissing,
+  })
 }
 
 function missingMaterials(state: ActionState): GuardError {
-  return { status: 409, body: { error: 'missing materials', missing: state.missing } }
+  return guardError(409, 'missing materials', { missing: state.missing })
 }
 
 /** Applies action XP + the idle-rig economy for a completed action. */
 export function settleAction(
   deps: AppEnv['Variables']['deps'],
-  userId: string,
+  userId: UserId,
   actionId: string | undefined,
   result: { correct: boolean; score: number },
   choiceId?: string,
@@ -103,7 +101,7 @@ function failedAward(action: ActionDef) {
  */
 function runRig(
   deps: AppEnv['Variables']['deps'],
-  userId: string,
+  userId: UserId,
   action: ActionDef,
   choiceId?: string,
 ) {

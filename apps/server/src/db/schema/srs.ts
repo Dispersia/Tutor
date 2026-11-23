@@ -3,7 +3,8 @@
  * Part of the schema split (docs/ARCHITECTURE.md).
  */
 
-import { index, integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import type { UserId, CardId } from '../../ids'
+import { index, integer, primaryKey, real, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 import { users } from './users'
 
 /** Per-user spaced-repetition state (FSRS-6, one row per card reviewed). */
@@ -11,9 +12,10 @@ export const srs = sqliteTable(
   'srs',
   {
     userId: text('user_id')
+      .$type<UserId>()
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    cardId: text('card_id').notNull(),
+    cardId: text('card_id').$type<CardId>().notNull(),
     state: text('state').notNull().default('new'),
     step: integer('step').notNull().default(0),
     stability: real('stability').notNull().default(0),
@@ -26,7 +28,7 @@ export const srs = sqliteTable(
     lastRating: integer('last_rating'),
     lastReviewAt: integer('last_review_at'),
   },
-  (t) => [index('idx_srs_user').on(t.userId)],
+  (t) => [primaryKey({ columns: [t.userId, t.cardId] })],
 )
 
 /**
@@ -39,9 +41,10 @@ export const srsReviews = sqliteTable(
   {
     id: text('id').primaryKey(),
     userId: text('user_id')
+      .$type<UserId>()
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    cardId: text('card_id').notNull(),
+    cardId: text('card_id').$type<CardId>().notNull(),
     /** The FSRS grade (1 = Again … 4 = Easy) this review produced. */
     rating: integer('rating').notNull(),
     stateBefore: text('state_before').notNull(),

@@ -3,6 +3,7 @@
  * then patch roles, study prefs and the scalar tuning knobs.
  */
 
+import { toDeckId, type UserId } from '../../ids'
 import type { Context } from 'hono'
 import {
   getRoles,
@@ -13,11 +14,13 @@ import {
   setUserSetting,
 } from '../../db/repo'
 import { INTRODUCE_ID, registry } from '../../exercises'
+import { isTimeZone, setUserTimeZone } from '../../services/clock'
 import { readStudyPrefs, writeStudyPrefs, type StudyPrefs } from '../../services/study'
 import { ROLES, type Role } from '../../env'
 import { hasUserKey, saveUserKey } from '../../llm/userkey'
 import type { App, AppEnv, Deps } from '../../context'
-import { bool, jsonBody, num, obj, str, strArray } from '../body'
+import { idField, bool, jsonBody, num, obj, str, strArray } from '../body'
+import { fail } from '../errors'
 
 export function registerSettings(app: App) {
   app.get('/api/settings', (c) => c.json(settingsView(c.get('deps'), c.get('user')!.id)))
@@ -25,7 +28,7 @@ export function registerSettings(app: App) {
   app.put('/api/settings/openrouter-key', (c) => saveKey(c))
 }
 
-function settingsView(deps: Deps, userId: string) {
+function settingsView(deps: Deps, userId: UserId) {
   return {
     roles: getRoles(deps.db, userId, deps.defaults),
     roleDefaults: deps.defaults,
@@ -42,55 +45,59 @@ async function updateSettings(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const userId = c.get('user')!.id
   const body = await jsonBody(c)
-  const roleErr = applyRoles(deps, userId, obj(body, 'roles'))
-  if (roleErr) return c.json({ error: roleErr }, 400)
-  const studyErr = applyStudy(deps, userId, obj(body, 'study'))
-  if (studyErr) return c.json({ error: studyErr }, 400)
+  const roles = obj(body, 'roles')
+  const study = obj(body, 'study')
+  // Validate everything before writing anything: a rejected request changes nothing.
+  const error = rolesError(roles) ?? studyError(deps, userId, study) ?? timeZoneError(body)
+  if (error) return fail(c, 400, error)
+  if (roles) applyRoles(deps, userId, roles)
+  if (study) writeStudyPrefs(deps.db, userId, studyPatch(study))
   applyScalars(deps, userId, body)
   return c.json(settingsReply(deps, userId))
 }
 
-function settingsReply(deps: Deps, userId: string) {
+/** The browser's IANA zone, reported so a day starts at the member's own midnight. */
+function timeZoneError(body: Record<string, unknown>): string | undefined {
+  const zone = str(body, 'timezone')
+  if (zone === undefined || isTimeZone(zone)) return undefined
+  return 'unknown time zone'
+}
+
+function settingsReply(deps: Deps, userId: UserId) {
   return {
     roles: getRoles(deps.db, userId, deps.defaults),
     study: readStudyPrefs(deps.db, userId),
   }
 }
 
-function applyRoles(
-  deps: Deps,
-  userId: string,
-  roles?: Record<string, unknown>,
-): string | undefined {
-  if (!roles) return undefined
-  const current = getRoles(deps.db, userId, deps.defaults)
-  for (const [role, model] of Object.entries(roles)) {
+function rolesError(roles?: Record<string, unknown>): string | undefined {
+  for (const [role, model] of Object.entries(roles ?? {})) {
     if (!ROLES.includes(role as Role)) return `unknown role: ${role}`
     if (typeof model !== 'string' || !model.trim()) return `invalid model for ${role}`
-    current[role as Role] = model
   }
-  setUserSetting(deps.db, userId, 'roles', JSON.stringify(current))
   return undefined
 }
 
-function applyStudy(
+function applyRoles(deps: Deps, userId: UserId, roles: Record<string, unknown>): void {
+  const current = getRoles(deps.db, userId, deps.defaults)
+  for (const [role, model] of Object.entries(roles)) current[role as Role] = model as string
+  setUserSetting(deps.db, userId, 'roles', JSON.stringify(current))
+}
+
+function studyError(
   deps: Deps,
-  userId: string,
+  userId: UserId,
   study?: Record<string, unknown>,
 ): string | undefined {
-  if (!study) return undefined
-  const activeDeckId = str(study, 'activeDeckId')
-  if (activeDeckId !== undefined && !deckExists(deps, userId, activeDeckId)) {
-    return 'unknown deck'
-  }
-  writeStudyPrefs(deps.db, userId, studyPatch(study))
+  const activeDeckId = study ? str(study, 'activeDeckId') : undefined
+  if (activeDeckId !== undefined && !deckExists(deps, userId, activeDeckId)) return 'unknown deck'
   return undefined
 }
 
-/** Whether an active-deck id is one of this member's own decks ('' clears it). */
-function deckExists(deps: Deps, userId: string, wanted: unknown): boolean {
+/** Whether an active-deck id names a real deck ('' clears it). */
+function deckExists(deps: Deps, userId: UserId, wanted: unknown): boolean {
   if (typeof wanted !== 'string' || !wanted) return true
-  return listDecks(deps.db, userId).some((d) => d.id === wanted)
+  return listDecks(deps.db).some((d) => d.id === wanted)
 }
 
 function studyPatch(study: Record<string, unknown>): Partial<StudyPrefs> {
@@ -109,7 +116,7 @@ function studyPatch(study: Record<string, unknown>): Partial<StudyPrefs> {
   if (disabled) patch.disabledExercises = knownExercises(disabled)
   const steps = study.learningSteps
   if (Array.isArray(steps)) patch.learningSteps = positiveSteps(steps)
-  const activeDeckId = str(study, 'activeDeckId')
+  const activeDeckId = idField(study, 'activeDeckId', toDeckId)
   if (activeDeckId !== undefined) patch.activeDeckId = activeDeckId || null
   return patch
 }
@@ -126,7 +133,9 @@ function positiveSteps(steps: number[]): number[] {
   return steps.filter((n): n is number => typeof n === 'number' && Number.isFinite(n) && n > 0)
 }
 
-function applyScalars(deps: Deps, userId: string, body: Record<string, unknown>): void {
+function applyScalars(deps: Deps, userId: UserId, body: Record<string, unknown>): void {
+  const zone = str(body, 'timezone')
+  if (zone !== undefined) setUserTimeZone(deps.db, userId, zone)
   const dailyGoal = num(body, 'dailyGoal')
   if (dailyGoal !== undefined) setDailyGoal(deps.db, userId, dailyGoal)
   const foodThreshold = num(body, 'foodThreshold')

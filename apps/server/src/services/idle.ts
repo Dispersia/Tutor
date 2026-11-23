@@ -1,10 +1,12 @@
 /** The idle-rig engine: settle, drill and stop (docs/DESIGN.md §13.5.1). */
 
+import type { UserId } from '../ids'
 import {
   addGatherLog,
   addItems,
-  getItemCount,
+  spendableCount,
   getRigState,
+  listEquipment,
   listInventory,
   listRigStates,
   setRigState,
@@ -36,7 +38,6 @@ import {
   type Cost,
 } from '../game/skills'
 import { actionProduces, actionSuccessChance } from './board'
-import { recordGearCrafts } from './gearInstances'
 import { consumeItems, grantItems } from './items'
 import { awardActionXp, loadProgress, type ProgressCtx } from './progress'
 import { atomic, inTransaction } from '../db/repo/helpers'
@@ -144,13 +145,13 @@ function rigClock(rig: RigState, action: ActionDef, now: number) {
  * This is the whole idle engine: O(actions) rows of pure arithmetic, one
  * transaction, no timers. Hundreds of offline hours cost the same as one second.
  */
-export function settleRigs(db: Db, bus: EventBus, userId: string, now = Date.now()): SettleReport {
+export function settleRigs(db: Db, bus: EventBus, userId: UserId, now = Date.now()): SettleReport {
   // Every write below is one unit: a crash mid-settle must not leave a half-paid
   // bank or a half-advanced rig.
   return inTransaction(db, (tx) => settleRigsTx(tx, bus, userId, now))
 }
 
-function settleRigsTx(db: Db, bus: EventBus, userId: string, now: number): SettleReport {
+function settleRigsTx(db: Db, bus: EventBus, userId: UserId, now: number): SettleReport {
   const bank = inventoryMap(db, userId)
   const before = new Map(bank)
   const rigs = listRigStates(db, userId)
@@ -158,7 +159,6 @@ function settleRigsTx(db: Db, bus: EventBus, userId: string, now: number): Settl
   const totals = settleEach({ db, userId, now, progress, bank, rigs })
   capAndPersist(db, userId, rigs, now)
   writeBank(db, userId, bank, before)
-  recordGear(db, userId, totals.produced)
   const gained = toCosts(totals.produced)
   const spent = toCosts(totals.consumed)
   for (const [actionId, amount] of totals.xp) {
@@ -168,16 +168,19 @@ function settleRigsTx(db: Db, bus: EventBus, userId: string, now: number): Settl
   return { gained, spent, xp: totals.xp, rigs, progress }
 }
 
-function inventoryMap(db: Db, userId: string): Map<string, number> {
+function inventoryMap(db: Db, userId: UserId): Map<string, number> {
   const bank = new Map<string, number>()
-  for (const r of listInventory(db, userId)) bank.set(r.itemId, r.count)
+  // What a rig may spend: worn gear is in the bank's count but is not material.
+  const worn = new Map<string, number>()
+  for (const e of listEquipment(db, userId)) worn.set(e.itemId, (worn.get(e.itemId) ?? 0) + 1)
+  for (const r of listInventory(db, userId)) bank.set(r.itemId, r.count - (worn.get(r.itemId) ?? 0))
   return bank
 }
 
 /** Everything one settle pass reads, plus the mutable bank and rig map. */
 interface SettleCtx {
   db: Db
-  userId: string
+  userId: UserId
   now: number
   progress: ProgressCtx
   bank: Map<string, number>
@@ -202,6 +205,7 @@ function settleOne(ctx: SettleCtx, action: ActionDef, totals: SettleTotals): voi
   if (!rig) return
   const choiceId = rig.choice || undefined
   const res = settleRig(rig, recipeOf(action, choiceId, ctx.progress), ctx.bank, ctx.now)
+  const xp = wholeXp(res.state, res.crafted)
   // A rig that was already still (most rows: XP-only actions and finished runs)
   // has nothing to pay, so it is not rewritten on every board load.
   const ranInWindow = rig.runEndsAt > rig.settledAt
@@ -215,7 +219,23 @@ function settleOne(ctx: SettleCtx, action: ActionDef, totals: SettleTotals): voi
   for (const [item, n] of Object.entries(res.consumed)) {
     totals.consumed[item] = (totals.consumed[item] ?? 0) + n
   }
-  if (res.crafted > 0) totals.xp.set(action.id, res.crafted * IDLE.xpPerCraft)
+  if (xp > 0) totals.xp.set(action.id, xp)
+}
+
+/** Where a rig keeps the fraction of an XP point it has earned but not been paid. */
+const XP_CARRY = '$xp'
+
+/**
+ * The whole XP these crafts pay, carrying the fraction on the rig. A craft is
+ * worth half a point, so rounding per settle paid a player who settles after
+ * every craft twice what one long offline settle paid for the same work.
+ */
+function wholeXp(state: RigState, crafted: number): number {
+  if (crafted <= 0) return 0
+  const earned = crafted * IDLE.xpPerCraft + (state.remainder[XP_CARRY] ?? 0)
+  const whole = Math.floor(earned)
+  state.remainder[XP_CARRY] = earned - whole
+  return whole
 }
 
 /** The recipe a settled rig ran, with its level-scaled odds and yield bonus. */
@@ -227,30 +247,33 @@ function recipeOf(action: ActionDef, choiceId: string | undefined, progress: Pro
     tier: action.tier,
     // an artisan's expected bonus product is folded into the run's rate
     yieldBonus: bonuses.yield(action.id) + bonuses.double(action.id),
+    // the coins passive pays on coins only, not on the gems stolen with them
+    itemBonus: { coins: bonuses.coins(action.id) },
     // a prospect consumes its ore but only pays out at its odds (§13.5.3.1)
     successChance: actionOdds(action, choiceId, levels.get(action.id) ?? 1),
   }
 }
 
 /** The live-rig cap (§13.5.1): never more than `MAX_LIVE_RIGS` runs at once. */
-function capAndPersist(db: Db, userId: string, rigs: Map<string, RigState>, now: number): void {
+function capAndPersist(db: Db, userId: UserId, rigs: Map<string, RigState>, now: number): void {
   for (const id of capLiveRigs(rigs, now)) setRigState(db, userId, id, rigs.get(id)!)
 }
 
+/**
+ * Writes the settled bank back as deltas. Equipment rides along: `listInventory`
+ * counts a member's pieces and `addItems` rolls each one a rig forged (and
+ * removes each one a rig consumed), so the bank map never needs to know.
+ */
 function writeBank(
   db: Db,
-  userId: string,
+  userId: UserId,
   bank: Map<string, number>,
   before: Map<string, number>,
 ): void {
   for (const [item, count] of bank) {
     const delta = count - (before.get(item) ?? 0)
-    if (delta !== 0) addItems(db, userId, item, delta)
+    if (delta !== 0) addItems(db, userId, item, delta, Math.random)
   }
-}
-
-function recordGear(db: Db, userId: string, produced: Record<string, number>): void {
-  for (const [item, count] of Object.entries(produced)) recordGearCrafts(db, userId, item, count)
 }
 
 export interface DrillRigResult {
@@ -274,7 +297,7 @@ export interface DrillRigResult {
 function completeActionTx(
   db: Db,
   bus: EventBus,
-  userId: string,
+  userId: UserId,
   req: { actionId: string; now?: number; rand?: () => number; choiceId?: string },
 ): DrillRigResult {
   const now = req.now ?? Date.now()
@@ -295,7 +318,7 @@ function xpTotal(report: SettleReport): number {
 interface DrillReq {
   db: Db
   bus: EventBus
-  userId: string
+  userId: UserId
   action: ActionDef
   now: number
   report: SettleReport
@@ -350,11 +373,11 @@ interface StrikeReq {
  * A prospect consumes its input but only *pays out* at its odds (§13.5.3.1), and
  * a `table` action rolls a single gem. The strike still powers the rig either way.
  */
-function drillStrike(db: Db, bus: EventBus, userId: string, req: StrikeReq): DrillStrike {
+function drillStrike(db: Db, bus: EventBus, userId: UserId, req: StrikeReq): DrillStrike {
   const spent = actionConsumes(req.action, req.choiceId)
   // The route's gate ran before the settle; this action's own rig may have used
   // the stock since. No stock, no strike: the drill still powers the rig.
-  if (spent.some((c) => getItemCount(db, userId, c.item) < c.count)) return NO_STRIKE
+  if (spent.some((c) => spendableCount(db, userId, c.item) < c.count)) return NO_STRIKE
   const chance = actionSuccessChance(db, userId, req.action, req.choiceId, req.levels)
   const hit = chance >= 1 || req.rand() < chance
   const gained = hit
@@ -382,7 +405,7 @@ function powerRig(req: DrillReq, current: RigState, choiceId?: string): RigState
 /** If the drill made a third run live, the cap stops the one closest to done. */
 function capAfterDrill(
   db: Db,
-  userId: string,
+  userId: UserId,
   rigs: Map<string, RigState>,
   actionId: string,
   now: number,
@@ -426,7 +449,7 @@ function drillResult(
 function stopRigTx(
   db: Db,
   bus: EventBus,
-  userId: string,
+  userId: UserId,
   actionId: string,
   now = Date.now(),
 ): boolean {
@@ -444,7 +467,7 @@ export const stopRig = atomic(stopRigTx)
 function setRigChoiceTx(
   db: Db,
   bus: EventBus,
-  userId: string,
+  userId: UserId,
   pick: { actionId: string; choiceId: string },
 ): boolean {
   const { actionId, choiceId } = pick

@@ -1,5 +1,7 @@
 /** `POST /api/practice/grade` — grade a submitted answer (docs/DESIGN.md §13.6). */
 
+import { toCardId, type CardId } from '../../ids'
+import type { ServerCard } from '../../db/repo'
 import type { Card, ExerciseContext, ExerciseDef, GradeResult } from '@tutor/core'
 import type { Context } from 'hono'
 import type { App, AppEnv, Deps } from '../../context'
@@ -7,14 +9,15 @@ import { getCard, type PublicUser } from '../../db/repo'
 import { INTRODUCE_ID, registry } from '../../exercises'
 import { knownWords } from '../../services'
 import { actionGate, type ActionRequest } from './action'
-import { exerciseCtx } from './exerciseCtx'
+import { exerciseCtx, learnerOf } from './exerciseCtx'
+import { wasIssued } from './issued'
 import { judgeFor } from './judge'
 import { finalizeReview, recordAttempt, uncountedOutcome } from './record'
-import { jsonBody, num, str } from '../body'
+import { idField, jsonBody, num, str } from '../body'
 
 interface GradeBody extends ActionRequest {
   exerciseId?: string
-  cardId?: string
+  cardId?: CardId
   answer?: unknown
   latencyMs?: number
   lessonId?: string
@@ -26,7 +29,7 @@ function readGradeBody(body: Record<string, unknown>): GradeBody {
     actionId: str(body, 'actionId'),
     choiceId: str(body, 'choiceId'),
     exerciseId: str(body, 'exerciseId'),
-    cardId: str(body, 'cardId'),
+    cardId: idField(body, 'cardId', toCardId),
     answer: body.answer,
     latencyMs: num(body, 'latencyMs'),
     lessonId: str(body, 'lessonId'),
@@ -45,10 +48,24 @@ async function gradeHandler(c: Context<AppEnv>) {
   if (!card) return c.json({ error: 'card not found' }, 404)
   const def = body.exerciseId ? registry.get(body.exerciseId) : undefined
   if (!def) return c.json({ error: 'exercise not found' }, 404)
+  if (!fits(def, card, user)) return c.json({ error: 'that exercise does not fit this card' }, 400)
+  if (!wasIssued(user.id, card.id, def.id)) return c.json({ error: NOT_ISSUED }, 409)
   // An action must be unlocked and affordable before it can settle.
   const gate = actionGate(deps, user.id, body)
   if (gate.error) return c.json(gate.error.body, gate.error.status)
   return gradeAttempt({ c, deps, user, card, def, body })
+}
+
+/**
+ * A grade is only taken for a drill the server could have served: the exercise
+ * must support the card and not be switched off product-wide. The drill itself
+ * must also be one that was handed to this member (`issued.ts`).
+ */
+const NOT_ISSUED = 'that drill was not the one you were given — load the next card'
+
+function fits(def: ExerciseDef, card: Card, user: PublicUser): boolean {
+  if (def.id === INTRODUCE_ID) return true
+  return !def.temporarilyDisabled && def.supports(card, learnerOf(user))
 }
 
 /** One validated attempt: generate, grade, and settle what it earned. */
@@ -56,7 +73,7 @@ interface GradeCall {
   c: Context<AppEnv>
   deps: Deps
   user: PublicUser
-  card: Card
+  card: ServerCard
   def: ExerciseDef
   body: GradeBody
 }

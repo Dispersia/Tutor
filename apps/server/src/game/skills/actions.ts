@@ -39,6 +39,15 @@ export function actionRequiredLevel(action: ActionDef): number {
  * instead of by the order the actions happen to be declared in.
  */
 export function actionsForSkill(skillId: SkillId): ActionDef[] {
+  let list = bySkill.get(skillId)
+  if (!list) bySkill.set(skillId, (list = sortedActions(skillId)))
+  return list
+}
+
+/** The catalog never changes at runtime, and this is asked dozens of times per request. */
+const bySkill = new Map<SkillId, ActionDef[]>()
+
+function sortedActions(skillId: SkillId): ActionDef[] {
   return ACTIONS.filter((a) => a.skillId === skillId).sort(
     (a, b) => actionRequiredLevel(a) - actionRequiredLevel(b) || a.tier - b.tier,
   )

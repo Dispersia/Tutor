@@ -11,6 +11,7 @@
 import { kanjiumReadings } from '../deck/kanjium'
 import { mandarinSentenceZhuyin } from '../deck/mandarin'
 import { levenshtein } from '../exercises/grading'
+import { lettersAndDigits as plain } from '../text/normalize'
 
 /** What a clip is supposed to say. */
 export interface Spoken {
@@ -24,14 +25,6 @@ export interface Spoken {
 const SENTENCE_TOLERANCE = 0.15
 /** Text at least this long (after stripping) is graded as a sentence. */
 const SENTENCE_MIN_CHARS = 6
-
-/** Letters and digits only, lower-cased: what was said, not how it was written. */
-function plain(text: string): string {
-  return text
-    .normalize('NFKC')
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}]/gu, '')
-}
 
 /** Katakana folded to hiragana, so キ and き compare equal. */
 function hiragana(text: string): string {

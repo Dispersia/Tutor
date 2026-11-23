@@ -10,7 +10,7 @@ import {
   getItemCount,
 } from '../db/repo'
 import { EventBus } from '../events'
-import { MONSTER_BY_ID } from './combat'
+import { MONSTER_BY_ID } from '../game/combat'
 import {
   combatResolve,
   equipItem,
@@ -19,7 +19,7 @@ import {
   monsterState,
   startEncounter,
   unequipItem,
-} from '../services'
+} from './index'
 
 function setup() {
   const { db, sqlite } = openDb(':memory:')
@@ -226,7 +226,6 @@ test('starting an unknown monster is refused; no encounter returns null', () => 
 
 test('mastery scales a hit once: it is inside the power, not multiplied again', () => {
   const { db, bus, user, sqlite } = setup()
-  addItems(db, user.id, 'bronze_sword', 1)
   const instanceId = addGearInstance(db, {
     userId: user.id,
     itemId: 'bronze_sword',
@@ -245,5 +244,28 @@ test('mastery scales a hit once: it is inside the power, not multiplied again', 
   // rand = 0.99: no crit and no haste strike, so the hit is the bare power
   const hit = combatResolve(db, bus, user.id, true, () => 0.99)!
   expect(hit.damage).toBe(pc.power)
+  sqlite.close()
+})
+
+test('a monster killed by the strike does not swing back', () => {
+  const { db, bus, user, sqlite } = setup()
+  addItems(db, user.id, 'bronze_sword', 1)
+  equipItem(db, bus, user.id, 'bronze_sword')
+  startEncounter(db, bus, user.id, 'slime')
+  let hit = combatResolve(db, bus, user.id, true)!
+  while (hit.outcome === 'ongoing') hit = combatResolve(db, bus, user.id, true)!
+  expect(hit.outcome).toBe('won')
+  expect(hit.playerDamage).toBe(0)
+  sqlite.close()
+})
+
+test('a second fight cannot be started over a running one', () => {
+  const { db, bus, user, sqlite } = setup()
+  expect(startEncounter(db, bus, user.id, 'slime').ok).toBe(true)
+  combatResolve(db, bus, user.id, true)
+  const again = startEncounter(db, bus, user.id, 'slime')
+  expect(again.ok).toBe(false)
+  // the fight in progress keeps its damage
+  expect(getEncounter(db, user.id)!.monsterHp).toBeLessThan(15)
   sqlite.close()
 })

@@ -1,23 +1,19 @@
 import type { Context } from 'hono'
 import type { App, AppEnv } from '../context'
+import { withGateway } from '../speech/gateway'
 import { adminOnly } from './guards'
 
 async function proxyToSpeech(c: Context<AppEnv>, path: string): Promise<Response> {
-  const sup = c.get('deps').supervisor
-  await sup.ensure()
-  sup.begin()
-  try {
-    const body =
-      c.req.method === 'GET' || c.req.method === 'HEAD' ? undefined : await c.req.arrayBuffer()
-    const res = await fetch(sup.url + path, {
+  const body =
+    c.req.method === 'GET' || c.req.method === 'HEAD' ? undefined : await c.req.arrayBuffer()
+  return withGateway(c.get('deps').supervisor, async (url) => {
+    const res = await fetch(url + path, {
       method: c.req.method,
       headers: forwardedHeaders(c),
       body,
     })
     return new Response(res.body, { status: res.status, headers: responseHeaders(res) })
-  } finally {
-    sup.end()
-  }
+  })
 }
 
 function forwardedHeaders(c: Context<AppEnv>): Headers {

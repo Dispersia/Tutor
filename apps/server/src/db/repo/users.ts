@@ -1,9 +1,22 @@
 /** User accounts. */
 
+import type { UserId } from '../../ids'
 import { eq, sql } from 'drizzle-orm'
 import type { Db } from '../client'
-import { users } from '../schema'
-import { id, now } from './helpers'
+import {
+  attempts,
+  audioBlobs,
+  cards,
+  decks,
+  messages,
+  reviews,
+  sessions,
+  stats,
+  users,
+  xpEvents,
+} from '../schema'
+import { deleteAllDecks } from './decks'
+import { inTransaction, newId, now } from './helpers'
 
 export interface NewUser {
   username: string
@@ -16,7 +29,7 @@ export interface NewUser {
 }
 
 export interface PublicUser {
-  id: string
+  id: UserId
   username: string | null
   handle: string
   role: string
@@ -41,7 +54,7 @@ export function publicUser(u: typeof users.$inferSelect): PublicUser {
 
 export function createUser(db: Db, u: NewUser) {
   const row = {
-    id: id(),
+    id: newId<UserId>(),
     username: u.username,
     passwordHash: u.passwordHash ?? null,
     handle: u.handle ?? u.username,
@@ -57,7 +70,23 @@ export function createUser(db: Db, u: NewUser) {
   return row
 }
 
-export function getUserById(db: Db, uid: string) {
+export type RegisterResult = { user: ReturnType<typeof createUser> } | { error: 'taken' | 'closed' }
+
+/**
+ * Creates an account in one step: the username check, the "first account is the
+ * admin" decision and the insert cannot interleave with another registration
+ * (the password is hashed before this runs, so nothing here awaits).
+ */
+export function registerUser(db: Db, u: NewUser, allowRegistration: boolean): RegisterResult {
+  return inTransaction(db, (tx): RegisterResult => {
+    if (getUserByUsername(tx, u.username)) return { error: 'taken' }
+    const isFirst = countUsers(tx) === 0
+    if (!isFirst && !allowRegistration) return { error: 'closed' }
+    return { user: createUser(tx, { ...u, role: isFirst ? 'admin' : 'user' }) }
+  })
+}
+
+export function getUserById(db: Db, uid: UserId) {
   return db.select().from(users).where(eq(users.id, uid)).get()
 }
 
@@ -80,7 +109,7 @@ export function countUsers(db: Db): number {
 
 export function updateUser(
   db: Db,
-  uid: string,
+  uid: UserId,
   patch: Partial<{ handle: string; nativeLang: string; targetLang: string; level: string }>,
 ): void {
   db.update(users)
@@ -89,6 +118,34 @@ export function updateUser(
     .run()
 }
 
-export function deleteUser(db: Db, uid: string): void {
-  db.delete(users).where(eq(users.id, uid)).run()
+/**
+ * Deletes a member and everything that is theirs, in one transaction. The game
+ * and SRS tables cascade from `users`; the older content and history tables have
+ * no foreign key, so their rows are removed here. Decks and cards are shared, so
+ * they stay (losing only their creator) — until the last member is gone, when
+ * nobody is left to study them. Returns false when there was no such member.
+ */
+export function deleteUser(db: Db, uid: UserId): boolean {
+  return inTransaction(db, (tx) => {
+    if (!tx.select({ id: users.id }).from(users).where(eq(users.id, uid)).get()) return false
+    deleteUserHistory(tx, uid)
+    tx.update(decks).set({ userId: null }).where(eq(decks.userId, uid)).run()
+    tx.delete(cards).where(eq(cards.privateTo, uid)).run()
+    tx.update(cards).set({ userId: null }).where(eq(cards.userId, uid)).run()
+    tx.update(audioBlobs).set({ userId: null }).where(eq(audioBlobs.userId, uid)).run()
+    tx.delete(users).where(eq(users.id, uid)).run()
+    if (countUsers(tx) === 0) deleteAllDecks(tx)
+    return true
+  })
+}
+
+/** The member's chats, reviews, attempts, XP ledger and stats row. */
+function deleteUserHistory(db: Db, uid: UserId): void {
+  const chats = db.select({ id: sessions.id }).from(sessions).where(eq(sessions.userId, uid)).all()
+  for (const c of chats) db.delete(messages).where(eq(messages.sessionId, c.id)).run()
+  db.delete(sessions).where(eq(sessions.userId, uid)).run()
+  db.delete(reviews).where(eq(reviews.userId, uid)).run()
+  db.delete(attempts).where(eq(attempts.userId, uid)).run()
+  db.delete(xpEvents).where(eq(xpEvents.userId, uid)).run()
+  db.delete(stats).where(eq(stats.userId, uid)).run()
 }

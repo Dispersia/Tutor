@@ -1,5 +1,6 @@
+import type { UserId } from '../ids'
 import { expect, test } from 'bun:test'
-import { openDb } from '../db/client'
+import { openDb, type Db } from '../db/client'
 import {
   addGearSet,
   addItems,
@@ -7,7 +8,9 @@ import {
   getItemCount,
   listEquipment,
   listGearInstances,
+  spendableCount,
 } from '../db/repo'
+import { equipment, inventory } from '../db/schema'
 import { EventBus } from '../events'
 import { MONSTERS, MONSTER_BY_ID } from './combat'
 import { ITEM_BY_ID } from './skills'
@@ -21,7 +24,13 @@ import {
 } from './gear'
 import {
   applyGearSet,
-  ensureBaseGearInstance,
+  backfillGearInstances,
+  consumeItems,
+  grantFixedItems,
+  discardGear,
+  distillItem,
+  inventoryView,
+  settleRigs,
   completeAction,
   equipItem,
   gearSetsView,
@@ -77,7 +86,7 @@ test('a craft creates a gear instance and equipping keeps the stack count', () =
   expect(res.ok).toBe(true)
   expect(listEquipment(db, user.id)).toHaveLength(1)
   expect(listEquipment(db, user.id)[0]!.slot).toBe('head')
-  // worn gear stays in the inventory as "pieces owned"
+  // worn gear is still a piece owned: the count is the number of instances
   expect(getItemCount(db, user.id, 'bronze_helm')).toBe(1)
 
   const pc = loadPlayerCombat(db, user.id)
@@ -181,7 +190,6 @@ test('equipping gear checks the combat stats it needs', () => {
   expect(equipItem(db, bus, user.id, 'bronze_sword').ok).toBe(true)
 
   // A locked piece still shows in the inventory, with what it needs.
-  ensureBaseGearInstance(db, user.id, ITEM_BY_ID.get('iron_sword')!)
   const piece = gearView(db, user.id).find((g) => g.itemId === 'iron_sword')
   expect(piece?.missing[0]).toMatchObject({ skill: 'attack', name: 'Attack', level: 5 })
   expect(meetsRequirements(ITEM_BY_ID.get('iron_sword')!, () => 5).ok).toBe(true)
@@ -202,5 +210,126 @@ test('wearing a saved set skips pieces you cannot use yet', () => {
   expect(res.skipped).toHaveLength(1)
   expect(res.skipped[0]).toMatchObject({ slot: 'head', itemId: 'iron_helm', name: 'Iron helm' })
   expect(listEquipment(db, user.id)).toHaveLength(0)
+  sqlite.close()
+})
+
+// --- gear instances are the only record of equipment (§13.5.3) -----------------
+
+/** What the bank reports for an item, and how many pieces really exist. */
+function owned(db: Db, userId: UserId, itemId: string) {
+  return {
+    count: getItemCount(db, userId, itemId),
+    listed: inventoryView(db, userId).find((i) => i.itemId === itemId)?.count,
+    pieces: listGearInstances(db, userId).filter((g) => g.itemId === itemId).length,
+  }
+}
+
+const all = (n: number) => ({ count: n, listed: n, pieces: n })
+
+test('a granted piece is an instance: the count is the number of instances', () => {
+  const { db, sqlite, user, bus } = setup()
+  addItems(db, user.id, 'bronze_helm', 2)
+  grantFixedItems(db, bus, user.id, [{ item: 'bronze_helm', count: 1 }])
+  expect(owned(db, user.id, 'bronze_helm')).toEqual(all(3))
+  // nothing is written to the materials table for equipment
+  expect(db.select().from(inventory).all()).toEqual([])
+  sqlite.close()
+})
+
+test('equipping and unequipping never change how many pieces are owned', () => {
+  const { db, sqlite, user, bus } = setup()
+  addItems(db, user.id, 'bronze_helm', 2)
+  expect(equipItem(db, bus, user.id, 'bronze_helm').ok).toBe(true)
+  expect(owned(db, user.id, 'bronze_helm')).toEqual(all(2))
+  unequipItem(db, user.id, 'head')
+  expect(owned(db, user.id, 'bronze_helm')).toEqual(all(2))
+  sqlite.close()
+})
+
+test('discard, salvage and distill each take one piece and one off the count', () => {
+  const { db, sqlite, user, bus } = setup()
+  addItems(db, user.id, 'bronze_helm', 4)
+  const [a, b] = listGearInstances(db, user.id)
+  expect(discardGear(db, user.id, a!.id).ok).toBe(true)
+  expect(owned(db, user.id, 'bronze_helm')).toEqual(all(3))
+  expect(salvageGear(db, bus, user.id, b!.id).ok).toBe(true)
+  expect(owned(db, user.id, 'bronze_helm')).toEqual(all(2))
+  expect(distillItem(db, bus, user.id, 'bronze_helm').ok).toBe(true)
+  expect(owned(db, user.id, 'bronze_helm')).toEqual(all(1))
+
+  // the last piece is worn: it cannot be distilled, and nothing is lost trying
+  equipItem(db, bus, user.id, 'bronze_helm')
+  expect(distillItem(db, bus, user.id, 'bronze_helm').ok).toBe(false)
+  expect(owned(db, user.id, 'bronze_helm')).toEqual(all(1))
+  sqlite.close()
+})
+
+test('a rig that forges equipment produces instances', () => {
+  const { db, sqlite, user, bus } = setup()
+  const t0 = 2_000_000_000_000
+  addItems(db, user.id, 'bronze_bar', 200)
+  completeAction(db, bus, user.id, { actionId: 'forge-bronze-helm', now: t0 })
+  expect(owned(db, user.id, 'bronze_helm')).toEqual(all(1))
+
+  const report = settleRigs(db, bus, user.id, t0 + 10 * 60_000)
+  const forged = report.gained.find((g) => g.item === 'bronze_helm')?.count ?? 0
+  expect(forged).toBeGreaterThan(0)
+  expect(owned(db, user.id, 'bronze_helm')).toEqual(all(1 + forged))
+  sqlite.close()
+})
+
+test('a recipe that consumes equipment removes the piece', () => {
+  const { db, sqlite, user, bus } = setup()
+  addItems(db, user.id, 'mythril_sword', 2)
+  consumeItems(db, bus, user.id, [{ item: 'mythril_sword', count: 1 }])
+  expect(owned(db, user.id, 'mythril_sword')).toEqual(all(1))
+  sqlite.close()
+})
+
+test('a piece being worn is never spent, only spare ones', () => {
+  const { db, sqlite, user, bus } = setup()
+  addItems(db, user.id, 'bronze_sword', 1)
+  expect(equipItem(db, bus, user.id, 'bronze_sword').ok).toBe(true)
+  // owned, but nothing to spend: a recipe cannot take the sword off your hand
+  expect(getItemCount(db, user.id, 'bronze_sword')).toBe(1)
+  expect(spendableCount(db, user.id, 'bronze_sword')).toBe(0)
+  consumeItems(db, bus, user.id, [{ item: 'bronze_sword', count: 1 }])
+  expect(getItemCount(db, user.id, 'bronze_sword')).toBe(1)
+  expect(listEquipment(db, user.id).length).toBe(1)
+  sqlite.close()
+})
+
+test('the backfill turns a legacy stack into instances, once', () => {
+  const { db, sqlite, user } = setup()
+  const stamp = { userId: user.id, updatedAt: 1 }
+  db.insert(inventory)
+    .values([
+      { ...stamp, itemId: 'bronze_helm', count: 2 },
+      { ...stamp, itemId: 'bronze_sword', count: 1 },
+      { ...stamp, itemId: 'copper_ore', count: 5 },
+    ])
+    .run()
+  // a worn row from before instances: no piece behind it
+  db.insert(equipment)
+    .values({ ...stamp, slot: 'mainHand', itemId: 'bronze_sword', instanceId: null })
+    .run()
+  // until the backfill runs, the bank reports only real pieces
+  expect(getItemCount(db, user.id, 'bronze_helm')).toBe(0)
+
+  expect(backfillGearInstances(db)).toBe(3)
+  expect(owned(db, user.id, 'bronze_helm')).toEqual(all(2))
+  expect(owned(db, user.id, 'bronze_sword')).toEqual(all(1))
+  const helm = listGearInstances(db, user.id).find((g) => g.itemId === 'bronze_helm')!
+  expect(helm.quality).toBe('common')
+  expect(helm.armour).toBe(ITEM_BY_ID.get('bronze_helm')!.armour ?? 0)
+  const sword = listGearInstances(db, user.id).find((g) => g.itemId === 'bronze_sword')!
+  expect(listEquipment(db, user.id)[0]!.instanceId).toBe(sword.id)
+  // only materials are left in the stacks table
+  expect(db.select().from(inventory).all()).toEqual([
+    expect.objectContaining({ itemId: 'copper_ore', count: 5 }),
+  ])
+
+  expect(backfillGearInstances(db)).toBe(0)
+  expect(listGearInstances(db, user.id)).toHaveLength(3)
   sqlite.close()
 })

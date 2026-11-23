@@ -1,4 +1,4 @@
-import type { Card } from '@tutor/core'
+import type { UserId, DeckId } from '../ids'
 import type { Db } from '../db/client'
 import {
   addCard,
@@ -9,10 +9,11 @@ import {
   listDecks,
   setUserSetting,
   updateCard,
+  type ServerCard,
 } from '../db/repo'
-import { FREQUENCY } from './frequency'
+import { FREQUENCY } from '../text/lexicon'
 import { FREQUENCY_JA } from './frequency-ja'
-import { pinyinToZhuyin } from './zhuyin'
+import { storedReadings } from '../text/readings'
 
 /** Level id of the Mandarin frequency (n+1) path. */
 export const FREQUENCY_LEVEL = 'zhfreq'
@@ -94,8 +95,8 @@ function seedCard(
  * a copy of the curated frequency decks so the SRS / n+1 / sentence tests have a
  * deterministic deck to drill. Idempotent.
  */
-export function seedStarterDecks(db: Db, userId: string): boolean {
-  const created = listDecks(db, userId).length === 0
+export function seedStarterDecks(db: Db, userId: UserId): boolean {
+  const created = listDecks(db).length === 0
   reconcileStarterDecks(db, userId)
   return created
 }
@@ -105,14 +106,14 @@ export function seedStarterDecks(db: Db, userId: string): boolean {
  * frequency deck they never got, updates cards in place (so SRS history
  * survives) and drops the retired themed decks. Runs once per SEED_VERSION.
  */
-export function reconcileStarterDecks(db: Db, userId: string): void {
+export function reconcileStarterDecks(db: Db, userId: UserId): void {
   if (getUserSetting(db, userId, SEED_VERSION_KEY) === String(SEED_VERSION)) return
   for (const level of LEGACY_LEVELS) {
-    const deck = listDecks(db, userId).find((d) => d.level === level)
-    if (deck) deleteDeck(db, deck.id, userId)
+    const deck = listDecks(db).find((d) => d.level === level)
+    if (deck) deleteDeck(db, deck.id)
   }
   for (const d of starterDecks()) {
-    const deck = listDecks(db, userId).find((x) => x.level === d.level)
+    const deck = listDecks(db).find((x) => x.level === d.level)
     if (!deck) {
       seedDeck(db, userId, d)
       continue
@@ -122,7 +123,7 @@ export function reconcileStarterDecks(db: Db, userId: string): void {
   setUserSetting(db, userId, SEED_VERSION_KEY, String(SEED_VERSION))
 }
 
-function seedDeck(db: Db, userId: string, d: FrequencyDeck): void {
+function seedDeck(db: Db, userId: UserId, d: FrequencyDeck): void {
   const deck = createDeck(db, userId, {
     name: d.name,
     sourceLang: 'en',
@@ -144,8 +145,8 @@ function seedDeck(db: Db, userId: string, d: FrequencyDeck): void {
 /** Matches stored cards to the seed by position (curated decks are append-only). */
 function reconcileCards(
   db: Db,
-  userId: string,
-  deckId: string,
+  userId: UserId,
+  deckId: DeckId,
   targetLang: string,
   seed: readonly SeedContent[],
 ): void {
@@ -156,12 +157,12 @@ function reconcileCards(
 
 interface ReconcileCtx {
   db: Db
-  userId: string
-  deckId: string
+  userId: UserId
+  deckId: DeckId
   targetLang: string
 }
 
-function reconcileCard(ctx: ReconcileCtx, card: Card | undefined, seed: SeedContent): void {
+function reconcileCard(ctx: ReconcileCtx, card: ServerCard | undefined, seed: SeedContent): void {
   if (!card) {
     addCard(ctx.db, ctx.userId, {
       deckId: ctx.deckId,
@@ -174,7 +175,7 @@ function reconcileCard(ctx: ReconcileCtx, card: Card | undefined, seed: SeedCont
   }
   const same = card.front === seed.front && card.back === seed.back
   if (same && sameReadings(card.readings, seed.readings)) return
-  updateCard(ctx.db, card.id, ctx.userId, {
+  updateCard(ctx.db, card.id, {
     front: seed.front,
     back: seed.back,
     readings: seed.readings,
@@ -196,8 +197,6 @@ export function readingsFor(
   reading: string,
   kana?: string,
 ): Record<string, string> {
-  if (targetLang === 'ja') {
-    return { kana: kana || reading }
-  }
-  return { zhuyin: pinyinToZhuyin(reading) }
+  const native = targetLang === 'ja' ? kana || reading : reading
+  return storedReadings({ targetLang, reading: native })
 }

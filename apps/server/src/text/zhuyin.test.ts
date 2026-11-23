@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { FREQUENCY } from './frequency'
+import { FREQUENCY } from './lexicon'
 import { pinyinToZhuyin } from './zhuyin'
 
 test('converts common syllables and tones', () => {

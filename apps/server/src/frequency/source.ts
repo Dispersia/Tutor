@@ -57,11 +57,39 @@ function chineseSource(variant?: CharacterVariant): FrequencySource {
 
 export type Fetcher = (url: string) => Promise<string>
 
-/** Default fetcher: a plain GET, returning the body as text. */
-export const defaultFetcher: Fetcher = async (url) => {
-  const res = await fetch(url, { headers: { 'user-agent': 'tutor' } })
+/** A list that has not arrived in this long is a failed build, not a hung one. */
+const FETCH_TIMEOUT_MS = 30_000
+
+/**
+ * Lists already downloaded, by URL, for the life of the process. A list is a
+ * fixed file (the 2018 corpus), and every build and growth batch of a deck
+ * reads the same one — a few hundred kilobytes that were re-downloaded each time.
+ */
+const downloaded = new Map<string, Promise<string>>()
+
+async function download(url: string): Promise<string> {
+  const res = await fetch(url, {
+    headers: { 'user-agent': 'tutor' },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  })
   if (!res.ok) throw new Error(`frequency list ${url} -> ${res.status}`)
   return res.text()
+}
+
+/**
+ * Default fetcher: a GET with a timeout, returning the body as text. Each URL
+ * is downloaded once; a failed download is forgotten so the next call retries.
+ */
+export const defaultFetcher: Fetcher = (url) => {
+  let list = downloaded.get(url)
+  if (!list) {
+    list = download(url).catch((err: unknown) => {
+      downloaded.delete(url)
+      throw err
+    })
+    downloaded.set(url, list)
+  }
+  return list
 }
 
 /** True for a token we would want to teach (a word, not punctuation/numbers). */

@@ -1,3 +1,4 @@
+import type { UserId } from '../ids'
 import { expect, test } from 'bun:test'
 import { openDb, type Db } from '../db/client'
 import {
@@ -12,8 +13,8 @@ import {
   listTalents,
 } from '../db/repo'
 import { EventBus } from '../events'
-import { itemRequirements } from './gear'
-import { liveRigCount } from './idle'
+import { itemRequirements } from '../game/gear'
+import { liveRigCount } from '../game/idle'
 import {
   ACTION_BY_ID,
   ACTION_MAX_LEVEL,
@@ -23,8 +24,8 @@ import {
   skillLevelInfo,
   skillXpForLevel,
   type SkillId,
-} from './skills'
-import { masteryOptions, talentOptions } from './talents'
+} from '../game/skills'
+import { masteryOptions, talentOptions } from '../game/talents'
 import {
   accountLevel,
   actionState,
@@ -40,7 +41,7 @@ import {
   stopRig,
   talentView,
   unequipItem,
-} from '../services'
+} from './index'
 /** XP needed to reach `level` from scratch. */
 function xpForLevel(level: number): number {
   let total = 0
@@ -49,14 +50,14 @@ function xpForLevel(level: number): number {
 }
 
 /** Brings every action of `skill` to `to` levels (there are no XP bonuses in tests). */
-function setSkill(db: Db, bus: EventBus, userId: string, skill: SkillId, to: number): void {
+function setSkill(db: Db, bus: EventBus, userId: UserId, skill: SkillId, to: number): void {
   for (const a of actionsForSkill(skill)) {
     const cur = skillLevelInfo(getActionXp(db, userId, a.id)).level
     awardActionXp(db, bus, userId, { actionId: a.id, amount: xpForLevel(to) - xpForLevel(cur) })
   }
 }
 
-function setMining(db: Db, bus: EventBus, userId: string, to: number): void {
+function setMining(db: Db, bus: EventBus, userId: UserId, to: number): void {
   setSkill(db, bus, userId, 'mining', to)
 }
 
@@ -264,7 +265,7 @@ test('equip / unequip moves gear between bank and slots', () => {
   expect(listEquipment(db, user.id)).toEqual([
     expect.objectContaining({ slot: 'mainHand', itemId: 'bronze_sword' }),
   ])
-  // The stack count is "pieces owned"; worn gear stays in the inventory.
+  // The count is the pieces owned (gear instances); wearing one does not move it.
   expect(getItemCount(db, user.id, 'bronze_sword')).toBe(1)
 
   unequipItem(db, user.id, 'mainHand')
@@ -474,4 +475,42 @@ test('distilling equipment burns its rolled instance, and never a worn piece', (
     false,
   )
   sqlite.close()
+})
+
+test('idle XP does not depend on how often the rig is settled', () => {
+  /** Mining XP after ten minutes of one run, settled every `stepMs`. */
+  const xpAfter = (stepMs: number): number => {
+    const { db, bus, user, sqlite } = setup()
+    const t0 = 1_000_000
+    completeAction(db, bus, user.id, { actionId: 'mine-copper', now: t0 })
+    const before = getActionXp(db, user.id, 'mine-copper')
+    for (let t = t0 + stepMs; t <= t0 + 600_000; t += stepMs) settleRigs(db, bus, user.id, t)
+    const xp = getActionXp(db, user.id, 'mine-copper') - before
+    sqlite.close()
+    return xp
+  }
+  const once = xpAfter(600_000)
+  expect(once).toBeGreaterThan(0)
+  // settling after every craft used to round each half point up: twice the XP
+  expect(Math.abs(xpAfter(5_000) - once)).toBeLessThanOrEqual(1)
+})
+
+test('the Thieving coins passive pays more coins, and only coins', () => {
+  const coinsFrom = (level: number): number => {
+    const { db, bus, user, sqlite } = setup()
+    if (level > 1) setSkill(db, bus, user.id, 'thieving', level)
+    let coins = 0
+    for (let i = 0; i < 200; i++) {
+      const got = grantItems(db, bus, user.id, {
+        actionId: 'steal-coins',
+        costs: [{ item: 'coins', count: 10 }],
+        rand: () => 0.99, // no lucky double: the yield alone
+      })
+      coins += got[0]?.count ?? 0
+    }
+    sqlite.close()
+    return coins
+  }
+  // +2% coins per Thieving level: level 50 is roughly double level 1
+  expect(coinsFrom(50)).toBeGreaterThan(coinsFrom(1) * 1.5)
 })

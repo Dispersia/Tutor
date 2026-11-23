@@ -6,8 +6,8 @@
  * its card is "learned" (see srs.isLearned).
  */
 
-export interface StepCard {
-  id: string
+export interface StepCard<I extends string = string> {
+  id: I
   front: string
   back: string
   reading?: string
@@ -19,13 +19,13 @@ export interface StepCard {
   step?: number
 }
 
-export interface Lesson {
+export interface Lesson<I extends string = string> {
   id: string
   index: number
   title: string
   description: string
   level: string
-  cardIds: string[]
+  cardIds: I[]
   /** the new word this step introduces */
   newWord?: string
   /** native reading (Zhuyin / kana) for the new word */
@@ -42,13 +42,13 @@ export const STEP_SIZE = 1
  * deck's level (curated) or id (generated). Cards without a `step` are each their
  * own lesson (the curated path's behaviour).
  */
-export function buildLessons(key: string, cards: StepCard[]): Lesson[] {
+export function buildLessons<I extends string>(key: string, cards: StepCard<I>[]): Lesson<I>[] {
   return groupByStep(cards).map((group, i) => lessonOf(key, group, i))
 }
 
 /** Cards sharing a `step` form one group, wherever they sit in the list. */
-function groupByStep(cards: StepCard[]): StepCard[][] {
-  const groups: StepCard[][] = []
+function groupByStep<I extends string>(cards: StepCard<I>[]): StepCard<I>[][] {
+  const groups: StepCard<I>[][] = []
   const index = new Map<number, number>()
   for (const card of cards) {
     if (card.step === undefined) {
@@ -66,7 +66,7 @@ function groupByStep(cards: StepCard[]): StepCard[][] {
 }
 
 /** One lesson from its group: the head card names the step and glosses it. */
-function lessonOf(key: string, group: StepCard[], i: number): Lesson {
+function lessonOf<I extends string>(key: string, group: StepCard<I>[], i: number): Lesson<I> {
   const head = group[0]!
   return {
     id: `${key}:${i + 1}`,

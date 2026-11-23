@@ -1,6 +1,8 @@
 /** Combat: the player's loadout numbers, encounters and consumables (docs/DESIGN.md §13.5). */
 
+import type { UserId } from '../ids'
 import {
+  getEncounter,
   getGearInstance,
   getPlayerHp,
   getUserSetting,
@@ -36,7 +38,6 @@ import {
   type UnlockReq,
 } from '../game/skills'
 import { accountBandBonuses, enchantOf } from './bands'
-import { ensureWornGear } from './gear'
 import { consumeItems } from './items'
 import { aggregateBonuses, loadProgress, skillLevelOf } from './progress'
 
@@ -76,7 +77,7 @@ interface Loadout {
 }
 
 /** The player's effective combat level, used to scale monsters. */
-export function combatLevel(db: Db, userId: string, levels?: Map<string, number>): number {
+export function combatLevel(db: Db, userId: UserId, levels?: Map<string, number>): number {
   return Math.max(
     skillLevelOf(db, userId, 'attack', levels),
     skillLevelOf(db, userId, 'strength', levels),
@@ -88,12 +89,11 @@ export function combatLevel(db: Db, userId: string, levels?: Map<string, number>
 }
 
 /** The active set bonuses for the current loadout (without the full combat maths). */
-export function loadoutSetBonuses(db: Db, userId: string): ActiveSetBonus[] {
-  ensureWornGear(db, userId)
+export function loadoutSetBonuses(db: Db, userId: UserId): ActiveSetBonus[] {
   return activeSetBonuses(armourCounts(db, userId))
 }
 
-function armourCounts(db: Db, userId: string): Partial<Record<ArmourType, number>> {
+function armourCounts(db: Db, userId: UserId): Partial<Record<ArmourType, number>> {
   const counts: Partial<Record<ArmourType, number>> = {}
   for (const row of listEquipment(db, userId)) {
     const item = ITEM_BY_ID.get(row.itemId)
@@ -110,10 +110,9 @@ function armourCounts(db: Db, userId: string): Partial<Record<ArmourType, number
  */
 export function loadPlayerCombat(
   db: Db,
-  userId: string,
+  userId: UserId,
   levels?: Map<string, number>,
 ): PlayerCombat {
-  ensureWornGear(db, userId)
   const b = aggregateBonuses(db, userId, levels)
   const load = loadout(db, userId)
   const setBonuses = activeSetBonuses(load.armourCounts)
@@ -121,7 +120,7 @@ export function loadPlayerCombat(
   return combatNumbers({ db, userId, levels, b, load, setBonuses, boosted })
 }
 
-function loadout(db: Db, userId: string): Loadout {
+function loadout(db: Db, userId: UserId): Loadout {
   const eq = listEquipment(db, userId)
   const weapon = eq.find((e) => e.slot === 'mainHand' || e.slot === 'weapon')
   const weaponItem = weapon ? ITEM_BY_ID.get(weapon.itemId) : undefined
@@ -132,7 +131,7 @@ function loadout(db: Db, userId: string): Loadout {
   }
 }
 
-function gearTotals(db: Db, userId: string, eq: EquipmentRow[]) {
+function gearTotals(db: Db, userId: UserId, eq: EquipmentRow[]) {
   let stats = emptyStats()
   let totalPower = 0
   let totalArmour = 0
@@ -150,7 +149,7 @@ function gearTotals(db: Db, userId: string, eq: EquipmentRow[]) {
 }
 
 /** One worn piece's contribution, including the enchant's flat stat points. */
-function pieceTotals(db: Db, userId: string, row: EquipmentRow, item: ItemDef, running: GearStats) {
+function pieceTotals(db: Db, userId: UserId, row: EquipmentRow, item: ItemDef, running: GearStats) {
   const instance = row.instanceId ? getGearInstance(db, userId, row.instanceId) : undefined
   let stats = addStats(running, instance ? parseStats(instance.statsJson) : statsOf(item))
   const def = instance ? enchantOf(instance) : undefined
@@ -164,7 +163,7 @@ function pieceTotals(db: Db, userId: string, row: EquipmentRow, item: ItemDef, r
 
 interface Assembly {
   db: Db
-  userId: string
+  userId: UserId
   levels?: Map<string, number>
   b: Bonuses
   load: Loadout
@@ -231,7 +230,7 @@ function passives(
 /** Every monster is fightable with whatever gear you have — no per-monster gate. */
 export function monsterState(
   _db: Db,
-  _userId: string,
+  _userId: UserId,
   _m: MonsterDef,
 ): { unlocked: boolean; missing: UnlockReq[]; equipMissing: { slot: string; tag: string } | null } {
   return { unlocked: true, missing: [], equipMissing: null }
@@ -245,7 +244,7 @@ export function monsterState(
  * is not a free heal. A player who has never fought starts at full; the value is
  * clamped to their current max HP, which moves with Constitution and armour.
  */
-export function currentHp(db: Db, userId: string, maxHp: number): number {
+export function currentHp(db: Db, userId: UserId, maxHp: number): number {
   const stored = getPlayerHp(db, userId)
   if (stored == null) return maxHp
   return Math.max(1, Math.min(stored, maxHp))
@@ -257,7 +256,7 @@ export const DEFEAT_HP = 1
 const DEFAULT_FOOD_THRESHOLD = 0.5
 
 /** Food is auto-eaten when HP falls below this fraction (user setting, %). */
-export function foodThreshold(db: Db, userId: string): number {
+export function foodThreshold(db: Db, userId: UserId): number {
   const raw = getUserSetting(db, userId, 'foodThreshold')
   const n = raw ? Number(raw) : NaN
   return Number.isFinite(n) && n > 0 && n <= 100 ? n / 100 : DEFAULT_FOOD_THRESHOLD
@@ -265,7 +264,7 @@ export function foodThreshold(db: Db, userId: string): number {
 
 function bestConsumable(
   db: Db,
-  userId: string,
+  userId: UserId,
   score: (item: ItemDef) => number | undefined,
 ): ItemDef | undefined {
   let best: ItemDef | undefined
@@ -285,12 +284,12 @@ function bestConsumable(
 }
 
 /** The best food in the bank (highest heal). */
-export function bestFood(db: Db, userId: string): ItemDef | undefined {
+export function bestFood(db: Db, userId: UserId): ItemDef | undefined {
   return bestConsumable(db, userId, (i) => i.heal)
 }
 
 /** The best potion in the bank (highest buff). */
-export function bestPotion(db: Db, userId: string): ItemDef | undefined {
+export function bestPotion(db: Db, userId: UserId): ItemDef | undefined {
   return bestConsumable(db, userId, (i) => (i.buff ? i.buff.value : undefined))
 }
 
@@ -305,7 +304,7 @@ interface DrinkResult {
 }
 
 /** Drinks the best buff potion at the start of a fight, returning its effect. */
-function drinkBestPotion(db: Db, bus: EventBus, userId: string, maxHp: number): DrinkResult {
+function drinkBestPotion(db: Db, bus: EventBus, userId: UserId, maxHp: number): DrinkResult {
   const potion = bestPotion(db, userId)
   if (!potion?.buff) return { maxHp, powerBonus: 0, potionId: null, drank: null }
   consumeItems(db, bus, userId, [{ item: potion.id, count: 1 }])
@@ -340,11 +339,14 @@ export type StartResult =
       equipMissing?: { slot: string; tag: string }
     }
 
-function startEncounterTx(db: Db, bus: EventBus, userId: string, monsterId: string): StartResult {
+function startEncounterTx(db: Db, bus: EventBus, userId: UserId, monsterId: string): StartResult {
   const m = MONSTER_BY_ID.get(monsterId)
   if (!m) return { ok: false, error: 'unknown monster' }
   const locked = lockResult(db, userId, m)
   if (locked) return locked
+  // Starting over mid-fight would reset the monster and drink a second potion.
+  if (getEncounter(db, userId))
+    return { ok: false, error: 'finish or flee the current fight first' }
   const pc = loadPlayerCombat(db, userId, loadProgress(db, userId).levels)
   const potion = drinkBestPotion(db, bus, userId, pc.maxHp)
   // HP carries between fights: resume from what's left, clamped to this fight's
@@ -372,7 +374,7 @@ function startOk(
 }
 
 /** The refusal when the monster is locked for this player, else undefined. */
-function lockResult(db: Db, userId: string, m: MonsterDef): StartResult | undefined {
+function lockResult(db: Db, userId: UserId, m: MonsterDef): StartResult | undefined {
   const state = monsterState(db, userId, m)
   if (state.unlocked) return undefined
   return {

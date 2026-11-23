@@ -6,6 +6,8 @@
  * function below.
  */
 
+import { toDeckId, toCardId, type UserId, type DeckId, type CardId } from '../../ids'
+import type { ServerCard } from '../../db/repo'
 import type { Card, ExerciseContext, ExerciseDef, ExerciseInstance } from '@tutor/core'
 import type { Context } from 'hono'
 import type { App, AppEnv, Deps } from '../../context'
@@ -24,6 +26,7 @@ import {
 } from '../../services'
 import { actionGate, type ActionRequest, type GuardError } from './action'
 import { exerciseCtx, type SessionUser } from './exerciseCtx'
+import { noteIssued } from './issued'
 import { judgeFor } from './judge'
 import {
   lessonOfCard,
@@ -32,22 +35,22 @@ import {
   pickStudyCard,
   resolveLesson,
 } from './select'
-import { jsonBody, str } from '../body'
+import { idField, jsonBody, str } from '../body'
 
 /** The request body of a "next drill" call. */
 interface NextBody extends ActionRequest {
-  deckId?: string
+  deckId?: DeckId
   exerciseId?: string
   lessonId?: string
   /** Drill this card specifically (a targeted drill; the budget still applies). */
-  cardId?: string
+  cardId?: CardId
 }
 
 /** The budget, the chosen card and the lesson the header should follow. */
 interface Served {
   data: LoadedCards
   budget: StudyBudget
-  card?: Card
+  card?: ServerCard
   lessonId?: string
   error?: GuardError
 }
@@ -57,10 +60,10 @@ function readNextBody(body: Record<string, unknown>): NextBody {
   return {
     actionId: str(body, 'actionId'),
     choiceId: str(body, 'choiceId'),
-    deckId: str(body, 'deckId'),
+    deckId: idField(body, 'deckId', toDeckId),
     exerciseId: str(body, 'exerciseId'),
     lessonId: str(body, 'lessonId'),
-    cardId: str(body, 'cardId'),
+    cardId: idField(body, 'cardId', toCardId),
   }
 }
 
@@ -86,7 +89,7 @@ interface NextCall {
   user: PublicUser
   body: NextBody
   prefs: StudyPrefs
-  deckId?: string
+  deckId?: DeckId
   action?: ActionDef
 }
 
@@ -115,12 +118,12 @@ function resolveDeck(
   body: NextBody,
   action: ActionDef | undefined,
   prefs: StudyPrefs,
-): { deckId?: string; error?: GuardError } {
+): { deckId?: DeckId; error?: GuardError } {
   if (body.lessonId) return lessonDeck(deps, user.id, body.lessonId)
   const fromAction = deckForAction(deps, user.id, action)
   if (fromAction) return { deckId: fromAction }
   if (body.deckId) return { deckId: body.deckId }
-  if (prefs.activeDeckId && getDeck(deps.db, prefs.activeDeckId, user.id)) {
+  if (prefs.activeDeckId && getDeck(deps.db, prefs.activeDeckId)) {
     return { deckId: prefs.activeDeckId }
   }
   return {}
@@ -128,9 +131,9 @@ function resolveDeck(
 
 function lessonDeck(
   deps: Deps,
-  userId: string,
+  userId: UserId,
   lessonId: string,
-): { deckId?: string; error?: GuardError } {
+): { deckId?: DeckId; error?: GuardError } {
   const lesson = resolveLesson(deps, userId, lessonId)
   return lesson
     ? { deckId: lesson.deckId }
@@ -138,9 +141,9 @@ function lessonDeck(
 }
 
 /** The deck a choose-input action pins its drills to, if any. */
-function deckForAction(deps: Deps, userId: string, action?: ActionDef): string | undefined {
+function deckForAction(deps: Deps, userId: UserId, action?: ActionDef): DeckId | undefined {
   if (!action?.deckLevel) return undefined
-  return listDecks(deps.db, userId).find((d) => d.level === action.deckLevel)?.id
+  return listDecks(deps.db).find((d) => d.level === action.deckLevel)?.id
 }
 
 /** The budget for the deck's cards, and the card it still allows. */
@@ -148,7 +151,7 @@ function resolveTarget(
   deps: Deps,
   user: PublicUser,
   body: NextBody,
-  deckId: string | undefined,
+  deckId: DeckId | undefined,
 ): Served {
   const data = loadLearnerData(deps.db, user.id)
   const deckIds = deckCardIds(data, deckId)
@@ -169,11 +172,11 @@ interface PickReq {
   body: NextBody
   data: LoadedCards
   budget: StudyBudget
-  deckIds: string[]
+  deckIds: CardId[]
 }
 
 /** The card to serve, `'card not found'` for a bad target, else undefined (done). */
-function pickCard(req: PickReq): Card | undefined | 'card not found' {
+function pickCard(req: PickReq): ServerCard | undefined | 'card not found' {
   const { deps, user, body, data, budget, deckIds } = req
   const allowed = allowedCardIds(deckIds, data, budget)
   if (body.cardId && !getCard(deps.db, body.cardId, user.id)) return 'card not found'
@@ -188,7 +191,7 @@ function notFound(message: string): GuardError {
   return { status: 404, body: { error: message } }
 }
 
-function deckCardIds(data: LoadedCards, deckId: string | undefined): string[] {
+function deckCardIds(data: LoadedCards, deckId: DeckId | undefined): CardId[] {
   const cards = deckId ? data.cards.filter((c) => c.deckId === deckId) : data.cards
   return cards.map((c) => c.id)
 }
@@ -201,8 +204,8 @@ function deckCardIds(data: LoadedCards, deckId: string | undefined): string[] {
  */
 function budgetForDeck(
   deps: Deps,
-  userId: string,
-  deckIds: string[],
+  userId: UserId,
+  deckIds: CardId[],
   data: LoadedCards,
   opts: { targeted: boolean; now: number },
 ): StudyBudget {
@@ -219,7 +222,7 @@ function budgetForDeck(
 }
 
 /** The cards the budget still allows: new cards draw new, the rest draw reviews. */
-function allowedCardIds(deckIds: string[], data: LoadedCards, budget: StudyBudget): string[] {
+function allowedCardIds(deckIds: CardId[], data: LoadedCards, budget: StudyBudget): CardId[] {
   const allowNew = budget.newUnlimited || budget.newRemaining > 0
   const allowReview = budget.reviewsUnlimited || budget.reviewsRemaining > 0
   return deckIds.filter((id) => (data.srs.has(id) ? allowReview : allowNew))
@@ -232,7 +235,7 @@ interface ServeCardReq {
   body: NextBody
   prefs: StudyPrefs
   data: LoadedCards
-  card: Card
+  card: ServerCard
   lessonId?: string
   action?: ActionDef
 }
@@ -247,6 +250,7 @@ async function serveCard(c: Context<AppEnv>, req: ServeCardReq) {
   })
   const instance = await serveDrill(drillRequest(req, ctx))
   if (typeof instance === 'string') return c.json({ error: instance }, 409)
+  noteIssued(req.user.id, instance)
   if (instance.exerciseId === 'type_listen') enqueueListen(req.deps, req.user, req.card)
   return c.json({ instance, action: actionSummary(req.action), lessonId: req.lessonId })
 }
@@ -266,7 +270,7 @@ function drillRequest(req: ServeCardReq, ctx: ExerciseContext): DrillRequest {
 
 async function buildCtx(
   c: Context<AppEnv>,
-  req: { deps: Deps; user: PublicUser; card: Card; data: LoadedCards; prefs: StudyPrefs },
+  req: { deps: Deps; user: PublicUser; card: ServerCard; data: LoadedCards; prefs: StudyPrefs },
 ): Promise<ExerciseContext> {
   return {
     ...exerciseCtx(req.deps, req.user, req.card, {
@@ -308,7 +312,7 @@ function actionSummary(action?: ActionDef) {
 interface DrillRequest {
   deps: Deps
   user: PublicUser
-  card: Card
+  card: ServerCard
   data: LoadedCards
   ctx: ExerciseContext
   exerciseId?: string

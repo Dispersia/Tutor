@@ -1,7 +1,9 @@
 /** Crafted gear: instances, equipping, salvage and enchanting (docs/DESIGN.md §13.5.3). */
 
+import type { UserId, GearInstanceId } from '../ids'
 import {
   addItems,
+  countGearPieces,
   deleteGearInstance,
   getGearInstance,
   getItemCount,
@@ -38,7 +40,7 @@ import {
   type Slot,
 } from '../game/skills'
 import { bandForItem, parseEnchants } from './bands'
-import { ensureBaseGearInstance } from './gearInstances'
+import { spareGearPiece } from './gearInstances'
 import { consumeItems } from './items'
 import { awardActionXp, skillLevelOf } from './progress'
 
@@ -48,7 +50,7 @@ export interface GearRequirementView extends MissingRequirement {
 }
 
 export interface GearInstanceView {
-  id: string
+  id: GearInstanceId
   itemId: string
   slot: Slot
   quality: GearQuality
@@ -70,23 +72,8 @@ export function requirementView(missing: MissingRequirement[]): GearRequirementV
   return missing.map((m) => ({ ...m, name: SKILL_BY_ID.get(m.skill)?.name ?? m.skill }))
 }
 
-/**
- * Older equipment rows predate gear instances. Give every worn piece a base
- * instance once, so the paper doll and saved sets can show its stats.
- */
-export function ensureWornGear(db: Db, userId: string): void {
-  for (const row of listEquipment(db, userId)) {
-    if (row.instanceId) continue
-    const item = ITEM_BY_ID.get(row.itemId)
-    if (!item?.slot) continue
-    const id = ensureBaseGearInstance(db, userId, item)
-    setEquipment(db, userId, row.slot, row.itemId, id)
-  }
-}
-
 /** Every crafted piece the player owns, with its rolled stats and wear state. */
-export function gearView(db: Db, userId: string, levels?: Map<string, number>): GearInstanceView[] {
-  ensureWornGear(db, userId)
+export function gearView(db: Db, userId: UserId, levels?: Map<string, number>): GearInstanceView[] {
   const worn = wornSet(db, userId)
   const levelOf = (skill: SkillId) => skillLevelOf(db, userId, skill, levels)
   return listGearInstances(db, userId).map((row) => instanceView(row, worn, levelOf))
@@ -96,7 +83,7 @@ type GearRow = ReturnType<typeof listGearInstances>[number]
 
 function instanceView(
   row: GearRow,
-  worn: Set<string>,
+  worn: Set<GearInstanceId>,
   levelOf: (skill: SkillId) => number,
 ): GearInstanceView {
   const stats = parseStats(row.statsJson)
@@ -125,31 +112,25 @@ function requirementsOf(item: ItemDef | undefined, levelOf: (skill: SkillId) => 
 }
 
 /** The ids of the equipped pieces (the ones not free to re-wear). */
-function wornSet(db: Db, userId: string): Set<string> {
+function wornSet(db: Db, userId: UserId): Set<GearInstanceId> {
   const ids = listEquipment(db, userId)
     .map((e) => e.instanceId)
-    .filter((id): id is string => Boolean(id))
+    .filter((id): id is GearInstanceId => Boolean(id))
   return new Set(ids)
 }
 
-/** The first unequipped instance of an item, if one exists. */
-function findFreeGear(db: Db, userId: string, itemId: string): string | undefined {
-  const worn = wornSet(db, userId)
-  return listGearInstances(db, userId).find((g) => g.itemId === itemId && !worn.has(g.id))?.id
-}
-
 /**
- * Equips a piece. Crafted gear equips by instance so its rolled stats follow it;
- * legacy gear (or a bare item id) equips the first free instance, or creates one
- * from the base definition. The inventory count stays as "pieces owned".
+ * Equips a piece: the named instance, or the first spare one of a bare item id.
+ * Wearing moves nothing — a worn piece is still an instance, so the bank's
+ * count of it (the number of instances) does not change.
  */
 function equipItemTx(
   db: Db,
   bus: EventBus,
-  userId: string,
+  userId: UserId,
   itemId: string,
-  opts: { instanceId?: string; targetSlot?: string; levels?: Map<string, number> } = {},
-): { ok: boolean; error?: string; instanceId?: string; missing?: GearRequirementView[] } {
+  opts: { instanceId?: GearInstanceId; targetSlot?: string; levels?: Map<string, number> } = {},
+): { ok: boolean; error?: string; instanceId?: GearInstanceId; missing?: GearRequirementView[] } {
   const item = ITEM_BY_ID.get(itemId)
   if (!item?.slot) return { ok: false, error: 'not equippable' }
   // RuneScape-style gate: the piece's stat requirements must be met first.
@@ -158,17 +139,17 @@ function equipItemTx(
   const slot = resolveSlot(item.slot, opts.targetSlot)
   const resolved = resolveInstance(db, userId, item, opts.instanceId)
   if ('error' in resolved) return { ok: false, error: resolved.error }
-  if (resolved.instance) vacateOtherSlots(db, userId, resolved.instance.id, slot)
-  setEquipment(db, userId, slot, itemId, resolved.instance?.id ?? null)
+  vacateOtherSlots(db, userId, resolved.instance.id, slot)
+  setEquipment(db, userId, slot, itemId, resolved.instance.id)
   bus.emit('item.equipped', { userId, itemId, slot })
-  return { ok: true, instanceId: resolved.instance?.id }
+  return { ok: true, instanceId: resolved.instance.id }
 }
 
 /** {@link equipItemTx}, all-or-nothing. */
 export const equipItem = atomic(equipItemTx)
 
 /** A piece is worn once: moving it to `slot` empties wherever else it sat. */
-function vacateOtherSlots(db: Db, userId: string, instanceId: string, slot: string): void {
+function vacateOtherSlots(db: Db, userId: UserId, instanceId: GearInstanceId, slot: string): void {
   for (const e of listEquipment(db, userId)) {
     if (e.instanceId === instanceId && e.slot !== slot) setEquipment(db, userId, e.slot, null)
   }
@@ -186,28 +167,25 @@ function resolveSlot(itemSlot: Slot, targetSlot?: string): Slot {
   return itemSlot
 }
 
-type InstanceResult = { instance?: ReturnType<typeof getGearInstance> } | { error: string }
+type InstanceResult =
+  { instance: NonNullable<ReturnType<typeof getGearInstance>> } | { error: string }
 
-/** The rolled piece to wear: the named one, a free one, or a fresh base piece. */
+/** The rolled piece to wear: the named one, or a spare one of that item. */
 function resolveInstance(
   db: Db,
-  userId: string,
+  userId: UserId,
   item: ItemDef,
-  instanceId?: string,
+  instanceId?: GearInstanceId,
 ): InstanceResult {
   const given = instanceId ? getGearInstance(db, userId, instanceId) : undefined
   if (given) return given.itemId === item.id ? { instance: given } : { error: 'wrong item' }
-  const owned = listGearInstances(db, userId).filter((g) => g.itemId === item.id)
-  if (owned.length > 0) {
-    const free = findFreeGear(db, userId, item.id)
-    if (!free) return { error: 'every piece is already worn' }
-    return { instance: getGearInstance(db, userId, free) }
-  }
-  if (getItemCount(db, userId, item.id) < 1) return { error: 'not in your bank' }
-  return { instance: getGearInstance(db, userId, ensureBaseGearInstance(db, userId, item)) }
+  if (countGearPieces(db, userId, item.id) < 1) return { error: 'not in your bank' }
+  const spare = spareGearPiece(db, userId, item.id)
+  const instance = spare ? getGearInstance(db, userId, spare) : undefined
+  return instance ? { instance } : { error: 'every piece is already worn' }
 }
 
-export function unequipItem(db: Db, userId: string, slot: string): void {
+export function unequipItem(db: Db, userId: UserId, slot: string): void {
   const normalized = slot === 'weapon' ? 'mainHand' : slot === 'body' ? 'chest' : slot
   setEquipment(db, userId, normalized, null)
 }
@@ -215,15 +193,14 @@ export function unequipItem(db: Db, userId: string, slot: string): void {
 /** Removes a single crafted piece (not while worn). */
 function discardGearTx(
   db: Db,
-  userId: string,
-  instanceId: string,
+  userId: UserId,
+  instanceId: GearInstanceId,
 ): { ok: boolean; error?: string } {
   const worn = listEquipment(db, userId).some((e) => e.instanceId === instanceId)
   if (worn) return { ok: false, error: 'unequip it first' }
   const instance = getGearInstance(db, userId, instanceId)
   if (!instance) return { ok: false, error: 'not found' }
   deleteGearInstance(db, userId, instanceId)
-  addItems(db, userId, instance.itemId, -1)
   return { ok: true }
 }
 
@@ -253,8 +230,8 @@ const SALVAGE_YIELD: Record<GearQuality, number> = {
 function salvageGearTx(
   db: Db,
   bus: EventBus,
-  userId: string,
-  instanceId: string,
+  userId: UserId,
+  instanceId: GearInstanceId,
 ): { ok: boolean; error?: string; materials?: Cost[] } {
   const worn = listEquipment(db, userId).some((e) => e.instanceId === instanceId)
   if (worn) return { ok: false, error: 'unequip it first' }
@@ -264,7 +241,6 @@ function salvageGearTx(
   if (!item) return { ok: false, error: 'unknown item' }
   const materials = salvageYield(item, instance.quality as GearQuality)
   deleteGearInstance(db, userId, instanceId)
-  addItems(db, userId, instance.itemId, -1)
   grantMaterials(db, bus, userId, materials)
   return { ok: true, materials }
 }
@@ -283,7 +259,7 @@ function salvageYield(item: ItemDef, quality: GearQuality): Cost[] {
   return materials
 }
 
-function grantMaterials(db: Db, bus: EventBus, userId: string, materials: Cost[]): void {
+function grantMaterials(db: Db, bus: EventBus, userId: UserId, materials: Cost[]): void {
   for (const m of materials) {
     addItems(db, userId, m.item, m.count)
     bus.emit('item.gained', {
@@ -303,7 +279,7 @@ function grantMaterials(db: Db, bus: EventBus, userId: string, materials: Cost[]
 function distillItemTx(
   db: Db,
   bus: EventBus,
-  userId: string,
+  userId: UserId,
   itemId: string,
   count = 1,
 ): { ok: boolean; error?: string; xp?: number; essence?: string } {
@@ -311,7 +287,8 @@ function distillItemTx(
   if (!item) return { ok: false, error: 'unknown item' }
   const n = Math.max(1, Math.floor(count))
   if (getItemCount(db, userId, itemId) < n) return { ok: false, error: 'not in your bank' }
-  if (item.slot && !burnGearPieces(db, userId, itemId, n)) return STILL_WORN
+  // consuming equipment removes spare pieces first; a worn one is never burned
+  if (item.slot && spareCount(db, userId, itemId) < n) return STILL_WORN
   consumeItems(db, bus, userId, [{ item: itemId, count: n }])
   const xp = Math.max(1, Math.round(itemValue(item) * DISTILL_XP_PER_VALUE)) * n
   awardActionXp(db, bus, userId, { actionId: 'distill', amount: xp })
@@ -325,22 +302,10 @@ export const distillItem = atomic(distillItemTx)
 
 const STILL_WORN = { ok: false, error: 'unequip it first' }
 
-const QUALITY_ORDER: readonly string[] = ['common', 'uncommon', 'rare', 'epic']
-
-/**
- * Removes the rolled instances behind `n` distilled pieces of equipment, worst
- * roll first, so a burned piece cannot still be worn or salvaged. False when
- * fewer than `n` pieces are off the body.
- */
-function burnGearPieces(db: Db, userId: string, itemId: string, n: number): boolean {
-  const worn = listEquipment(db, userId).filter((e) => e.itemId === itemId)
-  if (getItemCount(db, userId, itemId) - worn.length < n) return false
-  const wornIds = new Set(worn.map((e) => e.instanceId))
-  const free = listGearInstances(db, userId)
-    .filter((g) => g.itemId === itemId && !wornIds.has(g.id))
-    .sort((a, b) => QUALITY_ORDER.indexOf(a.quality) - QUALITY_ORDER.indexOf(b.quality))
-  for (const g of free.slice(0, n)) deleteGearInstance(db, userId, g.id)
-  return true
+/** How many pieces of an item are off the body, free to burn. */
+function spareCount(db: Db, userId: UserId, itemId: string): number {
+  const worn = wornSet(db, userId)
+  return listGearInstances(db, userId).filter((g) => g.itemId === itemId && !worn.has(g.id)).length
 }
 
 /**
@@ -351,8 +316,8 @@ function burnGearPieces(db: Db, userId: string, itemId: string, n: number): bool
 function applyEnchantTx(
   db: Db,
   bus: EventBus,
-  userId: string,
-  instanceId: string,
+  userId: UserId,
+  instanceId: GearInstanceId,
   opts: { enchantId: string; levels?: Map<string, number> },
 ): { ok: boolean; error?: string; enchantingLevel?: number } {
   const def = ENCHANT_BY_ID.get(opts.enchantId)
@@ -375,7 +340,7 @@ type EnchantDef = NonNullable<ReturnType<typeof ENCHANT_BY_ID.get>>
 /** The reason the enchant cannot be applied, or undefined when it can. */
 function enchantGuard(
   db: Db,
-  userId: string,
+  userId: UserId,
   def: EnchantDef,
   item: ItemDef | undefined,
   levels?: Map<string, number>,

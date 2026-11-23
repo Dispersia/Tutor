@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { normalizePlan, stripMetaCommentary } from './plan'
+import { normalizePlan, stripMetaCommentary, tokensMatchBack } from './plan'
 
 test('stripMetaCommentary removes the model’s asides but keeps plain glosses', () => {
   expect(stripMetaCommentary('My you. (Grammatically valid, though semantically odd)')).toBe(
@@ -126,4 +126,12 @@ test('normalizePlan keeps everyday sentences that contain a conversational marke
     ],
   })
   expect(cards.map((c) => c.front)).toEqual(['to wait', "Let's go."])
+})
+
+test('tokensMatchBack ignores case, spacing and punctuation, and passes a non-list', () => {
+  expect(tokensMatchBack(['我', '很', '好'], '我很好。')).toBe(true)
+  expect(tokensMatchBack(['I', 'am', 'fine'], 'i am fine!')).toBe(true)
+  expect(tokensMatchBack(['我', '好'], '我很好。')).toBe(false)
+  expect(tokensMatchBack(['我', 7, '很好'], '我很好')).toBe(true)
+  expect(tokensMatchBack(undefined, '我很好')).toBe(true)
 })

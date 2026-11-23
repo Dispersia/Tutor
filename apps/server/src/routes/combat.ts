@@ -1,10 +1,11 @@
+import { toCardId, type UserId, type CardId } from '../ids'
 import type { GradeResult } from '@tutor/core'
 import type { Context } from 'hono'
 import {
   clearEncounter,
   getCard,
+  countScheduledCards,
   getEncounter,
-  listCards,
   listDecks,
   setPlayerHp,
   type PublicUser,
@@ -20,21 +21,21 @@ import {
   knownWords,
   monsterState,
   recordReview,
-  srsStateMap,
   startEncounter,
   summary,
 } from '../services'
 import { readStudyPrefs } from '../services/study'
 import { exerciseCtx, pickNextExercise, pickReviewCard, type SessionUser } from './practice'
+import { noteIssued, wasIssued } from './practice/issued'
 import type { App, AppEnv, Deps } from '../context'
-import { bool, jsonBody, str } from './body'
+import { idField, bool, jsonBody, str } from './body'
 
 type PlayerCombat = ReturnType<typeof loadPlayerCombat>
 type MonsterRow = NonNullable<ReturnType<typeof getEncounter>>
 
 /** Builds "the next drill" for a monster (exercise-agnostic, review only). */
 async function buildDrill(deps: Deps, user: SessionUser, deckLevel: string) {
-  const deck = listDecks(deps.db, user.id).find((d) => d.level === deckLevel)
+  const deck = listDecks(deps.db).find((d) => d.level === deckLevel)
   // Combat is review only: never introduce a new card mid-fight. Prefer the
   // monster's own deck, but fall back to any reviewed card (decks like Anki
   // imports have no level, so the level match can miss).
@@ -52,17 +53,18 @@ async function buildDrill(deps: Deps, user: SessionUser, deckLevel: string) {
     disabled: new Set(prefs.disabledExercises),
   })
   if (!def) return null
-  return { instance: await def.generate(ctx), card }
+  const instance = await def.generate(ctx)
+  noteIssued(user.id, instance)
+  return { instance, card }
 }
 
 /** How many of the learner's cards have a review state (combat is review only). */
-function countReviewCards(deps: Deps, userId: string): number {
-  const srs = srsStateMap(deps.db, userId)
-  return listCards(deps.db, userId).filter((c) => srs.has(c.id)).length
+function countReviewCards(deps: Deps, userId: UserId): number {
+  return countScheduledCards(deps.db, userId)
 }
 
 /** The live encounter as the fight board reads it (null when none is running). */
-function encounterView(deps: Deps, userId: string, levels?: Map<string, number>) {
+function encounterView(deps: Deps, userId: UserId, levels?: Map<string, number>) {
   const enc = getEncounter(deps.db, userId)
   if (!enc) return null
   const monster = MONSTER_BY_ID.get(enc.monsterId)
@@ -90,7 +92,7 @@ function encounterCore(enc: MonsterRow, monster: MonsterDef | undefined) {
 
 type EncounterView = ReturnType<typeof encounterView>
 
-function playerView(deps: Deps, userId: string, player: PlayerCombat, level: number) {
+function playerView(deps: Deps, userId: UserId, player: PlayerCombat, level: number) {
   return {
     skill: player.skill,
     combatStyle: player.combatStyle,
@@ -110,7 +112,7 @@ function playerView(deps: Deps, userId: string, player: PlayerCombat, level: num
   }
 }
 
-function monstersView(deps: Deps, userId: string) {
+function monstersView(deps: Deps, userId: UserId) {
   return MONSTERS.map((m: MonsterDef) => ({ ...m, ...monsterState(deps.db, userId, m) }))
 }
 
@@ -198,7 +200,7 @@ function leaveCombat(c: Context<AppEnv>) {
 
 interface HitBody {
   exerciseId?: string
-  cardId?: string
+  cardId?: CardId
   answer?: unknown
   timedOut?: boolean
 }
@@ -207,11 +209,13 @@ interface HitBody {
 function readHit(body: Record<string, unknown>): HitBody {
   return {
     exerciseId: str(body, 'exerciseId'),
-    cardId: str(body, 'cardId'),
+    cardId: idField(body, 'cardId', toCardId),
     answer: body.answer,
     timedOut: bool(body, 'timedOut'),
   }
 }
+
+const NOT_ISSUED = 'not the drill you were given'
 
 async function hitCombat(c: Context<AppEnv>) {
   const deps = c.get('deps')
@@ -221,6 +225,8 @@ async function hitCombat(c: Context<AppEnv>) {
   if (!card) return c.json({ error: 'card not found' }, 404)
   const def = body.exerciseId ? registry.get(body.exerciseId) : undefined
   if (!def) return c.json({ error: 'exercise not found' }, 404)
+  // Only the drill this fight handed out lands a hit.
+  if (!wasIssued(user.id, card.id, def.id)) return c.json({ error: NOT_ISSUED }, 409)
   const result = await gradeHit(deps, user, card, def, body)
   const hit = combatResolve(deps.db, deps.events, user.id, result.correct)
   if (!hit) return c.json({ error: 'no active encounter' }, 409)

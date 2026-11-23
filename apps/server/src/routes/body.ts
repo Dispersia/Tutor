@@ -75,3 +75,16 @@ export function oneOf<T extends string>(
   const v = body[key]
   return typeof v === 'string' && (allowed as readonly string[]).includes(v) ? (v as T) : undefined
 }
+
+/**
+ * A string field branded as an id, or undefined: `idField(body, 'cardId', toCardId)`.
+ * Ids arriving over HTTP are tagged here, at the point they are read (`ids.ts`).
+ */
+export function idField<T>(
+  body: Record<string, unknown>,
+  key: string,
+  brand: (s: string) => T,
+): T | undefined {
+  const v = str(body, key)
+  return v === undefined ? undefined : brand(v)
+}

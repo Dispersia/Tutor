@@ -4,6 +4,7 @@
  * actions, bands and gear the client renders.
  */
 
+import type { UserId } from '../../ids'
 import {
   ACTIONS,
   ENCHANTS,
@@ -47,7 +48,7 @@ export type Board = ReturnType<typeof boardSkills>
 /** The shared request maps plus the one lookup only the board derives. */
 interface BoardData extends PlayerCtx {
   db: Deps['db']
-  userId: string
+  userId: UserId
   bandById: Map<BandId, ReturnType<typeof bandView>[number]>
   bandLevels: Map<BandId, number>
 }
@@ -59,7 +60,7 @@ interface BoardData extends PlayerCtx {
  * client always sees the truth. Pass the request's `PlayerCtx` to share the load
  * with `gearPayload` instead of scanning the stores again.
  */
-export function boardSkills(deps: Deps, userId: string, ctx?: PlayerCtx) {
+export function boardSkills(deps: Deps, userId: UserId, ctx?: PlayerCtx) {
   const data = boardData(deps, userId, ctx ?? loadPlayerCtx(deps.db, deps.events, userId))
   return {
     skills: SKILLS.map((s) => skillView(s, data)),
@@ -68,7 +69,7 @@ export function boardSkills(deps: Deps, userId: string, ctx?: PlayerCtx) {
 }
 
 /** The board's view data: the shared request maps plus the band lookup. */
-function boardData(deps: Deps, userId: string, ctx: PlayerCtx): BoardData {
+function boardData(deps: Deps, userId: UserId, ctx: PlayerCtx): BoardData {
   return {
     ...ctx,
     db: deps.db,
@@ -162,7 +163,7 @@ export function bonusSummary(b: Bonuses) {
 }
 
 /** The gear screen's payload: worn rows, rolled instances and saved sets. */
-export function gearPayload(deps: Deps, userId: string, ctx?: Pick<PlayerCtx, 'levels' | 'bands'>) {
+export function gearPayload(deps: Deps, userId: UserId, ctx?: Pick<PlayerCtx, 'levels' | 'bands'>) {
   const levels = ctx?.levels ?? loadProgress(deps.db, userId).levels
   const bands = ctx?.bands ?? bandView(deps.db, userId)
   return {

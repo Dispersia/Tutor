@@ -1,18 +1,18 @@
 /** Granting and consuming materials (docs/DESIGN.md §13.5). */
 
-import { addItems, getItemCount } from '../db/repo'
+import type { UserId } from '../ids'
+import { addItems } from '../db/repo'
 import type { Db } from '../db/client'
 import type { EventBus } from '../events'
 import { applyYield } from '../game/modifiers'
 import { type Cost } from '../game/skills'
-import { recordGearCrafts } from './gearInstances'
 import { aggregateBonuses } from './progress'
 
 /** Grants materials, applying the action's own yield + double bonuses. */
 export function grantItems(
   db: Db,
   bus: EventBus,
-  userId: string,
+  userId: UserId,
   req: { actionId: string; costs: Cost[]; rand?: () => number },
 ): Cost[] {
   const bonus = aggregateBonuses(db, userId)
@@ -28,7 +28,7 @@ export function grantItems(
 interface GrantReq {
   db: Db
   bus: EventBus
-  userId: string
+  userId: UserId
   cost: Cost
   bonus: ReturnType<typeof aggregateBonuses>
   actionId: string
@@ -40,44 +40,29 @@ function grantOne(req: GrantReq): Cost | undefined {
   const { db, bus, userId, cost } = req
   const count = applyYield(
     cost.count,
-    req.bonus.yield(req.actionId),
+    // the coins passive (Thieving) pays on coins only
+    req.bonus.yield(req.actionId) + (cost.item === 'coins' ? req.bonus.coins(req.actionId) : 0),
     req.bonus.double(req.actionId),
     req.rand,
   )
   if (count <= 0) return undefined
-  addItems(db, userId, cost.item, count)
-  recordGearCrafts(db, userId, cost.item, count, req.rand)
-  bus.emit('item.gained', {
-    userId,
-    itemId: cost.item,
-    count,
-    total: getItemCount(db, userId, cost.item),
-  })
+  // an equipment item lands as rolled pieces (db/repo/game.ts), not a stack
+  addItems(db, userId, cost.item, count, req.rand)
+  bus.emit('item.gained', { userId, itemId: cost.item, count })
   return { item: cost.item, count }
 }
 
-export function consumeItems(db: Db, bus: EventBus, userId: string, costs: Cost[]): void {
+export function consumeItems(db: Db, bus: EventBus, userId: UserId, costs: Cost[]): void {
   for (const c of costs) {
     addItems(db, userId, c.item, -c.count)
-    bus.emit('item.consumed', {
-      userId,
-      itemId: c.item,
-      count: c.count,
-      total: getItemCount(db, userId, c.item),
-    })
+    bus.emit('item.consumed', { userId, itemId: c.item, count: c.count })
   }
 }
 
-export function grantFixedItems(db: Db, bus: EventBus, userId: string, costs: Cost[]): void {
+export function grantFixedItems(db: Db, bus: EventBus, userId: UserId, costs: Cost[]): void {
   for (const c of costs) {
     if (c.count <= 0) continue
-    addItems(db, userId, c.item, c.count)
-    recordGearCrafts(db, userId, c.item, c.count)
-    bus.emit('item.gained', {
-      userId,
-      itemId: c.item,
-      count: c.count,
-      total: getItemCount(db, userId, c.item),
-    })
+    addItems(db, userId, c.item, c.count, Math.random)
+    bus.emit('item.gained', { userId, itemId: c.item, count: c.count })
   }
 }

@@ -1,5 +1,7 @@
+import { toDeckId, type UserId, type DeckId } from '../ids'
 import type { Db } from '../db/client'
-import { getUserSetting, setUserSetting } from '../db/repo'
+import { allUserSettings, getUserSetting, setUserSetting } from '../db/repo'
+import { userDay } from './clock'
 
 /**
  * Per-user study preferences (docs/DESIGN.md §13.8). These shape how decks are
@@ -33,7 +35,7 @@ export interface StudyPrefs {
    * practice and any caller that does not name a deck drill this one, so the
    * choice made in the profile menu follows the member across the app.
    */
-  activeDeckId: string | null
+  activeDeckId: DeckId | null
 }
 
 export const DEFAULT_STUDY_PREFS: StudyPrefs = {
@@ -70,9 +72,9 @@ function bool(raw: string | undefined, fallback: boolean): boolean {
 }
 
 /** A trimmed value, or null when the stored string is missing/empty. */
-function nonEmpty(raw: string | undefined): string | null {
+function nonEmpty(raw: string | undefined): DeckId | null {
   const value = raw?.trim()
-  return value ? value : null
+  return value ? toDeckId(value) : null
 }
 
 function int(raw: string | undefined, fallback: number, lo = 0, hi = 100_000): number {
@@ -97,8 +99,10 @@ function parseSteps(raw: string | undefined, fallback: number[]): number[] {
 }
 
 /** Reads a user's study preferences, falling back to the defaults. */
-export function readStudyPrefs(db: Db, userId: string): StudyPrefs {
-  const get = (key: string) => getUserSetting(db, userId, key)
+export function readStudyPrefs(db: Db, userId: UserId): StudyPrefs {
+  // One query for the whole bag: this runs on every practice step.
+  const all = allUserSettings(db, userId)
+  const get = (key: string): string | undefined => all[key]
   const d = DEFAULT_STUDY_PREFS
   return {
     showZhuyin: bool(get(KEYS.showZhuyin), d.showZhuyin),
@@ -124,7 +128,7 @@ function readDisabled(raw: string | undefined): string[] {
 }
 
 /** Applies a partial update and returns the full, stored preferences. */
-export function writeStudyPrefs(db: Db, userId: string, patch: Partial<StudyPrefs>): StudyPrefs {
+export function writeStudyPrefs(db: Db, userId: UserId, patch: Partial<StudyPrefs>): StudyPrefs {
   const put = (key: string, value: string) => setUserSetting(db, userId, key, value)
   if (patch.showZhuyin !== undefined) put(KEYS.showZhuyin, patch.showZhuyin ? '1' : '0')
   if (patch.showFurigana !== undefined) put(KEYS.showFurigana, patch.showFurigana ? '1' : '0')
@@ -147,22 +151,17 @@ export function writeStudyPrefs(db: Db, userId: string, patch: Partial<StudyPref
 
 // --- today's "study more" overrides -----------------------------------------
 
-/** UTC calendar day (matches the streak / daily-XP granularity). */
-function utcDay(ts: number): string {
-  return new Date(ts).toISOString().slice(0, 10)
-}
-
 export interface DailyExtra {
-  /** The UTC day these overrides belong to; stale values are ignored. */
+  /** The member's calendar day these overrides belong to; stale values are ignored. */
   day: string
   /** Extra new cards and reviews the learner asked for today. */
   newExtra: number
   reviewsExtra: number
 }
 
-/** The learner's extra allowance for the given UTC day (0 when none/stale). */
-export function readDailyExtra(db: Db, userId: string, ts: number = Date.now()): DailyExtra {
-  const day = utcDay(ts)
+/** The learner's extra allowance for their current day (0 when none/stale). */
+export function readDailyExtra(db: Db, userId: UserId, ts: number = Date.now()): DailyExtra {
+  const day = userDay(db, userId, ts)
   const raw = getUserSetting(db, userId, KEYS.extraToday)
   if (!raw) return { day, newExtra: 0, reviewsExtra: 0 }
   try {
@@ -181,7 +180,7 @@ export function readDailyExtra(db: Db, userId: string, ts: number = Date.now()):
 /** Adds to today's allowance ("study more", Anki's custom study). */
 export function bumpDailyExtra(
   db: Db,
-  userId: string,
+  userId: UserId,
   add: { newExtra?: number; reviewsExtra?: number },
   ts: number = Date.now(),
 ): DailyExtra {

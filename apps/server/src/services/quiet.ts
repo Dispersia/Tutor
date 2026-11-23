@@ -1,3 +1,4 @@
+import type { UserId } from '../ids'
 import { getUserSetting, setUserSetting } from '../db/repo'
 
 /**
@@ -19,7 +20,7 @@ export interface QuietState {
 /** Reads the current quiet window for a user (an expired window reads as off). */
 export function quietState(
   db: Parameters<typeof getUserSetting>[0],
-  userId: string,
+  userId: UserId,
   now = Date.now(),
 ): QuietState {
   const raw = getUserSetting(db, userId, KEY)
@@ -31,7 +32,7 @@ export function quietState(
 /** Turns the option on for `QUIET_MS`, or off, returning the new state. */
 export function setQuiet(
   db: Parameters<typeof getUserSetting>[0],
-  userId: string,
+  userId: UserId,
   active: boolean,
   now = Date.now(),
 ): QuietState {

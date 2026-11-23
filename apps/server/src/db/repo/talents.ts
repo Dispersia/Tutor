@@ -1,11 +1,12 @@
 /** Chosen talents (per skill, per milestone). */
 
+import type { UserId } from '../../ids'
 import { and, eq } from 'drizzle-orm'
 import type { Db } from '../client'
 import { talents } from '../schema'
 import { now } from './helpers'
 
-export function listTalents(db: Db, userId: string) {
+export function listTalents(db: Db, userId: UserId) {
   return db.select().from(talents).where(eq(talents.userId, userId)).all()
 }
 
@@ -16,7 +17,7 @@ export interface NewTalent {
   milestone: number
 }
 
-export function addTalent(db: Db, userId: string, t: NewTalent): void {
+export function addTalent(db: Db, userId: UserId, t: NewTalent): void {
   db.insert(talents)
     .values({ userId, ...t, grantedAt: now() })
     .onConflictDoNothing()
@@ -24,7 +25,7 @@ export function addTalent(db: Db, userId: string, t: NewTalent): void {
 }
 
 /** Swaps an owned talent for a different one (respec at the same milestone). */
-export function replaceTalent(db: Db, userId: string, oldTalentId: string, t: NewTalent): void {
+export function replaceTalent(db: Db, userId: UserId, oldTalentId: string, t: NewTalent): void {
   db.transaction((tx) => {
     tx.delete(talents)
       .where(and(eq(talents.userId, userId), eq(talents.talentId, oldTalentId)))

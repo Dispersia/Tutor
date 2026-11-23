@@ -14,9 +14,11 @@
  * for (it waits at most one short clip).
  */
 
+import { toUserId, type UserId, type DeckId } from '../ids'
 import { voiceInstruct, type Card } from '@tutor/core'
 import type { Db } from '../db/client'
 import { cardLanguages, listCards } from '../db/repo'
+import { withGateway } from '../speech/gateway'
 import type { SpeechSupervisor } from '../speech/supervisor'
 import {
   clipHash,
@@ -50,15 +52,8 @@ export type AsrFn = (clip: Uint8Array, language: string, reference: string) => P
 
 /** The real recogniser: POST the gateway's `/v1/asr` through the supervisor. */
 export function gatewayAsr(sup: SpeechSupervisor): AsrFn {
-  return async (clip, language, reference) => {
-    await sup.ensure()
-    sup.begin()
-    try {
-      return await postAsr(sup.url, { clip, language, reference })
-    } finally {
-      sup.end()
-    }
-  }
+  return (clip, language, reference) =>
+    withGateway(sup, (url) => postAsr(url, { clip, language, reference }))
 }
 
 async function postAsr(
@@ -78,15 +73,7 @@ async function postAsr(
 /** The real TTS: POST the gateway's `/v1/tts` through the supervisor, so the
  * request keeps the sidecar alive and counts against its idle timer. */
 export function gatewayTts(sup: SpeechSupervisor): TtsFn {
-  return async (req) => {
-    await sup.ensure()
-    sup.begin()
-    try {
-      return await postTts(sup.url, req)
-    } finally {
-      sup.end()
-    }
-  }
+  return (req) => withGateway(sup, (url) => postTts(url, req))
 }
 
 async function postTts(url: string, req: TtsRequest): Promise<Uint8Array> {
@@ -108,7 +95,7 @@ async function postTts(url: string, req: TtsRequest): Promise<Uint8Array> {
 
 /** One text to record, plus the language the TTS model should assume. */
 export interface AudioJob {
-  userId: string
+  userId: UserId
   text: string
   language: string
   /** The card's kana reading. Used only to grade the clip, never to synthesise it. */
@@ -153,9 +140,9 @@ export interface AudioService {
    * Returns how many new jobs were added. */
   enqueue(jobs: AudioJob[]): number
   /** Queues every card of a deck that is missing clips. */
-  enqueueDeck(userId: string, deckId: string): void
+  enqueueDeck(userId: UserId, deckId: DeckId): void
   /** Queues every card the user owns. */
-  enqueueUser(userId: string): number
+  enqueueUser(userId: UserId): number
   /** Drops everything still queued; the clip being recorded finishes. Returns
    * how many jobs were dropped. */
   cancel(): number
@@ -268,8 +255,8 @@ function adoptLegacyClip(s: AudioStore, ref: ClipRef, hash: string): void {
   removeClip(s.db, s.dataDir, legacy)
 }
 
-function clipOwner(s: AudioStore, hash: string): string {
-  return findClip(s.db, hash)?.userId ?? ''
+function clipOwner(s: AudioStore, hash: string): UserId {
+  return findClip(s.db, hash)?.userId ?? toUserId('')
 }
 
 type VoiceJob = AudioJob & { voiceId: string }
@@ -332,18 +319,18 @@ function enqueue(s: AudioStore, jobs: AudioJob[]): number {
   return added
 }
 
-function enqueueCards(s: AudioStore, cards: Card[], userId: string): number {
+function enqueueCards(s: AudioStore, cards: Card[], userId: UserId): number {
   return enqueue(
     s,
     cards.map((c) => ({ userId, text: c.back, language: c.targetLang, kana: c.readings.kana })),
   )
 }
 
-function enqueueDeck(s: AudioStore, userId: string, deckId: string): void {
+function enqueueDeck(s: AudioStore, userId: UserId, deckId: DeckId): void {
   enqueueCards(s, listCards(s.db, userId, deckId), userId)
 }
 
-function enqueueUser(s: AudioStore, userId: string): number {
+function enqueueUser(s: AudioStore, userId: UserId): number {
   return enqueueCards(s, listCards(s.db, userId), userId)
 }
 

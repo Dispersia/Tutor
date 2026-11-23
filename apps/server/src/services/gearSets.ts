@@ -1,10 +1,10 @@
 /** Saved gear sets (docs/DESIGN.md §13.5.3). */
 
+import type { UserId, GearInstanceId, GearSetId } from '../ids'
 import {
   addGearSet,
   deleteGearSet,
   getGearInstance,
-  getItemCount,
   listEquipment,
   listGearSets,
   setEquipment,
@@ -16,30 +16,31 @@ import { meetsRequirements } from '../game/gear'
 import { ITEM_BY_ID, SLOTS, type CombatStyle } from '../game/skills'
 import { loadPlayerCombat } from './combat'
 import { requirementView, type GearRequirementView } from './gear'
+import { spareGearPiece } from './gearInstances'
 import { skillLevelOf } from './progress'
 
 // --- saved gear sets ---------------------------------------------------------
 
 export interface GearSetView {
-  id: string
+  id: GearSetId
   name: string
   combatStyle: CombatStyle
-  slots: Record<string, { itemId: string; instanceId: string | null }>
+  slots: Record<string, { itemId: string; instanceId: GearInstanceId | null }>
   createdAt: number
   updatedAt: number
 }
 
 function parseSetSlots(
   json: string,
-): Record<string, { itemId: string; instanceId: string | null }> {
+): Record<string, { itemId: string; instanceId: GearInstanceId | null }> {
   try {
-    return JSON.parse(json) as Record<string, { itemId: string; instanceId: string | null }>
+    return JSON.parse(json) as Record<string, { itemId: string; instanceId: GearInstanceId | null }>
   } catch {
     return {}
   }
 }
 
-export function gearSetsView(db: Db, userId: string): GearSetView[] {
+export function gearSetsView(db: Db, userId: UserId): GearSetView[] {
   return listGearSets(db, userId).map((row) => ({
     id: row.id,
     name: row.name,
@@ -53,7 +54,7 @@ export function gearSetsView(db: Db, userId: string): GearSetView[] {
 /** Snapshots the current loadout under a name. */
 export function saveGearSet(
   db: Db,
-  userId: string,
+  userId: UserId,
   name: string,
   combatStyle?: CombatStyle,
   levels?: Map<string, number>,
@@ -79,8 +80,8 @@ export interface GearSetSkip {
 function applyGearSetTx(
   db: Db,
   bus: EventBus,
-  userId: string,
-  setId: string,
+  userId: UserId,
+  setId: GearSetId,
   levels?: Map<string, number>,
 ): { ok: boolean; error?: string; skipped: GearSetSkip[] } {
   const set = gearSetsView(db, userId).find((s) => s.id === setId)
@@ -102,11 +103,11 @@ export const applyGearSet = atomic(applyGearSetTx)
 
 interface SetEntry {
   itemId: string
-  instanceId: string | null
+  instanceId: GearInstanceId | null
 }
 
 interface SetSlotReq {
-  userId: string
+  userId: UserId
   slotId: string
   entry: SetEntry
   levels?: Map<string, number>
@@ -132,24 +133,27 @@ function skipView(
   return { slot, itemId, name: item.name, missing: requirementView(missing) }
 }
 
-/** Wears a rolled instance, or the plain item when the bank still holds one. */
+/** Wears the saved piece, or a spare one of the same item when that piece is gone. */
 function equipInstance(
   db: Db,
   bus: EventBus,
-  userId: string,
+  userId: UserId,
   slotId: string,
   entry: SetEntry,
 ): undefined {
-  const instance = entry.instanceId ? getGearInstance(db, userId, entry.instanceId) : undefined
-  if (instance) {
-    setEquipment(db, userId, slotId, instance.itemId, instance.id)
-    bus.emit('item.equipped', { userId, itemId: instance.itemId, slot: slotId })
-  } else if (ITEM_BY_ID.has(entry.itemId) && getItemCount(db, userId, entry.itemId) > 0) {
-    setEquipment(db, userId, slotId, entry.itemId, null)
-  }
+  const saved = entry.instanceId ? getGearInstance(db, userId, entry.instanceId) : undefined
+  const instance = saved ?? spareOf(db, userId, entry.itemId)
+  if (!instance) return undefined
+  setEquipment(db, userId, slotId, instance.itemId, instance.id)
+  bus.emit('item.equipped', { userId, itemId: instance.itemId, slot: slotId })
   return undefined
 }
 
-export function removeGearSet(db: Db, userId: string, setId: string): void {
+function spareOf(db: Db, userId: UserId, itemId: string) {
+  const spare = spareGearPiece(db, userId, itemId)
+  return spare ? getGearInstance(db, userId, spare) : undefined
+}
+
+export function removeGearSet(db: Db, userId: UserId, setId: GearSetId): void {
   deleteGearSet(db, userId, setId)
 }

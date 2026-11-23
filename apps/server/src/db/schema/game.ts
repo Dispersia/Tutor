@@ -4,7 +4,8 @@
  * (docs/ARCHITECTURE.md).
  */
 
-import { index, integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import type { UserId } from '../../ids'
+import { index, integer, primaryKey, real, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 import { users } from './users'
 
 /**
@@ -22,6 +23,7 @@ export const actionProgress = sqliteTable(
   'action_progress',
   {
     userId: text('user_id')
+      .$type<UserId>()
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     actionId: text('action_id').notNull(),
@@ -46,7 +48,7 @@ export const actionProgress = sqliteTable(
     lastChoice: text('last_choice').notNull().default(''),
     updatedAt: integer('updated_at').notNull(),
   },
-  (t) => [index('idx_action_progress_user').on(t.userId)],
+  (t) => [primaryKey({ columns: [t.userId, t.actionId] })],
 )
 
 /**
@@ -60,6 +62,7 @@ export const gatherLog = sqliteTable(
   {
     id: text('id').primaryKey(),
     userId: text('user_id')
+      .$type<UserId>()
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     actionId: text('action_id').notNull(),
@@ -74,13 +77,14 @@ export const inventory = sqliteTable(
   'inventory',
   {
     userId: text('user_id')
+      .$type<UserId>()
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     itemId: text('item_id').notNull(),
     count: integer('count').notNull().default(0),
     updatedAt: integer('updated_at').notNull(),
   },
-  (t) => [index('idx_inventory_user').on(t.userId)],
+  (t) => [primaryKey({ columns: [t.userId, t.itemId] })],
 )
 
 /** Per-user talents (one choice per 10-level milestone). */
@@ -88,6 +92,7 @@ export const talents = sqliteTable(
   'talents',
   {
     userId: text('user_id')
+      .$type<UserId>()
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     talentId: text('talent_id').notNull(),
@@ -96,12 +101,13 @@ export const talents = sqliteTable(
     milestone: integer('milestone').notNull(),
     grantedAt: integer('granted_at').notNull(),
   },
-  (t) => [index('idx_talents_user').on(t.userId)],
+  (t) => [primaryKey({ columns: [t.userId, t.talentId] })],
 )
 
 /** Persistent combat state (docs/DESIGN.md §13.5). */
 export const playerState = sqliteTable('player_state', {
   userId: text('user_id')
+    .$type<UserId>()
     .primaryKey()
     .references(() => users.id, { onDelete: 'cascade' }),
   hp: integer('hp'),
@@ -114,6 +120,7 @@ export const playerState = sqliteTable('player_state', {
  */
 export const encounters = sqliteTable('encounters', {
   userId: text('user_id')
+    .$type<UserId>()
     .primaryKey()
     .references(() => users.id, { onDelete: 'cascade' }),
   monsterId: text('monster_id').notNull(),

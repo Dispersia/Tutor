@@ -1,23 +1,29 @@
 /**
  * Chat: streamed conversation (SSE) and a JSON-schema completion
  * (docs/DESIGN.md §10).
+ *
+ * A member on their own OpenRouter key may pick the model and send their own
+ * messages. On the server's key the request is not a free proxy: the model is
+ * the role's configured one and the streamed chat uses the server-built prompt.
  */
 
+import { toSessionId, type SessionId } from '../../ids'
 import { streamSSE, type SSEStreamingApi } from 'hono/streaming'
 import type { Context } from 'hono'
 import { addMessage, createSession, getOwnedSession, getRoles, listMessages } from '../../db/repo'
 import { ROLES, roleReasoning, type Role } from '../../env'
 import { OpenRouter, type ChatMessage, type Usage } from '../../llm/openrouter'
 import { systemPrompt } from '../../llm/prompts'
-import { resolveUserKey } from '../../llm/userkey'
+import { needKey } from '../errors'
+import { resolveKey, type ResolvedKey } from '../../llm/userkey'
 import type { App, AppEnv, Deps } from '../../context'
 import type { PublicUser } from '../../db/repo'
-import { jsonBody, obj, oneOf, str } from '../body'
+import { idField, jsonBody, obj, oneOf, str } from '../body'
 
 const EMPTY_USAGE: Usage = { promptTokens: 0, completionTokens: 0, totalTokens: 0, costUsd: 0 }
 
 interface ChatBody {
-  sessionId?: string
+  sessionId?: SessionId
   role?: Role
   model?: string
   text?: string
@@ -41,13 +47,25 @@ function isChatMessage(m: unknown): m is ChatMessage {
 /** Reads a streamed-chat request. */
 function readChatBody(body: Record<string, unknown>): ChatBody {
   return {
-    sessionId: str(body, 'sessionId'),
+    sessionId: idField(body, 'sessionId', toSessionId),
     role: oneOf(body, 'role', ROLES),
     model: str(body, 'model'),
     text: str(body, 'text'),
     system: str(body, 'system'),
     messages: chatMessages(body.messages),
   }
+}
+
+/**
+ * What the caller may choose for itself. Only a member's own key buys a free
+ * choice of model and messages; on the server's key both are dropped.
+ */
+function allowed<T extends { model?: string; messages?: ChatMessage[]; system?: string }>(
+  body: T,
+  source: ResolvedKey['source'],
+): T {
+  if (source === 'user') return body
+  return { ...body, model: undefined, messages: undefined, system: undefined } as T
 }
 
 /** Everything one streamed reply needs, resolved before the stream opens. */
@@ -57,7 +75,7 @@ interface StreamReq {
   or: OpenRouter
   model: string
   role: Role
-  sid: string
+  sid: SessionId
   msgs: ChatMessage[]
 }
 
@@ -75,18 +93,19 @@ export function registerChat(app: App) {
 async function chatHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
-  const key = await resolveUserKey(deps, user.id)
-  if (!key) return c.json({ error: 'No OpenRouter key — add one in Settings.' }, 502)
-  const body = readChatBody(await jsonBody(c))
+  const resolved = await resolveKey(deps, user.id)
+  if (!resolved) return needKey(c)
+  const body = allowed(readChatBody(await jsonBody(c)), resolved.source)
   const role = body.role ?? 'conversation'
   const model = body.model ?? getRoles(deps.db, user.id, deps.defaults)[role]
   const sid = ensureSession(deps, user, body.sessionId)
   const msgs = messageList(deps, user, sid, role, body)
   if (body.text?.trim()) addMessage(deps.db, { sessionId: sid, role: 'user', text: body.text })
-  return streamReply({ c, deps, or: new OpenRouter(key, deps.or.baseUrl), model, role, sid, msgs })
+  const or = new OpenRouter(resolved.key, deps.or.baseUrl)
+  return streamReply({ c, deps, or, model, role, sid, msgs })
 }
 
-function ensureSession(deps: Deps, user: PublicUser, sessionId?: string): string {
+function ensureSession(deps: Deps, user: PublicUser, sessionId?: SessionId): SessionId {
   if (sessionId && getOwnedSession(deps.db, sessionId, user.id)) return sessionId
   return createSession(deps.db, user.id, { kind: 'chat', lang: user.targetLang ?? undefined }).id
 }
@@ -98,7 +117,7 @@ function ensureSession(deps: Deps, user: PublicUser, sessionId?: string): string
 function messageList(
   deps: Deps,
   user: PublicUser,
-  sid: string,
+  sid: SessionId,
   role: Role,
   body: ChatBody,
 ): ChatMessage[] {
@@ -109,7 +128,7 @@ function messageList(
   return msgs
 }
 
-function listHistory(deps: Deps, sid: string): ChatMessage[] {
+function listHistory(deps: Deps, sid: SessionId): ChatMessage[] {
   return listMessages(deps.db, sid).map((m) => ({
     role: m.role as ChatMessage['role'],
     content: m.text,
@@ -118,21 +137,39 @@ function listHistory(deps: Deps, sid: string): ChatMessage[] {
 
 async function streamReply(req: StreamReq) {
   return streamSSE(req.c, async (stream) => {
+    // A client that goes away stops the upstream completion too, instead of
+    // paying for a reply nobody reads.
+    const gone = new AbortController()
+    stream.onAbort(() => gone.abort())
     await stream.writeSSE({ event: 'session', data: req.sid })
-    const acc: StreamAcc = { full: '', usage: EMPTY_USAGE }
     try {
-      const events = req.or.streamChat({
-        model: req.model,
-        messages: req.msgs,
-        reasoning: roleReasoning[req.role],
-      })
-      await forwardEvents(stream, events, acc)
+      const acc = await pipeReply(req, stream, gone.signal)
+      // A reply cut off by the client is a fragment: it is not saved as a turn.
+      if (gone.signal.aborted) return
       saveAssistant(req, acc)
       await stream.writeSSE({ event: 'done', data: 'ok' })
     } catch (err) {
+      if (gone.signal.aborted) return
       await stream.writeSSE({ event: 'error', data: (err as Error).message })
     }
   })
+}
+
+/** Streams the model's reply to the client, returning what was sent. */
+async function pipeReply(
+  req: StreamReq,
+  stream: SSEStreamingApi,
+  signal: AbortSignal,
+): Promise<StreamAcc> {
+  const acc: StreamAcc = { full: '', usage: EMPTY_USAGE }
+  const events = req.or.streamChat({
+    model: req.model,
+    messages: req.msgs,
+    reasoning: roleReasoning[req.role],
+    signal,
+  })
+  await forwardEvents(stream, events, acc)
+  return acc
 }
 
 async function forwardEvents(
@@ -183,16 +220,22 @@ function readJsonBody(body: Record<string, unknown>): JsonBody {
 }
 
 /** Structured (JSON-schema) completion — used by the graders. */
+const OWN_KEY_ONLY = 'This endpoint needs your own OpenRouter key — add one in Settings.'
+
 async function jsonHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
-  const key = await resolveUserKey(deps, user.id)
-  if (!key) return c.json({ error: 'No OpenRouter key — add one in Settings.' }, 502)
+  const resolved = await resolveKey(deps, user.id)
+  if (!resolved) return needKey(c)
+  // Free-form prompts are for a member's own key: on the server's key this
+  // endpoint would be an open proxy to any model request a member cares to write.
+  if (resolved.source !== 'user') return c.json({ error: OWN_KEY_ONLY }, 403)
   const body = readJsonBody(await jsonBody(c))
   const role = body.role ?? 'judge'
   const model = body.model ?? getRoles(deps.db, user.id, deps.defaults)[role]
+  const or = new OpenRouter(resolved.key, deps.or.baseUrl)
   try {
-    const { json, usage } = await runJson(new OpenRouter(key, deps.or.baseUrl), model, role, body)
+    const { json, usage } = await runJson(or, model, role, body)
     return c.json({ result: json, usage, model })
   } catch (err) {
     return c.json({ error: (err as Error).message }, 502)

@@ -7,26 +7,28 @@
  * specific voice; without one each play gets a random voice from the set.
  */
 
+import { toCardId, type UserId, type CardId } from '../ids'
 import { getCard, listCards, setSetting } from '../db/repo'
 import type { App, AppEnv } from '../context'
 import { AUDIO_BACKFILL_KEY, variantVoice } from '../audio/service'
 import type { Context } from 'hono'
 import { adminOnly } from './guards'
+import { fail } from './errors'
 
-async function serveCardAudio(c: Context<AppEnv>, cardId: string): Promise<Response> {
+async function serveCardAudio(c: Context<AppEnv>, cardId: CardId): Promise<Response> {
   const deps = c.get('deps')
   const user = c.get('user')!
   const audio = deps.audio
-  if (!audio) return c.json({ error: 'audio unavailable' }, 503)
+  if (!audio) return fail(c, 503, 'audio unavailable')
   const card = getCard(deps.db, cardId, user.id)
-  if (!card) return c.json({ error: 'not found' }, 404)
+  if (!card) return fail(c, 404, 'not found')
   const voice = variantVoice(c.req.query('variant') ?? c.req.query('v'))
   try {
     const bytes = await clipBytes(audio, card, user.id, voice.id)
-    if (!bytes) return c.json({ error: 'audio generation failed' }, 502)
+    if (!bytes) return fail(c, 502, 'audio generation failed')
     return wavResponse(bytes)
   } catch (err) {
-    return c.json({ error: (err as Error).message }, 502)
+    return fail(c, 502, (err as Error).message)
   }
 }
 
@@ -34,7 +36,7 @@ async function serveCardAudio(c: Context<AppEnv>, cardId: string): Promise<Respo
 async function clipBytes(
   audio: NonNullable<AppEnv['Variables']['deps']['audio']>,
   card: NonNullable<ReturnType<typeof getCard>>,
-  userId: string,
+  userId: UserId,
   voiceId: string,
 ): Promise<Uint8Array | undefined> {
   const existing = audio.clip(card.back, card.targetLang, voiceId)
@@ -64,7 +66,7 @@ function wavResponse(bytes: Uint8Array): Response {
 }
 
 export function registerAudio(app: App) {
-  app.get('/api/cards/:id/audio', (c) => serveCardAudio(c, c.req.param('id')))
+  app.get('/api/cards/:id/audio', (c) => serveCardAudio(c, toCardId(c.req.param('id'))))
   app.get('/api/audio/status', (c) => statusHandler(c))
   app.post('/api/audio/backfill', (c) => backfillHandler(c))
   app.post('/api/audio/cancel', (c) => cancelHandler(c))
@@ -89,7 +91,7 @@ function backfillHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
   const audio = deps.audio
-  if (!audio) return c.json({ error: 'audio unavailable' }, 503)
+  if (!audio) return fail(c, 503, 'audio unavailable')
   // Remember that the library should be fully recorded: a restart resumes it.
   setSetting(deps.db, AUDIO_BACKFILL_KEY, '1')
   const queued = audio.enqueueUser(user.id)
@@ -105,7 +107,7 @@ function cancelHandler(c: Context<AppEnv>) {
   if (denied) return denied
   const deps = c.get('deps')
   const audio = deps.audio
-  if (!audio) return c.json({ error: 'audio unavailable' }, 503)
+  if (!audio) return fail(c, 503, 'audio unavailable')
   setSetting(deps.db, AUDIO_BACKFILL_KEY, '0')
   const cancelled = audio.cancel()
   return c.json({ cancelled, ...audio.status() })

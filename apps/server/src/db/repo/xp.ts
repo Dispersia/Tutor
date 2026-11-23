@@ -1,5 +1,6 @@
 /** The XP ledger and the derived stats row (level, streak, daily goal). */
 
+import type { UserId } from '../../ids'
 import { and, eq, sql } from 'drizzle-orm'
 import type { Db } from '../client'
 import { stats, xpEvents } from '../schema'
@@ -7,7 +8,7 @@ import { id, now } from './helpers'
 
 export function addXpEvent(
   db: Db,
-  userId: string,
+  userId: UserId,
   amount: number,
   reason: string,
   sourceId?: string,
@@ -18,7 +19,7 @@ export function addXpEvent(
     .run()
 }
 
-export function sumXp(db: Db, userId: string): number {
+export function sumXp(db: Db, userId: UserId): number {
   const row = db
     .select({ total: sql<number>`coalesce(sum(${xpEvents.amount}), 0)` })
     .from(xpEvents)
@@ -27,34 +28,41 @@ export function sumXp(db: Db, userId: string): number {
   return Number(row?.total ?? 0)
 }
 
-/** The UTC day of an event, in SQL (`created_at` is epoch ms). */
-const xpDay = sql<string>`date(${xpEvents.createdAt} / 1000, 'unixepoch')`
+/**
+ * The calendar day of an event, in SQL (`created_at` is epoch ms, UTC), for a
+ * member `offsetMin` minutes ahead of UTC. One offset is applied to the whole
+ * ledger, so across a daylight-saving change an event within an hour of
+ * midnight can land on the neighbouring day.
+ */
+const xpDay = (offsetMin: number) =>
+  sql<string>`date(${xpEvents.createdAt} / 1000 + ${offsetMin * 60}, 'unixepoch')`
 
 /**
- * Total XP per UTC day for a user, grouped in SQL so the streak and heat-map
- * never load the whole ledger. There is one row per active day.
+ * Total XP per day for a user, grouped in SQL so the streak and heat-map never
+ * load the whole ledger. There is one row per active day.
  */
-export function xpByDay(db: Db, userId: string): { day: string; amount: number }[] {
+export function xpByDay(db: Db, userId: UserId, offsetMin = 0): { day: string; amount: number }[] {
+  const day = xpDay(offsetMin)
   return db
-    .select({ day: xpDay, amount: sql<number>`coalesce(sum(${xpEvents.amount}), 0)` })
+    .select({ day, amount: sql<number>`coalesce(sum(${xpEvents.amount}), 0)` })
     .from(xpEvents)
     .where(eq(xpEvents.userId, userId))
-    .groupBy(xpDay)
+    .groupBy(day)
     .all()
     .map((r) => ({ day: r.day, amount: Number(r.amount) }))
 }
 
-/** The XP a user earned on one UTC day. */
-export function xpForDay(db: Db, userId: string, day: string): number {
+/** The XP a user earned on one of their days. */
+export function xpForDay(db: Db, userId: UserId, day: string, offsetMin = 0): number {
   const row = db
     .select({ total: sql<number>`coalesce(sum(${xpEvents.amount}), 0)` })
     .from(xpEvents)
-    .where(and(eq(xpEvents.userId, userId), eq(xpDay, day)))
+    .where(and(eq(xpEvents.userId, userId), eq(xpDay(offsetMin), day)))
     .get()
   return Number(row?.total ?? 0)
 }
 
-export function getStats(db: Db, userId: string) {
+export function getStats(db: Db, userId: UserId) {
   const row = db.select().from(stats).where(eq(stats.userId, userId)).get()
   return (
     row ?? {
@@ -77,7 +85,7 @@ export interface StatsPatch {
   dailyGoal?: number
 }
 
-export function upsertStats(db: Db, userId: string, patch: StatsPatch): void {
+export function upsertStats(db: Db, userId: UserId, patch: StatsPatch): void {
   db.insert(stats)
     .values({
       userId,
@@ -92,6 +100,6 @@ export function upsertStats(db: Db, userId: string, patch: StatsPatch): void {
     .run()
 }
 
-export function setDailyGoal(db: Db, userId: string, goal: number): void {
+export function setDailyGoal(db: Db, userId: UserId, goal: number): void {
   upsertStats(db, userId, { dailyGoal: Math.max(10, Math.min(1000, Math.round(goal))) })
 }

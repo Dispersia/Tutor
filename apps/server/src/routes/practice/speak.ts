@@ -4,7 +4,9 @@
  * a retry is left out of the schedule.
  */
 
-import type { Card, ExerciseContext, ExerciseDef, GradeResult } from '@tutor/core'
+import { toCardId, type CardId } from '../../ids'
+import type { ServerCard } from '../../db/repo'
+import type { ExerciseContext, ExerciseDef, GradeResult } from '@tutor/core'
 import type { Context } from 'hono'
 import type { App, AppEnv, Deps } from '../../context'
 import { getCard, type PublicUser } from '../../db/repo'
@@ -15,10 +17,11 @@ import { actionGate } from './action'
 import { exerciseCtx } from './exerciseCtx'
 import { judgeFor } from './judge'
 import { finalizeReview, recordAttempt, uncountedOutcome } from './record'
+import { fail, failWith } from '../errors'
 
 /** The multipart fields of a spoken attempt, read off the form. */
 interface SpokenFields {
-  cardId: string
+  cardId: CardId
   exerciseId: string
   actionId?: string
   lessonId?: string
@@ -37,21 +40,21 @@ async function speakHandler(c: Context<AppEnv>) {
   const user = c.get('user')!
   const form = await c.req.formData()
   const file = form.get('file')
-  if (!(file instanceof File)) return c.json({ error: 'audio file required' }, 400)
+  if (!(file instanceof File)) return fail(c, 400, 'audio file required')
   const fields = spokenFields(form)
   const card = fields.cardId ? getCard(deps.db, fields.cardId, user.id) : undefined
-  if (!card) return c.json({ error: 'card not found' }, 404)
+  if (!card) return fail(c, 404, 'card not found')
   const def = fields.exerciseId ? registry.get(fields.exerciseId) : undefined
-  if (!def?.gradeAudio) return c.json({ error: 'exercise does not support audio grading' }, 400)
+  if (!def?.gradeAudio) return fail(c, 400, 'exercise does not support audio grading')
   const gate = actionGate(deps, user.id, { actionId: fields.actionId, choiceId: fields.choiceId })
-  if (gate.error) return c.json(gate.error.body, gate.error.status)
+  if (gate.error) return failWith(c, gate.error)
   return gradeSpoken({ c, deps, user, card, def, fields, file })
 }
 
 function spokenFields(form: FormData): SpokenFields {
   const str = (name: string) => (form.get(name) ? String(form.get(name)) : undefined)
   return {
-    cardId: String(form.get('cardId') ?? ''),
+    cardId: toCardId(String(form.get('cardId') ?? '')),
     exerciseId: String(form.get('exerciseId') ?? ''),
     actionId: str('actionId'),
     lessonId: str('lessonId'),
@@ -65,7 +68,7 @@ interface SpeakCall {
   c: Context<AppEnv>
   deps: Deps
   user: PublicUser
-  card: Card
+  card: ServerCard
   def: ExerciseDef
   fields: SpokenFields
   file: File
@@ -85,7 +88,7 @@ async function gradeSpoken(call: SpeakCall) {
     }
     return c.json(settleSpoken(call, result, call.def.xp(result, instance)))
   } catch (err) {
-    return c.json({ error: (err as Error).message }, 502)
+    return fail(c, 502, (err as Error).message)
   }
 }
 

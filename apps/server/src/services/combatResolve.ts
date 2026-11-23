@@ -1,5 +1,6 @@
 /** Resolving one drill inside a combat encounter (docs/DESIGN.md §13.5). */
 
+import type { UserId } from '../ids'
 import { clearEncounter, getEncounter, setPlayerHp, upsertEncounter } from '../db/repo'
 import type { Db } from '../db/client'
 import { atomic } from '../db/repo/helpers'
@@ -55,7 +56,7 @@ type EncounterRow = NonNullable<ReturnType<typeof getEncounter>>
 /** Builds the fight context from an already-read encounter row. */
 function encounterContext(
   db: Db,
-  userId: string,
+  userId: UserId,
   enc: EncounterRow,
   levels: Map<string, number>,
 ): EncounterContext | null {
@@ -87,7 +88,7 @@ function fallbackNumbers(
 function autoEat(
   db: Db,
   bus: EventBus,
-  userId: string,
+  userId: UserId,
   state: { playerHp: number; maxHp: number; foodEaten: number },
 ): { playerHp: number; foodEaten: number; ate: HitOutcome['ate'] } {
   const { maxHp, foodEaten } = state
@@ -179,7 +180,7 @@ interface ExchangeState {
 function settleExchange(
   db: Db,
   bus: EventBus,
-  userId: string,
+  userId: UserId,
   ctx: EncounterContext,
   state: ExchangeState,
 ): void {
@@ -197,7 +198,7 @@ function settleExchange(
 function awardWin(
   db: Db,
   bus: EventBus,
-  userId: string,
+  userId: UserId,
   ctx: EncounterContext,
   drops: Cost[],
 ): void {
@@ -208,7 +209,7 @@ function awardWin(
 function endFight(
   db: Db,
   bus: EventBus,
-  userId: string,
+  userId: UserId,
   monsterId: string,
   outcome: 'won' | 'lost',
 ): void {
@@ -239,7 +240,7 @@ function ongoingRow(ctx: EncounterContext, state: ExchangeState) {
 function awardExchange(
   db: Db,
   bus: EventBus,
-  userId: string,
+  userId: UserId,
   parts: { skill: SkillId; xp: number; defenceXp: number; constitutionXp: number },
   progress: ProgressCtx,
 ): number | null {
@@ -280,7 +281,7 @@ interface OutcomeParts extends Decided {
 interface Resolve {
   db: Db
   bus: EventBus
-  userId: string
+  userId: UserId
   ctx: EncounterContext
   progress: ProgressCtx
   correct: boolean
@@ -292,7 +293,7 @@ interface Resolve {
 function combatResolveTx(
   db: Db,
   bus: EventBus,
-  userId: string,
+  userId: UserId,
   correct: boolean,
   rand: () => number = Math.random,
 ): HitOutcome | null {
@@ -341,7 +342,13 @@ function emitHit(req: Resolve, ex: Exchange): void {
   })
 }
 
-/** The player's strike (when correct) and the monster's always-on swing. */
+/** The monster's blow for this exchange. One the strike just killed does not swing back. */
+function swingBack(ctx: EncounterContext, hit: StrikeHit | undefined, playerHp: number) {
+  if (hit && hit.monsterHp <= 0) return { playerDamage: 0, playerHp }
+  return monsterStrike(ctx.pc, playerHp, ctx.monsterDamage)
+}
+
+/** The player's strike (when correct) and the monster's swing back. */
 function strikeExchange(
   ctx: EncounterContext,
   correct: boolean,
@@ -349,7 +356,7 @@ function strikeExchange(
   rand: () => number,
 ): Exchange {
   const hit = correct ? playerStrike(ctx.pc, ctx, startHp, rand) : undefined
-  const blow = monsterStrike(ctx.pc, hit?.playerHp ?? startHp, ctx.monsterDamage)
+  const blow = swingBack(ctx, hit, hit?.playerHp ?? startHp)
   return {
     monsterHp: hit?.monsterHp ?? ctx.enc.monsterHp,
     playerHp: blow.playerHp,

@@ -1,14 +1,38 @@
 /** Deterministic answer grading helpers (used before/without any LLM judge). */
 
-/** Lowercase, strip tone diacritics + punctuation + spaces. */
-export function normalize(s: string): string {
-  return s
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[\s\u3000]+/g, '')
-    .replace(/[.,!?;:'"“”‘’。，！？、；：（）()[\]…·-]/g, '')
+import { answerKey, tonelessKey } from '../text/normalize'
+
+/** A letter outside the Latin script (Han, kana, Hangul, Zhuyin, Cyrillic, …). */
+const NON_LATIN = /(?!\p{Script=Latin})\p{L}/u
+
+/**
+ * How two answers are compared for one card. Tone marks are optional only on a
+ * romanisation — a Latin-letter reading of a word written in another script
+ * ("ni hao" for nǐ hǎo). Everywhere else a diacritic is part of the spelling.
+ */
+function folderFor(expected: string): (s: string) => string {
+  if (!NON_LATIN.test(expected)) return answerKey
+  return (s) => (NON_LATIN.test(s) ? answerKey(s) : tonelessKey(s))
 }
+
+/**
+ * A gloss without its dressing: parentheticals, a leading "to " and leading
+ * articles go, so "eat" answers "to eat" and "dog" answers "the dog (animal)".
+ * Falls back to the text itself when nothing else is left ("the", "to").
+ */
+function gist(s: string): string {
+  const bare = s
+    .replace(/[(（[][^)）\]]*[)）\]]/g, ' ')
+    .trim()
+    .replace(/^(?:(?:to|an?|the)\s+)+/i, '')
+    .trim()
+  return bare || s
+}
+
+/** A near-miss is only forgiven on an answer long enough for a typo to be one. */
+const NEAR_MISS_MIN_LENGTH = 6
+/** The best score a wrong answer can get — under every caller's pass mark. */
+const WRONG_SCORE_CAP = 69
 
 export function levenshtein(a: string, b: string): number {
   if (a === b) return 0
@@ -28,8 +52,8 @@ export function levenshtein(a: string, b: string): number {
 
 /** 0..1 similarity over normalized strings. */
 export function similarity(a: string, b: string): number {
-  const na = normalize(a)
-  const nb = normalize(b)
+  const na = tonelessKey(a)
+  const nb = tonelessKey(b)
   if (!na && !nb) return 1
   const max = Math.max(na.length, nb.length, 1)
   return 1 - levenshtein(na, nb) / max
@@ -60,24 +84,59 @@ export interface TextGrade {
  * Grades a free-text answer against the expected value plus accepted
  * alternatives (e.g. pinyin/romaji readings).
  */
-export function gradeText(expected: string, accepted: string[], answer: string): TextGrade {
+export function gradeText(
+  expected: string,
+  accepted: string[],
+  answer: string,
+  opts: { gloss?: boolean } = {},
+): TextGrade {
   const candidates = [expected, ...accepted].filter(Boolean)
-  const norm = normalize(answer)
-  if (!norm) return { score: 0, correct: false }
+  const fold = folderFor(expected)
+  const typed = fold(answer)
+  if (!typed) return { score: 0, correct: false }
+  // Only a gloss (a meaning in the learner's language) carries "to"/articles to
+  // forgive. A target-language answer keeps every word: "a veces" is not "veces".
+  const key = opts.gloss ? (s: string) => fold(gist(s)) || fold(s) : fold
+  const typedKey = key(answer)
+  const exact = candidates.find((c) => fold(c) === typed || key(c) === typedKey)
+  if (exact !== undefined) return { score: 100, correct: true, matched: exact }
+  const shape = (s: string) => ({ key: key(s), words: wordCount(opts.gloss ? gist(s) : s) })
+  return closest(
+    candidates.map((c) => ({ text: c, ...shape(c) })),
+    shape(answer),
+  )
+}
+
+const wordCount = (s: string): number => s.trim().split(/\s+/).filter(Boolean).length
+
+/** A candidate or an answer, reduced to what a near-miss is judged on. */
+interface Shape {
+  key: string
+  words: number
+}
+
+/**
+ * The nearest candidate when none matched exactly. One edit is forgiven as a
+ * typo on a long answer only: on a short gloss one letter is another word
+ * ("give"/"live", "old"/"cold"), so those need the exact text. And a typo never
+ * changes the number of words: dropping one ("veces" for "a veces") is not a typo.
+ */
+function closest(candidates: (Shape & { text: string })[], typed: Shape): TextGrade {
+  let best: TextGrade = { score: 0, correct: false }
   for (const c of candidates) {
-    if (normalize(c) === norm) return { score: 100, correct: true, matched: c }
+    const distance = levenshtein(c.key, typed.key)
+    const score = Math.round((1 - distance / Math.max(c.key.length, typed.key.length, 1)) * 100)
+    const typo = distance <= 1 && c.key.length >= NEAR_MISS_MIN_LENGTH
+    const correct = typo && c.words === typed.words
+    const grade = { score: correct ? score : Math.min(score, WRONG_SCORE_CAP), correct }
+    if (outranks(grade, best)) best = { ...grade, matched: c.text }
   }
-  let best = 0
-  let matched: string | undefined
-  for (const c of candidates) {
-    const s = similarity(c, answer)
-    if (s > best) {
-      best = s
-      matched = c
-    }
-  }
-  const score = Math.round(best * 100)
-  return { score, correct: score >= 80, matched }
+  return best
+}
+
+function outranks(a: TextGrade, b: TextGrade): boolean {
+  if (a.correct !== b.correct) return a.correct
+  return a.score > b.score
 }
 
 /** Short human hint for the next attempt. */

@@ -8,6 +8,7 @@
  * the run moves `run_ends_at`, which re-arms it.
  */
 
+import type { UserId } from '../ids'
 import type { Db } from '../db/client'
 import {
   deletePushSubscription,
@@ -58,8 +59,8 @@ export async function runRigAlerts(deps: RigAlertDeps): Promise<RigAlertResult> 
   return { users, rigs }
 }
 
-function dueByUser(db: Db, now: number): Map<string, DueRigRow[]> {
-  const byUser = new Map<string, DueRigRow[]>()
+function dueByUser(db: Db, now: number): Map<UserId, DueRigRow[]> {
+  const byUser = new Map<UserId, DueRigRow[]>()
   for (const row of dueRigAlerts(db, now, RIG_ALERT_LEAD_SEC * 1000)) {
     // A short run that happens to be ending is not "running low" — the rig was
     // only just powered. Only runs long enough to cross the lead time qualify.
@@ -72,7 +73,7 @@ function dueByUser(db: Db, now: number): Map<string, DueRigRow[]> {
 }
 
 interface UserAlert {
-  userId: string
+  userId: UserId
   rows: DueRigRow[]
   now: number
 }

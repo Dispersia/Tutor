@@ -3,6 +3,7 @@
  * (docs/ARCHITECTURE.md).
  */
 
+import type { UserId } from '../../ids'
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 import { users } from './users'
 
@@ -16,6 +17,7 @@ export const pushSubscriptions = sqliteTable(
   {
     id: text('id').primaryKey(),
     userId: text('user_id')
+      .$type<UserId>()
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     endpoint: text('endpoint').notNull().unique(),

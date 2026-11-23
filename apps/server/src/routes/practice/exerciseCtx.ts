@@ -4,6 +4,8 @@
  * field (readings, known, distractors) is added once.
  */
 
+import type { UserId } from '../../ids'
+import type { ServerCard } from '../../db/repo'
 import type { Card, ExerciseContext } from '@tutor/core'
 import type { Deps } from '../../context'
 import { getDeck, otherBacks } from '../../db/repo'
@@ -18,11 +20,11 @@ export { learnerOf, type SessionUser }
  */
 export function showReadingsFor(
   deps: Deps,
-  userId: string,
-  card: Card,
+  userId: UserId,
+  card: ServerCard,
   prefs: StudyPrefs,
 ): boolean {
-  const deck = card.deckId ? getDeck(deps.db, card.deckId, userId) : undefined
+  const deck = card.deckId ? getDeck(deps.db, card.deckId) : undefined
   return deck?.settings?.showReadings ?? showsReadings(prefs, card.targetLang)
 }
 
@@ -43,7 +45,7 @@ export interface ExerciseCtxOpts {
 export function exerciseCtx(
   deps: Deps,
   user: SessionUser,
-  card: Card,
+  card: ServerCard,
   opts: ExerciseCtxOpts,
 ): ExerciseContext {
   const prefs = opts.prefs ?? readStudyPrefs(deps.db, user.id)

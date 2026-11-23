@@ -1,5 +1,5 @@
 /**
- * A Japanese frequency list, the Japanese counterpart to `frequency.ts`
+ * A Japanese frequency list, the Japanese counterpart to `text/lexicon.ts`
  * (docs/DESIGN.md §13.7).
  *
  * Ordered roughly by usefulness so the head is the words a beginner can build

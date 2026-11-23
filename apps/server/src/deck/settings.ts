@@ -17,6 +17,12 @@ export const DECK_INSTRUCTION_KEY = 'deckInstruction'
 export type ReadingScript =
   'zhuyin' | 'pinyin' | 'kana' | 'romaji' | 'latin' | 'none' | (string & {})
 
+/** What an imported deck already says about one of its words. */
+export interface WordHint {
+  reading?: string
+  meaning?: string
+}
+
 export interface DeckSettings {
   /** Override: show native readings (Zhuyin / furigana) for this deck. */
   showReadings?: boolean
@@ -39,6 +45,11 @@ export interface DeckSettings {
   /** The source word list (imported decks), so the deck can grow without it. */
   words?: string[]
   /**
+   * The source deck's own reading/meaning per word (imported decks). Stored so
+   * a build resumed after a restart still follows the source, not the model.
+   */
+  hints?: Record<string, WordHint>
+  /**
    * True while a background build is still generating this deck's cards. The
    * Learn tab watches it to show progress; a restart clears it (see
    * `clearDeckBuilds`), so a half-built deck is never stuck.
@@ -51,11 +62,12 @@ export interface DeckSettings {
 }
 
 /**
- * A deck's settings as sent to a client. The source `words` list can hold
- * thousands of entries and no client uses it, so it never leaves the server.
+ * A deck's settings as sent to a client. The source `words` list and its
+ * `hints` can hold thousands of entries and no client uses them, so they never
+ * leave the server.
  */
 export function publicDeckSettings(settings: DeckSettings): DeckSettings {
-  const { words: _words, ...rest } = settings
+  const { words: _words, hints: _hints, ...rest } = settings
   return rest
 }
 

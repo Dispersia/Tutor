@@ -26,6 +26,7 @@ import { decryptSecret } from '../apps/server/src/auth'
 import { OpenRouter } from '../apps/server/src/llm/openrouter'
 import type { CharacterVariant } from '../apps/server/src/frequency/source'
 import { sweepDeck, type DeckRow, type SweepRun } from '../apps/server/src/deck/sweep'
+import type { DeckId, UserId } from '../apps/server/src/ids'
 
 const args = process.argv.slice(2)
 const dry = args.includes('--dry')
@@ -56,8 +57,8 @@ const deckRows = sqlite
     'select id, user_id as userId, name, source_lang as sourceLang, target_lang as targetLang, settings_json as settingsJson from decks',
   )
   .all() as {
-  id: string
-  userId: string
+  id: DeckId
+  userId: UserId
   name: string
   sourceLang: string
   targetLang: string
@@ -88,7 +89,7 @@ if (chosen.length === 0) {
 }
 
 // Pick the generator key: the deck owner's own key, else the server key.
-async function keyFor(userId: string): Promise<string | undefined> {
+async function keyFor(userId: UserId): Promise<string | undefined> {
   const own = await decryptSecret(
     getUserSetting(db, userId, 'openrouter_key') || undefined,
     env.secret,

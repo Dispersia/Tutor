@@ -1,26 +1,29 @@
 /** Global XP, streak and the account summary (docs/DESIGN.md §13). */
 
+import type { UserId } from '../ids'
 import { addXpEvent, getStats, sumXp, upsertStats, xpByDay, xpForDay } from '../db/repo'
 import type { Db } from '../db/client'
 import type { EventBus } from '../events'
 import { levelInfo } from '../game/levels'
 import { accountLevel } from './board'
+import { dayOf, userDay, userOffsetMin } from './clock'
 import { aggregateBonuses } from './progress'
 
-/** UTC calendar day as YYYY-MM-DD (the streak granularity — UTC only). */
+/** UTC calendar day as YYYY-MM-DD: the day for a member with no time zone stored. */
 export function todayDay(ts: number = Date.now()): string {
-  return new Date(ts).toISOString().slice(0, 10)
+  return dayOf(ts)
 }
 
-export function activeDays(db: Db, userId: string): string[] {
-  return xpByDay(db, userId)
+/** The member's active days (their own calendar days), newest first. */
+export function activeDays(db: Db, userId: UserId): string[] {
+  return xpByDay(db, userId, userOffsetMin(db, userId))
     .map((r) => r.day)
     .sort()
     .reverse()
 }
 
-export function dailyXp(db: Db, userId: string, day: string): number {
-  return xpForDay(db, userId, day)
+export function dailyXp(db: Db, userId: UserId, day: string): number {
+  return xpForDay(db, userId, day, userOffsetMin(db, userId))
 }
 
 export function shiftDay(day: string, delta: number): string {
@@ -49,11 +52,12 @@ export interface ActivityDay {
  */
 export function activitySeries(
   db: Db,
-  userId: string,
+  userId: UserId,
   weeks = 18,
 ): { today: string; days: ActivityDay[] } {
-  const today = todayDay()
-  const byDay = new Map(xpByDay(db, userId).map((r) => [r.day, r.amount]))
+  const offset = userOffsetMin(db, userId)
+  const today = dayOf(Date.now(), offset)
+  const byDay = new Map(xpByDay(db, userId, offset).map((r) => [r.day, r.amount]))
   const gridStart = shiftDay(weekStart(today), -(weeks - 1) * 7)
   const days: ActivityDay[] = []
   for (let i = 0; i < weeks * 7; i++) {
@@ -84,7 +88,7 @@ export function streakFromDays(days: string[], today: string = todayDay()): numb
 export function awardXp(
   db: Db,
   bus: EventBus,
-  userId: string,
+  userId: UserId,
   req: { amount: number; reason: string; sourceId?: string },
 ): { total: number; level: number; leveledUp: boolean } {
   const before = getStats(db, userId).level
@@ -100,10 +104,11 @@ export function awardXp(
   return { total, level: info.level, leveledUp }
 }
 
-export function touchActivity(db: Db, bus: EventBus, userId: string): number {
+export function touchActivity(db: Db, bus: EventBus, userId: UserId): number {
   const days = activeDays(db, userId)
-  const streak = streakFromDays(days)
-  upsertStats(db, userId, { streakDays: streak, lastActiveDay: days[0] ?? todayDay() })
+  const today = userDay(db, userId)
+  const streak = streakFromDays(days, today)
+  upsertStats(db, userId, { streakDays: streak, lastActiveDay: days[0] ?? today })
   bus.emit('streak.updated', { userId, days: streak })
   return streak
 }
@@ -126,9 +131,9 @@ function streakAlive(lastActiveDay: string | null, today: string): boolean {
   return lastActiveDay === today || lastActiveDay === shiftDay(today, -1)
 }
 
-export function summary(db: Db, userId: string): GameSummary {
+export function summary(db: Db, userId: UserId): GameSummary {
   const s = getStats(db, userId)
-  const today = todayDay()
+  const today = userDay(db, userId)
   const daily = dailyXp(db, userId, today)
   const goal = s.dailyGoal || 50
   const account = accountLevel(db, userId)
@@ -146,13 +151,13 @@ export function summary(db: Db, userId: string): GameSummary {
   }
 }
 
-export function rebuildStats(db: Db, userId: string): GameSummary {
+export function rebuildStats(db: Db, userId: UserId): GameSummary {
   const total = sumXp(db, userId)
   const days = activeDays(db, userId)
   upsertStats(db, userId, {
     xpTotal: total,
     level: levelInfo(total).level,
-    streakDays: streakFromDays(days),
+    streakDays: streakFromDays(days, userDay(db, userId)),
     lastActiveDay: days[0] ?? null,
   })
   return summary(db, userId)

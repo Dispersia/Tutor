@@ -6,7 +6,9 @@
  * schedule and the reinforcement hook. Only how the grade was produced differs.
  */
 
-import type { Card, ExerciseDef, GradeResult } from '@tutor/core'
+import type { UserId } from '../../ids'
+import type { ServerCard } from '../../db/repo'
+import type { ExerciseDef, GradeResult } from '@tutor/core'
 import type { Deps } from '../../context'
 import { addReview } from '../../db/repo'
 import { REINFORCE_LAPSES, reinforceLapsedCard } from '../../deck/reinforce'
@@ -31,8 +33,8 @@ export interface ReviewOutcome {
 
 /** Appends the review log row. Called for every countable attempt, XP or not. */
 export interface AttemptInput {
-  userId: string
-  card: Card
+  userId: UserId
+  card: ServerCard
   exerciseId: string
   result: GradeResult
   latencyMs?: number
@@ -50,7 +52,7 @@ export function recordAttempt(deps: Deps, input: AttemptInput): void {
 }
 
 /** The reply for an attempt that must not count: no XP, no schedule, no lesson. */
-export function uncountedOutcome(deps: Deps, userId: string, result: GradeResult): ReviewOutcome {
+export function uncountedOutcome(deps: Deps, userId: UserId, result: GradeResult): ReviewOutcome {
   return {
     result: { ...result, xp: 0, leveledUp: false },
     skill: null,
@@ -61,8 +63,8 @@ export function uncountedOutcome(deps: Deps, userId: string, result: GradeResult
 }
 
 export interface FinalizeInput {
-  userId: string
-  card: Card
+  userId: UserId
+  card: ServerCard
   def: ExerciseDef
   result: GradeResult
   xp: number
@@ -95,7 +97,7 @@ export function finalizeReview(deps: Deps, input: FinalizeInput): ReviewOutcome 
 }
 
 /** Pays the review's XP (the reason is fixed: a graded card review). */
-function awardReviewXp(deps: Deps, userId: string, input: FinalizeInput): boolean {
+function awardReviewXp(deps: Deps, userId: UserId, input: FinalizeInput): boolean {
   const { leveledUp } = awardXp(deps.db, deps.events, userId, {
     amount: input.xp,
     reason: 'review',
@@ -105,7 +107,7 @@ function awardReviewXp(deps: Deps, userId: string, input: FinalizeInput): boolea
 }
 
 /** Advances the card's FSRS schedule for this review. */
-function reviewSchedule(deps: Deps, userId: string, input: FinalizeInput) {
+function reviewSchedule(deps: Deps, userId: UserId, input: FinalizeInput) {
   return recordReview(deps.db, deps.events, userId, {
     cardId: input.card.id,
     score: input.result.score,

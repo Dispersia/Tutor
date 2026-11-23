@@ -1,5 +1,6 @@
 /** Creating and filling a deck from an instruction (the synchronous path). */
 
+import type { UserId, DeckId } from '../ids'
 import { createDeck, updateDeckSettings } from '../db/repo'
 import type { Db } from '../db/client'
 import { fetchFrequencyWords, frequencySourceFor } from '../frequency/source'
@@ -15,9 +16,10 @@ import {
   type DeckContext,
 } from './context'
 import { DEFAULT_COUNT, MAX_DECK_WORDS, PLAN_CHUNK, clamp } from './instruction'
+import { wordKey } from '../text/normalize'
 
 export interface CreateDeckResult {
-  deckId: string
+  deckId: DeckId
   name: string
   /** The ordered words the deck will introduce. */
   candidates: string[]
@@ -41,7 +43,7 @@ interface WordSource {
  */
 export async function createDeckForBuild(
   db: Db,
-  userId: string,
+  userId: UserId,
   opts: BuildDeckOptions,
 ): Promise<CreateDeckResult> {
   const count = clamp(opts.count ?? DEFAULT_COUNT, 1, MAX_DECK_WORDS)
@@ -155,8 +157,8 @@ function fillState(opts: FillDeckOptions): FillState {
  */
 export async function fillDeck(
   db: Db,
-  userId: string,
-  deckId: string,
+  userId: UserId,
+  deckId: DeckId,
   request: FillDeckRequest,
 ): Promise<FillDeckResult> {
   const { ctx, opts, planner } = request
@@ -169,8 +171,8 @@ export async function fillDeck(
 
 interface BatchReq {
   db: Db
-  userId: string
-  deckId: string
+  userId: UserId
+  deckId: DeckId
   ctx: DeckContext
   opts: FillDeckOptions
   planner: Planner
@@ -178,7 +180,12 @@ interface BatchReq {
   total: number
 }
 
-/** Plans and persists one batch, shrinking the next size after a truncation. */
+/**
+ * Plans and persists one batch, shrinking the next size after a truncation.
+ * Only the words the model really returned count as built: the batch advances
+ * past the leading run it introduced, and the next one starts at the first word
+ * it skipped, so a short answer is retried instead of silently losing words.
+ */
 async function oneBatch(req: BatchReq) {
   const { state, total } = req
   const size = Math.min(state.chunkSize, total - state.built)
@@ -188,15 +195,51 @@ async function oneBatch(req: BatchReq) {
     state.chunkSize = Math.max(1, Math.floor(size / 2))
     return
   }
-  const res = persistBatch({
-    db: req.db,
-    userId: req.userId,
-    deckId: req.deckId,
-    ctx: req.ctx,
-    planned,
-    state,
-  })
-  accumulate(state, res, size, total, req.opts)
+  const accepted = acceptPlanned(planned, words)
+  if (accepted.introduced === 0) return stalled(state, words)
+  const { db, userId, deckId, ctx } = req
+  const res = persistBatch({ db, userId, deckId, ctx, planned: accepted.cards, state })
+  accumulate(state, res, accepted.introduced, total, req.opts)
+}
+
+/**
+ * A batch that introduced none of its words is retried smaller. A single word
+ * the model still will not return is skipped: one word it refuses (or returns in
+ * another script) must not stop the whole deck, on this run and every resume.
+ */
+function stalled(state: FillState, words: string[]): void {
+  if (words.length > 1) {
+    state.chunkSize = Math.max(1, Math.floor(words.length / 2))
+    return
+  }
+  console.warn(`[deck] the generator returned no card for "${words[0]}" — skipped`)
+  state.built += 1
+}
+
+/**
+ * Keeps what a batch may persist. A vocab card is kept only for a requested
+ * word — anything else is the model inventing vocabulary — and only once, and
+ * only inside the leading run of words it returned, so `introduced` is a true
+ * prefix of `requested` and the words after a gap are asked for again rather
+ * than duplicated. Sentence and grammar cards pass through to the n+1 checks.
+ */
+export function acceptPlanned(
+  planned: PlannedCard[],
+  requested: string[],
+): { cards: PlannedCard[]; introduced: number } {
+  const canonical = new Map(requested.map((w) => [wordKey(w), w]))
+  const wordOf = (c: PlannedCard) => canonical.get(wordKey(c.back))
+  const returned = new Set(planned.filter((c) => c.template === 'vocab').map(wordOf))
+  let introduced = 0
+  while (introduced < requested.length && returned.has(requested[introduced])) introduced++
+  const open = new Set(requested.slice(0, introduced))
+  const cards: PlannedCard[] = []
+  for (const c of planned) {
+    const word = c.template === 'vocab' ? wordOf(c) : undefined
+    if (c.template !== 'vocab') cards.push(c)
+    else if (word !== undefined && open.delete(word)) cards.push({ ...c, back: word })
+  }
+  return { cards, introduced }
 }
 
 /** Plans one batch; undefined when it failed and should be retried smaller. */
@@ -235,8 +278,8 @@ function planArgs(ctx: DeckContext, words: string[], state: FillState, size: num
 
 interface PersistReq {
   db: Db
-  userId: string
-  deckId: string
+  userId: UserId
+  deckId: DeckId
   ctx: DeckContext
   planned: PlannedCard[]
   state: FillState
@@ -264,7 +307,7 @@ function persistBatch(req: PersistReq) {
 function accumulate(
   state: FillState,
   res: ReturnType<typeof persistCards>,
-  size: number,
+  introduced: number,
   total: number,
   opts: FillDeckOptions,
 ): void {
@@ -272,7 +315,7 @@ function accumulate(
   state.known.push(...res.newWords)
   state.newWords.push(...res.newWords)
   state.cardCount += res.cardCount
-  state.built += size
+  state.built += introduced
   opts.onProgress?.(state.built, total)
   // Recover the batch size one word at a time after a shrink.
   if (state.chunkSize < PLAN_CHUNK) state.chunkSize = Math.min(PLAN_CHUNK, state.chunkSize + 1)
@@ -285,7 +328,7 @@ function accumulate(
  */
 export async function buildDeck(
   db: Db,
-  userId: string,
+  userId: UserId,
   opts: BuildDeckOptions,
 ): Promise<BuiltDeck> {
   const created = await createDeckForBuild(db, userId, opts)
@@ -294,7 +337,7 @@ export async function buildDeck(
     opts: { words: created.candidates, count: created.count, knownWords: [], startStep: 0 },
     planner: opts.planner,
   })
-  updateDeckSettings(db, created.deckId, userId, { cursor: built })
+  updateDeckSettings(db, created.deckId, { cursor: built })
   return {
     deckId: created.deckId,
     name: created.name,

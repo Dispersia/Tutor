@@ -1,9 +1,9 @@
 /** Introduce: the first exposure teaches, it never quizzes (DESIGN §13.7). */
 
 import type { ExerciseContext, ExerciseDef } from '@tutor/core'
-import { LEXICON } from '../../seed/frequency'
+import { LEXICON } from '../../text/lexicon'
 import { SENTENCE_POS, buildSentence, canBuildSentence } from '../../game/grammar'
-import { pinyinToZhuyin } from '../../seed/zhuyin'
+import { pinyinToZhuyin } from '../../text/zhuyin'
 import { hashSeed, seededRandom } from '../seeded'
 import { readingsShown, wordView } from '../shared'
 

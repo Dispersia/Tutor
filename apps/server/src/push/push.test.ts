@@ -1,3 +1,4 @@
+import type { UserId } from '../ids'
 import { expect, test } from 'bun:test'
 import type { Db } from '../db/client'
 import { openDb } from '../db/client'
@@ -142,7 +143,7 @@ test('sendPush reports a dead subscription', async () => {
 
 function rig(
   db: Db,
-  userId: string,
+  userId: UserId,
   runEndsAt: number,
   completions = 50,
   actionId = 'mine-copper',
@@ -253,4 +254,40 @@ test('drops a dead subscription and leaves the deadline unannounced', async () =
 
 test('lead time is half an hour', () => {
   expect(RIG_ALERT_LEAD_SEC).toBe(1800)
+})
+
+test('sendPush prunes on 401/403 and bounds the request with a timeout', async () => {
+  const { db } = openDb(':memory:')
+  const sub = await receiver()
+  const target = { endpoint: 'https://push.example/x', p256dh: sub.p256dh, auth: sub.authKey }
+  for (const status of [401, 403]) {
+    let signal: AbortSignal | null | undefined
+    const fetchImpl = (async (_url: string, init: RequestInit) => {
+      signal = init.signal
+      return new Response('nope', { status })
+    }) as unknown as typeof fetch
+    expect(await sendPush(db, target, { title: 'x' }, { fetchImpl })).toEqual({
+      ok: false,
+      gone: true,
+      status,
+    })
+    expect(signal).toBeInstanceOf(AbortSignal)
+  }
+  // A server error is still transient: the row is kept and retried.
+  const flaky = (async () => new Response('busy', { status: 503 })) as unknown as typeof fetch
+  expect((await sendPush(db, target, { title: 'x' }, { fetchImpl: flaky })).gone).toBe(false)
+})
+
+test('a device has one owner: the newest member to enable it takes it over', () => {
+  const { db, sqlite } = openDb(':memory:')
+  const alice = createUser(db, { username: 'alice' })
+  const bob = createUser(db, { username: 'bob' })
+  const endpoint = 'https://fcm.googleapis.com/fcm/send/abc'
+  upsertPushSubscription(db, { userId: alice.id, endpoint, p256dh: 'p', auth: 'a' })
+  // the same browser, another account ticks the box
+  upsertPushSubscription(db, { userId: bob.id, endpoint, p256dh: 'p2', auth: 'a2' })
+  expect(sqlite.query('select user_id as u, p256dh as k from push_subscriptions').all()).toEqual([
+    { u: bob.id, k: 'p2' },
+  ])
+  sqlite.close()
 })

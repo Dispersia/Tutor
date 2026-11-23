@@ -30,15 +30,16 @@ import { llmPlanner } from '../apps/server/src/deck/plan'
 import { createDeckForBuild, fillDeck } from '../apps/server/src/deck/generate'
 import type { CharacterVariant } from '../apps/server/src/deck/settings'
 import { curriculumView } from '../apps/server/src/services'
+import type { DeckId, UserId } from '../apps/server/src/ids'
 
-const deckId = process.argv[2]
+const deckId = process.argv[2] as DeckId | undefined
 if (!deckId) throw new Error('usage: bun scripts/rebuild-deck-examples.ts <deckId>')
 
 const { db, sqlite } = openDb(join(env.dataDir, 'tutor.db'))
 
 interface DeckRow {
-  id: string
-  userId: string
+  id: DeckId
+  userId: UserId
   name: string
   sourceLang: string
   targetLang: string
@@ -139,7 +140,7 @@ try {
     planner,
   })
 } catch (err) {
-  deleteDeck(db, created.deckId, userId)
+  deleteDeck(db, created.deckId)
   throw err
 }
 console.log(`generated in ${Math.round((Date.now() - started) / 1000)}s`)
@@ -182,7 +183,7 @@ for (const c of tempCards) {
 }
 console.log(`new examples: ${pending.length} (${skipped} skipped: unknown anchor)`)
 if (pending.length === 0) {
-  deleteDeck(db, created.deckId, userId)
+  deleteDeck(db, created.deckId)
   throw new Error('generation produced no examples — deck left untouched')
 }
 
@@ -209,8 +210,8 @@ for (const e of pending) {
     origin: 'llm',
   })
 }
-deleteDeck(db, created.deckId, userId)
-updateDeckSettings(db, deckId, userId, { instruction })
+deleteDeck(db, created.deckId)
+updateDeckSettings(db, deckId, { instruction })
 
 console.log(`done: removed ${oldExamples.length} old examples, added ${pending.length}`)
 sqlite.close()

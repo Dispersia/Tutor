@@ -1,5 +1,6 @@
 /** The per-request state a board/player view reads (docs/ARCHITECTURE.md). */
 
+import type { UserId } from '../ids'
 import { listCards } from '../db/repo'
 import type { Db } from '../db/client'
 import type { EventBus } from '../events'
@@ -16,7 +17,7 @@ import { aggregateBonuses } from './progress'
  * cards + SRS state scans each store once instead of once per helper. Pass the
  * result to `studyBudget` / `knownWords`.
  */
-export function loadLearnerData(db: Db, userId: string): LoadedCards {
+export function loadLearnerData(db: Db, userId: UserId): LoadedCards {
   return { cards: listCards(db, userId), srs: srsStateMap(db, userId) }
 }
 
@@ -40,7 +41,7 @@ export interface PlayerCtx {
  * map. Board and gear handlers share one, so a render reads each store once
  * instead of once per view (docs/ARCHITECTURE.md).
  */
-export function loadPlayerCtx(db: Db, bus: EventBus, userId: string, now = Date.now()): PlayerCtx {
+export function loadPlayerCtx(db: Db, bus: EventBus, userId: UserId, now = Date.now()): PlayerCtx {
   const settled = settleRigs(db, bus, userId, now)
   const byAction = actionProgressView(db, userId)
   const levels = actionLevels(byAction)
@@ -52,7 +53,7 @@ export function loadPlayerCtx(db: Db, bus: EventBus, userId: string, now = Date.
     levels,
     bands,
     progress: new Map(skillSummaries(db, userId, byAction).map((s) => [s.skillId, s])),
-    talents: new Map(talentView(db, userId).map((t) => [t.skillId, t])),
+    talents: new Map(talentView(db, userId, levels).map((t) => [t.skillId, t])),
     bonuses: aggregateBonuses(db, userId, levels),
   }
 }

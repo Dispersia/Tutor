@@ -1,6 +1,7 @@
 import type { OpenRouter, ReasoningEffort } from '../llm/openrouter'
 import { parsePitchContour } from '@tutor/core'
 import { PLAN_SYSTEM, planPrompt, type PlanRequest } from './planPrompt'
+import { bareText } from '../text/normalize'
 
 /**
  * Turns a user instruction + a pulled frequency list into cards that fit the
@@ -133,13 +134,15 @@ export function stripMetaCommentary(text: string): string {
     .trim()
 }
 
-const bare = (s: string): string => s.replace(/[\s\p{P}\p{S}]/gu, '').toLowerCase()
-
-/** A sentence card's tokens must rebuild its `back` (ignoring spaces/punctuation). */
-function tokensMatchBack(tokens: unknown, back: string): boolean {
+/**
+ * A sentence card's tokens must rebuild its `back`, ignoring case, spaces,
+ * punctuation and symbols. Anything that is not a token list has nothing to
+ * disagree with, so it passes.
+ */
+export function tokensMatchBack(tokens: unknown, back: string): boolean {
   if (!Array.isArray(tokens)) return true
   const joined = tokens.filter((t): t is string => typeof t === 'string').join('')
-  return bare(joined) === bare(back)
+  return bareText(joined) === bareText(back)
 }
 
 /** Cleans the free-text fields of a planned card and drops an unusable one. */

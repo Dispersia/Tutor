@@ -32,8 +32,27 @@ export function parseInstruction(
     readingScript: readingScriptOf(s, isChinese, isJapanese),
     // Pitch-accent metadata is language-specific but opt-in: only ask the
     // generator when the instruction does.
-    pitchAccent: /pitch|accent|アクセント|音調|音调|高低|聲調|声调|tone contour|tones?/.test(s),
+    pitchAccent: PITCH_REQUEST.test(s),
   }
+}
+
+/**
+ * Whole words only: "milestone" and "a polite tone" are not a request for pitch
+ * metadata, while "pitch accent", "with tones" and "tone contours" are.
+ */
+const PITCH_REQUEST =
+  /\b(?:pitch|accents?|tone contours?|tones)\b|アクセント|音調|音调|高低|聲調|声调/
+
+const TRADITIONAL = 'traditional|繁體|繁体|zh_tw'
+const SIMPLIFIED = 'simplified|简体|簡體|zh_cn'
+
+/** "not traditional", "no simplified", "don't use traditional", "不要繁體" … */
+const NEGATION = String.raw`(?:\b(?:not|no|never|avoid|without)|n['’]t|不要|不用|別用|别用)\s*(?:\b(?:use|using|in|the|any)\s+)*`
+
+/** Whether the prompt asks for a variant, rules it out, or does not mention it. */
+function stance(s: string, names: string): 'wanted' | 'refused' | undefined {
+  if (new RegExp(`${NEGATION}(?:${names})`).test(s)) return 'refused'
+  return new RegExp(names).test(s) ? 'wanted' : undefined
 }
 
 function variantOf(
@@ -42,8 +61,14 @@ function variantOf(
   isChinese: boolean,
 ): CharacterVariant | undefined {
   if (!isChinese) return undefined
-  if (/traditional|繁體|繁体|zh_tw/.test(s)) return 'traditional'
-  if (/simplified|简体|簡體|zh_cn/.test(s)) return 'simplified'
+  // "Simplified characters please, not traditional" names both: the one that is
+  // ruled out must not win just because it is tested first.
+  const traditional = stance(s, TRADITIONAL)
+  const simplified = stance(s, SIMPLIFIED)
+  if (traditional === 'wanted') return 'traditional'
+  if (simplified === 'wanted') return 'simplified'
+  if (simplified === 'refused' && traditional !== 'refused') return 'traditional'
+  if (traditional === 'refused' && simplified !== 'refused') return 'simplified'
   return targetLang === 'zh' ? 'traditional' : undefined // the app's default
 }
 

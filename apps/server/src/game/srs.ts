@@ -333,11 +333,11 @@ export function isLearned(state: FsrsState | undefined): boolean {
  * `selectStudyCardId`, which never reaches past a review card's due date.
  * `cardIds` is in syllabus order; `srs` maps card id -> state.
  */
-export function selectCardId(
-  cardIds: string[],
+export function selectCardId<T extends string>(
+  cardIds: T[],
   srs: Map<string, FsrsState>,
   now: number,
-): string | undefined {
+): T | undefined {
   if (cardIds.length === 0) return undefined
   const due = cardIds.filter((id) => {
     const s = srs.get(id)
@@ -365,11 +365,11 @@ const dueOf = (srs: Map<string, FsrsState>, id: string): number => srs.get(id)?.
  * new word is left, the day is done. Combat, which must always have a card for a
  * hit, keeps using `selectCardId`.
  */
-export function selectStudyCardId(
-  cardIds: string[],
+export function selectStudyCardId<T extends string>(
+  cardIds: T[],
   srs: Map<string, FsrsState>,
   now: number,
-): string | undefined {
+): T | undefined {
   if (cardIds.length === 0) return undefined
   const due = cardIds.filter((id) => {
     const s = srs.get(id)

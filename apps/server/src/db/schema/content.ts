@@ -4,11 +4,12 @@
  * the schema split (docs/ARCHITECTURE.md).
  */
 
+import type { UserId, DeckId, CardId, SessionId } from '../../ids'
 import { index, integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
 export const decks = sqliteTable('decks', {
-  id: text('id').primaryKey(),
-  userId: text('user_id'),
+  id: text('id').$type<DeckId>().primaryKey(),
+  userId: text('user_id').$type<UserId>(),
   name: text('name').notNull(),
   sourceLang: text('source_lang').notNull(),
   targetLang: text('target_lang').notNull(),
@@ -21,9 +22,13 @@ export const decks = sqliteTable('decks', {
 export const cards = sqliteTable(
   'cards',
   {
-    id: text('id').primaryKey(),
-    deckId: text('deck_id').references(() => decks.id),
-    userId: text('user_id'),
+    id: text('id').$type<CardId>().primaryKey(),
+    deckId: text('deck_id')
+      .$type<DeckId>()
+      .references(() => decks.id),
+    userId: text('user_id').$type<UserId>(),
+    /** Set for a card only one member sees (their reinforcement cards); null = shared. */
+    privateTo: text('private_to').$type<UserId>(),
     type: text('type').notNull(),
     sourceLang: text('source_lang').notNull(),
     targetLang: text('target_lang').notNull(),
@@ -43,9 +48,9 @@ export const cards = sqliteTable(
 export const sessions = sqliteTable(
   'sessions',
   {
-    id: text('id').primaryKey(),
-    userId: text('user_id'),
-    deckId: text('deck_id'),
+    id: text('id').$type<SessionId>().primaryKey(),
+    userId: text('user_id').$type<UserId>(),
+    deckId: text('deck_id').$type<DeckId>(),
     kind: text('kind').notNull().default('chat'),
     lang: text('lang'),
     title: text('title'),
@@ -60,6 +65,7 @@ export const messages = sqliteTable(
   {
     id: text('id').primaryKey(),
     sessionId: text('session_id')
+      .$type<SessionId>()
       .notNull()
       .references(() => sessions.id, { onDelete: 'cascade' }),
     role: text('role').notNull(),
@@ -76,7 +82,7 @@ export const messages = sqliteTable(
 
 export const audioBlobs = sqliteTable('audio_blobs', {
   hash: text('hash').primaryKey(),
-  userId: text('user_id'),
+  userId: text('user_id').$type<UserId>(),
   path: text('path').notNull(),
   bytes: integer('bytes'),
   mime: text('mime'),

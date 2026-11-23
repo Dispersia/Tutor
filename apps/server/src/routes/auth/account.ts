@@ -1,18 +1,13 @@
 /** Account endpoints: register, log in, log out and the profile (docs/DESIGN.md §12.5). */
 
 import type { Context } from 'hono'
-import {
-  createUser,
-  getUserById,
-  getUserByUsername,
-  publicUser,
-  updateUser,
-  countUsers,
-} from '../../db/repo'
+import { getUserById, getUserByUsername, publicUser, registerUser, updateUser } from '../../db/repo'
 import { hashPassword, verifyPassword } from '../../auth'
 import type { App, AppEnv } from '../../context'
 import { jsonBody, str } from '../body'
 import { currentUser, endSession, startSession } from './session'
+import { clearFailures, noteFailure, retryAfterSec } from './throttle'
+import { fail, failWith, guardError, type GuardError } from '../errors'
 
 interface RegisterBody {
   username?: string
@@ -35,11 +30,6 @@ function readRegister(body: Record<string, unknown>): RegisterBody {
   }
 }
 
-interface GuardError {
-  status: 400 | 403 | 409
-  message: string
-}
-
 export function registerAccounts(app: App) {
   app.post('/api/auth/register', (c) => registerHandler(c))
   app.post('/api/auth/login', (c) => loginHandler(c))
@@ -57,58 +47,69 @@ async function registerHandler(c: Context<AppEnv>) {
   const username = body.username?.trim()
   const password = body.password ?? ''
   const invalid = validateRegister(username, password)
-  if (invalid) return c.json({ error: invalid.message }, invalid.status)
-  if (getUserByUsername(deps.db, username!)) return c.json({ error: 'username already taken' }, 409)
-  const isFirst = countUsers(deps.db) === 0
-  if (!isFirst && !deps.allowRegistration) {
-    return c.json({ error: 'registration is disabled on this server' }, 403)
-  }
-  const user = await makeUser(deps.db, body, username!, password, isFirst)
-  startSession(c, user.id)
-  return c.json({ user: publicUser(user) }, 201)
+  if (invalid) return failWith(c, invalid)
+  // Hash first: everything after it is one synchronous step (see `registerUser`).
+  const account = newAccount(body, username!, await hashPassword(password))
+  const made = registerUser(deps.db, account, deps.allowRegistration)
+  if ('error' in made) return fail(c, STATUS[made.error], REGISTER_ERRORS[made.error])
+  startSession(c, made.user.id)
+  return c.json({ user: publicUser(made.user) }, 201)
 }
+
+const REGISTER_ERRORS = {
+  taken: 'username already taken',
+  closed: 'registration is disabled on this server',
+} as const
+const STATUS = { taken: 409, closed: 403 } as const
 
 function validateRegister(username: string | undefined, password: string): GuardError | undefined {
   if (!username || !/^[a-zA-Z0-9_.-]{2,32}$/.test(username)) {
-    return { status: 400, message: 'username must be 2-32 chars: letters, digits, . _ -' }
+    return guardError(400, 'username must be 2-32 chars: letters, digits, . _ -')
   }
   if (password.length < 8) {
-    return { status: 400, message: 'password must be at least 8 characters' }
+    return guardError(400, 'password must be at least 8 characters')
   }
   return undefined
 }
 
-async function makeUser(
-  db: Parameters<typeof createUser>[0],
-  body: RegisterBody,
-  username: string,
-  password: string,
-  isFirst: boolean,
-) {
-  return createUser(db, {
+function newAccount(body: RegisterBody, username: string, passwordHash: string) {
+  return {
     username,
-    passwordHash: await hashPassword(password),
+    passwordHash,
     handle: body.handle?.trim() || username,
-    role: isFirst ? 'admin' : 'user',
     nativeLang: body.nativeLang,
     targetLang: body.targetLang,
     level: body.level,
-  })
+  }
 }
 
 async function loginHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const body = await jsonBody(c)
   const username = str(body, 'username')?.trim() ?? ''
+  const wait = retryAfterSec(username)
+  if (wait > 0) return tooManyAttempts(c, wait)
   const user = username ? getUserByUsername(deps.db, username) : undefined
-  if (
-    !user?.passwordHash ||
-    !(await verifyPassword(str(body, 'password') ?? '', user.passwordHash))
-  ) {
-    return c.json({ error: 'invalid username or password' }, 401)
+  // An unknown username is checked against a dummy hash, so a wrong name takes
+  // as long to reject as a wrong password and the timing reveals nothing.
+  const hash = user?.passwordHash ?? (await dummyHash())
+  const ok = await verifyPassword(str(body, 'password') ?? '', hash)
+  if (!user?.passwordHash || !ok) {
+    noteFailure(username)
+    return fail(c, 401, 'invalid username or password')
   }
+  clearFailures(username)
   startSession(c, user.id)
   return c.json({ user: publicUser(user) })
+}
+
+let dummy: Promise<string> | undefined
+/** A real argon2id hash of a password nobody has, made once. */
+const dummyHash = (): Promise<string> => (dummy ??= hashPassword(crypto.randomUUID()))
+
+function tooManyAttempts(c: Context<AppEnv>, waitSec: number) {
+  c.header('Retry-After', String(waitSec))
+  return fail(c, 429, 'too many attempts — try again in a few minutes')
 }
 
 function meView(c: Context<AppEnv>) {
@@ -118,7 +119,7 @@ function meView(c: Context<AppEnv>) {
 
 async function updateMe(c: Context<AppEnv>) {
   const user = currentUser(c)
-  if (!user) return c.json({ error: 'unauthorized' }, 401)
+  if (!user) return fail(c, 401, 'unauthorized')
   const body = await jsonBody(c)
   const patch = profilePatch(body)
   if (Object.keys(patch).length) updateUser(c.get('deps').db, user.id, patch)

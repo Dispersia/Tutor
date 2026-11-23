@@ -7,6 +7,8 @@
  * nothing about HTTP, so both route modules share them.
  */
 
+import type { UserId, DeckId, CardId } from '../../ids'
+import type { ServerCard } from '../../db/repo'
 import type { Card, ExerciseContext, ExerciseDef, Learner } from '@tutor/core'
 import type { Deps } from '../../context'
 import {
@@ -20,12 +22,12 @@ import {
 import { INTRODUCE_ID, registry } from '../../exercises'
 import { buildLessons } from '../../game/curriculum'
 import { selectCardId, selectStudyCardId, type FsrsState } from '../../game/srs'
-import { pinyinToZhuyin } from '../../seed/zhuyin'
+import { displayReading } from '../../text/readings'
 import { srsStateMap } from '../../services/srs'
 
 /** The user fields a route handler has on `c.get('user')` (docs/DESIGN §12.5). */
 export interface SessionUser {
-  id: string
+  id: UserId
   nativeLang: string
   targetLang: string | null
   level: string | null
@@ -62,10 +64,10 @@ const WARMUP_NEW_CARDS = 3
  */
 export function pickStudyCard(
   deps: Deps,
-  userId: string,
-  ids: string[],
-  srs: Map<string, FsrsState>,
-): Card | undefined {
+  userId: UserId,
+  ids: CardId[],
+  srs: Map<CardId, FsrsState>,
+): ServerCard | undefined {
   const now = Date.now()
 
   // A sitting opens with a few new words (in curriculum order), then the due
@@ -83,11 +85,11 @@ export function pickStudyCard(
 }
 
 /** The curriculum step a card belongs to, so the practice header can follow it. */
-export function lessonOfCard(deps: Deps, userId: string, card: Card): string | undefined {
+export function lessonOfCard(deps: Deps, userId: UserId, card: ServerCard): string | undefined {
   if (!card.deckId) return undefined
-  const deck = getDeck(deps.db, card.deckId, userId)
+  const deck = getDeck(deps.db, card.deckId)
   if (!deck) return undefined
-  const key = deck.level ?? deck.id
+  const key = deck.id
   const lessons = buildLessons(key, stepCardsOf(listCards(deps.db, userId, deck.id)))
   return lessons.find((l) => l.cardIds.includes(card.id))?.id
 }
@@ -97,7 +99,11 @@ export function lessonOfCard(deps: Deps, userId: string, card: Card): string | u
  * already have a spaced-repetition state are eligible (due ones first), so a
  * fight never introduces vocabulary — it practises what you've already met.
  */
-export function pickReviewCard(deps: Deps, userId: string, deckId?: string): Card | undefined {
+export function pickReviewCard(
+  deps: Deps,
+  userId: UserId,
+  deckId?: DeckId,
+): ServerCard | undefined {
   const srs = srsStateMap(deps.db, userId)
   const ids = listCards(deps.db, userId, deckId)
     .filter((c) => srs.has(c.id))
@@ -108,7 +114,7 @@ export function pickReviewCard(deps: Deps, userId: string, deckId?: string): Car
 }
 
 /** Maps stored cards to the curriculum builder's shape. */
-export function stepCardsOf(cards: Card[]) {
+export function stepCardsOf<I extends string>(cards: (Card & { id: I })[]) {
   return cards.map((c) => ({
     id: c.id,
     front: c.front,
@@ -122,16 +128,13 @@ export function stepCardsOf(cards: Card[]) {
 
 /** Native reading for a card: Zhuyin (zh) or kana (ja). Never pinyin/romaji. */
 export function displayReadingOf(c: Card): string {
-  if (c.targetLang === 'ja') return c.readings.kana || ''
-  if (c.targetLang === 'zh')
-    return c.readings.zhuyin || (c.readings.pinyin ? pinyinToZhuyin(c.readings.pinyin) : '')
-  return Object.values(c.readings).find(Boolean) ?? ''
+  return displayReading(c)
 }
 
 /** Display reading (Zhuyin / kana) keyed by target text, for option annotation. */
 export function readingMap(
   db: Deps['db'],
-  userId: string,
+  userId: UserId,
   targetLang: string,
   cards?: Card[],
 ): Record<string, string> {
@@ -145,20 +148,20 @@ export function readingMap(
 
 /**
  * Resolves a lesson id into its card ids (and its deck). The id is
- * `<key>:<index>`, where `<key>` is the deck's `level` (curated decks) or its id
- * (generated decks), so generated decks never collide.
+ * `<deckId>:<index>`. The key is always the deck's id, so two decks never share
+ * lesson ids.
  */
 export function resolveLesson(
   deps: Deps,
-  userId: string,
+  userId: UserId,
   lessonId: string,
-): { deckId: string; cardIds: string[]; key: string } | undefined {
+): { deckId: DeckId; cardIds: CardId[]; key: string } | undefined {
   const sep = lessonId.lastIndexOf(':')
   if (sep <= 0) return undefined
   const key = lessonId.slice(0, sep)
   const index = Number(lessonId.slice(sep + 1)) - 1
   if (!key || !Number.isFinite(index) || index < 0) return undefined
-  const deck = listDecks(deps.db, userId).find((d) => d.level === key || d.id === key)
+  const deck = listDecks(deps.db).find((d) => d.id === key)
   if (!deck) return undefined
   const cards = listCards(deps.db, userId, deck.id)
   const lesson = buildLessons(key, stepCardsOf(cards))[index]
@@ -179,7 +182,7 @@ export interface DrillPickOpts {
 /** "The next drill": the eligible exercise you've trained least recently. */
 export function pickNextExercise(
   db: Parameters<typeof lastExerciseUse>[0],
-  userId: string,
+  userId: UserId,
   card: Card,
   learner: Learner,
   opts: DrillPickOpts = {},
@@ -208,7 +211,7 @@ function eligibleDrills(card: Card, learner: Learner, opts: DrillPickOpts): Exer
 /** Of an equally-eligible pool, the exercise used least recently (ties random). */
 function leastRecentlyUsed(
   db: Parameters<typeof lastExerciseUse>[0],
-  userId: string,
+  userId: UserId,
   pool: ExerciseDef<unknown>[],
 ): ExerciseDef<unknown> {
   const lastUse = lastExerciseUse(db, userId)

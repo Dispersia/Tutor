@@ -2,11 +2,6 @@
 
 import type { Card } from '@tutor/core'
 
-// --- free conversation turn --------------------------------------------------
-
-/** Strip spaces, punctuation and symbols so “你好。” and “你好” compare equal. */
-export const bare = (s: string) => s.replace(/[\s\p{P}\p{S}]/gu, '').toLowerCase()
-
 /** Ordered target-language tokens a sentence card carries in its payload. */
 export function payloadTokens(card: Card): string[] {
   const t = card.payload?.tokens

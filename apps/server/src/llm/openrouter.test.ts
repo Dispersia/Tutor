@@ -181,3 +181,63 @@ test('listModels({user:true}) uses /models/user and requires a key', async () =>
 
   globalThis.fetch = orig
 })
+
+test('a mid-stream error chunk is thrown, not passed off as a finished reply', async () => {
+  expect(() => parseSseData('{"error":{"code":502,"message":"provider overloaded"}}')).toThrow(
+    /provider overloaded/,
+  )
+  const orig = globalThis.fetch
+  globalThis.fetch = (async () =>
+    streamResponse(
+      'data: {"choices":[{"delta":{"content":"half a"}}]}\n\n' +
+        'data: {"error":{"code":502,"message":"provider overloaded"},"choices":[{"delta":{"content":""},"finish_reason":"error"}]}\n\n' +
+        'data: [DONE]\n\n',
+    )) as unknown as typeof fetch
+
+  const or = new OpenRouter('k', 'http://stub')
+  await expect(or.chat({ model: 'm', messages: [] })).rejects.toThrow(
+    /stream error: provider overloaded/,
+  )
+  globalThis.fetch = orig
+})
+
+test('streamChat cancels the response body when the consumer stops early', async () => {
+  const orig = globalThis.fetch
+  let cancelled = false
+  const enc = new TextEncoder()
+  const body = new ReadableStream<Uint8Array>({
+    pull(c) {
+      c.enqueue(enc.encode('data: {"choices":[{"delta":{"content":"x"}}]}\n\n'))
+    },
+    cancel() {
+      cancelled = true
+    },
+  })
+  globalThis.fetch = (async () => new Response(body, { status: 200 })) as unknown as typeof fetch
+
+  const or = new OpenRouter('k', 'http://stub')
+  for await (const ev of or.streamChat({ model: 'm', messages: [] })) {
+    if (ev.type === 'delta') break
+  }
+  expect(cancelled).toBe(true)
+  globalThis.fetch = orig
+})
+
+test('chatJSON times out by default and keeps a caller-supplied signal', async () => {
+  const orig = globalThis.fetch
+  const signals: (AbortSignal | null | undefined)[] = []
+  globalThis.fetch = (async (_url: string | URL, init?: RequestInit) => {
+    signals.push(init?.signal)
+    return Response.json({ choices: [{ message: { content: '{}' } }] })
+  }) as unknown as typeof fetch
+
+  const or = new OpenRouter('k', 'http://stub')
+  const req = { model: 'm', messages: [], schema: { type: 'object' } }
+  await or.chatJSON(req)
+  expect(signals[0]).toBeInstanceOf(AbortSignal)
+
+  const own = new AbortController()
+  await or.chatJSON({ ...req, signal: own.signal })
+  expect(signals[1]).toBe(own.signal)
+  globalThis.fetch = orig
+})

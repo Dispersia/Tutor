@@ -12,6 +12,7 @@
  * history and lesson progress survive.
  */
 
+import type { UserId, DeckId } from '../ids'
 import type { Card } from '@tutor/core'
 import type { Db } from '../db/client'
 import { listCards } from '../db/repo'
@@ -19,8 +20,10 @@ import type { ChatMessage, OpenRouter } from '../llm/openrouter'
 import { langName, scriptRule } from '../llm/prompts'
 import { roleReasoning } from '../env'
 import { leapsAhead } from './context'
-import { stripMetaCommentary, type PlannedCard } from './plan'
+import { mandarinSentenceZhuyin } from './mandarin'
+import { stripMetaCommentary, tokensMatchBack, type PlannedCard } from './plan'
 import type { CharacterVariant } from '../frequency/source'
+import { withReading } from '../text/readings'
 
 /** How many example cards one model call audits. */
 const BATCH = 8
@@ -62,8 +65,8 @@ interface AuditCard {
 
 /** The deck being swept, read straight from the `decks` table. */
 export interface DeckRow {
-  id: string
-  userId: string
+  id: DeckId
+  userId: UserId
   name: string
   sourceLang: string
   targetLang: string
@@ -256,7 +259,7 @@ function applyOne(
   tally: DeckSweep,
 ): void {
   if (verdict?.drop) return dropCard(ctx, card, verdict.reason, tally)
-  const next = verdict ? applyVerdict(card, verdict) : undefined
+  const next = verdict ? applyVerdict(card, verdict, ctx.deck.readingScript) : undefined
   if (!next) return keepOne(tally)
   const reject = rejection(ctx, card, next)
   if (reject) keepBecause(card, reject, tally)
@@ -340,14 +343,17 @@ function plannedCard(card: Card, next: Rewrite): PlannedCard {
 }
 
 /** Merges a verdict into the card, or undefined when nothing changed. */
-function applyVerdict(card: Card, verdict: AuditCard): Rewrite | undefined {
+function applyVerdict(card: Card, verdict: AuditCard, script?: string): Rewrite | undefined {
   const sides = targetSides(card, verdict)
   if (!sides) return undefined
   if (!changedBy(card, verdict, sides)) return undefined
+  // The reading goes under the key the deck builder uses (`text/readings.ts`).
+  const fallbackZhuyin = () => mandarinSentenceZhuyin(sides.back)
+  const reading = { targetLang: card.targetLang, reading: verdict.reading, script, fallbackZhuyin }
   return {
     front: sides.front,
     back: sides.back,
-    readings: mergedReadings(card, verdict.reading),
+    readings: withReading(card.readings, reading),
     payload: mergedPayload(card, verdict.payload),
   }
 }
@@ -373,15 +379,6 @@ function changedBy(
   return !sameSides || verdict.payload !== undefined || verdict.reading !== undefined
 }
 
-function mergedReadings(card: Card, reading: string | undefined): Record<string, string> {
-  const readings = { ...card.readings }
-  if (reading === undefined) return readings
-  const key = card.targetLang === 'ja' ? 'kana' : card.targetLang === 'zh' ? 'zhuyin' : 'reading'
-  if (reading) readings[key] = reading
-  else delete readings[key]
-  return readings
-}
-
 function mergedPayload(
   card: Card,
   update: Record<string, unknown> | undefined,
@@ -396,13 +393,6 @@ function mergedPayload(
 const CJK = /[\u3040-\u30ff\u3400-\u9fff\uff66-\uff9f]/
 const looksTarget = (text: string, lang: string): boolean =>
   (lang === 'zh' || lang === 'yue' || lang === 'ja') && CJK.test(text)
-
-/** A sentence's tokens must rebuild its back, ignoring spaces and punctuation. */
-function tokensMatchBack(tokens: unknown[], back: string): boolean {
-  const bare = (s: string) => s.replace(/[\s\p{P}\p{S}]/gu, '').toLowerCase()
-  const joined = tokens.filter((t): t is string => typeof t === 'string').join('')
-  return bare(joined) === bare(back)
-}
 
 /**
  * Greedy longest-match tokeniser over the deck's vocabulary, so a target sentence

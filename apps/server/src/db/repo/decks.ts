@@ -1,6 +1,14 @@
-/** Decks: creation, listing, settings and deletion. */
+/**
+ * Decks: creation, listing, settings and deletion.
+ *
+ * Decks and their cards are **shared by every member** (docs/DESIGN.md §12.5).
+ * `decks.user_id` only records who created the deck; what is personal — the
+ * schedule, review history and lesson progress — lives in the per-user tables.
+ * So nothing here asks who is calling: a deck has no owner to check.
+ */
 
-import { and, asc, eq, inArray, like, sql } from 'drizzle-orm'
+import type { UserId, DeckId, CardId } from '../../ids'
+import { and, asc, eq, inArray, isNull, like, sql } from 'drizzle-orm'
 import {
   DECK_INSTRUCTION_KEY,
   mergeDeckSettings,
@@ -8,8 +16,18 @@ import {
   type DeckSettings,
 } from '../../deck/settings'
 import type { Db } from '../client'
-import { attempts, cards, decks, lessonProgress, messages, reviews, sessions, srs } from '../schema'
-import { id } from './helpers'
+import {
+  attempts,
+  cards,
+  decks,
+  lessonProgress,
+  messages,
+  reviews,
+  sessions,
+  srs,
+  srsReviews,
+} from '../schema'
+import { inTransaction, newId } from './helpers'
 import { getUserSetting } from './settings'
 
 export interface NewDeck {
@@ -21,9 +39,9 @@ export interface NewDeck {
   settings?: DeckSettings
 }
 
-export function createDeck(db: Db, userId: string, d: NewDeck) {
+export function createDeck(db: Db, userId: UserId, d: NewDeck) {
   const row = {
-    id: id(),
+    id: newId<DeckId>(),
     userId,
     name: d.name,
     sourceLang: d.sourceLang,
@@ -36,30 +54,35 @@ export function createDeck(db: Db, userId: string, d: NewDeck) {
   return row
 }
 
-export function listDecks(db: Db, userId: string) {
-  return db
-    .select({
-      id: decks.id,
-      name: decks.name,
-      sourceLang: decks.sourceLang,
-      targetLang: decks.targetLang,
-      level: decks.level,
-      description: decks.description,
-      settingsJson: decks.settingsJson,
-      cardCount: sql<number>`count(${cards.id})`,
-    })
-    .from(decks)
-    .leftJoin(cards, eq(cards.deckId, decks.id))
-    .where(eq(decks.userId, userId))
-    .groupBy(decks.id)
-    .orderBy(asc(decks.name))
-    .all()
-    .map((d) => ({ ...d, settings: parseDeckSettings(d.settingsJson) }))
+const DECK_COLUMNS = {
+  id: decks.id,
+  name: decks.name,
+  sourceLang: decks.sourceLang,
+  targetLang: decks.targetLang,
+  level: decks.level,
+  description: decks.description,
+  settingsJson: decks.settingsJson,
+  cardCount: sql<number>`count(${cards.id})`,
 }
 
-export function getDeck(db: Db, deckId: string, userId: string) {
+/** Every deck, for any member. */
+export function listDecks(db: Db) {
+  return (
+    db
+      .select(DECK_COLUMNS)
+      .from(decks)
+      // The count is the shared deck: a member's private cards are not part of it.
+      .leftJoin(cards, and(eq(cards.deckId, decks.id), isNull(cards.privateTo)))
+      .groupBy(decks.id)
+      .orderBy(asc(decks.name))
+      .all()
+      .map((d) => ({ ...d, settings: parseDeckSettings(d.settingsJson) }))
+  )
+}
+
+export function getDeck(db: Db, deckId: DeckId) {
   const row = db.select().from(decks).where(eq(decks.id, deckId)).get()
-  if (!row || row.userId !== userId) return undefined
+  if (!row) return undefined
   return { ...row, settings: parseDeckSettings(row.settingsJson) }
 }
 
@@ -68,30 +91,32 @@ export function getDeck(db: Db, deckId: string, userId: string) {
  * prompt wins; older decks predate that setting, so fall back to the first
  * explicit (non-generic) prompt already stored on one of their decks.
  */
-export function rememberedDeckInstruction(db: Db, userId: string): string | undefined {
+export function rememberedDeckInstruction(db: Db, userId: UserId): string | undefined {
   const saved = getUserSetting(db, userId, DECK_INSTRUCTION_KEY)
   if (saved) return saved
-  for (const deck of listDecks(db, userId)) {
+  for (const deck of listDecks(db)) {
     const prompt = deck.settings.instruction
     if (prompt && !prompt.startsWith('Build a deck from the imported deck ')) return prompt
   }
   return undefined
 }
 
-/** The stable key a deck's lessons are addressed by (level if set, else id). */
-export function deckKey(deck: { id: string; level: string | null }): string {
-  return deck.level ?? deck.id
+/**
+ * The stable key a deck's lessons are addressed by: its id. Never the free-text
+ * `level` — two decks with one level would share lesson ids and progress.
+ */
+export function deckKey(deck: { id: string }): string {
+  return deck.id
 }
 
 /** Applies a partial settings update and returns the merged settings. */
 export function updateDeckSettings(
   db: Db,
-  deckId: string,
-  userId: string,
+  deckId: DeckId,
   patch: Partial<DeckSettings>,
 ): DeckSettings | undefined {
   const row = db.select().from(decks).where(eq(decks.id, deckId)).get()
-  if (!row || row.userId !== userId) return undefined
+  if (!row) return undefined
   const merged = mergeDeckSettings(parseDeckSettings(row.settingsJson), patch)
   db.update(decks)
     .set({ settingsJson: JSON.stringify(merged) })
@@ -120,25 +145,29 @@ export function clearDeckBuilds(db: Db): number {
 }
 
 /**
- * Deletes a deck and everything that belongs to it: its cards, the learner's
- * SRS state, attempt/review history, lesson progress, and any deck-scoped chat
- * sessions. Other users' rows are never touched.
+ * Deletes a deck for **everyone**, in one transaction: its cards, every
+ * member's schedule and history for those cards, their lesson progress and any
+ * deck-scoped chat sessions.
  */
-export function deleteDeck(db: Db, deckId: string, userId: string): void {
-  const row = db.select().from(decks).where(eq(decks.id, deckId)).get()
-  if (!row || row.userId !== userId) return
-  deleteCardHistory(db, userId, cardIdsOf(db, deckId))
-  // Lessons are addressed as `${deck.level ?? deck.id}:${step}`.
-  const key = row.level ?? row.id
-  db.delete(lessonProgress)
-    .where(and(eq(lessonProgress.userId, userId), like(lessonProgress.lessonId, `${key}:%`)))
-    .run()
-  deleteDeckSessions(db, deckId, userId)
-  db.delete(cards).where(eq(cards.deckId, deckId)).run()
-  db.delete(decks).where(eq(decks.id, deckId)).run()
+export function deleteDeck(db: Db, deckId: DeckId): void {
+  inTransaction(db, (tx) => {
+    deleteCardHistory(tx, cardIdsOf(tx, deckId))
+    // Lessons are addressed as `${deck.id}:${step}`; a deck id has no LIKE wildcards.
+    tx.delete(lessonProgress)
+      .where(like(lessonProgress.lessonId, `${deckId}:%`))
+      .run()
+    deleteDeckSessions(tx, deckId)
+    tx.delete(cards).where(eq(cards.deckId, deckId)).run()
+    tx.delete(decks).where(eq(decks.id, deckId)).run()
+  })
 }
 
-function cardIdsOf(db: Db, deckId: string): string[] {
+/** Deletes every deck. Only for when the last member is gone: nobody is left to study them. */
+export function deleteAllDecks(db: Db): void {
+  for (const d of db.select({ id: decks.id }).from(decks).all()) deleteDeck(db, d.id)
+}
+
+function cardIdsOf(db: Db, deckId: DeckId): CardId[] {
   return db
     .select({ id: cards.id })
     .from(cards)
@@ -147,30 +176,26 @@ function cardIdsOf(db: Db, deckId: string): string[] {
     .map((c) => c.id)
 }
 
-/** The learner's SRS state, review and attempt rows for the deck's cards. */
-function deleteCardHistory(db: Db, userId: string, cardIds: string[]): void {
-  if (cardIds.length === 0) return
-  db.delete(srs)
-    .where(and(eq(srs.userId, userId), inArray(srs.cardId, cardIds)))
-    .run()
-  db.delete(reviews)
-    .where(and(eq(reviews.userId, userId), inArray(reviews.cardId, cardIds)))
-    .run()
-  db.delete(attempts)
-    .where(and(eq(attempts.userId, userId), inArray(attempts.cardId, cardIds)))
-    .run()
+/** Every member's SRS state, review log, review and attempt rows for these cards. */
+function deleteCardHistory(db: Db, cardIds: CardId[]): void {
+  // SQLite caps the variables in one statement; a big deck is deleted in slices.
+  for (let i = 0; i < cardIds.length; i += 500) {
+    const slice = cardIds.slice(i, i + 500)
+    db.delete(srs).where(inArray(srs.cardId, slice)).run()
+    db.delete(srsReviews).where(inArray(srsReviews.cardId, slice)).run()
+    db.delete(reviews).where(inArray(reviews.cardId, slice)).run()
+    db.delete(attempts).where(inArray(attempts.cardId, slice)).run()
+  }
 }
 
-/** The deck-scoped chat sessions and all their messages. */
-function deleteDeckSessions(db: Db, deckId: string, userId: string): void {
+/** The deck-scoped chat sessions (any member's) and all their messages. */
+function deleteDeckSessions(db: Db, deckId: DeckId): void {
   const ids = db
     .select({ id: sessions.id })
     .from(sessions)
-    .where(and(eq(sessions.userId, userId), eq(sessions.deckId, deckId)))
+    .where(eq(sessions.deckId, deckId))
     .all()
     .map((s) => s.id)
   if (ids.length > 0) db.delete(messages).where(inArray(messages.sessionId, ids)).run()
-  db.delete(sessions)
-    .where(and(eq(sessions.userId, userId), eq(sessions.deckId, deckId)))
-    .run()
+  db.delete(sessions).where(eq(sessions.deckId, deckId)).run()
 }

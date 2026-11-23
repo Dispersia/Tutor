@@ -6,6 +6,7 @@ import { SYNERGY } from '../../game/talents'
 import { loadPlayerCtx } from '../../services'
 import type { App, AppEnv } from '../../context'
 import { bonusSummary, boardSkills, gearPayload, itemSources, type Board } from './board'
+import { fail } from '../errors'
 
 export function registerSkillCatalog(app: App) {
   app.get('/api/skills', (c) => boardHandler(c))
@@ -31,7 +32,7 @@ function skillPage(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
   const id = c.req.param('id') as SkillId
-  if (!SKILL_BY_ID.has(id)) return c.json({ error: 'unknown profession' }, 404)
+  if (!SKILL_BY_ID.has(id)) return fail(c, 404, 'unknown profession')
   const ctx = loadPlayerCtx(deps.db, deps.events, user.id)
   const board = boardSkills(deps, user.id, ctx)
   return c.json({

@@ -1,13 +1,21 @@
-/** Cards: creation, edits and the read queries practice and review share. */
+/**
+ * Cards: creation, edits and the read queries practice and review share.
+ *
+ * Cards are shared with their deck (see `decks.ts`) — except a card marked
+ * `private_to` one member, which only that member's queries return. `userId`
+ * below is the member asking: with it a query returns the shared cards plus
+ * that member's own; without it (tools, the recorder) it returns every card.
+ */
 
+import type { UserId, DeckId, CardId } from '../../ids'
 import type { Card, CardMetadata, CardType } from '@tutor/core'
-import { and, asc, eq, sql } from 'drizzle-orm'
+import { and, eq, isNull, or, sql } from 'drizzle-orm'
 import type { Db } from '../client'
 import { cards, reviews, srs } from '../schema'
-import { id, now } from './helpers'
+import { newId, now } from './helpers'
 
 export interface NewCard {
-  deckId: string
+  deckId: DeckId
   type?: CardType
   sourceLang: string
   targetLang: string
@@ -19,13 +27,27 @@ export interface NewCard {
   /** Language-agnostic annotations (pitch accent, radicals, …). */
   metadata?: CardMetadata
   origin?: 'curated' | 'llm' | 'manual'
+  /** Only this member sees the card (their reinforcement cards). */
+  privateTo?: UserId
 }
 
-export function addCard(db: Db, userId: string, c: NewCard) {
-  const row = {
-    id: id(),
+/** The cards a member may see: the shared ones and their own private ones. */
+function visibleTo(userId: UserId | undefined) {
+  return userId ? or(isNull(cards.privateTo), eq(cards.privateTo, userId)) : undefined
+}
+
+export function addCard(db: Db, userId: UserId, c: NewCard) {
+  const row = cardRow(userId, c)
+  db.insert(cards).values(row).run()
+  return row
+}
+
+function cardRow(userId: UserId, c: NewCard) {
+  return {
+    id: newId<CardId>(),
     deckId: c.deckId,
     userId,
+    privateTo: c.privateTo ?? null,
     type: c.type ?? 'vocab',
     sourceLang: c.sourceLang,
     targetLang: c.targetLang,
@@ -38,8 +60,6 @@ export function addCard(db: Db, userId: string, c: NewCard) {
     origin: c.origin ?? 'manual',
     createdAt: now(),
   }
-  db.insert(cards).values(row).run()
-  return row
 }
 
 /**
@@ -56,9 +76,7 @@ export interface CardPatch {
   metadata?: CardMetadata
 }
 
-export function updateCard(db: Db, cardId: string, userId: string, patch: CardPatch): void {
-  const row = db.select().from(cards).where(eq(cards.id, cardId)).get()
-  if (!row || row.userId !== userId) return
+export function updateCard(db: Db, cardId: CardId, patch: CardPatch): void {
   const set = cardSet(patch)
   if (Object.keys(set).length > 0) db.update(cards).set(set).where(eq(cards.id, cardId)).run()
 }
@@ -81,7 +99,13 @@ function parseJson<T>(json: string, fallback: T): T {
   }
 }
 
-function toCard(row: typeof cards.$inferSelect): Card {
+/**
+ * A card as the server holds it: the shared `Card` with its ids branded, so a
+ * card read from the database can be passed wherever a `CardId` is wanted.
+ */
+export type ServerCard = Card & { id: CardId; deckId: DeckId | null }
+
+function toCard(row: typeof cards.$inferSelect): ServerCard {
   return {
     id: row.id,
     deckId: row.deckId,
@@ -99,10 +123,9 @@ function toCard(row: typeof cards.$inferSelect): Card {
   }
 }
 
-export function listCards(db: Db, userId: string, deckId?: string): Card[] {
-  const where = deckId
-    ? and(eq(cards.userId, userId), eq(cards.deckId, deckId))
-    : eq(cards.userId, userId)
+/** A deck's cards (or every deck's, when none is named) as `userId` sees them. */
+export function listCards(db: Db, userId?: UserId, deckId?: DeckId): ServerCard[] {
+  const where = and(deckId ? eq(cards.deckId, deckId) : undefined, visibleTo(userId))
   // rowid order == insertion order, which is the syllabus (frequency) order.
   const rows = db
     .select()
@@ -113,29 +136,11 @@ export function listCards(db: Db, userId: string, deckId?: string): Card[] {
   return rows.map(toCard)
 }
 
-export function getCard(db: Db, cardId: string, userId: string): Card | undefined {
-  // The user filter lives in SQL, so another user's card id resolves to nothing
-  // rather than being fetched and then discarded.
+export function getCard(db: Db, cardId: CardId, userId?: UserId): ServerCard | undefined {
   const row = db
     .select()
     .from(cards)
-    .where(and(eq(cards.id, cardId), eq(cards.userId, userId)))
-    .get()
-  return row ? toCard(row) : undefined
-}
-
-/** Picks a card, preferring ones the learner has reviewed least. */
-export function pickCard(db: Db, userId: string, deckId?: string): Card | undefined {
-  const least = sql<number>`(select count(*) from ${reviews} r where r.card_id = ${cards.id})`
-  const where = deckId
-    ? and(eq(cards.userId, userId), eq(cards.deckId, deckId))
-    : eq(cards.userId, userId)
-  const row = db
-    .select()
-    .from(cards)
-    .where(where)
-    .orderBy(asc(least), sql`random()`)
-    .limit(1)
+    .where(and(eq(cards.id, cardId), visibleTo(userId)))
     .get()
   return row ? toCard(row) : undefined
 }
@@ -151,7 +156,7 @@ export function pickCard(db: Db, userId: string, deckId?: string): Card | undefi
  */
 export function otherBacks(
   db: Db,
-  userId: string,
+  userId: UserId,
   targetLang: string,
   excludeBack: string,
   limit = 3,
@@ -159,7 +164,7 @@ export function otherBacks(
   return db
     .selectDistinct({ back: cards.back })
     .from(cards)
-    .where(and(eq(cards.userId, userId), eq(cards.targetLang, targetLang), metCondition()))
+    .where(and(eq(cards.targetLang, targetLang), visibleTo(userId), metCondition(userId)))
     .orderBy(sql`random()`)
     .limit(limit + 1)
     .all()
@@ -168,11 +173,11 @@ export function otherBacks(
     .slice(0, limit)
 }
 
-/** The learner has met a card when they have reviewed it or hold SRS state for it. */
-function metCondition() {
+/** This learner has met a card when they have reviewed it or hold SRS state for it. */
+function metCondition(userId: UserId) {
   return sql`(
-    exists (select 1 from ${reviews} where ${reviews.cardId} = ${cards.id} and ${reviews.userId} = ${cards.userId})
-    or exists (select 1 from ${srs} where ${srs.cardId} = ${cards.id} and ${srs.userId} = ${cards.userId})
+    exists (select 1 from ${reviews} where ${reviews.cardId} = ${cards.id} and ${reviews.userId} = ${userId})
+    or exists (select 1 from ${srs} where ${srs.cardId} = ${cards.id} and ${srs.userId} = ${userId})
   )`
 }
 

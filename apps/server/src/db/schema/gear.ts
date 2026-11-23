@@ -3,19 +3,22 @@
  * (docs/ARCHITECTURE.md).
  */
 
-import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import type { UserId, GearInstanceId, GearSetId } from '../../ids'
+import { index, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 import { users } from './users'
 
 /**
  * Crafted gear instances. A recipe produces a *piece*, not a stack: each row
- * carries its own quality and rolled stats. The inventory count stays the
- * stack count, so the bank and the old equipment code keep working.
+ * carries its own quality and rolled stats. These rows are the only record of
+ * owned equipment: an item's count is the number of its instances (the
+ * `inventory` table holds materials only).
  */
 export const gearInstances = sqliteTable(
   'gear_instances',
   {
-    id: text('id').primaryKey(),
+    id: text('id').$type<GearInstanceId>().primaryKey(),
     userId: text('user_id')
+      .$type<UserId>()
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     itemId: text('item_id').notNull(),
@@ -36,22 +39,24 @@ export const equipment = sqliteTable(
   'equipment',
   {
     userId: text('user_id')
+      .$type<UserId>()
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     slot: text('slot').notNull(),
     itemId: text('item_id').notNull(),
-    instanceId: text('instance_id'),
+    instanceId: text('instance_id').$type<GearInstanceId>(),
     updatedAt: integer('updated_at').notNull(),
   },
-  (t) => [index('idx_equipment_user').on(t.userId)],
+  (t) => [primaryKey({ columns: [t.userId, t.slot] })],
 )
 
 /** Saved gear sets for quick loadout changes. */
 export const gearSets = sqliteTable(
   'gear_sets',
   {
-    id: text('id').primaryKey(),
+    id: text('id').$type<GearSetId>().primaryKey(),
     userId: text('user_id')
+      .$type<UserId>()
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),

@@ -58,7 +58,7 @@ export const translateBackToFront: ExerciseDef<string> = {
     // A gloss can list several senses (“of / possessive particle / nominalizer”):
     // knowing any one of them is knowing the word.
     const alternatives = meaningAlternatives(ctx.card.front)
-    const g = gradeText(ctx.card.front, alternatives, typed)
+    const g = gradeText(ctx.card.front, alternatives, typed, { gloss: true })
     // Deterministic grading can't know every acceptable paraphrase, so an
     // unmatched answer goes to the LLM judge (when one is configured) before we
     // call it wrong — see DESIGN §11.3.

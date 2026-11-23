@@ -1,6 +1,7 @@
 /** The professions board: per-action/profession state and the action gate. */
 
-import { getItemCount, listActionProgress, listEquipment, listInventory } from '../db/repo'
+import type { UserId } from '../ids'
+import { listActionProgress, listEquipment, listInventory, spendableCount } from '../db/repo'
 import type { Db } from '../db/client'
 import { BAND_BY_ID, type BandId } from '../game/bands'
 import {
@@ -30,7 +31,7 @@ export interface ActionProgress {
 }
 
 /** Per-action XP + level (actions never trained are absent — callers default to 1). */
-export function actionProgressView(db: Db, userId: string): Map<string, ActionProgress> {
+export function actionProgressView(db: Db, userId: UserId): Map<string, ActionProgress> {
   return new Map(
     listActionProgress(db, userId).map((r) => [
       r.actionId,
@@ -45,7 +46,7 @@ export function actionProgressView(db: Db, userId: string): Map<string, ActionPr
  * actions' progress toward their next level. Pass the action map when the caller
  * already built one (see `loadPlayerCtx`).
  */
-export function skillSummaries(db: Db, userId: string, byAction?: Map<string, ActionProgress>) {
+export function skillSummaries(db: Db, userId: UserId, byAction?: Map<string, ActionProgress>) {
   const actions = byAction ?? actionProgressView(db, userId)
   return SKILLS.map((s) => {
     const acts = actionsForSkill(s.id)
@@ -70,7 +71,7 @@ export function skillSummaries(db: Db, userId: string, byAction?: Map<string, Ac
  * rigs feed them) and **drops when a new profession or action is added**, because
  * the average gains a denominator you have not trained yet. That is intended.
  */
-export function accountLevel(db: Db, userId: string): { level: number; progress: number } {
+export function accountLevel(db: Db, userId: UserId): { level: number; progress: number } {
   const profs = skillSummaries(db, userId)
   if (!profs.length) return { level: 1, progress: 0 }
   const mean = profs.reduce((n, p) => n + p.level, 0) / profs.length
@@ -78,7 +79,7 @@ export function accountLevel(db: Db, userId: string): { level: number; progress:
   return { level: Math.min(100, Math.max(1, Math.round(mean))), progress }
 }
 
-export function inventoryView(db: Db, userId: string) {
+export function inventoryView(db: Db, userId: UserId) {
   const counts = new Map(listInventory(db, userId).map((r) => [r.itemId, r.count]))
   return ITEMS.map((i) => ({ itemId: i.id, count: counts.get(i.id) ?? 0 }))
 }
@@ -113,7 +114,7 @@ export interface ActionStateCtx {
 
 export function actionState(
   db: Db,
-  userId: string,
+  userId: UserId,
   action: ActionDef,
   choiceId?: string,
   ctx: ActionStateCtx = {},
@@ -121,7 +122,7 @@ export function actionState(
   const missingUnlocksList = missingUnlocks(action, (s) => skillLevelOf(db, userId, s, ctx.levels))
   // Cost depends on the chosen recipe (prospect this ore, cut that gem).
   const consumes = actionConsumes(action, choiceId)
-  const missing = consumes.filter((c) => getItemCount(db, userId, c.item) < c.count)
+  const missing = consumes.filter((c) => spendableCount(db, userId, c.item) < c.count)
   const { band, missingBands } = bandGate(action, ctx.bandLevels ?? bandLevelMap(db, userId))
   const { equipOk, equipMissing } = equipGate(db, userId, action)
   return buildState({ missingUnlocksList, missing, band, missingBands, equipOk, equipMissing })
@@ -179,7 +180,7 @@ function afterGate(
 }
 
 /** Whether the action's required gear tag is actually worn. */
-function equipGate(db: Db, userId: string, action: ActionDef) {
+function equipGate(db: Db, userId: UserId, action: ActionDef) {
   if (!action.equip) return { equipOk: true, equipMissing: null }
   const eq = listEquipment(db, userId).find((e) => e.slot === action.equip!.slot)
   const item = eq ? ITEM_BY_ID.get(eq.itemId) : undefined
@@ -194,7 +195,7 @@ function equipGate(db: Db, userId: string, action: ActionDef) {
  */
 export function actionSuccessChance(
   db: Db,
-  userId: string,
+  userId: UserId,
   action: ActionDef,
   choiceId?: string,
   levels?: Map<string, number>,

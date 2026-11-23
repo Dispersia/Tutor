@@ -1,7 +1,12 @@
 /** Level curve (docs/DESIGN.md §13). Each level needs a bit more XP than the last. */
 
+import { curveLevelInfo, curveXpForLevel, type LevelCurve } from './curve'
+
+/** The player ladder: 100 XP for level 1, 50 more each level, no cap. */
+const PLAYER_CURVE: LevelCurve = { base: 100, step: 50 }
+
 export function xpForLevel(level: number): number {
-  return 100 + (level - 1) * 50
+  return curveXpForLevel(PLAYER_CURVE, level)
 }
 
 export interface LevelInfo {
@@ -15,12 +20,5 @@ export interface LevelInfo {
 }
 
 export function levelInfo(xp: number): LevelInfo {
-  let level = 1
-  let remaining = Math.max(0, xp)
-  while (remaining >= xpForLevel(level)) {
-    remaining -= xpForLevel(level)
-    level++
-  }
-  const forNext = xpForLevel(level)
-  return { level, intoLevel: remaining, forNext, progress: Math.min(1, remaining / forNext) }
+  return curveLevelInfo(PLAYER_CURVE, xp)
 }

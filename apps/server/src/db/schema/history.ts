@@ -4,15 +4,16 @@
  * the schema split (docs/ARCHITECTURE.md).
  */
 
-import { index, integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import type { UserId, CardId } from '../../ids'
+import { index, integer, primaryKey, real, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 import { users } from './users'
 
 export const reviews = sqliteTable(
   'reviews',
   {
     id: text('id').primaryKey(),
-    cardId: text('card_id'),
-    userId: text('user_id'),
+    cardId: text('card_id').$type<CardId>(),
+    userId: text('user_id').$type<UserId>(),
     exerciseId: text('exercise_id'),
     score: real('score'),
     latencyMs: integer('latency_ms'),
@@ -28,8 +29,8 @@ export const attempts = sqliteTable(
   {
     id: text('id').primaryKey(),
     sessionId: text('session_id'),
-    cardId: text('card_id'),
-    userId: text('user_id'),
+    cardId: text('card_id').$type<CardId>(),
+    userId: text('user_id').$type<UserId>(),
     exerciseId: text('exercise_id'),
     answerJson: text('answer_json').notNull().default('{}'),
     gradeJson: text('grade_json').notNull().default('{}'),
@@ -43,17 +44,17 @@ export const xpEvents = sqliteTable(
   'xp_events',
   {
     id: text('id').primaryKey(),
-    userId: text('user_id'),
+    userId: text('user_id').$type<UserId>(),
     amount: integer('amount').notNull(),
     reason: text('reason').notNull(),
     sourceId: text('source_id'),
     createdAt: integer('created_at').notNull(),
   },
-  (t) => [index('idx_xp_events_user').on(t.userId)],
+  (t) => [index('idx_xp_user').on(t.userId)],
 )
 
 export const stats = sqliteTable('stats', {
-  userId: text('user_id').primaryKey(),
+  userId: text('user_id').$type<UserId>().primaryKey(),
   xpTotal: integer('xp_total').notNull().default(0),
   level: integer('level').notNull().default(1),
   streakDays: integer('streak_days').notNull().default(0),
@@ -67,12 +68,13 @@ export const lessonProgress = sqliteTable(
   'lesson_progress',
   {
     userId: text('user_id')
+      .$type<UserId>()
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     lessonId: text('lesson_id').notNull(),
     completedAt: integer('completed_at'),
   },
-  (t) => [index('idx_lesson_progress_user').on(t.userId)],
+  (t) => [primaryKey({ columns: [t.userId, t.lessonId] })],
 )
 
 /** Server-global settings (registration policy, install metadata). */

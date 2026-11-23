@@ -1,3 +1,4 @@
+import { toCardId } from '../ids'
 import { expect, test } from 'bun:test'
 import { openDb } from '../db/client'
 import {
@@ -22,7 +23,7 @@ import {
   summary,
   todayDay,
   weekStart,
-} from '../services'
+} from './index'
 
 test('streakFromDays counts consecutive days ending today or yesterday', () => {
   const today = '2026-11-12'
@@ -134,8 +135,12 @@ test('recordReview appends an FSRS revlog row with the before/after state', () =
   const bus = new EventBus()
   const user = createUser(db, { username: 'dave', passwordHash: 'x' })
 
-  const schedule = recordReview(db, bus, user.id, { cardId: 'card-1', score: 85, correct: true })
-  const log = listSrsReviews(db, user.id, 'card-1')
+  const schedule = recordReview(db, bus, user.id, {
+    cardId: toCardId('card-1'),
+    score: 85,
+    correct: true,
+  })
+  const log = listSrsReviews(db, user.id, toCardId('card-1'))
   expect(log.length).toBe(1)
   const row = log[0]!
   expect(row.rating).toBe(3) // 85 → Good
@@ -159,7 +164,11 @@ test('a brand-new card never graduates on its first answer', () => {
 
   // Every correct answer is a "Good" learning step (never "Easy"): the card
   // takes the learning steps, then graduates. It must not graduate in one shot.
-  const first = recordReview(db, bus, user.id, { cardId: 'card-1', score: 100, correct: true })
+  const first = recordReview(db, bus, user.id, {
+    cardId: toCardId('card-1'),
+    score: 100,
+    correct: true,
+  })
   expect(first.rating).toBe(3) // Good
   expect(first.state).toBe('learning')
   expect(first.intervalDays).toBe(0)
@@ -168,7 +177,7 @@ test('a brand-new card never graduates on its first answer', () => {
   let cur = first
   let reviews = 1
   while (cur.state !== 'review' && reviews < 10) {
-    cur = recordReview(db, bus, user.id, { cardId: 'card-1', score: 100, correct: true })
+    cur = recordReview(db, bus, user.id, { cardId: toCardId('card-1'), score: 100, correct: true })
     reviews++
   }
   expect(cur.state).toBe('review')
@@ -176,7 +185,11 @@ test('a brand-new card never graduates on its first answer', () => {
   expect(reviews).toBeGreaterThan(1)
 
   // A wrong answer is Again, even on an established card.
-  const wrong = recordReview(db, bus, user.id, { cardId: 'card-1', score: 0, correct: false })
+  const wrong = recordReview(db, bus, user.id, {
+    cardId: toCardId('card-1'),
+    score: 0,
+    correct: false,
+  })
   expect(wrong.rating).toBe(1)
   sqlite.close()
 })
@@ -186,10 +199,10 @@ test('the revlog records fractional elapsed days and the review source', () => {
   const bus = new EventBus()
   const user = createUser(db, { username: 'erin', passwordHash: 'x' })
 
-  recordReview(db, bus, user.id, { cardId: 'card-1', score: 85, correct: true })
-  const prev = getSrs(db, user.id, 'card-1')!
+  recordReview(db, bus, user.id, { cardId: toCardId('card-1'), score: 85, correct: true })
+  const prev = getSrs(db, user.id, toCardId('card-1'))!
   // pretend the previous review happened two days ago
-  upsertSrs(db, user.id, 'card-1', {
+  upsertSrs(db, user.id, toCardId('card-1'), {
     state: prev.state,
     step: prev.step,
     stability: prev.stability,
@@ -202,8 +215,13 @@ test('the revlog records fractional elapsed days and the review source', () => {
     lastReviewAt: Date.now() - 2 * 24 * 60 * 60 * 1000,
   })
 
-  recordReview(db, bus, user.id, { cardId: 'card-1', score: 0, correct: false, source: 'combat' })
-  const last = listSrsReviews(db, user.id, 'card-1').at(-1)!
+  recordReview(db, bus, user.id, {
+    cardId: toCardId('card-1'),
+    score: 0,
+    correct: false,
+    source: 'combat',
+  })
+  const last = listSrsReviews(db, user.id, toCardId('card-1')).at(-1)!
   expect(last.source).toBe('combat')
   expect(last.rating).toBe(1) // wrong → Again
   expect(last.stateBefore).toBe('learning')

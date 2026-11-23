@@ -1,7 +1,8 @@
 /** Free conversation turn: use the word in a sentence. */
 
 import type { ExerciseContext, ExerciseDef, GradeResult } from '@tutor/core'
-import { bare, isUtterance } from '../payload'
+import { bareText as bare } from '../../text/normalize'
+import { isUtterance } from '../payload'
 import { JUDGE_SCHEMA } from '../schemas'
 import { label, wordView } from '../shared'
 

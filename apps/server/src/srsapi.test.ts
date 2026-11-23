@@ -1,3 +1,4 @@
+import { toCardId, type UserId } from './ids'
 import { expect, test } from 'bun:test'
 import { createApp } from './app'
 import type { App, Deps } from './context'
@@ -70,7 +71,7 @@ async function signupUser(app: App, db: Db, username = 'alice') {
   const res = await app.request('/api/auth/register', json({ username, password: 'password123' }))
   const cookie = res.headers.getSetCookie()[0]!.split(';')[0]!
   // Decks are no longer pre-seeded; tests drill the curated fixture decks.
-  const { user } = (await res.json()) as { user: { id: string } }
+  const { user } = (await res.json()) as { user: { id: UserId } }
   seedStarterDecks(db, user.id)
   return { cookie, user }
 }
@@ -95,13 +96,14 @@ test('GET /api/curriculum returns the frequency decks split into one-word steps'
     decks: {
       name: string
       level: string
+      deckId: string
       learned: number
       lessons: { id: string; title: string; cards: number; learned: number; complete: boolean }[]
     }[]
   }
   const freq = body.decks.find((d) => d.level === 'zhfreq')!
   expect(freq.lessons.length).toBeGreaterThan(100)
-  expect(freq.lessons[0]!.id).toBe('zhfreq:1')
+  expect(freq.lessons[0]!.id).toBe(`${freq.deckId}:1`)
   expect(freq.lessons[0]!.title).toBe('我')
   expect(freq.lessons[0]!.cards).toBe(1)
   expect(freq.lessons.every((l) => !l.complete)).toBe(true)
@@ -127,13 +129,16 @@ test('practising a step stays inside it and records spaced repetition', async ()
 
   // a step drill only uses that step's card
   const next = (await (
-    await app.request('/api/practice/next', auth(cookie, json({ lessonId: 'zhfreq:1' })))
+    await app.request('/api/practice/next', auth(cookie, json({ lessonId: `${deckId}:1` })))
   ).json()) as { instance: { cardId: string } }
   expect(next.instance.cardId).toBe(first.id)
 
   // grade the step's card correctly until it graduates through its learning steps
   let last: { lessonCompleted: boolean } = { lessonCompleted: false }
+  const drill = { deckId, cardId: first.id, exerciseId: 'multiple_choice' }
   for (let pass = 0; pass < 8 && !last.lessonCompleted; pass++) {
+    // a grade is only taken for a drill the server handed out
+    await app.request('/api/practice/next', auth(cookie, json(drill)))
     const res = (await (
       await app.request(
         '/api/practice/grade',
@@ -143,7 +148,7 @@ test('practising a step stays inside it and records spaced repetition', async ()
             exerciseId: 'multiple_choice',
             cardId: first.id,
             answer: first.back,
-            lessonId: 'zhfreq:1',
+            lessonId: `${deckId}:1`,
           }),
         ),
       )
@@ -168,8 +173,8 @@ test('practising a step stays inside it and records spaced repetition', async ()
   }
   const freq = body.decks.find((d) => d.level === 'zhfreq')!
   expect(freq.learned).toBeGreaterThanOrEqual(1)
-  expect(freq.lessons.find((l) => l.id === 'zhfreq:1')!.complete).toBe(true)
-  expect(freq.lessons.find((l) => l.id === 'zhfreq:2')!.complete).toBe(false)
+  expect(freq.lessons.find((l) => l.id === `${deckId}:1`)!.complete).toBe(true)
+  expect(freq.lessons.find((l) => l.id === `${deckId}:2`)!.complete).toBe(false)
   sqlite.close()
 })
 
@@ -228,13 +233,14 @@ test('the frequency path introduces one word per step (n+1)', async () => {
   const body = (await (await app.request('/api/curriculum', auth(cookie))).json()) as {
     decks: {
       level: string
+      deckId: string
       lessons: { id: string; cards: number; newWord?: string; reading?: string }[]
     }[]
   }
   const freq = body.decks.find((d) => d.level === 'zhfreq')!
   expect(freq.lessons.length).toBeGreaterThan(100)
   expect(freq.lessons[0]!.cards).toBe(1)
-  expect(freq.lessons[0]!.id).toBe('zhfreq:1')
+  expect(freq.lessons[0]!.id).toBe(`${freq.deckId}:1`)
   expect(freq.lessons[0]!.newWord).toBe('我')
   expect(freq.lessons[0]!.reading).toBe('ㄨㄛˇ')
 
@@ -247,7 +253,7 @@ test('the frequency path introduces one word per step (n+1)', async () => {
     await app.request(`/api/decks/${freqDeck.id}/cards`, auth(cookie))
   ).json()) as { cards: { id: string; back: string }[] }
   const next = (await (
-    await app.request('/api/practice/next', auth(cookie, json({ lessonId: 'zhfreq:1' })))
+    await app.request('/api/practice/next', auth(cookie, json({ lessonId: `${freqDeck.id}:1` })))
   ).json()) as { instance: { cardId: string } }
   expect(cards.cards.find((c) => c.id === next.instance.cardId)?.back).toBe('我')
   sqlite.close()
@@ -498,7 +504,7 @@ test('a sitting opens with a few new words before the due backlog', async () => 
   // due-first queue would serve immediately.
   const due = cards.cards.at(-1)!
   const now = Date.now()
-  upsertSrs(db, user.id, due.id, {
+  upsertSrs(db, user.id, toCardId(due.id), {
     state: 'review',
     step: 0,
     stability: 5,
@@ -556,7 +562,7 @@ test('a one-word lesson does not re-show its word before the next step is due', 
 
   // Learn the step's word: teach, then its first graded drill.
   const taught = (await (
-    await app.request('/api/practice/next', auth(cookie, json({ lessonId: 'zhfreq:1' })))
+    await app.request('/api/practice/next', auth(cookie, json({ lessonId: `${deckId}:1` })))
   ).json()) as { instance: { exerciseId: string; cardId: string } }
   expect(taught.instance.exerciseId).toBe('introduce')
   expect(taught.instance.cardId).toBe(first.id)
@@ -567,7 +573,7 @@ test('a one-word lesson does not re-show its word before the next step is due', 
   const drilled = (await (
     await app.request(
       '/api/practice/next',
-      auth(cookie, json({ lessonId: 'zhfreq:1', exerciseId: 'multiple_choice' })),
+      auth(cookie, json({ lessonId: `${deckId}:1`, exerciseId: 'multiple_choice' })),
     )
   ).json()) as { instance: { exerciseId: string; cardId: string } }
   expect(drilled.instance.cardId).toBe(first.id)
@@ -579,7 +585,7 @@ test('a one-word lesson does not re-show its word before the next step is due', 
         exerciseId: 'multiple_choice',
         cardId: first.id,
         answer: first.back,
-        lessonId: 'zhfreq:1',
+        lessonId: `${deckId}:1`,
       }),
     ),
   )
@@ -587,7 +593,7 @@ test('a one-word lesson does not re-show its word before the next step is due', 
   // Its next learning step is a minute out: the queue teaches the path's next
   // word instead of showing the same word again and again.
   const after = (await (
-    await app.request('/api/practice/next', auth(cookie, json({ lessonId: 'zhfreq:1' })))
+    await app.request('/api/practice/next', auth(cookie, json({ lessonId: `${deckId}:1` })))
   ).json()) as { instance: { exerciseId: string; cardId: string } }
   expect(after.instance.cardId).not.toBe(first.id)
   expect(after.instance.exerciseId).toBe('introduce')

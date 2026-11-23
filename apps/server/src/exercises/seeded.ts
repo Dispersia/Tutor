@@ -1,4 +1,4 @@
-/** Deterministic PRNG and sentence normalisation for the sentence drills. */
+/** Deterministic PRNG for the sentence drills. */
 
 /** Deterministic PRNG so the same card always yields the same sentence. */
 export function seededRandom(seed: number): () => number {
@@ -19,9 +19,4 @@ export function hashSeed(s: string): number {
     h = Math.imul(h, 16777619)
   }
   return h >>> 0
-}
-
-/** Normalises a built/typed sentence for comparison (ignore spaces + punctuation). */
-export function normalizeSentence(s: string): string {
-  return s.replace(/[\s.,!?。，！？、；：；'"]/g, '').trim()
 }

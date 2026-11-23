@@ -1,3 +1,4 @@
+import type { DeckId } from './ids'
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -89,7 +90,7 @@ async function signup(app: App, username = 'alice') {
 }
 
 type DeckBody = {
-  deck: { id: string; name: string; targetLang: string; settings: Record<string, unknown> }
+  deck: { id: DeckId; name: string; targetLang: string; settings: Record<string, unknown> }
   cardCount: number
   source: string
   newWords: string[]
@@ -199,7 +200,7 @@ test('POST /api/decks needs a planner (OpenRouter key)', async () => {
     '/api/decks',
     auth(cookie, json({ instruction: 'spanish frequency list', targetLang: 'es' })),
   )
-  expect(res.status).toBe(502)
+  expect(res.status).toBe(409)
   sqlite.close()
 })
 
@@ -311,8 +312,9 @@ test('DELETE /api/decks/:id removes the deck and its cards', async () => {
   sqlite.close()
 })
 
-test('a deck cannot be deleted by another account', async () => {
+test('a shared deck can only be deleted by its creator or the admin', async () => {
   const { app, sqlite } = makeApp()
+  const admin = await signup(app, 'admin') // the first account is the admin
   const alice = await signup(app, 'alice')
   const bob = await signup(app, 'bob')
   const created = (await (
@@ -321,12 +323,16 @@ test('a deck cannot be deleted by another account', async () => {
       auth(alice, json({ instruction: 'chinese frequency list', targetLang: 'zh', count: 2 })),
     )
   ).json()) as DeckBody
+  const url = `/api/decks/${created.deck.id}`
 
-  const denied = await app.request(`/api/decks/${created.deck.id}`, auth(bob, { method: 'DELETE' }))
-  expect(denied.status).toBe(404)
-
-  const stillThere = await app.request(`/api/decks/${created.deck.id}/cards`, auth(alice))
-  expect(stillThere.status).toBe(200)
+  // every member sees and can study a shared deck …
+  const bobs = (await (await app.request('/api/decks', auth(bob))).json()) as { decks: unknown[] }
+  expect(bobs.decks.length).toBe(1)
+  expect((await app.request(`${url}/cards`, auth(bob))).status).toBe(200)
+  // … but deleting it would take it away from everyone
+  expect((await app.request(url, auth(bob, { method: 'DELETE' }))).status).toBe(403)
+  expect((await app.request(`${url}/cards`, auth(alice))).status).toBe(200)
+  expect((await app.request(url, auth(admin, { method: 'DELETE' }))).status).toBe(200)
   sqlite.close()
 })
 
@@ -454,7 +460,9 @@ test('a generated Chinese deck reads words from the Taiwan dictionary', async ()
     { template: 'vocab', front: 'possessive particle', back: '的', reading: 'de' },
     { template: 'vocab', front: 'nonsense', back: 'x-test', reading: 'mā' },
   ]
-  const { app, sqlite } = makeApp({ planner: zhPlanner })
+  // the list holds exactly the words the planner returns: only requested words are kept
+  const zhList: Fetcher = async () => '的 100\nx-test 90'
+  const { app, sqlite } = makeApp({ planner: zhPlanner, fetcher: zhList })
   const cookie = await signup(app)
   const created = (await (
     await app.request(
@@ -807,5 +815,65 @@ test('grow { all: true } finishes a partly-imported deck in the background', asy
   const vocab = after.cards.filter((c) => c.payload.template === 'vocab').map((c) => c.back)
   expect(vocab).toEqual(['我', '你', '喝', '茶'])
   expect(after.deck.settings.building).toBe(false)
+  sqlite.close()
+})
+
+test('parseInstruction honours a ruled-out variant and only whole pitch words', () => {
+  const variant = (s: string) => parseInstruction(s, 'zh').variant
+  expect(variant('Simplified characters please, not traditional')).toBe('simplified')
+  expect(variant('Traditional characters, not simplified')).toBe('traditional')
+  expect(variant("don't use traditional characters")).toBe('simplified')
+  expect(variant('not simplified')).toBe('traditional')
+  expect(variant('不要繁體，用简体')).toBe('simplified')
+  // naming both without ruling one out keeps the app's default
+  expect(variant('traditional and simplified')).toBe('traditional')
+  expect(variant('everyday words')).toBe('traditional')
+
+  const pitch = (s: string) => parseInstruction(s, 'ja').pitchAccent
+  expect(pitch('reach the N5 milestone')).toBe(false)
+  expect(pitch('everyday phrases in a polite tone')).toBe(false)
+  expect(pitch('keystone vocabulary, accentuate verbs')).toBe(false)
+  expect(pitch('with pitch-accent marks')).toBe(true)
+  expect(pitch('show the tones')).toBe(true)
+  expect(pitch('add tone contours')).toBe(true)
+  expect(pitch('アクセント付き')).toBe(true)
+})
+
+test('an import resumed later still builds under the rules it was imported with', async () => {
+  const seen: PlanRequest[] = []
+  const recording: Planner = async (req) => {
+    seen.push(req)
+    return planner(req)
+  }
+  const { app, sqlite } = makeApp({ planner: recording })
+  const cookie = await signup(app)
+  const apkg = readFileSync(join(import.meta.dir, 'anki/fixtures/sample.apkg'))
+  const form = new FormData()
+  form.set('file', new File([apkg], 'sample.apkg'))
+  form.set('targetLang', 'zh')
+  form.set('instruction', 'Simplified characters with pinyin, not traditional. Show the tones.')
+  form.set('count', '2')
+  form.set('wordField', '0')
+  form.set('readingField', '1')
+  form.set('meaningField', '2')
+  const res = await app.request('/api/decks/import', auth(cookie, { method: 'POST', body: form }))
+  const body = (await res.json()) as DeckBody
+  await awaitDeckBuild(body.deck.id)
+  // the rules are on the deck, but the per-word hints never go to a client
+  expect(body.deck.settings).toMatchObject({ variant: 'simplified', readingScript: 'pinyin' })
+  expect(body.deck.settings.hints).toBeUndefined()
+
+  // "Finish" plans from the stored settings alone, as it would after a restart.
+  seen.length = 0
+  await app.request(`/api/decks/${body.deck.id}/grow`, auth(cookie, json({ all: true })))
+  await awaitDeckBuild(body.deck.id)
+  expect(seen[0]!.words).toEqual(['喝', '茶'])
+  expect(seen[0]).toMatchObject({
+    variant: 'simplified',
+    readingScript: 'pinyin',
+    pitchAccent: true,
+  })
+  expect(Object.keys(seen[0]!.hints ?? {})).toEqual(expect.arrayContaining(['喝', '茶']))
+  expect(seen[0]!.hints!['茶']!.meaning).toBeTruthy()
   sqlite.close()
 })

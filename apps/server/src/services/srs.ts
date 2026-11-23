@@ -1,5 +1,6 @@
 /** Spaced repetition: scheduling, the state map and the daily budget (docs/DESIGN.md §13.6). */
 
+import type { UserId, CardId } from '../ids'
 import {
   addSrsReview,
   dailyReviewCounts,
@@ -23,6 +24,7 @@ import {
   type FsrsState,
   type Rating,
 } from '../game/srs'
+import { startOfDay, userOffsetMin } from './clock'
 import { readDailyExtra, readStudyPrefs } from './study'
 
 // --- spaced repetition + curriculum (Phase 9, docs/DESIGN.md §13.6) ----------
@@ -41,7 +43,7 @@ export interface ReviewSchedule {
 }
 
 /** A user's desired retention as a fraction (Anki-style percent, default 90%). */
-export function desiredRetention(db: Db, userId: string): number {
+export function desiredRetention(db: Db, userId: UserId): number {
   const raw = Number(getUserSetting(db, userId, 'desiredRetention') ?? 90)
   const pct = Number.isFinite(raw) ? Math.min(97, Math.max(70, Math.round(raw))) : 90
   return pct / 100
@@ -65,7 +67,7 @@ function prevStateOf(row: ReturnType<typeof getSrs>): FsrsState {
 }
 
 /** Writes the advanced schedule back, stamping `lastReviewAt` when it is new. */
-function saveSchedule(db: Db, userId: string, cardId: string, state: FsrsState, now: number): void {
+function saveSchedule(db: Db, userId: UserId, cardId: CardId, state: FsrsState, now: number): void {
   upsertSrs(db, userId, cardId, {
     state: state.state,
     step: state.step,
@@ -93,8 +95,8 @@ function elapsedDaysOf(prev: FsrsState, now: number): number {
 function recordReviewTx(
   db: Db,
   bus: EventBus,
-  userId: string,
-  req: { cardId: string; score: number; correct: boolean; source?: string },
+  userId: UserId,
+  req: { cardId: CardId; score: number; correct: boolean; source?: string },
 ): ReviewSchedule {
   const prev = prevStateOf(getSrs(db, userId, req.cardId))
   const now = Date.now()
@@ -112,7 +114,7 @@ function recordReviewTx(
 export const recordReview = atomic(recordReviewTx)
 
 /** The card's next schedule, at this member's retention and learning steps. */
-function advance(db: Db, userId: string, prev: FsrsState, rating: Rating, now: number) {
+function advance(db: Db, userId: UserId, prev: FsrsState, rating: Rating, now: number) {
   return schedule(prev, rating, now, {
     desiredRetention: desiredRetention(db, userId),
     learningSteps: readStudyPrefs(db, userId).learningSteps,
@@ -121,8 +123,8 @@ function advance(db: Db, userId: string, prev: FsrsState, rating: Rating, now: n
 
 interface ReviewLog {
   db: Db
-  userId: string
-  cardId: string
+  userId: UserId
+  cardId: CardId
   rating: Rating
   prev: FsrsState
   next: { state: FsrsState; intervalDays: number; dueAt: number }
@@ -153,8 +155,8 @@ function logReview(r: ReviewLog): void {
 
 function emitSrs(
   bus: EventBus,
-  userId: string,
-  cardId: string,
+  userId: UserId,
+  cardId: CardId,
   rating: Rating,
   state: FsrsState,
 ): void {
@@ -189,7 +191,7 @@ function scheduleResult(
   }
 }
 
-export function srsStateMap(db: Db, userId: string): Map<string, FsrsState> {
+export function srsStateMap(db: Db, userId: UserId): Map<CardId, FsrsState> {
   return new Map(
     listSrs(db, userId).map((r) => [
       r.cardId,
@@ -212,11 +214,11 @@ export function srsStateMap(db: Db, userId: string): Map<string, FsrsState> {
 /** The expensive per-user maps, when a caller has already loaded them. */
 export interface LoadedCards {
   cards: ReturnType<typeof listCards>
-  srs: Map<string, FsrsState>
+  srs: Map<CardId, FsrsState>
 }
 
 /** The target-language words a learner currently knows (learned cards). */
-export function knownWords(db: Db, userId: string, loaded?: LoadedCards): Set<string> {
+export function knownWords(db: Db, userId: UserId, loaded?: LoadedCards): Set<string> {
   const srsMap = loaded?.srs ?? srsStateMap(db, userId)
   const known = new Set<string>()
   for (const c of loaded?.cards ?? listCards(db, userId)) {
@@ -239,12 +241,6 @@ export interface StudyBudget {
   reviewsUnlimited: boolean
 }
 
-/** Start of the UTC day containing `ts`, in epoch ms (matches the streak day). */
-export function startOfUtcDay(ts: number): number {
-  const d = new Date(ts)
-  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
-}
-
 /**
  * Today's study budget: how many new cards and reviews are left (docs/DESIGN.md
  * §13.6). Anki-style daily limits bound a day's work; the learner can raise
@@ -252,13 +248,14 @@ export function startOfUtcDay(ts: number): number {
  */
 export function studyBudget(
   db: Db,
-  userId: string,
+  userId: UserId,
   now: number = Date.now(),
   loaded?: LoadedCards,
 ): StudyBudget {
   const prefs = readStudyPrefs(db, userId)
   const extra = readDailyExtra(db, userId, now)
-  const counts = dailyReviewCounts(db, userId, startOfUtcDay(now))
+  // The budget is per day of the member's own calendar (see `clock.ts`).
+  const counts = dailyReviewCounts(db, userId, startOfDay(now, userOffsetMin(db, userId, now)))
   const ids = (loaded?.cards ?? listCards(db, userId)).map((c) => c.id)
   const map = loaded?.srs ?? srsStateMap(db, userId)
   const limits = dailyLimits(prefs, extra)
@@ -271,8 +268,8 @@ export function studyBudget(
 }
 
 interface BudgetCtx {
-  ids: string[]
-  map: Map<string, FsrsState>
+  ids: CardId[]
+  map: Map<CardId, FsrsState>
   now: number
   limits: ReturnType<typeof dailyLimits>
   counts: { newCards: number; reviews: number }
@@ -313,7 +310,7 @@ export interface SrsStats {
   budget: StudyBudget
 }
 
-export function srsStats(db: Db, userId: string): SrsStats {
+export function srsStats(db: Db, userId: UserId): SrsStats {
   const now = Date.now()
   const cards = listCards(db, userId)
   const map = srsStateMap(db, userId)

@@ -1,3 +1,4 @@
+import { toCardId, type UserId } from './ids'
 import { expect, test } from 'bun:test'
 import { createApp } from './app'
 import type { App, Deps } from './context'
@@ -53,7 +54,7 @@ async function signup(app: App, db: Db, username = 'alice') {
   const res = await app.request('/api/auth/register', json({ username, password: 'password123' }))
   const cookie = res.headers.getSetCookie()[0]!.split(';')[0]!
   // Decks are no longer pre-seeded; tests drill the curated fixture decks.
-  const { user } = (await res.json()) as { user: { id: string } }
+  const { user } = (await res.json()) as { user: { id: UserId } }
   seedStarterDecks(db, user.id)
   return cookie
 }
@@ -135,6 +136,9 @@ test('practice: next -> grade -> xp, and exercise catalog', async () => {
     `/api/decks/${deckId}/cards`,
   )
   const card = cards.cards[0]!
+  // a grade is only taken for a drill the server handed out: ask for this one
+  const drill = { deckId, cardId: card.id, exerciseId: 'translate.front_to_back' }
+  await postJson(app, cookie, '/api/practice/next', drill)
 
   const good = await postJson<{
     result: { correct: boolean; score: number; xp: number }
@@ -184,7 +188,7 @@ test('LLM deck generation needs a key', async () => {
     '/api/decks',
     auth(cookie, json({ topic: 'food', targetLang: 'zh' })),
   )
-  expect(res.status).toBe(502)
+  expect(res.status).toBe(409)
   sqlite.close()
 })
 
@@ -356,6 +360,8 @@ test('quiet mode hides listen/speak cards for 15 minutes (XP unaffected)', async
   expect(forced.instance.modality).not.toBe('voice')
 
   // Grading a text card still works and still earns its XP.
+  const drill = { deckId, cardId: card.id, exerciseId: 'translate.front_to_back' }
+  await app.request('/api/practice/next', auth(cookie, json(drill)))
   const graded = (await (
     await app.request(
       '/api/practice/grade',
@@ -572,7 +578,7 @@ test('practice: nothing due and no new words means done, never the same card aga
     json({ username: 'loop', password: 'password123' }),
   )
   const cookie = res.headers.getSetCookie()[0]!.split(';')[0]!
-  const { user } = (await res.json()) as { user: { id: string } }
+  const { user } = (await res.json()) as { user: { id: UserId } }
   seedStarterDecks(db, user.id)
 
   const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
@@ -588,7 +594,7 @@ test('practice: nothing due and no new words means done, never the same card aga
   // same not-due card (the "This is not that." loop the learner reported).
   const now = Date.now()
   for (const c of cards.cards) {
-    upsertSrs(db, user.id, c.id, {
+    upsertSrs(db, user.id, toCardId(c.id), {
       state: 'review',
       step: 0,
       stability: 5,
@@ -652,5 +658,30 @@ test('practice keeps giving new words past the daily budget instead of stopping'
     budget: { newRemaining: number }
   }
   expect(stats.budget.newRemaining).toBeGreaterThan(0)
+  sqlite.close()
+})
+
+test('a grade is refused for a drill the server did not hand out', async () => {
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
+  const decks = await getJson<{ decks: { id: string }[] }>(app, cookie, '/api/decks')
+  const deckId = decks.decks[0]!.id
+  const cards = await getJson<{ cards: { id: string; back: string }[] }>(
+    app,
+    cookie,
+    `/api/decks/${deckId}/cards`,
+  )
+  const [first, second] = cards.cards
+  const issued = { deckId, cardId: first!.id, exerciseId: 'multiple_choice' }
+  await postJson(app, cookie, '/api/practice/next', issued)
+
+  // another card, or another exercise on the same card, was never issued
+  const grade = (body: object) => app.request('/api/practice/grade', auth(cookie, json(body)))
+  const other = { exerciseId: 'multiple_choice', cardId: second!.id, answer: second!.back }
+  expect((await grade(other)).status).toBe(409)
+  const swapped = { exerciseId: 'translate.front_to_back', cardId: first!.id, answer: first!.back }
+  expect((await grade(swapped)).status).toBe(409)
+  const real = { exerciseId: 'multiple_choice', cardId: first!.id, answer: first!.back }
+  expect((await grade(real)).status).toBe(200)
   sqlite.close()
 })

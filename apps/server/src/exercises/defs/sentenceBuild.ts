@@ -1,10 +1,11 @@
 /** Sentence build: n+1 sentence from the words already met (DESIGN §13.7). */
 
 import type { ExerciseContext, ExerciseDef } from '@tutor/core'
-import { LEXICON, type FreqWord } from '../../seed/frequency'
+import { LEXICON, type FreqWord } from '../../text/lexicon'
 import { SENTENCE_POS, buildSentence, canBuildSentence } from '../../game/grammar'
 import { hasPayloadSentence, payloadTokens } from '../payload'
-import { hashSeed, normalizeSentence, seededRandom } from '../seeded'
+import { hashSeed, seededRandom } from '../seeded'
+import { sentenceKey } from '../../text/normalize'
 import { shuffle } from '../shared'
 
 export const sentenceBuild: ExerciseDef<unknown> = {
@@ -41,7 +42,7 @@ export const sentenceBuild: ExerciseDef<unknown> = {
       : typeof answer === 'string'
         ? answer
         : String((answer as { tokens?: string[] })?.tokens?.join('') ?? '')
-    const correct = expected.length > 0 && normalizeSentence(built) === normalizeSentence(expected)
+    const correct = expected.length > 0 && sentenceKey(built) === sentenceKey(expected)
     return {
       score: correct ? 100 : 0,
       correct,

@@ -1,5 +1,6 @@
 /** Gear actions: equip, discard, salvage, enchant, distill (docs/DESIGN.md §13.5.3). */
 
+import { toGearInstanceId, type GearInstanceId } from '../../ids'
 import type { Context } from 'hono'
 import {
   applyEnchant,
@@ -11,13 +12,13 @@ import {
   unequipItem,
 } from '../../services'
 import type { App, AppEnv } from '../../context'
-import { jsonBody, num, str } from '../body'
+import { idField, jsonBody, num, str } from '../body'
 import { gearPayload } from './board'
 
 /** The piece to equip: an exact instance, a base item, and where it goes. */
 interface EquipPiece {
   itemId?: string
-  instanceId?: string
+  instanceId?: GearInstanceId
   slot?: string
 }
 
@@ -39,7 +40,7 @@ function gearHandler(c: Context<AppEnv>) {
 
 /**
  * Equip / unequip gear. An instanceId equips that exact rolled piece; an itemId
- * equips the first free instance (or creates one from the base definition).
+ * equips the first spare piece of that item.
  */
 async function equipHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
@@ -52,7 +53,7 @@ async function equipHandler(c: Context<AppEnv>) {
   }
   return equipPiece(c, {
     itemId: str(body, 'itemId'),
-    instanceId: str(body, 'instanceId'),
+    instanceId: idField(body, 'instanceId', toGearInstanceId),
     slot,
   })
 }
@@ -77,7 +78,7 @@ async function equipPiece(c: Context<AppEnv>, piece: EquipPiece) {
 async function discardHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
-  const instanceId = str(await jsonBody(c), 'instanceId')
+  const instanceId = idField(await jsonBody(c), 'instanceId', toGearInstanceId)
   if (!instanceId) return c.json({ error: 'instanceId required' }, 400)
   const res = discardGear(deps.db, user.id, instanceId)
   if (!res.ok) return c.json({ error: res.error }, 400)
@@ -88,7 +89,7 @@ async function discardHandler(c: Context<AppEnv>) {
 async function salvageHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
-  const instanceId = str(await jsonBody(c), 'instanceId')
+  const instanceId = idField(await jsonBody(c), 'instanceId', toGearInstanceId)
   if (!instanceId) return c.json({ error: 'instanceId required' }, 400)
   const res = salvageGear(deps.db, deps.events, user.id, instanceId)
   if (!res.ok) return c.json({ error: res.error }, 400)
@@ -103,7 +104,7 @@ async function enchantHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
   const body = await jsonBody(c)
-  const instanceId = str(body, 'instanceId')
+  const instanceId = idField(body, 'instanceId', toGearInstanceId)
   const enchantId = str(body, 'enchantId')
   if (!instanceId || !enchantId) {
     return c.json({ error: 'instanceId and enchantId required' }, 400)

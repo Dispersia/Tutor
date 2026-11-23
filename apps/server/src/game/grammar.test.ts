@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { FREQUENCY, LEXICON } from '../seed/frequency'
+import { FREQUENCY, LEXICON } from '../text/lexicon'
 import { SENTENCE_POS, buildSentence, canBuildSentence } from './grammar'
 
 const first = (known: string[], word: string) => {

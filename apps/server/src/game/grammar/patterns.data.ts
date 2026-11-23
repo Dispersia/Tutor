@@ -7,7 +7,7 @@
  * `build.ts` is the engine that fills these slots; a content edit lives here.
  */
 
-import type { FreqWord, Pos } from '../../seed/frequency'
+import type { FreqWord, Pos } from '../../text/lexicon'
 
 export type NounClass = 'person' | 'place' | 'thing'
 

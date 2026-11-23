@@ -86,17 +86,17 @@ test('clearDeckBuilds lifts a build flag left behind by a restart', () => {
     targetLang: 'ja',
     settings: { building: true, buildTotal: 1477, cursor: 30 },
   })
-  expect(getDeck(db, deck.id, user.id)?.settings.building).toBe(true)
+  expect(getDeck(db, deck.id)?.settings.building).toBe(true)
 
   expect(clearDeckBuilds(db)).toBe(1)
-  const after = getDeck(db, deck.id, user.id)!.settings
+  const after = getDeck(db, deck.id)!.settings
   expect(after.building).toBe(false)
   // the progress it reached is kept — only the flag is cleared
   expect(after.cursor).toBe(30)
   expect(after.buildTotal).toBe(1477)
 
   // a deck that is not building is left alone
-  updateDeckSettings(db, deck.id, user.id, { building: false })
+  updateDeckSettings(db, deck.id, { building: false })
   expect(clearDeckBuilds(db)).toBe(0)
   sqlite.close()
 })
@@ -132,5 +132,34 @@ test('otherBacks only offers words the learner has already met', () => {
   expect(backs).toEqual([b!.back, c!.back].sort())
   expect(backs).not.toContain(d!.back) // 四 has never been seen
   expect(backs).not.toContain(a!.back) // the answer is never a distractor
+  sqlite.close()
+})
+
+test('a private card extends the deck for one member and nobody else', async () => {
+  const { openDb } = await import('./client')
+  const repo = await import('./repo')
+  const { db, sqlite } = openDb(':memory:')
+  const a = repo.createUser(db, { username: 'a', passwordHash: 'x' })
+  const b = repo.createUser(db, { username: 'b', passwordHash: 'x' })
+  const deck = repo.createDeck(db, a.id, { name: 'd', sourceLang: 'en', targetLang: 'zh' })
+  const card = { deckId: deck.id, sourceLang: 'en', targetLang: 'zh' }
+  repo.addCard(db, a.id, { ...card, front: 'tea', back: '茶' })
+  const mine = repo.addCard(db, a.id, {
+    ...card,
+    front: 'I drink tea.',
+    back: '我喝茶。',
+    privateTo: a.id,
+  })
+
+  expect(repo.listCards(db, a.id, deck.id).map((c) => c.back)).toEqual(['茶', '我喝茶。'])
+  expect(repo.listCards(db, b.id, deck.id).map((c) => c.back)).toEqual(['茶'])
+  expect(repo.getCard(db, mine.id, a.id)?.back).toBe('我喝茶。')
+  expect(repo.getCard(db, mine.id, b.id)).toBeUndefined()
+  // the shared deck's size is the same for everyone
+  expect(repo.listDecks(db)[0]!.cardCount).toBe(1)
+  // a tool with no member sees everything; deleting the member takes their card along
+  expect(repo.listCards(db).length).toBe(2)
+  repo.deleteUser(db, a.id)
+  expect(repo.listCards(db).map((c) => c.back)).toEqual(['茶'])
   sqlite.close()
 })

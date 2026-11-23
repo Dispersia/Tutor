@@ -6,28 +6,23 @@
  * one-shot vocabulary generation; no body creates an empty deck.
  */
 
+import type { UserId, DeckId } from '../../ids'
 import type { Context } from 'hono'
 import type { App, AppEnv, Deps } from '../../context'
 import { addCard, createDeck, getDeck, getRoles, setUserSetting } from '../../db/repo'
+import { inTransaction } from '../../db/repo/helpers'
 import { buildDeck, parseInstruction } from '../../deck/generate'
 import { plannerFor } from '../../deck/planner'
 import type { Planner } from '../../deck/plan'
 import { DECK_INSTRUCTION_KEY } from '../../deck/settings'
 import { roleReasoning } from '../../env'
 import { OpenRouter } from '../../llm/openrouter'
+import { langName } from '../../llm/prompts'
 import { resolveUserKey } from '../../llm/userkey'
 import { readingsFor } from '../../seed/service'
 import { bool, jsonBody, num, oneOf, str, strArray } from '../body'
 import { deckView } from './view'
-
-const LANG_LABEL: Record<string, string> = {
-  zh: 'Mandarin Chinese',
-  ja: 'Japanese',
-  ko: 'Korean',
-  es: 'Spanish',
-  fr: 'French',
-  de: 'German',
-}
+import { fail, needKey } from '../errors'
 
 interface CreateBody {
   instruction?: string
@@ -83,7 +78,7 @@ export function registerDeckCreate(app: App) {
 async function createFromInstruction(c: Context<AppEnv>, deps: Deps, body: CreateBody) {
   const user = c.get('user')!
   const planner = await plannerFor(deps, user.id)
-  if (!planner) return c.json({ error: 'No OpenRouter key — add one in Settings.' }, 502)
+  if (!planner) return needKey(c)
   const instruction = body.instruction!.trim()
   try {
     const built = await buildDeck(deps.db, user.id, {
@@ -95,9 +90,9 @@ async function createFromInstruction(c: Context<AppEnv>, deps: Deps, body: Creat
     // (including imports and growth batches) starts from it.
     setUserSetting(deps.db, user.id, DECK_INSTRUCTION_KEY, instruction)
     deps.audio?.enqueueDeck(user.id, built.deckId)
-    return c.json({ deck: deckView(getDeck(deps.db, built.deckId, user.id)!), ...built }, 201)
+    return c.json({ deck: deckView(getDeck(deps.db, built.deckId)!), ...built }, 201)
   } catch (err) {
-    return c.json({ error: (err as Error).message }, 502)
+    return fail(c, 502, (err as Error).message)
   }
 }
 
@@ -133,23 +128,33 @@ function instructionArgs(input: ArgsInput): Omit<DeckBuildArgs, 'targetLang' | '
 async function createFromTopic(c: Context<AppEnv>, deps: Deps, body: CreateBody) {
   const user = c.get('user')!
   const key = await resolveUserKey(deps, user.id)
-  if (!key) return c.json({ error: 'No OpenRouter key — add one in Settings.' }, 502)
+  if (!key) return needKey(c)
   const targetLang = body.targetLang ?? user.targetLang ?? 'zh'
   const sourceLang = body.sourceLang ?? user.nativeLang ?? 'en'
   try {
-    const cards = await generateTopicCards(deps, user.id, key, body, targetLang)
-    const deck = createTopicDeck(deps, user.id, body, sourceLang, targetLang)
-    addTopicCards({ deps, userId: user.id, deckId: deck.id, sourceLang, targetLang, cards })
+    const cards = usableCards(await generateTopicCards(deps, user.id, key, body, targetLang))
+    if (cards.length === 0) return fail(c, 502, 'the model returned no usable cards')
+    const deck = saveTopicDeck(deps, body, { userId: user.id, sourceLang, targetLang, cards })
     deps.audio?.enqueueDeck(user.id, deck.id)
     return c.json({ deck, count: cards.length }, 201)
   } catch (err) {
-    return c.json({ error: (err as Error).message }, 502)
+    return fail(c, 502, (err as Error).message)
   }
+}
+
+/** The deck and its cards land together: a failure never leaves an empty deck. */
+function saveTopicDeck(deps: Deps, body: CreateBody, ctx: Omit<TopicCardsCtx, 'deps' | 'deckId'>) {
+  return inTransaction(deps.db, (tx) => {
+    const scoped = { ...deps, db: tx }
+    const deck = createTopicDeck(scoped, ctx.userId, body, ctx.sourceLang, ctx.targetLang)
+    addTopicCards({ ...ctx, deps: scoped, deckId: deck.id })
+    return deck
+  })
 }
 
 function createTopicDeck(
   deps: Deps,
-  userId: string,
+  userId: UserId,
   body: CreateBody,
   sourceLang: string,
   targetLang: string,
@@ -164,6 +169,18 @@ function createTopicDeck(
   })
 }
 
+/** Only cards with both sides filled in: the model's output is not trusted to be complete. */
+function usableCards(cards: unknown): TopicCard[] {
+  if (!Array.isArray(cards)) return []
+  return cards.filter(
+    (c): c is TopicCard =>
+      typeof c?.front === 'string' &&
+      typeof c?.back === 'string' &&
+      !!c.front.trim() &&
+      !!c.back.trim(),
+  )
+}
+
 interface TopicCard {
   front: string
   back: string
@@ -173,7 +190,7 @@ interface TopicCard {
 
 async function generateTopicCards(
   deps: Deps,
-  userId: string,
+  userId: UserId,
   key: string,
   body: CreateBody,
   targetLang: string,
@@ -194,7 +211,7 @@ function topicMessages(
   targetLang: string,
 ): { role: 'system' | 'user'; content: string }[] {
   const count = Math.min(Math.max(body.count ?? 20, 5), 50)
-  const lang = LANG_LABEL[targetLang] ?? targetLang
+  const lang = langName(targetLang)
   const topic = body.topic!.trim()
   const level = body.level ?? 'beginner'
   const request = [
@@ -248,10 +265,16 @@ function readingRule(targetLang: string): string {
   return '- reading and kana: empty strings.'
 }
 
+/** Zhuyin for Mandarin, kana for Japanese; other languages carry no reading. */
+function topicReadings(targetLang: string, cd: TopicCard): Record<string, string> {
+  if (targetLang !== 'zh' && targetLang !== 'ja') return {}
+  return readingsFor(targetLang, cd.reading ?? '', cd.kana)
+}
+
 interface TopicCardsCtx {
   deps: Deps
-  userId: string
-  deckId: string
+  userId: UserId
+  deckId: DeckId
   sourceLang: string
   targetLang: string
   cards: TopicCard[]
@@ -265,7 +288,7 @@ function addTopicCards(ctx: TopicCardsCtx): void {
       targetLang: ctx.targetLang,
       front: cd.front,
       back: cd.back,
-      readings: readingsFor(ctx.targetLang, cd.reading, cd.kana),
+      readings: topicReadings(ctx.targetLang, cd),
       origin: 'llm',
     })
   }

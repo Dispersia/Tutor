@@ -9,6 +9,7 @@ import type { App, AppEnv } from '../../context'
 import { deletePushSubscription, upsertPushSubscription } from '../../db/repo'
 import { jsonBody, obj, str } from '../body'
 import { vapidKeys } from '../../push/webpush'
+import { fail } from '../errors'
 
 interface SubscribeBody {
   endpoint?: string
@@ -42,29 +43,43 @@ async function subscribeHandler(c: Context<AppEnv>) {
   const endpoint = body.endpoint?.trim()
   const p256dh = body.keys?.p256dh
   const auth = body.keys?.auth
-  if (!endpoint || !p256dh || !auth) return c.json({ error: 'invalid subscription' }, 400)
-  if (!isHttpsEndpoint(endpoint)) return c.json({ error: 'endpoint must be https' }, 400)
-  upsertPushSubscription(c.get('deps').db, {
-    userId: user.id,
-    endpoint,
-    p256dh,
-    auth,
-    userAgent: c.req.header('user-agent'),
-  })
+  if (!endpoint || !p256dh || !auth) return fail(c, 400, 'invalid subscription')
+  if (!isPushServiceEndpoint(endpoint)) {
+    return fail(c, 400, 'endpoint is not a known push service')
+  }
+  const sub = { userId: user.id, endpoint, p256dh, auth, userAgent: c.req.header('user-agent') }
+  upsertPushSubscription(c.get('deps').db, sub)
   return c.json({ ok: true })
 }
 
-function isHttpsEndpoint(endpoint: string): boolean {
+/**
+ * The browser push services. The server POSTs to whatever endpoint it stores,
+ * so anything else would let a member aim those requests at an arbitrary host
+ * (an internal one included).
+ */
+const PUSH_HOSTS = [
+  'fcm.googleapis.com',
+  '.push.apple.com',
+  'updates.push.services.mozilla.com',
+  '.notify.windows.com',
+]
+
+/** True for an https endpoint on one of the known browser push services. */
+export function isPushServiceEndpoint(endpoint: string): boolean {
+  let url: URL
   try {
-    return new URL(endpoint).protocol === 'https:'
+    url = new URL(endpoint)
   } catch {
     return false
   }
+  if (url.protocol !== 'https:' || url.port !== '') return false
+  const host = url.hostname.toLowerCase()
+  return PUSH_HOSTS.some((h) => (h.startsWith('.') ? host.endsWith(h) : host === h))
 }
 
 async function unsubscribeHandler(c: Context<AppEnv>) {
   const endpoint = str(await jsonBody(c), 'endpoint')
-  if (!endpoint) return c.json({ error: 'endpoint required' }, 400)
+  if (!endpoint) return fail(c, 400, 'endpoint required')
   deletePushSubscription(c.get('deps').db, c.get('user')!.id, endpoint)
   return c.json({ ok: true })
 }

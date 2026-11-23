@@ -1,3 +1,4 @@
+import type { UserId } from './ids'
 import { expect, test } from 'bun:test'
 import { createApp } from './app'
 import type { App, Deps } from './context'
@@ -55,7 +56,7 @@ async function signup(app: App, db: Db, username = 'alice') {
   const res = await app.request('/api/auth/register', json({ username, password: 'password123' }))
   const cookie = res.headers.getSetCookie()[0]!.split(';')[0]!
   // Decks are no longer pre-seeded; tests drill the curated fixture decks.
-  const { user } = (await res.json()) as { user: { id: string } }
+  const { user } = (await res.json()) as { user: { id: UserId } }
   seedStarterDecks(db, user.id)
   // Combat is review only, so give every card a spent SRS state (due now).
   const now = Date.now()
@@ -133,7 +134,7 @@ test('starting a fight with no review cards is refused', async () => {
     json({ username: 'fresh', password: 'password123' }),
   )
   const cookie = res.headers.getSetCookie()[0]!.split(';')[0]!
-  const { user } = (await res.json()) as { user: { id: string } }
+  const { user } = (await res.json()) as { user: { id: UserId } }
   seedStarterDecks(db, user.id)
 
   const start = await app.request('/api/combat/start', auth(cookie, json({ monsterId: 'slime' })))

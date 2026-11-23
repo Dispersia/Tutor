@@ -1,11 +1,12 @@
 /** Spaced-repetition state and its review log (FSRS). */
 
-import { and, asc, eq } from 'drizzle-orm'
+import type { UserId, CardId } from '../../ids'
+import { and, asc, eq, sql } from 'drizzle-orm'
 import type { Db } from '../client'
-import { srs, srsReviews } from '../schema'
+import { cards, srs, srsReviews } from '../schema'
 import { id, now } from './helpers'
 
-export function getSrs(db: Db, userId: string, cardId: string) {
+export function getSrs(db: Db, userId: UserId, cardId: CardId) {
   return db
     .select()
     .from(srs)
@@ -13,7 +14,7 @@ export function getSrs(db: Db, userId: string, cardId: string) {
     .get()
 }
 
-export function listSrs(db: Db, userId: string) {
+export function listSrs(db: Db, userId: UserId) {
   return db.select().from(srs).where(eq(srs.userId, userId)).all()
 }
 
@@ -30,7 +31,7 @@ export interface SrsWrite {
   lastReviewAt: number
 }
 
-export function upsertSrs(db: Db, userId: string, cardId: string, s: SrsWrite): void {
+export function upsertSrs(db: Db, userId: UserId, cardId: CardId, s: SrsWrite): void {
   db.insert(srs)
     .values({ userId, cardId, ...s })
     .onConflictDoUpdate({ target: [srs.userId, srs.cardId], set: { ...s } })
@@ -39,8 +40,8 @@ export function upsertSrs(db: Db, userId: string, cardId: string, s: SrsWrite): 
 
 /** Appends one FSRS review to the log (docs/DESIGN.md §13.6). */
 export interface SrsReviewWrite {
-  userId: string
-  cardId: string
+  userId: UserId
+  cardId: CardId
   rating: number
   stateBefore: string
   stateAfter: string
@@ -62,9 +63,20 @@ export function addSrsReview(db: Db, r: SrsReviewWrite): void {
 }
 
 /** The review log for one user, or one card, oldest first. */
-export function listSrsReviews(db: Db, userId: string, cardId?: string) {
+export function listSrsReviews(db: Db, userId: UserId, cardId?: CardId) {
   const where = cardId
     ? and(eq(srsReviews.userId, userId), eq(srsReviews.cardId, cardId))
     : eq(srsReviews.userId, userId)
   return db.select().from(srsReviews).where(where).orderBy(asc(srsReviews.createdAt)).all()
+}
+
+/** How many cards this member has a schedule for, counted in SQL. */
+export function countScheduledCards(db: Db, userId: UserId): number {
+  const row = db
+    .select({ n: sql<number>`count(*)` })
+    .from(srs)
+    .innerJoin(cards, eq(cards.id, srs.cardId))
+    .where(eq(srs.userId, userId))
+    .get()
+  return Number(row?.n ?? 0)
 }

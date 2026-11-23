@@ -1,5 +1,6 @@
 /** The deck-wide context, the option types and the card-persisting helpers. */
 
+import type { UserId, DeckId } from '../ids'
 import type { CardType } from '@tutor/core'
 import { addCard } from '../db/repo'
 import type { Db } from '../db/client'
@@ -7,7 +8,7 @@ import type { CharacterVariant, Fetcher } from '../frequency/source'
 import type { PlannedCard, Planner } from './plan'
 import { kanjiumContour } from './kanjium'
 import { mandarinSentenceZhuyin, mandarinZhuyin } from './mandarin'
-import { pinyinToZhuyin } from '../seed/zhuyin'
+import { storedReadings } from '../text/readings'
 
 export interface BuildDeckOptions {
   instruction: string
@@ -41,7 +42,7 @@ export interface GrowDeckOptions {
 }
 
 export interface BuiltDeck {
-  deckId: string
+  deckId: DeckId
   name: string
   cardCount: number
   /** The frequency list it was built from, e.g. "zh_tw (Traditional)". */
@@ -66,24 +67,25 @@ export interface DeckContext {
   hints?: Record<string, { reading?: string; meaning?: string }>
 }
 
-/** The stored reading for a planned card, in the deck's script. */
+/**
+ * The stored reading for a planned card, in the deck's script. `back` (the
+ * card's own text) lets a Mandarin reading that cannot be converted fall back to
+ * the dictionary instead of being stored as garbage.
+ */
 export function readingsForPlanned(
   targetLang: string,
   reading: string | undefined,
   script: string | undefined,
+  back?: string,
 ): Record<string, string> {
-  if (!reading) return {}
-  if (targetLang === 'zh' || targetLang === 'yue') {
-    if (script === 'pinyin') return { pinyin: reading }
-    // The deck wants Zhuyin. A reading that came back as pinyin (the model
-    // ignored the script rule, or a sentence the dictionary does not cover) is
-    // converted, so the learner never sees Latin letters where Zhuyin belongs.
-    const zhuyin = /[a-zA-Z]/.test(reading) ? pinyinToZhuyin(reading) : reading
-    return zhuyin ? { zhuyin } : {}
-  }
-  if (targetLang === 'ja') return { kana: reading }
-  return { reading }
+  // The deck wants Zhuyin. A reading that came back as pinyin (the model
+  // ignored the script rule, or a sentence the dictionary does not cover) is
+  // converted, so the learner never sees Latin letters where Zhuyin belongs.
+  const fallbackZhuyin = () => (back ? mandarinSentenceZhuyin(back) : undefined)
+  return storedReadings({ targetLang, reading, script, fallbackZhuyin })
 }
+
+export { zhuyinFromPinyin } from '../text/readings'
 
 function cardTypeFor(template: PlannedCard['template']): CardType {
   if (template === 'sentence') return 'phrase'
@@ -174,8 +176,8 @@ export function leapsAhead(card: PlannedCard, future: ReadonlySet<string>): bool
  */
 export function persistCards(
   db: Db,
-  userId: string,
-  deckId: string,
+  userId: UserId,
+  deckId: DeckId,
   opts: PersistOpts,
   planned: PlannedCard[],
 ): { newWords: string[]; cardCount: number } {
@@ -209,8 +211,8 @@ interface PersistOpts {
 
 interface PersistReq {
   db: Db
-  userId: string
-  deckId: string
+  userId: UserId
+  deckId: DeckId
   opts: PersistOpts
   card: PlannedCard
   step: number
@@ -225,7 +227,7 @@ function persistOne(req: PersistReq): void {
     targetLang: opts.targetLang,
     front: c.front,
     back: c.back,
-    readings: readingsForPlanned(opts.targetLang, c.reading, opts.readingScript),
+    readings: readingsForPlanned(opts.targetLang, c.reading, opts.readingScript, c.back),
     tags: [opts.targetLang, c.template],
     payload: { ...(c.payload ?? {}), template: c.template, step },
     metadata: c.metadata,

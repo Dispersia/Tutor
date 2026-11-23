@@ -1,5 +1,6 @@
 import type { AlignItem, WordFeedback } from '@tutor/core'
-import { levenshtein, normalize } from '../exercises/grading'
+import { levenshtein } from '../exercises/grading'
+import { tonelessKey } from '../text/normalize'
 import { charSound, soundAlike } from './variants'
 
 const CJK = /[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af]/
@@ -46,7 +47,7 @@ const accentAware = (lang: string | undefined) => lang === 'zh'
  * normalised characters.
  */
 function foldForCompare(text: string, lang: string | undefined): string {
-  const base = normalize(text)
+  const base = tonelessKey(text)
   if (!accentAware(lang)) return base
   let out = ''
   for (const ch of base) out += charSound(ch) ?? ch

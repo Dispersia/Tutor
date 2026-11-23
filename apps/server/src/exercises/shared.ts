@@ -1,21 +1,12 @@
 /** Helpers every exercise needs: language labels, readings and the word view. */
 
 import { pitchOf, type ExerciseContext } from '@tutor/core'
-import { furiganaSegments } from '../seed/furigana'
-import { pinyinToZhuyin } from '../seed/zhuyin'
+import { langName } from '../llm/prompts'
+import { furiganaSegments } from '../text/furigana'
+import { displayReading as nativeReading } from '../text/readings'
 
-const LANG_LABEL: Record<string, string> = {
-  zh: 'Mandarin',
-  yue: 'Cantonese',
-  ja: 'Japanese',
-  ko: 'Korean',
-  en: 'English',
-  es: 'Spanish',
-  fr: 'French',
-  de: 'German',
-}
-
-export const label = (lang: string) => LANG_LABEL[lang] ?? lang
+/** A language's display name — the one table is `langName` (`llm/prompts.ts`). */
+export const label = (lang: string): string => langName(lang)
 
 export const readingsOf = (ctx: ExerciseContext): string[] =>
   Object.values(ctx.card.readings).filter(Boolean)
@@ -28,13 +19,8 @@ export const readingsShown = (ctx: ExerciseContext): boolean => ctx.showReadings
  * Japanese. Never Latin transliteration — a legacy pinyin value is converted.
  * Empty when the learner has hidden readings in their study preferences.
  */
-export const displayReading = (ctx: ExerciseContext): string => {
-  if (!readingsShown(ctx)) return ''
-  const r = ctx.card.readings
-  if (ctx.card.targetLang === 'ja') return r.kana || ''
-  if (ctx.card.targetLang === 'zh') return r.zhuyin || (r.pinyin ? pinyinToZhuyin(r.pinyin) : '')
-  return Object.values(r).find(Boolean) ?? ''
-}
+export const displayReading = (ctx: ExerciseContext): string =>
+  readingsShown(ctx) ? nativeReading(ctx.card) : ''
 
 /** Furigana ruby segments for a Japanese word (undefined for other languages). */
 export const furiganaFor = (lang: string, word: string, reading: string) =>
@@ -46,12 +32,7 @@ export const furiganaFor = (lang: string, word: string, reading: string) =>
  * has produced wrong readings (ㄕㄧˋ for ㄕˋ) and Latin look-alikes ("shee"), so
  * it is given the card's own reading to copy verbatim.
  */
-export const gradingReading = (ctx: ExerciseContext): string => {
-  const r = ctx.card.readings
-  if (ctx.card.targetLang === 'zh') return r.zhuyin || (r.pinyin ? pinyinToZhuyin(r.pinyin) : '')
-  if (ctx.card.targetLang === 'ja') return r.kana || ''
-  return Object.values(r).find(Boolean) ?? ''
-}
+export const gradingReading = (ctx: ExerciseContext): string => nativeReading(ctx.card)
 
 /** The target word plus the reading the learner should see (Zhuyin / furigana). */
 export const wordView = (ctx: ExerciseContext) => ({

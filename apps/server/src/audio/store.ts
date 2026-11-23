@@ -7,6 +7,7 @@
  * so the DB stays small and audio can be pruned on its own.
  */
 
+import type { UserId } from '../ids'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -63,7 +64,7 @@ export function readClip(db: Db, dataDir: string, hash: string): Uint8Array | un
 export function writeClip(
   db: Db,
   dataDir: string,
-  userId: string,
+  userId: UserId,
   hash: string,
   bytes: Uint8Array,
 ): void {

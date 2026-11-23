@@ -5,6 +5,7 @@ import { loadPlayerCtx, setRigChoice, stopRig } from '../../services'
 import type { App, AppEnv } from '../../context'
 import { jsonBody, str } from '../body'
 import { boardSkills, gearPayload } from './board'
+import { fail } from '../errors'
 
 export function registerSkillRigs(app: App) {
   app.post('/api/skills/choice', (c) => chooseRecipe(c))
@@ -21,9 +22,9 @@ async function chooseRecipe(c: Context<AppEnv>) {
   const body = await jsonBody(c)
   const actionId = str(body, 'actionId')
   const choiceId = str(body, 'choiceId')
-  if (!actionId || !choiceId) return c.json({ error: 'actionId and choiceId required' }, 400)
+  if (!actionId || !choiceId) return fail(c, 400, 'actionId and choiceId required')
   if (!setRigChoice(deps.db, deps.events, user.id, { actionId, choiceId })) {
-    return c.json({ error: 'unknown choice' }, 400)
+    return fail(c, 400, 'unknown choice')
   }
   const ctx = loadPlayerCtx(deps.db, deps.events, user.id)
   const board = boardSkills(deps, user.id, ctx)
@@ -40,12 +41,15 @@ async function stopRigHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
   const actionId = str(await jsonBody(c), 'actionId')
-  if (!actionId) return c.json({ error: 'actionId required' }, 400)
-  const stopped = stopRig(deps.db, deps.events, user.id, actionId)
+  if (!actionId) return fail(c, 400, 'actionId required')
+  // Stopping is idempotent: a rig that already ran out (the page was open a
+  // while) is stopped as far as the member is concerned, so they get the fresh
+  // board rather than an error.
+  stopRig(deps.db, deps.events, user.id, actionId)
   const ctx = loadPlayerCtx(deps.db, deps.events, user.id)
   const board = boardSkills(deps, user.id, ctx)
   return c.json({
-    ok: stopped,
+    ok: true,
     skills: board.skills,
     rigs: board.rigs,
     ...gearPayload(deps, user.id, ctx),

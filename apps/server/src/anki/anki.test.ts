@@ -106,3 +106,31 @@ test('cleanField strips Anki HTML and sound markup', () => {
   expect(cleanField('<b>茶</b>[sound:tea.mp3]&nbsp;')).toBe('茶')
   expect(cleanField('to <br>drink')).toBe('to drink')
 })
+
+test('unzip inflates only the entries the filter asks for', async () => {
+  const all = await unzip(modernFixture())
+  expect([...all.keys()].sort()).toEqual(['collection.anki21b', 'media', 'meta'])
+  const opened: string[] = []
+  const only = await unzip(modernFixture(), {
+    filter: (name) => {
+      opened.push(name)
+      return name.startsWith('collection.')
+    },
+  })
+  expect([...only.keys()]).toEqual(['collection.anki21b'])
+  expect(opened.sort()).toEqual(['collection.anki21b', 'media', 'meta'])
+})
+
+test('unzip refuses an entry that inflates past the size cap', async () => {
+  await expect(unzip(fixture(), { maxEntryBytes: 1000 })).rejects.toThrow(/larger than the 1000/)
+  // an entry that is filtered out is never opened, so its size does not matter
+  const none = await unzip(fixture(), { maxEntryBytes: 1000, filter: () => false })
+  expect(none.size).toBe(0)
+})
+
+test('a zstd frame’s declared size is read from its header', async () => {
+  const { zstdContentSize } = await import('./parse')
+  const raw = new Uint8Array(100_000).fill(7)
+  expect(zstdContentSize(Bun.zstdCompressSync(raw))).toBe(100_000)
+  expect(zstdContentSize(new Uint8Array([1, 2, 3, 4, 5, 6]))).toBeUndefined()
+})

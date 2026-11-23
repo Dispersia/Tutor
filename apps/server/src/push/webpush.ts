@@ -5,8 +5,10 @@
  * the authorization is RFC 8292 VAPID (ES256 JWT). Both are small enough to sit
  * on WebCrypto, which keeps the packaged binary's dependency tree untouched.
  *
- * A subscription that the browser revoked answers 404/410; the caller drops the
- * row. Anything else is a transient failure and the next scan retries it.
+ * A subscription that the browser revoked answers 404/410, and one whose VAPID
+ * identity the push service no longer accepts answers 401/403 — neither will
+ * ever work again, so the caller drops the row. Anything else is a transient
+ * failure and the next scan retries it.
  */
 
 import type { Db } from '../db/client'
@@ -18,6 +20,10 @@ const VAPID_SETTING = 'push.vapid'
 const JWT_TTL_SEC = 12 * 60 * 60
 /** Push-service record size: one record holds the whole payload. */
 const RECORD_SIZE = 4096
+/** A push service that does not answer in this long is a failed send, not a hung scan. */
+const PUSH_TIMEOUT_MS = 10_000
+/** Statuses that mean "this subscription will never accept a push again". */
+const GONE_STATUSES = new Set([401, 403, 404, 410])
 
 export interface VapidKeys {
   /** base64url, the 65-byte uncompressed P-256 point the browser subscribes with */
@@ -145,12 +151,13 @@ function post(
       urgency: 'normal',
     },
     body,
+    signal: AbortSignal.timeout(PUSH_TIMEOUT_MS),
   }).catch((e: unknown) => e as Error)
 }
 
 async function resultOf(res: Response): Promise<PushResult> {
   const status = res.status
-  if (status === 404 || status === 410) return { ok: false, gone: true, status }
+  if (GONE_STATUSES.has(status)) return { ok: false, gone: true, status }
   if (res.ok) return { ok: true, gone: false, status }
   const text = await res.text().catch(() => '')
   return { ok: false, gone: false, status, error: text.slice(0, 200) }

@@ -1,5 +1,6 @@
 /** Action levels, profession levels and the aggregate bonuses (docs/DESIGN.md §13.5). */
 
+import type { UserId } from '../ids'
 import { getActionXp, listActionProgress, listTalents, setActionXp } from '../db/repo'
 import type { Db } from '../db/client'
 import type { EventBus } from '../events'
@@ -14,7 +15,7 @@ import {
 import { resolveTalents } from '../game/talents'
 
 /** Every action's level for a user; actions never trained sit at level 1. */
-export function actionLevelMap(db: Db, userId: string): Map<string, number> {
+export function actionLevelMap(db: Db, userId: UserId): Map<string, number> {
   return new Map(
     listActionProgress(db, userId).map((r) => [r.actionId, actionLevelInfo(r.xp).level]),
   )
@@ -22,7 +23,7 @@ export function actionLevelMap(db: Db, userId: string): Map<string, number> {
 
 export function actionLevelOf(
   db: Db,
-  userId: string,
+  userId: UserId,
   actionId: string,
   levels?: Map<string, number>,
 ): number {
@@ -36,7 +37,7 @@ export interface ProgressCtx {
 }
 
 /** Loads the action-level map once and derives the bonuses from that same map. */
-export function loadProgress(db: Db, userId: string): ProgressCtx {
+export function loadProgress(db: Db, userId: UserId): ProgressCtx {
   const levels = actionLevelMap(db, userId)
   return { levels, bonuses: aggregateBonuses(db, userId, levels) }
 }
@@ -50,7 +51,7 @@ export function loadProgress(db: Db, userId: string): ProgressCtx {
  */
 export function skillLevelOf(
   db: Db,
-  userId: string,
+  userId: UserId,
   skillId: SkillId,
   levels?: Map<string, number>,
 ): number {
@@ -66,7 +67,7 @@ export function primaryActionId(skillId: SkillId): string {
   return actionsForSkill(skillId)[0]!.id
 }
 
-export function aggregateBonuses(db: Db, userId: string, levels?: Map<string, number>): Bonuses {
+export function aggregateBonuses(db: Db, userId: UserId, levels?: Map<string, number>): Bonuses {
   return computeBonuses(
     levels ?? actionLevelMap(db, userId),
     resolveTalents(listTalents(db, userId)),
@@ -103,7 +104,7 @@ export interface XpAward {
 }
 
 /** Credits XP to one action. */
-export function awardActionXp(db: Db, bus: EventBus, userId: string, award: XpAward): ActionAward {
+export function awardActionXp(db: Db, bus: EventBus, userId: UserId, award: XpAward): ActionAward {
   const { actionId, amount, ctx } = award
   const action = ACTION_BY_ID.get(actionId)!
   // The map is derived once and threaded through, so an award is one scan
@@ -117,7 +118,7 @@ export function awardActionXp(db: Db, bus: EventBus, userId: string, award: XpAw
 }
 
 interface CreditReq {
-  userId: string
+  userId: UserId
   actionId: string
   action: ActionDef
   beforeXp: number
@@ -145,7 +146,7 @@ function creditXp(db: Db, bus: EventBus, req: CreditReq) {
 
 interface XpEvent {
   bus: EventBus
-  userId: string
+  userId: UserId
   action: ActionDef
   actionId: string
   gained: number
@@ -167,7 +168,7 @@ function emitXp(e: XpEvent): void {
 /** A profession level-up: announces it and reports the milestone it opened. */
 interface LevelUp {
   bus: EventBus
-  userId: string
+  userId: UserId
   action: ActionDef
   level: number
   skillBefore: number

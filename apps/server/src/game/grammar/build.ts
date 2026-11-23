@@ -11,7 +11,7 @@
  * semantic tables live in `patterns.data.ts`.
  */
 
-import { FREQUENCY, LEXICON, type FreqWord, type Pos } from '../../seed/frequency'
+import { FREQUENCY, LEXICON, type FreqWord, type Pos } from '../../text/lexicon'
 import {
   OBJECT_VERBS,
   PATTERNS,

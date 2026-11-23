@@ -55,6 +55,8 @@ export interface RigRecipe {
   yieldBonus?: number
   /** expected-value bonus-product chance, folded into yield (see docs) */
   doubleBonus?: number
+  /** extra yield for particular products only, by item id (e.g. Thieving's coins) */
+  itemBonus?: Record<string, number>
   /**
    * Chance each craft actually yields its `produces` (1 = always). Consumers still
    * pay their `consumes` on a miss — that is what makes prospecting a gamble (§13.5.3).
@@ -210,7 +212,7 @@ function emitProduced(
     (recipe.successChance ?? 1) * (1 + (recipe.yieldBonus ?? 0) + (recipe.doubleBonus ?? 0))
   for (const p of recipe.produces ?? []) {
     const carried = next.remainder[p.item] ?? 0
-    const raw = done * p.count * bonus + carried
+    const raw = done * p.count * (bonus + (recipe.itemBonus?.[p.item] ?? 0)) + carried
     const n = Math.floor(raw)
     next.remainder[p.item] = raw - n
     if (n <= 0) continue

@@ -5,6 +5,12 @@
 
 const DEFAULT_BASE = 'https://openrouter.ai/api/v1'
 
+/**
+ * A JSON completion with no caller-supplied signal is cut off after this long:
+ * a hung provider would otherwise hold a deck build (or a grade) open forever.
+ */
+export const JSON_TIMEOUT_MS = 120_000
+
 export interface Usage {
   promptTokens: number
   completionTokens: number
@@ -63,31 +69,53 @@ async function* lines(body: ReadableStream<Uint8Array>): AsyncGenerator<string> 
   const reader = body.getReader()
   const dec = new TextDecoder()
   let buf = ''
-  for (;;) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buf += dec.decode(value, { stream: true })
-    let idx: number
-    while ((idx = buf.indexOf('\n')) >= 0) {
-      yield buf.slice(0, idx).replace(/\r$/, '')
-      buf = buf.slice(idx + 1)
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buf += dec.decode(value, { stream: true })
+      let idx: number
+      while ((idx = buf.indexOf('\n')) >= 0) {
+        yield buf.slice(0, idx).replace(/\r$/, '')
+        buf = buf.slice(idx + 1)
+      }
     }
+    if (buf) yield buf
+  } finally {
+    // Runs when the consumer stops early or throws too: release the connection.
+    await reader.cancel().catch(() => {})
   }
-  if (buf) yield buf
 }
 
-/** Parses one SSE `data:` payload into a ChatEvent, or null to skip. */
+interface StreamChunk {
+  choices?: { delta?: { content?: string } }[]
+  usage?: Record<string, unknown>
+  error?: { message?: string; code?: unknown } | string
+}
+
+/** The message of a mid-stream `{"error": …}` chunk, or undefined. */
+function streamError(json: StreamChunk): string | undefined {
+  if (!json.error) return undefined
+  if (typeof json.error === 'string') return json.error
+  return json.error.message ?? `code ${String(json.error.code ?? 'unknown')}`
+}
+
+/**
+ * Parses one SSE `data:` payload into a ChatEvent, or null to skip. A provider
+ * failure after the stream opened arrives as an `error` chunk under HTTP 200: it
+ * is thrown, so the half reply is never taken for a finished message.
+ */
 export function parseSseData(data: string): ChatEvent | null {
   if (data === '[DONE]') return { type: 'done' }
-  let json: {
-    choices?: { delta?: { content?: string } }[]
-    usage?: Record<string, unknown>
-  }
+  let json: StreamChunk | null
   try {
-    json = JSON.parse(data)
+    json = JSON.parse(data) as StreamChunk | null
   } catch {
     return null
   }
+  if (!json || typeof json !== 'object') return null
+  const failure = streamError(json)
+  if (failure) throw new Error(`openrouter stream error: ${failure}`)
   const delta = json.choices?.[0]?.delta?.content
   if (delta) return { type: 'delta', text: delta }
   if (json.usage) return { type: 'usage', usage: mapUsage(json.usage) }
@@ -229,7 +257,7 @@ async function sendJson(
   const res = await fetch(`${baseUrl}/chat/completions`, {
     method: 'POST',
     headers,
-    signal: opts.signal,
+    signal: opts.signal ?? AbortSignal.timeout(JSON_TIMEOUT_MS),
     body: JSON.stringify(jsonBody(opts)),
   })
   if (!res.ok) {

@@ -1,5 +1,6 @@
 /** Growing an existing deck: its next batch and the background finish. */
 
+import type { UserId, DeckId } from '../ids'
 import { getDeck, listCards, rememberedDeckInstruction, updateDeckSettings } from '../db/repo'
 import type { Db } from '../db/client'
 import { fetchFrequencyWords, frequencySourceFor } from '../frequency/source'
@@ -25,6 +26,8 @@ export interface GrowthPlan {
   startStep: number
   /** The index into the deck's source list this growth starts at. */
   cursor: number
+  /** How many cards the deck holds before this growth. */
+  cardCount: number
 }
 
 /**
@@ -34,8 +37,8 @@ export interface GrowthPlan {
  */
 export async function growthPlan(
   db: Db,
-  userId: string,
-  deckId: string,
+  userId: UserId,
+  deckId: DeckId,
   opts: GrowPlanOpts = {},
 ): Promise<GrowthPlan | undefined> {
   const head = await planHead(db, userId, deckId, opts)
@@ -45,14 +48,28 @@ export async function growthPlan(
 }
 
 function planOf(head: PlanHead, source: string[], instruction: string, topic?: string): GrowthPlan {
+  const known = new Set(head.known)
   return {
     instruction,
     ctx: growthContext(head.deck, head.settings, instruction, topic),
-    words: source.slice(head.cursor).filter((w) => !head.known.includes(w)),
+    words: source.slice(head.cursor).filter((w) => !known.has(w)),
     knownWords: head.known,
     startStep: maxStep(head.cards),
     cursor: head.cursor,
+    cardCount: head.cards.length,
   }
+}
+
+/**
+ * A card that introduced a word. Sentence and grammar cards are not vocabulary:
+ * counting their `back` as known would let a later batch skip a real word that
+ * happens to equal a grammar answer, and would hand whole sentences to the
+ * planner as "words". Cards made outside the planner carry no template, so
+ * their card type decides.
+ */
+function introducesWord(c: ReturnType<typeof listCards>[number]): boolean {
+  const template = c.payload?.template
+  return template === undefined ? c.type === 'vocab' : template === 'vocab'
 }
 
 interface GrowPlanOpts {
@@ -73,11 +90,11 @@ interface PlanHead {
 /** The deck, its settings and n+1 state, or undefined when it does not exist. */
 async function planHead(
   db: Db,
-  userId: string,
-  deckId: string,
+  userId: UserId,
+  deckId: DeckId,
   opts: GrowPlanOpts,
 ): Promise<PlanHead | undefined> {
-  const deck = getDeck(db, deckId, userId)
+  const deck = getDeck(db, deckId)
   if (!deck) return undefined
   const settings = deck.settings ?? {}
   const cards = listCards(db, userId, deckId)
@@ -85,7 +102,7 @@ async function planHead(
     deck,
     settings,
     cards,
-    known: cards.map((c) => c.back),
+    known: cards.filter(introducesWord).map((c) => c.back),
     cursor: settings.cursor ?? 0,
     want: clamp(opts.want ?? PLAN_CHUNK, 1, MAX_DECK_WORDS),
   }
@@ -107,7 +124,7 @@ async function sourceWordsFor(head: PlanHead, fetcher?: Fetcher): Promise<string
  * deck from the imported deck …" wording, so they pick up the learner's
  * remembered prompt instead of losing it on the next batch.
  */
-function instructionFor(db: Db, userId: string, settings: DeckSettings): string {
+function instructionFor(db: Db, userId: UserId, settings: DeckSettings): string {
   const generic =
     !settings.instruction || settings.instruction.startsWith('Build a deck from the imported deck ')
   return generic
@@ -131,6 +148,9 @@ function growthContext(
     variant: settings.variant,
     readingScript: settings.readingScript,
     pitchAccent: settings.pitchAccent,
+    // An imported deck's own readings/meanings, stored at import time: without
+    // them a build resumed after a restart would fall back to the model's guess.
+    hints: settings.hints,
   }
 }
 
@@ -142,23 +162,22 @@ function growthContext(
  */
 export async function growDeck(
   db: Db,
-  userId: string,
-  deckId: string,
+  userId: UserId,
+  deckId: DeckId,
   opts: GrowDeckOptions,
 ): Promise<BuiltDeck> {
-  const deck = getDeck(db, deckId, userId)
+  const deck = getDeck(db, deckId)
   if (!deck) throw new Error('deck not found')
   const settings = deck.settings ?? {}
-  const cards = listCards(db, userId, deckId)
   const count = clamp(opts.count ?? settings.batchSize ?? 10, 1, MAX_DECK_WORDS)
   const plan = await grownPlan(db, userId, deckId, opts, count)
   if (!plan) throw new Error('deck not found')
   const filled = await fillGrown(db, { userId, deckId, plan, count, planner: opts.planner })
-  updateDeckSettings(db, deckId, userId, grownSettings(plan, count))
-  return grewDeck(deck, settings, deckId, cards.length + filled.cardCount, filled.newWords)
+  updateDeckSettings(db, deckId, grownSettings(plan, count))
+  return grewDeck(deck, settings, deckId, plan.cardCount + filled.cardCount, filled.newWords)
 }
 
-function grownPlan(db: Db, userId: string, deckId: string, opts: GrowDeckOptions, count: number) {
+function grownPlan(db: Db, userId: UserId, deckId: DeckId, opts: GrowDeckOptions, count: number) {
   return growthPlan(db, userId, deckId, {
     topic: opts.topic,
     fetcher: opts.fetcher,
@@ -176,8 +195,8 @@ function grownSettings(plan: GrowthPlan, count: number) {
 }
 
 interface GrowFill {
-  userId: string
-  deckId: string
+  userId: UserId
+  deckId: DeckId
   plan: GrowthPlan
   count: number
   planner: Planner
@@ -199,7 +218,7 @@ function fillGrown(db: Db, req: GrowFill) {
 function grewDeck(
   deck: Deck,
   settings: DeckSettings,
-  deckId: string,
+  deckId: DeckId,
   cardCount: number,
   newWords: string[],
 ): BuiltDeck {
@@ -217,15 +236,15 @@ function grewDeck(
  */
 export async function startDeckGrowth(
   db: Db,
-  userId: string,
-  deckId: string,
+  userId: UserId,
+  deckId: DeckId,
   opts: GrowStartOpts,
 ): Promise<number | undefined> {
   const plan = await growthPlan(db, userId, deckId, grownRequest(opts, MAX_DECK_WORDS))
   if (!plan) return undefined
-  if (plan.words.length === 0) return stopBuilding(db, deckId, userId)
+  if (plan.words.length === 0) return stopBuilding(db, deckId)
   const total = plan.cursor + plan.words.length
-  updateDeckSettings(db, deckId, userId, {
+  updateDeckSettings(db, deckId, {
     building: true,
     buildTotal: total,
     buildError: undefined,
@@ -238,8 +257,8 @@ function grownRequest(opts: GrowStartOpts, want: number) {
   return { topic: opts.topic, fetcher: opts.fetcher, want }
 }
 
-function stopBuilding(db: Db, deckId: string, userId: string): number {
-  updateDeckSettings(db, deckId, userId, { building: false, buildError: undefined })
+function stopBuilding(db: Db, deckId: DeckId): number {
+  updateDeckSettings(db, deckId, { building: false, buildError: undefined })
   return 0
 }
 

@@ -1,17 +1,18 @@
 /** The guided path: decks split into lessons, and lesson completion (docs/DESIGN.md §13.6). */
 
+import type { UserId } from '../ids'
 import { completeLesson, deckKey, listCards, listDecks, listLessonProgress } from '../db/repo'
 import type { Db } from '../db/client'
 import type { EventBus } from '../events'
 import { buildLessons } from '../game/curriculum'
 import { countDue, isLearned, type FsrsState } from '../game/srs'
 import { publicDeckSettings } from '../deck/settings'
-import { pinyinToZhuyin } from '../seed/zhuyin'
+import { displayReading } from '../text/readings'
 import { srsStateMap } from './srs'
 
 /** The guided path: each deck split into lessons with completion state. */
-export function curriculumView(db: Db, userId: string) {
-  const decks = listDecks(db, userId)
+export function curriculumView(db: Db, userId: UserId) {
+  const decks = listDecks(db)
   const srsMap = srsStateMap(db, userId)
   const completed = new Set(listLessonProgress(db, userId).map((r) => r.lessonId))
   const ctx: CurriculumCtx = { srsMap, completed, now: Date.now() }
@@ -27,7 +28,7 @@ interface CurriculumCtx {
 type DeckRow = ReturnType<typeof listDecks>[number]
 type LessonRow = ReturnType<typeof buildLessons>[number]
 
-function deckView(db: Db, userId: string, d: DeckRow, ctx: CurriculumCtx) {
+function deckView(db: Db, userId: UserId, d: DeckRow, ctx: CurriculumCtx) {
   const cards = listCards(db, userId, d.id)
   const ids = cards.map((c) => c.id)
   return {
@@ -78,22 +79,19 @@ function lessonCardsOf(cards: ReturnType<typeof listCards>) {
 
 /** The reading a learner sees: Zhuyin for Chinese, kana for Japanese. */
 function cardDisplayReading(c: { targetLang: string; readings: Record<string, string> }): string {
-  const r = c.readings
-  if (c.targetLang === 'ja') return r.kana || ''
-  if (c.targetLang === 'zh') return r.zhuyin || (r.pinyin ? pinyinToZhuyin(r.pinyin) : '')
-  return Object.values(r).find(Boolean) ?? ''
+  return displayReading(c)
 }
 
 /** Marks a lesson complete when every card in it has been learned. */
 export function checkLessonCompletion(
   db: Db,
   bus: EventBus,
-  userId: string,
+  userId: UserId,
   lessonId: string,
 ): boolean {
   const parts = parseLessonId(lessonId)
   if (!parts) return false
-  const deck = listDecks(db, userId).find((d) => d.level === parts.key || d.id === parts.key)
+  const deck = listDecks(db).find((d) => d.id === parts.key)
   if (!deck) return false
   const lesson = buildLessons(parts.key, lessonCardsOf(listCards(db, userId, deck.id)))[parts.index]
   if (!lesson || lesson.cardIds.length === 0) return false

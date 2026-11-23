@@ -13,21 +13,25 @@
  *   TUTOR_DATA_DIR=~/.local/share/tutor \
  *     bun scripts/fix-deck-quality.ts <deck-id-or-name> [--llm] [--dry]
  *
- * Read this as a maintenance tool, not part of the request path.
+ * Read this as a maintenance tool, not part of the request path. It opens the
+ * database directly (WAL lets it run beside the live server) instead of building
+ * the server's dependencies: that would clear the live server's `building` flags
+ * and could start a second speech gateway from inside this script.
  */
 
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import type { Deps } from '../apps/server/src/context'
 
 process.env.TUTOR_DATA_DIR ||= join(homedir(), '.local/share/tutor')
 
 const { env } = await import('../apps/server/src/env')
-const { buildDeps } = await import('../apps/server/src/bootstrap')
+const { openDb } = await import('../apps/server/src/db/client')
 const { getRoles, listCards, listDecks, listUsers, updateCard } =
   await import('../apps/server/src/db/repo')
 const { META_MARKERS, stripMetaCommentary } = await import('../apps/server/src/deck/plan')
 const { mandarinSentenceZhuyin } = await import('../apps/server/src/deck/mandarin')
-const { pinyinToZhuyin } = await import('../apps/server/src/seed/zhuyin')
+const { zhuyinFromPinyin } = await import('../apps/server/src/deck/context')
 const { resolveUserKey } = await import('../apps/server/src/llm/userkey')
 const { OpenRouter } = await import('../apps/server/src/llm/openrouter')
 
@@ -37,7 +41,9 @@ const useLlm = args.includes('--llm')
 const needle = args.find((a) => !a.startsWith('--'))?.toLowerCase()
 const limit = Number(args.find((a) => a.startsWith('--limit='))?.slice(8) ?? 0)
 
-const { deps, close } = buildDeps(env)
+const { db, sqlite } = openDb(join(env.dataDir, 'tutor.db'))
+/** Just what `resolveUserKey` reads — no speech supervisor, no audio service. */
+const keyDeps = { db, secret: env.secret, serverKey: env.openrouterKey } as unknown as Deps
 
 /** Fields that are shown to the learner and must never hold model reasoning. */
 const TEXT_FIELDS = ['gloss', 'prompt', 'rule', 'explanation'] as const
@@ -71,8 +77,12 @@ function repairCardText(card: ReturnType<typeof listCards>[number]): RepairPatch
 function repairReadings(
   card: ReturnType<typeof listCards>[number],
 ): Record<string, string> | undefined {
-  if (looksPinyin(card.readings.zhuyin)) {
-    return { ...card.readings, zhuyin: pinyinToZhuyin(card.readings.zhuyin!) }
+  // Mandarin only: Cantonese romanisation is not pinyin and must not be converted.
+  if (card.targetLang === 'zh' && looksPinyin(card.readings.zhuyin)) {
+    // Tone digits or stray punctuation do not convert: use the dictionary then,
+    // and leave the reading alone when neither gives clean Zhuyin.
+    const zhuyin = zhuyinFromPinyin(card.readings.zhuyin!) ?? mandarinSentenceZhuyin(card.back)
+    return zhuyin ? { ...card.readings, zhuyin } : undefined
   }
   if (card.targetLang === 'zh' && !card.readings.zhuyin && !card.readings.pinyin) {
     // Fill a missing Zhuyin reading from the Taiwan dictionary.
@@ -155,10 +165,10 @@ let repairedReadings = 0
 let repairedText = 0
 let retranslated = 0
 
-for (const user of listUsers(deps.db)) {
-  for (const deck of listDecks(deps.db, user.id)) {
+for (const user of listUsers(db)) {
+  for (const deck of listDecks(db)) {
     if (needle && deck.id !== needle && !deck.name.toLowerCase().includes(needle)) continue
-    const cards = listCards(deps.db, user.id, deck.id)
+    const cards = listCards(db, user.id, deck.id)
     console.log(`[fix] ${deck.name} (${cards.length} cards)`)
 
     // Pass 1 + 2: deterministic repairs.
@@ -167,21 +177,21 @@ for (const user of listUsers(deps.db)) {
       if (Object.keys(patch).length === 0) continue
       if (patch.readings) repairedReadings++
       if (patch.front || patch.payload) repairedText++
-      if (!dry) updateCard(deps.db, card.id, user.id, patch)
+      if (!dry) updateCard(db, card.id, patch)
     }
 
     // Pass 3: word-by-word English -> one natural sentence.
     if (useLlm) {
-      const key = await resolveUserKey(deps, user.id)
+      const key = await resolveUserKey(keyDeps, user.id)
       if (!key) {
         console.warn(`[fix] no OpenRouter key for ${user.username}; skipping the translation pass`)
         continue
       }
-      const model = getRoles(deps.db, user.id, deps.defaults).translator
-      const or = new OpenRouter(key, deps.or.baseUrl)
+      const model = getRoles(db, user.id, env.defaultRoles).translator
+      const or = new OpenRouter(key)
       // Re-read after the text pass, so a leaked rule/explanation we just
       // dropped is not resurrected by the gloss update below.
-      const live = dry ? cards : listCards(deps.db, user.id, deck.id)
+      const live = dry ? cards : listCards(db, user.id, deck.id)
       const all = live.filter(needsEnglish)
       const targets = limit > 0 ? all.slice(0, limit) : all
       console.log(`[fix] ${all.length} sentence cards need a natural translation`)
@@ -196,7 +206,7 @@ for (const user of listUsers(deps.db)) {
             console.log(`[fix]   ${card.back}  ${card.front}  ->  ${english}`)
             continue
           }
-          updateCard(deps.db, card.id, user.id, {
+          updateCard(db, card.id, {
             front: english,
             payload: { ...(card.payload ?? {}), gloss: english },
           })
@@ -210,4 +220,4 @@ for (const user of listUsers(deps.db)) {
 console.log(
   `[fix] ${dry ? 'would repair' : 'repaired'}: ${repairedReadings} readings, ${repairedText} text fields, ${retranslated} sentence translations`,
 )
-close()
+sqlite.close()

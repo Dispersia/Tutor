@@ -1,3 +1,4 @@
+import type { UserId } from '../ids'
 import type { Deps } from '../context'
 import { getRoles } from '../db/repo'
 import { roleReasoning } from '../env'
@@ -10,7 +11,7 @@ import { llmPlanner, type Planner } from './plan'
  * OpenRouter-backed generator using the user's own key (or the server's).
  * Undefined when no key is configured.
  */
-export async function plannerFor(deps: Deps, userId: string): Promise<Planner | undefined> {
+export async function plannerFor(deps: Deps, userId: UserId): Promise<Planner | undefined> {
   if (deps.planner) return deps.planner
   const key = await resolveUserKey(deps, userId)
   if (!key) return undefined

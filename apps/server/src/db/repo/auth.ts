@@ -1,5 +1,6 @@
 /** Login (bearer) sessions. */
 
+import type { UserId } from '../../ids'
 import { eq } from 'drizzle-orm'
 import type { Db } from '../client'
 import { authSessions } from '../schema'
@@ -9,7 +10,7 @@ import { getUserById } from './users'
 export function insertAuthSession(
   db: Db,
   tokenId: string,
-  userId: string,
+  userId: UserId,
   ttlMs: number,
   userAgent?: string,
 ): number {
@@ -34,6 +35,6 @@ export function deleteAuthSession(db: Db, tokenId: string): void {
   db.delete(authSessions).where(eq(authSessions.id, tokenId)).run()
 }
 
-export function deleteUserAuthSessions(db: Db, userId: string): void {
+export function deleteUserAuthSessions(db: Db, userId: UserId): void {
   db.delete(authSessions).where(eq(authSessions.userId, userId)).run()
 }

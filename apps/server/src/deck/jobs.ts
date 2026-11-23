@@ -1,5 +1,6 @@
 /** Background deck builds: the in-flight map and the runner. */
 
+import type { UserId, DeckId } from '../ids'
 import { updateDeckSettings } from '../db/repo'
 import type { Db } from '../db/client'
 import type { Planner } from './plan'
@@ -10,15 +11,15 @@ import type { DeckContext } from './context'
  * In-flight background builds, keyed by deck id, so a caller (or a test) can
  * wait for the work the HTTP response did not. Entries clear when they finish.
  */
-const builds = new Map<string, Promise<void>>()
+const builds = new Map<DeckId, Promise<void>>()
 
 /** True while a background build is filling this deck. */
-export function isDeckBuilding(deckId: string): boolean {
+export function isDeckBuilding(deckId: DeckId): boolean {
   return builds.has(deckId)
 }
 
 /** Waits for a deck's background build, resolving at once when none is running. */
-export function awaitDeckBuild(deckId: string): Promise<void> {
+export function awaitDeckBuild(deckId: DeckId): Promise<void> {
   return builds.get(deckId) ?? Promise.resolve()
 }
 
@@ -43,8 +44,8 @@ export interface StartDeckBuildRequest {
 
 export function startDeckBuild(
   db: Db,
-  userId: string,
-  deckId: string,
+  userId: UserId,
+  deckId: DeckId,
   request: StartDeckBuildRequest,
 ): void {
   const base = request.base ?? {}
@@ -64,8 +65,8 @@ interface Range {
 /** The run itself: fill in batches, then clear the status flag. */
 async function runBuild(
   db: Db,
-  userId: string,
-  deckId: string,
+  userId: UserId,
+  deckId: DeckId,
   request: StartDeckBuildRequest,
   range: Range,
 ): Promise<void> {
@@ -73,9 +74,9 @@ async function runBuild(
   const onProgress = progressWriter({ db, deckId, userId, opts, ...range })
   try {
     await fillDeck(db, userId, deckId, { ctx, opts: { ...opts, onProgress }, planner })
-    updateDeckSettings(db, deckId, userId, builtSettings(range, opts.count))
+    updateDeckSettings(db, deckId, builtSettings(range, opts.count))
   } catch (err) {
-    updateDeckSettings(db, deckId, userId, { building: false, buildError: (err as Error).message })
+    updateDeckSettings(db, deckId, { building: false, buildError: (err as Error).message })
   }
 }
 
@@ -91,8 +92,8 @@ function builtSettings(range: Range, count: number) {
 
 interface ProgressReq {
   db: Db
-  deckId: string
-  userId: string
+  deckId: DeckId
+  userId: UserId
   opts: FillDeckOptions
   start: number
   total: number
@@ -102,7 +103,7 @@ interface ProgressReq {
 function progressWriter(req: ProgressReq) {
   return (built: number, chunkTotal: number) => {
     req.opts.onProgress?.(built, chunkTotal)
-    updateDeckSettings(req.db, req.deckId, req.userId, {
+    updateDeckSettings(req.db, req.deckId, {
       cursor: req.start + built,
       buildTotal: req.total,
     })

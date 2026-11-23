@@ -12,6 +12,7 @@ import { clearDeckBuilds, getSetting, listUsers } from './db/repo'
 import { env } from './env'
 import { EventBus } from './events'
 import { OpenRouter } from './llm/openrouter'
+import { backfillGearInstances } from './services/gearInstances'
 import { SpeechSupervisor } from './speech/supervisor'
 
 export interface Built {
@@ -25,6 +26,9 @@ export function buildDeps(cfg: typeof env): Built {
   // A background deck build cannot survive a restart: clear the flags it left
   // behind so a half-built domain never looks busy forever.
   clearDeckBuilds(db)
+  // Equipment is its gear instances: fold any older bank stacks into pieces.
+  const pieces = backfillGearInstances(db)
+  if (pieces) console.log(`[gear] backfilled ${pieces} gear instances from legacy bank stacks`)
   const or = new OpenRouter(cfg.openrouterKey)
   const supervisor = speechSupervisor(cfg)
   const audio = createAudioService({

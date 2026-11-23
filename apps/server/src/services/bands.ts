@@ -1,5 +1,6 @@
 /** Material tier bands and the enchant tokens gear carries (docs/DESIGN.md §13.5.3). */
 
+import type { UserId } from '../ids'
 import { listActionProgress } from '../db/repo'
 import type { Db } from '../db/client'
 import {
@@ -43,7 +44,7 @@ export function enchantOf(instance: { enchantJson: string }): EnchantDef | undef
  * levelled on the same curve an action uses. Any item of the band feeds the same
  * score, so you never level a dozen near-identical actions to move on.
  */
-export function bandXpMap(db: Db, userId: string): Map<BandId, number> {
+export function bandXpMap(db: Db, userId: UserId): Map<BandId, number> {
   const out = new Map<BandId, number>()
   for (const row of listActionProgress(db, userId)) {
     const action = ACTION_BY_ID.get(row.actionId)
@@ -53,7 +54,7 @@ export function bandXpMap(db: Db, userId: string): Map<BandId, number> {
   return out
 }
 
-export function bandLevelMap(db: Db, userId: string): Map<BandId, number> {
+export function bandLevelMap(db: Db, userId: UserId): Map<BandId, number> {
   const xp = bandXpMap(db, userId)
   const out = new Map<BandId, number>()
   // Every band reads at least level 1, so its entry action is never gated away.
@@ -87,7 +88,7 @@ export interface BandView {
 }
 
 /** The band board for an artisan page: each metal with its shared score. */
-export function bandView(db: Db, userId: string): BandView[] {
+export function bandView(db: Db, userId: UserId): BandView[] {
   const xpByBand = bandXpMap(db, userId)
   return BANDS.map((band) => bandViewOf(band, xpByBand.get(band.id) ?? 0))
 }
@@ -129,7 +130,7 @@ function nextUnlock(locked: ActionDef[]): { level: number; name: string } | null
 }
 
 /** The account-wide passive every band level grants (crit, lifesteal, …). */
-export function accountBandBonuses(db: Db, userId: string): BandBonuses {
+export function accountBandBonuses(db: Db, userId: UserId): BandBonuses {
   return bandBonuses(bandLevelMap(db, userId))
 }
 

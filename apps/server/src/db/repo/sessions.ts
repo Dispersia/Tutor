@@ -1,21 +1,22 @@
 /** Per-user chat sessions and their messages (append-only). */
 
+import type { UserId, DeckId, SessionId } from '../../ids'
 import { desc, eq } from 'drizzle-orm'
 import type { Db } from '../client'
 import { messages, sessions } from '../schema'
-import { id, now } from './helpers'
+import { id, newId, now } from './helpers'
 
 export interface NewSession {
-  id?: string
-  deckId?: string
+  id?: SessionId
+  deckId?: DeckId
   kind?: 'chat' | 'voice' | 'mixed'
   lang?: string
   title?: string
 }
 
-export function createSession(db: Db, userId: string, s: NewSession = {}) {
+export function createSession(db: Db, userId: UserId, s: NewSession = {}) {
   const row = {
-    id: s.id ?? id(),
+    id: s.id ?? newId<SessionId>(),
     userId,
     deckId: s.deckId ?? null,
     kind: s.kind ?? 'chat',
@@ -29,13 +30,13 @@ export function createSession(db: Db, userId: string, s: NewSession = {}) {
 }
 
 /** Returns the session only if it belongs to this user. */
-export function getOwnedSession(db: Db, sid: string, userId: string) {
+export function getOwnedSession(db: Db, sid: SessionId, userId: UserId) {
   const row = db.select().from(sessions).where(eq(sessions.id, sid)).get()
   if (!row || row.userId !== userId) return undefined
   return row
 }
 
-export function listSessions(db: Db, userId: string, limit = 100) {
+export function listSessions(db: Db, userId: UserId, limit = 100) {
   return db
     .select()
     .from(sessions)
@@ -46,7 +47,7 @@ export function listSessions(db: Db, userId: string, limit = 100) {
 }
 
 export interface NewMessage {
-  sessionId: string
+  sessionId: SessionId
   role: 'system' | 'user' | 'assistant' | 'tool'
   text: string
   model?: string
@@ -73,7 +74,7 @@ export function addMessage(db: Db, m: NewMessage) {
   return row
 }
 
-export function listMessages(db: Db, sessionId: string) {
+export function listMessages(db: Db, sessionId: SessionId) {
   return db
     .select()
     .from(messages)

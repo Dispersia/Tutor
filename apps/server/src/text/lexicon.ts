@@ -1,5 +1,7 @@
 /**
- * A Mandarin frequency list (docs/DESIGN.md §13.7).
+ * The Mandarin lexicon: a frequency list (docs/DESIGN.md §13.7). It lives in
+ * `text/` because the grammar engine and the sentence drills read it at runtime;
+ * `seed/service.ts` also seeds the test-fixture deck from it.
  *
  * Ordered roughly by frequency, then trimmed for beginner usefulness: the head
  * of the list is the words you can actually build sentences with, so the path

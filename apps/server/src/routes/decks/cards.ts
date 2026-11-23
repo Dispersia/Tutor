@@ -3,12 +3,14 @@
  * The same "add a card" endpoint backs the automatic n+1 reinforcement.
  */
 
+import { toDeckId, toCardId, type UserId } from '../../ids'
 import { parsePitchContour } from '@tutor/core'
 import type { Context } from 'hono'
 import type { App, AppEnv, Deps } from '../../context'
 import { addCard, getCard, getDeck, listCards, updateCard } from '../../db/repo'
 import { jsonBody, num, obj, str, strRecord } from '../body'
 import { deckView } from './view'
+import { fail } from '../errors'
 
 /** The deck row as `getDeck` returns it. */
 type Deck = NonNullable<ReturnType<typeof getDeck>>
@@ -50,8 +52,8 @@ export function registerDeckCards(app: App) {
 function listCardsHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
-  const deck = getDeck(deps.db, String(c.req.param('id')), user.id)
-  if (!deck) return c.json({ error: 'not found' }, 404)
+  const deck = getDeck(deps.db, toDeckId(String(c.req.param('id'))))
+  if (!deck) return fail(c, 404, 'not found')
   return c.json({ deck: deckView(deck), cards: listCards(deps.db, user.id, deck.id) })
 }
 
@@ -64,12 +66,12 @@ function listCardsHandler(c: Context<AppEnv>) {
 async function addCardHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
-  const deck = getDeck(deps.db, String(c.req.param('id')), user.id)
-  if (!deck) return c.json({ error: 'not found' }, 404)
+  const deck = getDeck(deps.db, toDeckId(String(c.req.param('id'))))
+  if (!deck) return fail(c, 404, 'not found')
   const body = readNewCard(await jsonBody(c))
   const front = body.front?.trim()
   const back = body.back?.trim()
-  if (!front || !back) return c.json({ error: 'front and back are required' }, 400)
+  if (!front || !back) return fail(c, 400, 'front and back are required')
   const step = stepFor(listCards(deps.db, user.id, deck.id), body.step)
   const card = insertCard({ deps, userId: user.id, deck, step, front, back, body })
   // Record the card's audio now (background), so its listening card streams
@@ -80,7 +82,7 @@ async function addCardHandler(c: Context<AppEnv>) {
 
 interface NewCardCtx {
   deps: Deps
-  userId: string
+  userId: UserId
   deck: Deck
   step: number
   front: string
@@ -113,10 +115,10 @@ function insertCard(ctx: NewCardCtx) {
 async function patchCardHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
-  const cardId = String(c.req.param('cardId'))
+  const cardId = toCardId(String(c.req.param('cardId')))
   const card = getCard(deps.db, cardId, user.id)
-  if (!card || card.deckId !== String(c.req.param('id'))) return c.json({ error: 'not found' }, 404)
-  updateCard(deps.db, cardId, user.id, cardPatch(card.metadata, await jsonBody(c)))
+  if (!card || card.deckId !== String(c.req.param('id'))) return fail(c, 404, 'not found')
+  updateCard(deps.db, cardId, cardPatch(card.metadata, await jsonBody(c)))
   return c.json({ card: getCard(deps.db, cardId, user.id) })
 }
 

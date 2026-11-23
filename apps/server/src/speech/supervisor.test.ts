@@ -111,3 +111,79 @@ test('ensure() surfaces a crashed gateway', async () => {
   await expect(sup.ensure()).rejects.toThrow(/exited during startup/)
   globalThis.fetch = orig
 })
+
+const cfg = {
+  url: 'http://127.0.0.1:9',
+  port: 9,
+  pythonDir: '.',
+  modelsDir: '.',
+  idleTimeoutMs: 600_000,
+  autostart: false,
+}
+
+test('stop() waits for the exit, so an immediate ensure() cannot double-spawn', async () => {
+  const orig = globalThis.fetch
+  globalThis.fetch = (async () =>
+    new Response('{"ready":false,"models":[]}', { status: 200 })) as unknown as typeof fetch
+
+  let alive = 0
+  let peak = 0
+  const exits: (() => void)[] = []
+  const sup = new SpeechSupervisor({
+    ...cfg,
+    spawn: () => {
+      peak = Math.max(peak, ++alive)
+      const proc = {
+        pid: 7,
+        exitCode: null as number | null,
+        exited: new Promise<void>((resolve) => exits.push(resolve)),
+        kill: () => undefined,
+      }
+      void proc.exited.then(() => void (alive--, (proc.exitCode = 0)))
+      return proc
+    },
+  })
+
+  await sup.ensure()
+  const stopping = sup.stop()
+  const restarting = sup.ensure()
+  await Bun.sleep(20)
+  // The first gateway has been killed but has not exited: no second spawn yet.
+  expect(exits.length).toBe(1)
+  exits[0]!()
+  await stopping
+  await restarting
+  expect(exits.length).toBe(2)
+  expect(peak).toBe(1)
+  expect(sup.running).toBe(true)
+  globalThis.fetch = orig
+})
+
+test('ensure() adopts a gateway that already answers instead of spawning', async () => {
+  const orig = globalThis.fetch
+  const calls: string[] = []
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    calls.push(`${init?.method ?? 'GET'} ${String(input)}`)
+    return Response.json({ ready: true, models: ['asr'], idleTimeoutMs: 600_000 })
+  }) as unknown as typeof fetch
+
+  let spawned = 0
+  const sup = new SpeechSupervisor({
+    ...cfg,
+    spawn: () => {
+      spawned++
+      return { pid: 1, exitCode: null as number | null, kill: () => undefined }
+    },
+  })
+
+  await sup.ensure()
+  await sup.ensure()
+  expect(spawned).toBe(0)
+  expect(sup.running).toBe(true)
+
+  // No handle to kill: stopping asks the adopted gateway to unload its models.
+  await sup.stop()
+  expect(sup.running).toBe(false)
+  expect(calls).toContain('POST http://127.0.0.1:9/admin/shutdown')
+  globalThis.fetch = orig
+})

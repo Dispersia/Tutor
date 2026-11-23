@@ -1,11 +1,12 @@
 /** The active combat encounter and the player's persisted HP. */
 
+import type { UserId } from '../../ids'
 import { eq } from 'drizzle-orm'
 import type { Db } from '../client'
 import { encounters, playerState } from '../schema'
 import { now } from './helpers'
 
-export function getEncounter(db: Db, userId: string) {
+export function getEncounter(db: Db, userId: UserId) {
   return db.select().from(encounters).where(eq(encounters.userId, userId)).get()
 }
 
@@ -26,7 +27,7 @@ export interface EncounterPatch {
   xpEarned?: number
 }
 
-export function upsertEncounter(db: Db, userId: string, patch: EncounterPatch): void {
+export function upsertEncounter(db: Db, userId: UserId, patch: EncounterPatch): void {
   const extras = encounterExtras(patch)
   db.insert(encounters)
     .values(encounterValues(userId, patch))
@@ -44,7 +45,7 @@ export function upsertEncounter(db: Db, userId: string, patch: EncounterPatch): 
 }
 
 /** The insert values, with the columns the fight does not always set defaulted. */
-function encounterValues(userId: string, patch: EncounterPatch) {
+function encounterValues(userId: UserId, patch: EncounterPatch) {
   return {
     userId,
     monsterId: patch.monsterId,
@@ -77,18 +78,18 @@ function encounterExtras(patch: EncounterPatch) {
   }
 }
 
-export function clearEncounter(db: Db, userId: string): void {
+export function clearEncounter(db: Db, userId: UserId): void {
   db.delete(encounters).where(eq(encounters.userId, userId)).run()
 }
 
 // --- persistent player state (combat HP) -------------------------------------
 
 /** The player's persisted HP, or null when they have never fought (means "full"). */
-export function getPlayerHp(db: Db, userId: string): number | null {
+export function getPlayerHp(db: Db, userId: UserId): number | null {
   return db.select().from(playerState).where(eq(playerState.userId, userId)).get()?.hp ?? null
 }
 
-export function setPlayerHp(db: Db, userId: string, hp: number): void {
+export function setPlayerHp(db: Db, userId: UserId, hp: number): void {
   db.insert(playerState)
     .values({ userId, hp, updatedAt: now() })
     .onConflictDoUpdate({ target: playerState.userId, set: { hp, updatedAt: now() } })

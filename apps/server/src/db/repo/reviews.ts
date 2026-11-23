@@ -1,13 +1,14 @@
 /** Graded reviews, and the review-derived counts the practice queue reads. */
 
+import type { UserId, CardId } from '../../ids'
 import { and, eq, gte, ne, sql } from 'drizzle-orm'
 import type { Db } from '../client'
 import { reviews } from '../schema'
 import { id, now } from './helpers'
 
 export interface ReviewInput {
-  cardId: string
-  userId: string
+  cardId: CardId
+  userId: UserId
   exerciseId: string
   score: number
   latencyMs?: number
@@ -33,7 +34,7 @@ function reviewValues(r: ReviewInput) {
   }
 }
 
-export function lastExerciseUse(db: Db, userId: string): Map<string, number> {
+export function lastExerciseUse(db: Db, userId: UserId): Map<string, number> {
   const rows = db
     .select({ exerciseId: reviews.exerciseId, last: sql<number>`max(${reviews.createdAt})` })
     .from(reviews)
@@ -50,13 +51,13 @@ export function lastExerciseUse(db: Db, userId: string): Map<string, number> {
  * step). Recorded as a review row with exerciseId `introduce`; it is not a recall
  * test, so it carries no SRS state.
  */
-export function introducedCardIds(db: Db, userId: string): Set<string> {
+export function introducedCardIds(db: Db, userId: UserId): Set<CardId> {
   const rows = db
     .select({ cardId: reviews.cardId })
     .from(reviews)
     .where(and(eq(reviews.userId, userId), eq(reviews.exerciseId, 'introduce')))
     .all()
-  return new Set(rows.map((r) => r.cardId).filter((c): c is string => Boolean(c)))
+  return new Set(rows.map((r) => r.cardId).filter((c): c is CardId => Boolean(c)))
 }
 
 /** Today's study counts for the daily new/review budget (docs/DESIGN.md §13.6). */
@@ -67,25 +68,27 @@ export interface DailyReviewCounts {
   reviews: number
 }
 
-export function dailyReviewCounts(db: Db, userId: string, since: number): DailyReviewCounts {
+export function dailyReviewCounts(db: Db, userId: UserId, since: number): DailyReviewCounts {
   return { newCards: newToday(db, userId, since), reviews: gradedCount(db, userId, since) }
 }
 
 /** A card is "new today" when its first graded review is at/after `since`. */
-function newToday(db: Db, userId: string, since: number): number {
+function newToday(db: Db, userId: UserId, since: number): number {
   // Reviewing an old card again today is not "new": only its first graded
   // review counts, and the teach-only `introduce` step is not graded.
-  const firsts = db
-    .select({ firstAt: sql<number>`min(${reviews.createdAt})` })
+  // The cut-off is applied in SQL: only today's first-timers come back, not one
+  // row for every card the learner has ever reviewed.
+  return db
+    .select({ cardId: reviews.cardId })
     .from(reviews)
     .where(and(eq(reviews.userId, userId), ne(reviews.exerciseId, 'introduce')))
     .groupBy(reviews.cardId)
-    .all()
-  return firsts.filter((r) => Number(r.firstAt) >= since).length
+    .having(sql`min(${reviews.createdAt}) >= ${since}`)
+    .all().length
 }
 
 /** Graded reviews at/after `since` (the teach-only `introduce` step excluded). */
-function gradedCount(db: Db, userId: string, since: number): number {
+function gradedCount(db: Db, userId: UserId, since: number): number {
   const row = db
     .select({ n: sql<number>`count(*)` })
     .from(reviews)
@@ -106,7 +109,7 @@ function gradedCount(db: Db, userId: string, since: number): number {
  * The practice queue uses this to tell "a sitting just started" (few cards, warm
  * up with new words) from "in the middle of a review run".
  */
-export function cardsGradedSince(db: Db, userId: string, since: number): number {
+export function cardsGradedSince(db: Db, userId: UserId, since: number): number {
   const row = db
     .select({ n: sql<number>`count(distinct ${reviews.cardId})` })
     .from(reviews)

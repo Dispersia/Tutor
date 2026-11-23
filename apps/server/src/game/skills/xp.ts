@@ -3,9 +3,16 @@
  * level-100 cap the profession mean is built from.
  */
 
+import { curveLevelInfo, curveXpForLevel, type LevelCurve } from '../curve'
 import type { SkillLevelInfo } from './types'
 
 // --- skill XP curve ----------------------------------------------------------
+
+/**
+ * The action ladder, uncapped here: `actionLevelInfo` applies the level-100 cap
+ * itself, on top of the uncapped level.
+ */
+const ACTION_CURVE: LevelCurve = { base: 100, step: 10 }
 
 /**
  * XP to advance one **action** level. Kept linear so the level-100 cap stays
@@ -16,18 +23,11 @@ import type { SkillLevelInfo } from './types'
  * action is ~22 "leave it running" sessions, not one.
  */
 export function skillXpForLevel(level: number): number {
-  return 100 + (level - 1) * 10
+  return curveXpForLevel(ACTION_CURVE, level)
 }
 
 export function skillLevelInfo(xp: number): SkillLevelInfo {
-  let level = 1
-  let remaining = Math.max(0, xp)
-  while (remaining >= skillXpForLevel(level)) {
-    remaining -= skillXpForLevel(level)
-    level++
-  }
-  const forNext = skillXpForLevel(level)
-  return { level, intoLevel: remaining, forNext, progress: Math.min(1, remaining / forNext) }
+  return curveLevelInfo(ACTION_CURVE, xp)
 }
 
 /**

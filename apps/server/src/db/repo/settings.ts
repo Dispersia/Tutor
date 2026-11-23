@@ -1,5 +1,6 @@
 /** Server-global settings, per-user settings and per-user LLM roles. */
 
+import type { UserId } from '../../ids'
 import { and, eq } from 'drizzle-orm'
 import type { Role } from '../../env'
 import type { Db } from '../client'
@@ -16,7 +17,7 @@ export function setSetting(db: Db, key: string, value: string): void {
     .run()
 }
 
-export function getUserSetting(db: Db, userId: string, key: string): string | undefined {
+export function getUserSetting(db: Db, userId: UserId, key: string): string | undefined {
   return db
     .select()
     .from(userSettings)
@@ -24,14 +25,14 @@ export function getUserSetting(db: Db, userId: string, key: string): string | un
     .get()?.value
 }
 
-export function setUserSetting(db: Db, userId: string, key: string, value: string): void {
+export function setUserSetting(db: Db, userId: UserId, key: string, value: string): void {
   db.insert(userSettings)
     .values({ userId, key, value })
     .onConflictDoUpdate({ target: [userSettings.userId, userSettings.key], set: { value } })
     .run()
 }
 
-export function allUserSettings(db: Db, userId: string): Record<string, string> {
+export function allUserSettings(db: Db, userId: UserId): Record<string, string> {
   return Object.fromEntries(
     db
       .select()
@@ -44,7 +45,7 @@ export function allUserSettings(db: Db, userId: string): Record<string, string> 
 
 export function getRoles(
   db: Db,
-  userId: string,
+  userId: UserId,
   defaults: Record<Role, string>,
 ): Record<Role, string> {
   const raw = getUserSetting(db, userId, 'roles')
@@ -58,7 +59,7 @@ export function getRoles(
 
 export function setRole(
   db: Db,
-  userId: string,
+  userId: UserId,
   defaults: Record<Role, string>,
   role: Role,
   model: string,

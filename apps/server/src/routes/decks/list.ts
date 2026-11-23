@@ -7,7 +7,6 @@ import { deckView } from './view'
 export function registerDeckList(app: App) {
   app.get('/api/decks', (c) => {
     const deps = c.get('deps')
-    const user = c.get('user')!
-    return c.json({ decks: listDecks(deps.db, user.id).map(deckView) })
+    return c.json({ decks: listDecks(deps.db).map(deckView) })
   })
 }
