@@ -127,45 +127,50 @@ export function clearDeckBuilds(db: Db): number {
 export function deleteDeck(db: Db, deckId: string, userId: string): void {
   const row = db.select().from(decks).where(eq(decks.id, deckId)).get()
   if (!row || row.userId !== userId) return
-
-  const cardIds = db
-    .select({ id: cards.id })
-    .from(cards)
-    .where(eq(cards.deckId, deckId))
-    .all()
-    .map((c) => c.id)
-
-  if (cardIds.length > 0) {
-    db.delete(srs)
-      .where(and(eq(srs.userId, userId), inArray(srs.cardId, cardIds)))
-      .run()
-    db.delete(reviews)
-      .where(and(eq(reviews.userId, userId), inArray(reviews.cardId, cardIds)))
-      .run()
-    db.delete(attempts)
-      .where(and(eq(attempts.userId, userId), inArray(attempts.cardId, cardIds)))
-      .run()
-  }
-
+  deleteCardHistory(db, userId, cardIdsOf(db, deckId))
   // Lessons are addressed as `${deck.level ?? deck.id}:${step}`.
   const key = row.level ?? row.id
   db.delete(lessonProgress)
     .where(and(eq(lessonProgress.userId, userId), like(lessonProgress.lessonId, `${key}:%`)))
     .run()
+  deleteDeckSessions(db, deckId, userId)
+  db.delete(cards).where(eq(cards.deckId, deckId)).run()
+  db.delete(decks).where(eq(decks.id, deckId)).run()
+}
 
-  const sessionIds = db
+function cardIdsOf(db: Db, deckId: string): string[] {
+  return db
+    .select({ id: cards.id })
+    .from(cards)
+    .where(eq(cards.deckId, deckId))
+    .all()
+    .map((c) => c.id)
+}
+
+/** The learner's SRS state, review and attempt rows for the deck's cards. */
+function deleteCardHistory(db: Db, userId: string, cardIds: string[]): void {
+  if (cardIds.length === 0) return
+  db.delete(srs)
+    .where(and(eq(srs.userId, userId), inArray(srs.cardId, cardIds)))
+    .run()
+  db.delete(reviews)
+    .where(and(eq(reviews.userId, userId), inArray(reviews.cardId, cardIds)))
+    .run()
+  db.delete(attempts)
+    .where(and(eq(attempts.userId, userId), inArray(attempts.cardId, cardIds)))
+    .run()
+}
+
+/** The deck-scoped chat sessions and all their messages. */
+function deleteDeckSessions(db: Db, deckId: string, userId: string): void {
+  const ids = db
     .select({ id: sessions.id })
     .from(sessions)
     .where(and(eq(sessions.userId, userId), eq(sessions.deckId, deckId)))
     .all()
     .map((s) => s.id)
-  if (sessionIds.length > 0) {
-    db.delete(messages).where(inArray(messages.sessionId, sessionIds)).run()
-  }
+  if (ids.length > 0) db.delete(messages).where(inArray(messages.sessionId, ids)).run()
   db.delete(sessions)
     .where(and(eq(sessions.userId, userId), eq(sessions.deckId, deckId)))
     .run()
-
-  db.delete(cards).where(eq(cards.deckId, deckId)).run()
-  db.delete(decks).where(eq(decks.id, deckId)).run()
 }

@@ -91,6 +91,12 @@ async function importPrivate(pub: string, d: string): Promise<CryptoKey> {
   ])
 }
 
+interface SendOpts {
+  subject?: string
+  ttlSec?: number
+  fetchImpl?: typeof fetch
+}
+
 /**
  * Sends one notification. `payload` is JSON; the browser's `push` event reads
  * it with `event.data.json()`. Returns `gone` when the subscription is dead.
@@ -99,47 +105,55 @@ export async function sendPush(
   db: Db,
   sub: PushSubscription,
   payload: unknown,
-  opts: {
-    subject?: string
-    ttlSec?: number
-    fetchImpl?: typeof fetch
-  } = {},
+  opts: SendOpts = {},
 ): Promise<PushResult> {
-  let audience: string
-  try {
-    audience = new URL(sub.endpoint).origin
-  } catch {
-    return { ok: false, gone: true, error: 'invalid endpoint' }
-  }
-
+  const audience = endpointOrigin(sub.endpoint)
+  if (!audience) return { ok: false, gone: true, error: 'invalid endpoint' }
   try {
     const keys = await vapidKeys(db)
     const jwt = await vapidJwt(keys, audience, opts.subject ?? env.pushSubject)
-    const body = await encryptPayload(sub, payload)
-
-    const res = await (opts.fetchImpl ?? fetch)(sub.endpoint, {
-      method: 'POST',
-      headers: {
-        authorization: `vapid t=${jwt},k=${keys.publicKey}`,
-        'content-encoding': 'aes128gcm',
-        'content-type': 'application/octet-stream',
-        ttl: String(opts.ttlSec ?? 6 * 60 * 60),
-        urgency: 'normal',
-      },
-      body,
-    }).catch((e: unknown) => e as Error)
-
-    if (res instanceof Error) return { ok: false, gone: false, error: String(res) }
-
-    const status = res.status
-    if (status === 404 || status === 410) return { ok: false, gone: true, status }
-    if (status >= 200 && status < 300) return { ok: true, gone: false, status }
-    const text = await res.text().catch(() => '')
-    return { ok: false, gone: false, status, error: text.slice(0, 200) }
+    const res = await post(sub, keys, jwt, await encryptPayload(sub, payload), opts)
+    return res instanceof Error ? { ok: false, gone: false, error: String(res) } : resultOf(res)
   } catch (e) {
     // A malformed subscription key or a crypto failure must not crash the scan.
     return { ok: false, gone: false, error: String(e) }
   }
+}
+
+function endpointOrigin(endpoint: string): string | undefined {
+  try {
+    return new URL(endpoint).origin
+  } catch {
+    return undefined
+  }
+}
+
+function post(
+  sub: PushSubscription,
+  keys: VapidKeys,
+  jwt: string,
+  body: Uint8Array<ArrayBuffer>,
+  opts: SendOpts,
+) {
+  return (opts.fetchImpl ?? fetch)(sub.endpoint, {
+    method: 'POST',
+    headers: {
+      authorization: `vapid t=${jwt},k=${keys.publicKey}`,
+      'content-encoding': 'aes128gcm',
+      'content-type': 'application/octet-stream',
+      ttl: String(opts.ttlSec ?? 6 * 60 * 60),
+      urgency: 'normal',
+    },
+    body,
+  }).catch((e: unknown) => e as Error)
+}
+
+async function resultOf(res: Response): Promise<PushResult> {
+  const status = res.status
+  if (status === 404 || status === 410) return { ok: false, gone: true, status }
+  if (res.ok) return { ok: true, gone: false, status }
+  const text = await res.text().catch(() => '')
+  return { ok: false, gone: false, status, error: text.slice(0, 200) }
 }
 
 async function vapidJwt(keys: VapidKeys, audience: string, subject: string): Promise<string> {
@@ -169,6 +183,22 @@ async function encryptPayload(
 ): Promise<Uint8Array<ArrayBuffer>> {
   const uaPub = unb64u(sub.p256dh)
   const auth = unb64u(sub.auth)
+  const { localPub, secret } = await ecdhSecret(uaPub)
+  const prk = await hkdf(auth, secret, concat(encode('WebPush: info\0'), uaPub, localPub), 32)
+  const salt = crypto.getRandomValues(new Uint8Array(16))
+  const cek = await hkdf(salt, prk, encode('Content-Encoding: aes128gcm\0'), 16)
+  const nonce = await hkdf(salt, prk, encode('Content-Encoding: nonce\0'), 12)
+  const aes = await crypto.subtle.importKey('raw', cek, 'AES-GCM', false, ['encrypt'])
+  // 0x02 marks the last (and only) record, so the receiver knows padding ended.
+  const plain = concat(encode(JSON.stringify(payload)), new Uint8Array([2]))
+  const cipher = new Uint8Array(
+    await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonce, tagLength: 128 }, aes, plain),
+  )
+  return concat(salt, u32be(RECORD_SIZE), new Uint8Array([localPub.length]), localPub, cipher)
+}
+
+/** The ephemeral ECDH public key and the shared secret (RFC 8291). */
+async function ecdhSecret(uaPub: Uint8Array<ArrayBuffer>) {
   const local = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, [
     'deriveBits',
   ])
@@ -183,19 +213,7 @@ async function encryptPayload(
   const secret = new Uint8Array(
     await crypto.subtle.deriveBits({ name: 'ECDH', public: uaKey }, local.privateKey, 256),
   )
-
-  const prk = await hkdf(auth, secret, concat(encode('WebPush: info\0'), uaPub, localPub), 32)
-  const salt = crypto.getRandomValues(new Uint8Array(16))
-  const cek = await hkdf(salt, prk, encode('Content-Encoding: aes128gcm\0'), 16)
-  const nonce = await hkdf(salt, prk, encode('Content-Encoding: nonce\0'), 12)
-  const aes = await crypto.subtle.importKey('raw', cek, 'AES-GCM', false, ['encrypt'])
-
-  // 0x02 marks the last (and only) record, so the receiver knows padding ended.
-  const plain = concat(encode(JSON.stringify(payload)), new Uint8Array([2]))
-  const cipher = new Uint8Array(
-    await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonce, tagLength: 128 }, aes, plain),
-  )
-  return concat(salt, u32be(RECORD_SIZE), new Uint8Array([localPub.length]), localPub, cipher)
+  return { localPub, secret }
 }
 
 async function hkdf(

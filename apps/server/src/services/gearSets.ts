@@ -87,33 +87,63 @@ export function applyGearSet(
   const skipped: GearSetSkip[] = []
   for (const slot of SLOTS) {
     const entry = set.slots[slot.id]
-    if (!entry) {
-      setEquipment(db, userId, slot.id, null)
-      continue
-    }
-    const item = ITEM_BY_ID.get(entry.itemId)
-    if (item) {
-      const gate = meetsRequirements(item, (skill) => skillLevelOf(db, userId, skill, levels))
-      if (!gate.ok) {
-        // Keep whatever is worn: the rest of the set still goes on.
-        skipped.push({
-          slot: slot.id,
-          itemId: entry.itemId,
-          name: item.name,
-          missing: requirementView(gate.missing),
-        })
-        continue
-      }
-    }
-    const instance = entry.instanceId ? getGearInstance(db, userId, entry.instanceId) : undefined
-    if (instance) {
-      setEquipment(db, userId, slot.id, instance.itemId, instance.id)
-      bus.emit('item.equipped', { userId, itemId: instance.itemId, slot: slot.id })
-    } else if (ITEM_BY_ID.has(entry.itemId) && getItemCount(db, userId, entry.itemId) > 0) {
-      setEquipment(db, userId, slot.id, entry.itemId, null)
+    if (!entry) setEquipment(db, userId, slot.id, null)
+    else {
+      const skip = equipFromSet(db, bus, { userId, slotId: slot.id, entry, levels })
+      if (skip) skipped.push(skip)
     }
   }
   return { ok: true, skipped }
+}
+
+interface SetEntry {
+  itemId: string
+  instanceId: string | null
+}
+
+interface SetSlotReq {
+  userId: string
+  slotId: string
+  entry: SetEntry
+  levels?: Map<string, number>
+}
+
+function equipFromSet(db: Db, bus: EventBus, req: SetSlotReq): GearSetSkip | undefined {
+  const { userId, slotId, entry } = req
+  const item = ITEM_BY_ID.get(entry.itemId)
+  if (item) {
+    const gate = meetsRequirements(item, (skill) => skillLevelOf(db, userId, skill, req.levels))
+    // Keep whatever is worn: the rest of the set still goes on.
+    if (!gate.ok) return skipView(slotId, entry.itemId, item, gate.missing)
+  }
+  return equipInstance(db, bus, userId, slotId, entry)
+}
+
+function skipView(
+  slot: string,
+  itemId: string,
+  item: NonNullable<ReturnType<typeof ITEM_BY_ID.get>>,
+  missing: Parameters<typeof requirementView>[0],
+): GearSetSkip {
+  return { slot, itemId, name: item.name, missing: requirementView(missing) }
+}
+
+/** Wears a rolled instance, or the plain item when the bank still holds one. */
+function equipInstance(
+  db: Db,
+  bus: EventBus,
+  userId: string,
+  slotId: string,
+  entry: SetEntry,
+): undefined {
+  const instance = entry.instanceId ? getGearInstance(db, userId, entry.instanceId) : undefined
+  if (instance) {
+    setEquipment(db, userId, slotId, instance.itemId, instance.id)
+    bus.emit('item.equipped', { userId, itemId: instance.itemId, slot: slotId })
+  } else if (ITEM_BY_ID.has(entry.itemId) && getItemCount(db, userId, entry.itemId) > 0) {
+    setEquipment(db, userId, slotId, entry.itemId, null)
+  }
+  return undefined
 }
 
 export function removeGearSet(db: Db, userId: string, setId: string): void {

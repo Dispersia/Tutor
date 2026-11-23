@@ -98,78 +98,50 @@ function parseSteps(raw: string | undefined, fallback: number[]): number[] {
 
 /** Reads a user's study preferences, falling back to the defaults. */
 export function readStudyPrefs(db: Db, userId: string): StudyPrefs {
-  let disabled: string[] = []
-  const raw = getUserSetting(db, userId, KEYS.disabledExercises)
-  if (raw) {
-    try {
-      const parsed = JSON.parse(raw) as unknown
-      if (Array.isArray(parsed)) disabled = parsed.filter((x): x is string => typeof x === 'string')
-    } catch {
-      disabled = []
-    }
-  }
+  const get = (key: string) => getUserSetting(db, userId, key)
+  const d = DEFAULT_STUDY_PREFS
   return {
-    showZhuyin: bool(getUserSetting(db, userId, KEYS.showZhuyin), DEFAULT_STUDY_PREFS.showZhuyin),
-    showFurigana: bool(
-      getUserSetting(db, userId, KEYS.showFurigana),
-      DEFAULT_STUDY_PREFS.showFurigana,
-    ),
-    disabledExercises: disabled,
-    newPerDay: int(
-      getUserSetting(db, userId, KEYS.newPerDay),
-      DEFAULT_STUDY_PREFS.newPerDay,
-      0,
-      10_000,
-    ),
-    maxReviewsPerDay: int(
-      getUserSetting(db, userId, KEYS.maxReviewsPerDay),
-      DEFAULT_STUDY_PREFS.maxReviewsPerDay,
-      0,
-      100_000,
-    ),
-    learningSteps: parseSteps(
-      getUserSetting(db, userId, KEYS.learningSteps),
-      DEFAULT_STUDY_PREFS.learningSteps,
-    ),
-    autoReinforce: bool(
-      getUserSetting(db, userId, KEYS.autoReinforce),
-      DEFAULT_STUDY_PREFS.autoReinforce,
-    ),
-    activeDeckId: nonEmpty(getUserSetting(db, userId, KEYS.activeDeck)),
+    showZhuyin: bool(get(KEYS.showZhuyin), d.showZhuyin),
+    showFurigana: bool(get(KEYS.showFurigana), d.showFurigana),
+    disabledExercises: readDisabled(get(KEYS.disabledExercises)),
+    newPerDay: int(get(KEYS.newPerDay), d.newPerDay, 0, 10_000),
+    maxReviewsPerDay: int(get(KEYS.maxReviewsPerDay), d.maxReviewsPerDay, 0, 100_000),
+    learningSteps: parseSteps(get(KEYS.learningSteps), d.learningSteps),
+    autoReinforce: bool(get(KEYS.autoReinforce), d.autoReinforce),
+    activeDeckId: nonEmpty(get(KEYS.activeDeck)),
+  }
+}
+
+/** The exercise kinds the learner turned off, from the stored JSON list. */
+function readDisabled(raw: string | undefined): string[] {
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : []
+  } catch {
+    return []
   }
 }
 
 /** Applies a partial update and returns the full, stored preferences. */
 export function writeStudyPrefs(db: Db, userId: string, patch: Partial<StudyPrefs>): StudyPrefs {
-  if (patch.showZhuyin !== undefined) {
-    setUserSetting(db, userId, KEYS.showZhuyin, patch.showZhuyin ? '1' : '0')
-  }
-  if (patch.showFurigana !== undefined) {
-    setUserSetting(db, userId, KEYS.showFurigana, patch.showFurigana ? '1' : '0')
-  }
+  const put = (key: string, value: string) => setUserSetting(db, userId, key, value)
+  if (patch.showZhuyin !== undefined) put(KEYS.showZhuyin, patch.showZhuyin ? '1' : '0')
+  if (patch.showFurigana !== undefined) put(KEYS.showFurigana, patch.showFurigana ? '1' : '0')
   if (patch.disabledExercises !== undefined) {
-    setUserSetting(db, userId, KEYS.disabledExercises, JSON.stringify(patch.disabledExercises))
+    put(KEYS.disabledExercises, JSON.stringify(patch.disabledExercises))
   }
   if (patch.newPerDay !== undefined) {
-    setUserSetting(db, userId, KEYS.newPerDay, String(Math.max(0, Math.round(patch.newPerDay))))
+    put(KEYS.newPerDay, String(Math.max(0, Math.round(patch.newPerDay))))
   }
   if (patch.maxReviewsPerDay !== undefined) {
-    setUserSetting(
-      db,
-      userId,
-      KEYS.maxReviewsPerDay,
-      String(Math.max(0, Math.round(patch.maxReviewsPerDay))),
-    )
+    put(KEYS.maxReviewsPerDay, String(Math.max(0, Math.round(patch.maxReviewsPerDay))))
   }
   if (patch.learningSteps !== undefined) {
-    setUserSetting(db, userId, KEYS.learningSteps, JSON.stringify(patch.learningSteps))
+    put(KEYS.learningSteps, JSON.stringify(patch.learningSteps))
   }
-  if (patch.autoReinforce !== undefined) {
-    setUserSetting(db, userId, KEYS.autoReinforce, patch.autoReinforce ? '1' : '0')
-  }
-  if (patch.activeDeckId !== undefined) {
-    setUserSetting(db, userId, KEYS.activeDeck, patch.activeDeckId ?? '')
-  }
+  if (patch.autoReinforce !== undefined) put(KEYS.autoReinforce, patch.autoReinforce ? '1' : '0')
+  if (patch.activeDeckId !== undefined) put(KEYS.activeDeck, patch.activeDeckId ?? '')
   return readStudyPrefs(db, userId)
 }
 
