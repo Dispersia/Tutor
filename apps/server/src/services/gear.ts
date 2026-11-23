@@ -32,6 +32,7 @@ import {
   type Cost,
   type GearQuality,
   type GearStats,
+  type ItemDef,
   type SkillId,
   type Slot,
 } from '../game/skills'
@@ -85,39 +86,54 @@ export function ensureWornGear(db: Db, userId: string): void {
 /** Every crafted piece the player owns, with its rolled stats and wear state. */
 export function gearView(db: Db, userId: string, levels?: Map<string, number>): GearInstanceView[] {
   ensureWornGear(db, userId)
-  const worn = new Set(
-    listEquipment(db, userId)
-      .map((e) => e.instanceId)
-      .filter((id): id is string => Boolean(id)),
-  )
+  const worn = wornSet(db, userId)
   const levelOf = (skill: SkillId) => skillLevelOf(db, userId, skill, levels)
-  return listGearInstances(db, userId).map((row) => {
-    const stats = parseStats(row.statsJson)
-    const item = ITEM_BY_ID.get(row.itemId)
-    return {
-      id: row.id,
-      itemId: row.itemId,
-      slot: row.slot as Slot,
-      quality: row.quality as GearQuality,
-      stats,
-      armour: row.armour,
-      power: row.power,
-      gearScore: gearScore(stats, row.armour, row.power),
-      equipped: worn.has(row.id),
-      enchant: parseEnchants(row.enchantJson),
-      requirements: item ? itemRequirements(item) : {},
-      missing: item ? requirementView(meetsRequirements(item, levelOf).missing) : [],
-    }
-  })
+  return listGearInstances(db, userId).map((row) => instanceView(row, worn, levelOf))
+}
+
+type GearRow = ReturnType<typeof listGearInstances>[number]
+
+function instanceView(
+  row: GearRow,
+  worn: Set<string>,
+  levelOf: (skill: SkillId) => number,
+): GearInstanceView {
+  const stats = parseStats(row.statsJson)
+  return {
+    id: row.id,
+    itemId: row.itemId,
+    slot: row.slot as Slot,
+    quality: row.quality as GearQuality,
+    stats,
+    armour: row.armour,
+    power: row.power,
+    gearScore: gearScore(stats, row.armour, row.power),
+    equipped: worn.has(row.id),
+    enchant: parseEnchants(row.enchantJson),
+    ...requirementsOf(ITEM_BY_ID.get(row.itemId), levelOf),
+  }
+}
+
+/** The piece's stat requirements and whichever of them the player still misses. */
+function requirementsOf(item: ItemDef | undefined, levelOf: (skill: SkillId) => number) {
+  if (!item) return { requirements: {}, missing: [] }
+  return {
+    requirements: itemRequirements(item),
+    missing: requirementView(meetsRequirements(item, levelOf).missing),
+  }
+}
+
+/** The ids of the equipped pieces (the ones not free to re-wear). */
+function wornSet(db: Db, userId: string): Set<string> {
+  const ids = listEquipment(db, userId)
+    .map((e) => e.instanceId)
+    .filter((id): id is string => Boolean(id))
+  return new Set(ids)
 }
 
 /** The first unequipped instance of an item, if one exists. */
 function findFreeGear(db: Db, userId: string, itemId: string): string | undefined {
-  const worn = new Set(
-    listEquipment(db, userId)
-      .map((e) => e.instanceId)
-      .filter((id): id is string => Boolean(id)),
-  )
+  const worn = wornSet(db, userId)
   return listGearInstances(db, userId).find((g) => g.itemId === itemId && !worn.has(g.id))?.id
 }
 
@@ -137,41 +153,48 @@ export function equipItem(
 ): { ok: boolean; error?: string; instanceId?: string; missing?: GearRequirementView[] } {
   const item = ITEM_BY_ID.get(itemId)
   if (!item?.slot) return { ok: false, error: 'not equippable' }
-
   // RuneScape-style gate: the piece's stat requirements must be met first.
   const gate = meetsRequirements(item, (skill) => skillLevelOf(db, userId, skill, levels))
-  if (!gate.ok) {
-    const missing = requirementView(gate.missing)
-    return {
-      ok: false,
-      error: `requires ${missing.map((m) => `${m.name} ${m.level}`).join(', ')}`,
-      missing,
-    }
-  }
-
-  const slot =
-    targetSlot && slotFamily(item.slot).includes(targetSlot as Slot)
-      ? (targetSlot as Slot)
-      : item.slot
-
-  let instance = instanceId ? getGearInstance(db, userId, instanceId) : undefined
-  if (instance && instance.itemId !== itemId) return { ok: false, error: 'wrong item' }
-  if (!instance) {
-    const owned = listGearInstances(db, userId).filter((g) => g.itemId === itemId)
-    if (owned.length > 0) {
-      const free = findFreeGear(db, userId, itemId)
-      if (!free) return { ok: false, error: 'every piece is already worn' }
-      instance = getGearInstance(db, userId, free)
-    } else {
-      if (getItemCount(db, userId, itemId) < 1) return { ok: false, error: 'not in your bank' }
-      const id = ensureBaseGearInstance(db, userId, item)
-      instance = getGearInstance(db, userId, id)
-    }
-  }
-
-  setEquipment(db, userId, slot, itemId, instance?.id ?? null)
+  if (!gate.ok) return gateError(gate.missing)
+  const slot = resolveSlot(item.slot, targetSlot)
+  const resolved = resolveInstance(db, userId, item, instanceId)
+  if ('error' in resolved) return { ok: false, error: resolved.error }
+  setEquipment(db, userId, slot, itemId, resolved.instance?.id ?? null)
   bus.emit('item.equipped', { userId, itemId, slot })
-  return { ok: true, instanceId: instance?.id }
+  return { ok: true, instanceId: resolved.instance?.id }
+}
+
+function gateError(missing: MissingRequirement[]) {
+  const view = requirementView(missing)
+  const names = view.map((m) => `${m.name} ${m.level}`).join(', ')
+  return { ok: false as const, error: `requires ${names}`, missing: view }
+}
+
+/** The slot to wear in: the requested one when it fits the piece's family. */
+function resolveSlot(itemSlot: Slot, targetSlot?: string): Slot {
+  if (targetSlot && slotFamily(itemSlot).includes(targetSlot as Slot)) return targetSlot as Slot
+  return itemSlot
+}
+
+type InstanceResult = { instance?: ReturnType<typeof getGearInstance> } | { error: string }
+
+/** The rolled piece to wear: the named one, a free one, or a fresh base piece. */
+function resolveInstance(
+  db: Db,
+  userId: string,
+  item: ItemDef,
+  instanceId?: string,
+): InstanceResult {
+  const given = instanceId ? getGearInstance(db, userId, instanceId) : undefined
+  if (given) return given.itemId === item.id ? { instance: given } : { error: 'wrong item' }
+  const owned = listGearInstances(db, userId).filter((g) => g.itemId === item.id)
+  if (owned.length > 0) {
+    const free = findFreeGear(db, userId, item.id)
+    if (!free) return { error: 'every piece is already worn' }
+    return { instance: getGearInstance(db, userId, free) }
+  }
+  if (getItemCount(db, userId, item.id) < 1) return { error: 'not in your bank' }
+  return { instance: getGearInstance(db, userId, ensureBaseGearInstance(db, userId, item)) }
 }
 
 export function unequipItem(db: Db, userId: string, slot: string): void {
@@ -226,15 +249,25 @@ export function salvageGear(
   if (!instance) return { ok: false, error: 'not found' }
   const item = ITEM_BY_ID.get(instance.itemId)
   if (!item) return { ok: false, error: 'unknown item' }
+  const materials = salvageYield(item, instance.quality as GearQuality)
+  deleteGearInstance(db, userId, instanceId)
+  addItems(db, userId, instance.itemId, -1)
+  grantMaterials(db, bus, userId, materials)
+  return { ok: true, materials }
+}
+
+/** What a broken-down piece returns: its family material, plus the band reagent. */
+function salvageYield(item: ItemDef, quality: GearQuality): Cost[] {
   const material = SALVAGE_MATERIAL[item.armourType ?? 'plate']
-  const count = SALVAGE_YIELD[instance.quality as GearQuality] ?? 1
-  const materials: Cost[] = [{ item: material, count }]
+  const materials: Cost[] = [{ item: material, count: SALVAGE_YIELD[quality] ?? 1 }]
   // Deep salvage also yields the band's reagent (§13.5.3): the feedstock
   // Enchanting spends to put that band's signature stat on a higher-tier piece.
   const band = bandForItem(item)
-  if (band) materials.push({ item: band.reagent, count })
-  deleteGearInstance(db, userId, instanceId)
-  addItems(db, userId, instance.itemId, -1)
+  if (band) materials.push({ item: band.reagent, count: 1 })
+  return materials
+}
+
+function grantMaterials(db: Db, bus: EventBus, userId: string, materials: Cost[]): void {
   for (const m of materials) {
     addItems(db, userId, m.item, m.count)
     bus.emit('item.gained', {
@@ -244,7 +277,6 @@ export function salvageGear(
       total: getItemCount(db, userId, m.item),
     })
   }
-  return { ok: true, materials }
 }
 
 /**
@@ -267,13 +299,7 @@ export function distillItem(
   const xp = Math.max(1, Math.round(itemValue(item) * DISTILL_XP_PER_VALUE)) * n
   awardActionXp(db, bus, userId, { actionId: 'distill', amount: xp })
   const essence = essenceId(essenceFamily(item))
-  addItems(db, userId, essence, n)
-  bus.emit('item.gained', {
-    userId,
-    itemId: essence,
-    count: n,
-    total: getItemCount(db, userId, essence),
-  })
+  grantMaterials(db, bus, userId, [{ item: essence, count: n }])
   return { ok: true, xp, essence }
 }
 
@@ -294,7 +320,24 @@ export function applyEnchant(
   if (!def) return { ok: false, error: 'unknown enchant' }
   const instance = getGearInstance(db, userId, instanceId)
   if (!instance) return { ok: false, error: 'not found' }
-  const item = ITEM_BY_ID.get(instance.itemId)
+  const invalid = enchantGuard(db, userId, def, ITEM_BY_ID.get(instance.itemId), levels)
+  if (invalid) return invalid
+  consumeItems(db, bus, userId, def.reagents)
+  setGearInstanceEnchant(db, userId, instanceId, JSON.stringify([def.id]))
+  bus.emit('item.enchanted', { userId, instanceId, band: def.id })
+  return { ok: true }
+}
+
+type EnchantDef = NonNullable<ReturnType<typeof ENCHANT_BY_ID.get>>
+
+/** The reason the enchant cannot be applied, or undefined when it can. */
+function enchantGuard(
+  db: Db,
+  userId: string,
+  def: EnchantDef,
+  item: ItemDef | undefined,
+  levels?: Map<string, number>,
+): { ok: false; error: string; enchantingLevel?: number } | undefined {
   if (!item?.slot || !(def.slot === item.slot || slotFamily(def.slot).includes(item.slot))) {
     return { ok: false, error: `${def.name} does not fit ${item?.slot ?? 'that piece'}` }
   }
@@ -303,11 +346,6 @@ export function applyEnchant(
     return { ok: false, error: `requires Enchanting ${def.level}`, enchantingLevel: level }
   }
   const missing = def.reagents.filter((r) => getItemCount(db, userId, r.item) < r.count)
-  if (missing.length) {
-    return { ok: false, error: `needs ${missing.map((m) => m.item).join(', ')}` }
-  }
-  consumeItems(db, bus, userId, def.reagents)
-  setGearInstanceEnchant(db, userId, instanceId, JSON.stringify([def.id]))
-  bus.emit('item.enchanted', { userId, instanceId, band: def.id })
-  return { ok: true }
+  if (missing.length) return { ok: false, error: `needs ${missing.map((m) => m.item).join(', ')}` }
+  return undefined
 }

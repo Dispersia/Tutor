@@ -500,11 +500,12 @@ followed. Tests got their own, larger ceiling (**60** lines: a case is
 arrange/act/assert, read as one unit) instead of the production 20, and the
 long ones were split or given `getJson`/`postJson` helpers. The settle pass and
 drill (`services/idle.ts`), the n+1 reinforcement, the OpenRouter client, the web
-chat streamer and the sentence-builder exercise followed. That took the list from
-127 files / 255 functions to **63 files / 105 functions**. The biggest left are
-the web speech client, the deck growth planner and the remaining repository row
-mappers, all under 60 lines. The list shrinks; it never grows, and new code is
-held to 20 from day one.
+chat streamer and the sentence-builder exercise followed, then the pronunciation
+feature maths, the web speech client, the deck growth planner and the gear
+service. That took the list from 127 files / 255 functions to **59 files / 92
+functions**. The biggest left are the exercise graders and the remaining
+repository row mappers, all under 60 lines. The list shrinks; it never grows, and
+new code is held to 20 from day one.
 
 **Phase 15 — the web shells & route validation (open).**
 The remaining `+page.svelte` files over ~250 lines (`practice`, `settings`,

@@ -9,25 +9,35 @@ function play(url: string): Promise<void> {
     stopAudio()
     const a = new Audio(url)
     currentAudio = a
-    let settled = false
-    // `pause` fires when we stop playback mid-clip (stopAudio); resolve so callers
-    // waiting on the clip do not hang forever.
-    const done = () => {
-      if (settled) return
-      settled = true
-      if (currentAudio === a) currentAudio = null
-      resolve()
-    }
-    const fail = (err: unknown) => {
-      if (settled) return
-      settled = true
-      reject(err instanceof Error ? err : new Error('audio playback failed'))
-    }
+    const { done, fail } = onceSettler(a, resolve, reject)
     a.onended = done
     a.onpause = done
     a.onerror = () => fail(new Error('audio playback failed'))
     a.play().catch(fail)
   })
+}
+
+/** Settle a clip's promise at most once, however `play()` ends. */
+function onceSettler(
+  a: HTMLAudioElement,
+  resolve: () => void,
+  reject: (err: unknown) => void,
+): { done: () => void; fail: (err: unknown) => void } {
+  let settled = false
+  const done = () => {
+    if (settled) return
+    settled = true
+    if (currentAudio === a) currentAudio = null
+    resolve()
+  }
+  // `pause` fires when we stop playback mid-clip (stopAudio); resolve so callers
+  // waiting on the clip do not hang forever.
+  const fail = (err: unknown) => {
+    if (settled) return
+    settled = true
+    reject(err instanceof Error ? err : new Error('audio playback failed'))
+  }
+  return { done, fail }
 }
 
 export function stopAudio(): void {
@@ -64,12 +74,7 @@ export async function speak(
   opts: SpeakOptions = {},
   signal?: AbortSignal,
 ): Promise<void> {
-  const url = URL.createObjectURL(await fetchTts(text, opts, signal))
-  try {
-    await play(url)
-  } finally {
-    URL.revokeObjectURL(url)
-  }
+  await playBlob(await fetchTts(text, opts, signal))
 }
 
 /**
@@ -84,7 +89,12 @@ export async function speakCard(cardId: string, signal?: AbortSignal): Promise<v
     signal,
   })
   if (!res.ok) throw new Error(`audio failed: ${await res.text().catch(() => res.status)}`)
-  const url = URL.createObjectURL(await res.blob())
+  await playBlob(await res.blob())
+}
+
+/** Play a blob from an object URL, revoking it however playback ends. */
+async function playBlob(blob: Blob): Promise<void> {
+  const url = URL.createObjectURL(blob)
   try {
     await play(url)
   } finally {
@@ -108,70 +118,79 @@ export interface Speaker {
  * wait for the whole reply (DESIGN §9.2).
  */
 export function createSpeaker(opts: SpeakOptions = {}, onError?: (err: Error) => void): Speaker {
-  const queue: { text: string; audio: Promise<Blob> }[] = []
-  let cancelled = false
-  let closed = false
-  let wake: (() => void) | null = null
-
+  const state = speakerState()
   const report = (e: unknown) => onError?.(e instanceof Error ? e : new Error(String(e)))
+  const started = runLoop(state, report)
+  return speakerApi(state, started, opts)
+}
 
-  async function loop(): Promise<void> {
-    while (!cancelled) {
-      if (queue.length === 0) {
-        if (closed) break
-        await new Promise<void>((r) => (wake = r))
-        continue
-      }
-      const item = queue.shift()!
-      try {
-        const blob = await item.audio
-        if (cancelled) break
-        const url = URL.createObjectURL(blob)
-        try {
-          await play(url)
-        } finally {
-          URL.revokeObjectURL(url)
-        }
-      } catch (e) {
-        report(e)
-      }
+interface SpeakerState {
+  queue: { text: string; audio: Promise<Blob> }[]
+  cancelled: boolean
+  closed: boolean
+  wake: (() => void) | null
+}
+
+function speakerState(): SpeakerState {
+  return { queue: [], cancelled: false, closed: false, wake: null }
+}
+
+/** Plays queued sentences in order, synthesising each while the last one plays. */
+async function runLoop(state: SpeakerState, report: (e: unknown) => void): Promise<void> {
+  while (!state.cancelled) {
+    if (state.queue.length === 0) {
+      if (state.closed) break
+      await new Promise<void>((r) => (state.wake = r))
+      continue
+    }
+    try {
+      const blob = await state.queue.shift()!.audio
+      if (state.cancelled) break
+      await playBlob(blob)
+    } catch (e) {
+      report(e)
     }
   }
+}
 
-  const started = loop()
+function signal(state: SpeakerState): void {
+  if (!state.wake) return
+  const r = state.wake
+  state.wake = null
+  r()
+}
 
-  const signal = () => {
-    if (wake) {
-      const r = wake
-      wake = null
-      r()
-    }
-  }
-
+function speakerApi(state: SpeakerState, started: Promise<void>, opts: SpeakOptions): Speaker {
   return {
-    push(text: string) {
-      const t = text.trim()
-      if (cancelled || closed || !t) return
-      const audio = fetchTts(t, opts)
-      // If cancel() drops this item before the loop awaits it, the rejection must
-      // not surface as an unhandled promise rejection.
-      audio.catch(() => {})
-      queue.push({ text: t, audio })
-      signal()
-    },
-    async close() {
-      closed = true
-      signal()
-      await started
-    },
-    cancel() {
-      cancelled = true
-      closed = true
-      queue.length = 0
-      signal()
-      stopAudio()
-    },
+    push: (text) => pushText(state, opts, text),
+    close: () => closeSpeaker(state, started),
+    cancel: () => cancelSpeaker(state),
   }
+}
+
+function pushText(state: SpeakerState, opts: SpeakOptions, text: string): void {
+  const t = text.trim()
+  if (state.cancelled || state.closed || !t) return
+  const audio = fetchTts(t, opts)
+  // If cancel() drops this item before the loop awaits it, the rejection must
+  // not surface as an unhandled promise rejection.
+  audio.catch(() => {})
+  state.queue.push({ text: t, audio })
+  signal(state)
+}
+
+async function closeSpeaker(state: SpeakerState, started: Promise<void>): Promise<void> {
+  state.closed = true
+  signal(state)
+  await started
+}
+
+function cancelSpeaker(state: SpeakerState): void {
+  state.cancelled = true
+  state.closed = true
+  state.queue.length = 0
+  signal(state)
+  stopAudio()
 }
 
 /** Transcribes a recorded clip with the local speech gateway. */

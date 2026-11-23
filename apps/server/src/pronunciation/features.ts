@@ -101,18 +101,74 @@ export function computeFeatures(input: AssessInput): AssessFeatures {
   const tokensEqual = accentAware(input.lang) ? soundAlike : (a: string, b: string) => a === b
   const expectedTokens = tokenize(input.expected)
   const transcriptTokens = tokenize(input.transcript)
+  const cmp = compareTokens(expectedTokens, transcriptTokens, input, tokensEqual)
+  const totalSyllables = expectedTokens.reduce((n, t) => n + syllableCount(t), 0)
+  const truncated = isTruncated(input, expectedTokens, cmp.missing)
+  return featureResult({
+    input,
+    ...cmp,
+    words: wordTimings(input.items),
+    pauses: pausesOf(input.items),
+    speechRate: input.duration > 0 ? totalSyllables / input.duration : 0,
+    truncated,
+    score: scoreOf(cmp.cer, expectedTokens, cmp.missing, truncated),
+  })
+}
 
-  const normExpected = foldForCompare(input.expected, input.lang)
-  const normTranscript = foldForCompare(input.transcript, input.lang)
-  const denom = Math.max(1, normExpected.length)
-  const cer = Math.min(1, levenshtein(normExpected, normTranscript) / denom)
+interface FeatureParts extends Compare {
+  input: AssessInput
+  words: WordTiming[]
+  pauses: Pause[]
+  speechRate: number
+  truncated: boolean
+  score: number
+}
 
-  const missing = multisetDiff(expectedTokens, transcriptTokens, tokensEqual)
-  const extra = multisetDiff(transcriptTokens, expectedTokens, (x, y) =>
-    tokensEqual(y, x),
-  )
+function featureResult(p: FeatureParts): AssessFeatures {
+  return {
+    expected: p.input.expected,
+    transcript: p.input.transcript,
+    cer: p.cer,
+    missing: p.missing,
+    extra: p.extra,
+    words: p.words,
+    pauses: p.pauses,
+    speechRate: p.speechRate,
+    truncated: p.truncated,
+    duration: p.input.duration,
+    score: p.score,
+    correct: p.score >= 70 && p.missing.length === 0,
+  }
+}
 
-  const words: WordTiming[] = input.items.map((it) => {
+interface Compare {
+  cer: number
+  missing: string[]
+  extra: string[]
+}
+
+function compareTokens(
+  expectedTokens: string[],
+  transcriptTokens: string[],
+  input: AssessInput,
+  tokensEqual: (a: string, b: string) => boolean,
+): Compare {
+  return {
+    cer: charErrorRate(input.expected, input.transcript, input.lang),
+    missing: multisetDiff(expectedTokens, transcriptTokens, tokensEqual),
+    extra: multisetDiff(transcriptTokens, expectedTokens, (x, y) => tokensEqual(y, x)),
+  }
+}
+
+/** Character error rate over the accent-folded forms the two texts compare on. */
+function charErrorRate(expected: string, transcript: string, lang: string | undefined): number {
+  const normExpected = foldForCompare(expected, lang)
+  const normTranscript = foldForCompare(transcript, lang)
+  return Math.min(1, levenshtein(normExpected, normTranscript) / Math.max(1, normExpected.length))
+}
+
+function wordTimings(items: AlignItem[]): WordTiming[] {
+  return items.map((it) => {
     const duration = Math.max(0.01, it.end - it.start)
     const syllables = syllableCount(it.text)
     const rate = syllables / duration
@@ -121,43 +177,37 @@ export function computeFeatures(input: AssessInput): AssessFeatures {
     const flagged = rate > 14 || rate < 1.0
     return { text: it.text, start: it.start, end: it.end, duration, syllables, rate, flagged }
   })
+}
 
+/** Gaps over 0.4s between aligned words, as pauses the learner took. */
+function pausesOf(items: AlignItem[]): Pause[] {
   const pauses: Pause[] = []
-  for (let i = 1; i < input.items.length; i++) {
-    const prev = input.items[i - 1]!
-    const cur = input.items[i]!
-    const gap = cur.start - prev.end
-    if (gap > 0.4) pauses.push({ after: prev.text, seconds: Number(gap.toFixed(2)) })
+  for (let i = 1; i < items.length; i++) {
+    const gap = items[i]!.start - items[i - 1]!.end
+    if (gap > 0.4) pauses.push({ after: items[i - 1]!.text, seconds: Number(gap.toFixed(2)) })
   }
+  return pauses
+}
 
-  const totalSyllables = expectedTokens.reduce((n, t) => n + syllableCount(t), 0)
-  const speechRate = input.duration > 0 ? totalSyllables / input.duration : 0
-
-  const lastEnd = input.items.length ? input.items[input.items.length - 1]!.end : 0
-  const truncated =
+/** A clip is truncated when it aligned fewer words than expected, or cut short. */
+function isTruncated(input: AssessInput, expectedTokens: string[], missing: string[]): boolean {
+  const last = input.items[input.items.length - 1]
+  return (
     input.items.length < expectedTokens.length ||
-    (input.duration - lastEnd > 0.5 && missing.length > 0)
+    (input.duration - (last?.end ?? 0) > 0.5 && missing.length > 0)
+  )
+}
 
+function scoreOf(
+  cer: number,
+  expectedTokens: string[],
+  missing: string[],
+  truncated: boolean,
+): number {
   const coverage =
     expectedTokens.length > 0 ? (expectedTokens.length - missing.length) / expectedTokens.length : 1
-  const accuracy = 1 - cer
-  let score = Math.round(100 * (0.55 * accuracy + 0.45 * coverage))
-  if (truncated) score = Math.max(0, score - 5)
-
-  return {
-    expected: input.expected,
-    transcript: input.transcript,
-    cer,
-    missing,
-    extra,
-    words,
-    pauses,
-    speechRate,
-    truncated,
-    duration: input.duration,
-    score,
-    correct: score >= 70 && missing.length === 0,
-  }
+  const score = Math.round(100 * (0.55 * (1 - cer) + 0.45 * coverage))
+  return truncated ? Math.max(0, score - 5) : score
 }
 
 /** Deterministic per-word feedback (used when there is no LLM judge). */
