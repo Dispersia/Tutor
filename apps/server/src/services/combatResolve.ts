@@ -64,11 +64,17 @@ function encounterContext(
     return null
   }
   const pc = loadPlayerCombat(db, userId, levels)
+  return { monster, enc, pc, ...fallbackNumbers(enc, monster, pc.maxHp) }
+}
+
+/** The encounter's stored numbers, with the monster definition filling gaps. */
+function fallbackNumbers(
+  enc: EncounterRow,
+  monster: NonNullable<ReturnType<typeof MONSTER_BY_ID.get>>,
+  playerMaxHp: number,
+) {
   return {
-    monster,
-    enc,
-    pc,
-    maxHp: enc.playerMaxHp || pc.maxHp,
+    maxHp: enc.playerMaxHp || playerMaxHp,
     monsterMaxHp: enc.monsterMaxHp || monster.hp,
     monsterDamage: enc.monsterDamage || monster.damage,
     monsterLevel: enc.monsterLevel || monster.level,
@@ -99,23 +105,24 @@ function autoEat(
 }
 
 /** The player's strike: damage, crit/haste, the monster's new HP and the Life-steal heal. */
-function playerStrike(
-  pc: PlayerCombat,
-  ctx: EncounterContext,
-  playerHp: number,
-  rand: () => number,
-): {
+interface StrikeHit {
   damage: number
   crit: boolean
   haste: boolean
   monsterHp: number
   playerHp: number
   xp: number
-} {
+}
+
+function playerStrike(
+  pc: PlayerCombat,
+  ctx: EncounterContext,
+  playerHp: number,
+  rand: () => number,
+): StrikeHit {
   const crit = pc.crit > 0 && rand() < pc.crit
   const haste = pc.haste > 0 && rand() < pc.haste
-  const multiplier = (crit ? 1.75 : 1) * (1 + pc.mastery) * (haste ? 1.5 : 1)
-  const damage = Math.max(1, Math.round(pc.power * (1 + ctx.enc.powerBonus) * multiplier))
+  const damage = strikeDamage(pc, ctx, crit, haste)
   // Iron bands/enchants return a slice of the damage dealt as HP.
   const heal = pc.lifesteal > 0 ? Math.round(damage * pc.lifesteal) : 0
   return {
@@ -126,6 +133,17 @@ function playerStrike(
     playerHp: heal > 0 ? Math.min(ctx.maxHp, playerHp + heal) : playerHp,
     xp: Math.max(1, Math.round(ctx.xpReward / 4)),
   }
+}
+
+/** The hit's damage: mastery scaling, a crit multiplier and a haste extra strike. */
+function strikeDamage(
+  pc: PlayerCombat,
+  ctx: EncounterContext,
+  crit: boolean,
+  haste: boolean,
+): number {
+  const multiplier = (crit ? 1.75 : 1) * (1 + pc.mastery) * (haste ? 1.5 : 1)
+  return Math.max(1, Math.round(pc.power * (1 + ctx.enc.powerBonus) * multiplier))
 }
 
 /**
@@ -142,7 +160,7 @@ function monsterStrike(
   return { playerDamage, playerHp: Math.max(0, playerHp - playerDamage) }
 }
 
-interface Exchange {
+interface ExchangeState {
   monsterHp: number
   playerHp: number
   foodEaten: number
@@ -158,7 +176,7 @@ function settleExchange(
   bus: EventBus,
   userId: string,
   ctx: EncounterContext,
-  state: Exchange,
+  state: ExchangeState,
 ): void {
   // HP persists between fights: a defeat leaves you at a sliver, not a free heal.
   setPlayerHp(
@@ -166,16 +184,36 @@ function settleExchange(
     userId,
     state.outcome === 'lost' ? DEFEAT_HP : Math.max(DEFEAT_HP, state.playerHp),
   )
-  if (state.outcome === 'won') {
-    grantFixedItems(db, bus, userId, state.drops)
-    awardXp(db, bus, userId, ctx.xpReward, 'combat', ctx.monster.id)
-  }
-  if (state.outcome !== 'ongoing') {
-    bus.emit('combat.ended', { userId, monsterId: ctx.monster.id, outcome: state.outcome })
-    clearEncounter(db, userId)
-    return
-  }
-  upsertEncounter(db, userId, {
+  if (state.outcome === 'won') awardWin(db, bus, userId, ctx, state.drops)
+  if (state.outcome !== 'ongoing') return endFight(db, bus, userId, ctx.monster.id, state.outcome)
+  upsertEncounter(db, userId, ongoingRow(ctx, state))
+}
+
+function awardWin(
+  db: Db,
+  bus: EventBus,
+  userId: string,
+  ctx: EncounterContext,
+  drops: Cost[],
+): void {
+  grantFixedItems(db, bus, userId, drops)
+  awardXp(db, bus, userId, ctx.xpReward, 'combat', ctx.monster.id)
+}
+
+function endFight(
+  db: Db,
+  bus: EventBus,
+  userId: string,
+  monsterId: string,
+  outcome: 'won' | 'lost',
+): void {
+  bus.emit('combat.ended', { userId, monsterId, outcome })
+  clearEncounter(db, userId)
+}
+
+/** The encounter row to persist while the fight continues. */
+function ongoingRow(ctx: EncounterContext, state: ExchangeState) {
+  return {
     monsterId: ctx.monster.id,
     monsterHp: state.monsterHp,
     playerHp: state.playerHp,
@@ -189,7 +227,7 @@ function settleExchange(
     foodEaten: state.foodEaten,
     totalDamage: ctx.enc.totalDamage + state.damage,
     xpEarned: ctx.enc.xpEarned + state.xp,
-  })
+  }
 }
 
 /** Awards the exchange's XP and returns the profession milestone it unlocked, if any. */
@@ -210,6 +248,41 @@ function awardExchange(
   return awards.find((a) => a?.talentUnlocked)?.talentUnlocked ?? null
 }
 
+/** One exchange's rolled numbers, before the outcome is decided. */
+interface Exchange {
+  monsterHp: number
+  playerHp: number
+  damage: number
+  crit: boolean
+  haste: boolean
+  xp: number
+  playerDamage: number
+}
+
+interface Decided {
+  outcome: HitOutcome['outcome']
+  xp: number
+  drops: Cost[]
+}
+
+interface OutcomeParts extends Decided {
+  defenceXp: number
+  constitutionXp: number
+  talentUnlocked: number | null
+}
+
+/** Everything resolving one drill needs, already loaded. */
+interface Resolve {
+  db: Db
+  bus: EventBus
+  userId: string
+  ctx: EncounterContext
+  progress: ProgressCtx
+  correct: boolean
+  eaten: ReturnType<typeof autoEat>
+  rand: () => number
+}
+
 /** Resolves one drill inside an active encounter. */
 export function combatResolve(
   db: Db,
@@ -223,72 +296,125 @@ export function combatResolve(
   const progress = loadProgress(db, userId)
   const ctx = encounterContext(db, userId, enc, progress.levels)
   if (!ctx) return null
-  const { pc } = ctx
-
   const eaten = autoEat(db, bus, userId, {
-    playerHp: ctx.enc.playerHp,
+    playerHp: enc.playerHp,
     maxHp: ctx.maxHp,
-    foodEaten: ctx.enc.foodEaten,
+    foodEaten: enc.foodEaten,
   })
-  let playerHp = eaten.playerHp
-  let monsterHp = ctx.enc.monsterHp
-  let xp = 0
-  let damage = 0
-  let crit = false
-  let haste = false
+  return runEncounter({ db, bus, userId, ctx, progress, correct, eaten, rand })
+}
 
-  if (correct) {
-    ;({ damage, crit, haste, monsterHp, playerHp, xp } = playerStrike(pc, ctx, playerHp, rand))
-    bus.emit('combat.hit', { userId, monsterId: ctx.monster.id, damage, monsterHp, crit, haste })
-  }
-
-  const blow = monsterStrike(pc, playerHp, ctx.monsterDamage)
-  playerHp = blow.playerHp
-  const defenceXp = Math.max(1, blow.playerDamage)
-  const constitutionXp = Math.max(1, blow.playerDamage)
-
-  const drops: Cost[] = []
-  let outcome: HitOutcome['outcome'] = 'ongoing'
-  if (monsterHp <= 0) {
-    outcome = 'won'
-    xp += ctx.xpReward
-    drops.push(...rollDrops(ctx.monster.drops, progress.bonuses.drop, rand))
-  } else if (playerHp <= 0) {
-    outcome = 'lost'
-  }
-
-  const parts = { skill: pc.skill, xp, defenceXp, constitutionXp }
-  const talentUnlocked = awardExchange(db, bus, userId, parts, progress)
-
-  settleExchange(db, bus, userId, ctx, {
-    monsterHp,
-    playerHp,
+function runEncounter(req: Resolve): HitOutcome {
+  const { ctx, progress, correct, eaten, rand } = req
+  const ex = strikeExchange(ctx, correct, eaten.playerHp, rand)
+  if (correct) emitHit(req, ex)
+  const decided = decideOutcome(ctx, progress, ex, rand)
+  const awarded = awardStrike(req, ex, decided)
+  settleExchange(req.db, req.bus, req.userId, ctx, {
+    monsterHp: ex.monsterHp,
+    playerHp: ex.playerHp,
     foodEaten: eaten.foodEaten,
-    damage,
-    xp,
-    drops,
-    outcome,
+    damage: ex.damage,
+    xp: decided.xp,
+    drops: decided.drops,
+    outcome: decided.outcome,
   })
+  return hitOutcome({ ctx, correct, ate: eaten.ate, ex, p: awarded })
+}
 
+function emitHit(req: Resolve, ex: Exchange): void {
+  req.bus.emit('combat.hit', {
+    userId: req.userId,
+    monsterId: req.ctx.monster.id,
+    damage: ex.damage,
+    monsterHp: ex.monsterHp,
+    crit: ex.crit,
+    haste: ex.haste,
+  })
+}
+
+/** The player's strike (when correct) and the monster's always-on swing. */
+function strikeExchange(
+  ctx: EncounterContext,
+  correct: boolean,
+  startHp: number,
+  rand: () => number,
+): Exchange {
+  const hit = correct ? playerStrike(ctx.pc, ctx, startHp, rand) : undefined
+  const blow = monsterStrike(ctx.pc, hit?.playerHp ?? startHp, ctx.monsterDamage)
   return {
-    correct,
-    skill: pc.skill,
-    damage,
-    crit,
-    haste,
-    monsterHp,
+    monsterHp: hit?.monsterHp ?? ctx.enc.monsterHp,
+    playerHp: blow.playerHp,
+    damage: hit?.damage ?? 0,
+    crit: hit?.crit ?? false,
+    haste: hit?.haste ?? false,
+    xp: hit?.xp ?? 0,
+    playerDamage: blow.playerDamage,
+  }
+}
+
+function decideOutcome(
+  ctx: EncounterContext,
+  progress: ProgressCtx,
+  ex: Exchange,
+  rand: () => number,
+): Decided {
+  if (ex.monsterHp <= 0) {
+    const drops = rollDrops(ctx.monster.drops, progress.bonuses.drop, rand)
+    return { outcome: 'won', xp: ex.xp + ctx.xpReward, drops }
+  }
+  if (ex.playerHp <= 0) return { outcome: 'lost', xp: ex.xp, drops: [] }
+  return { outcome: 'ongoing', xp: ex.xp, drops: [] }
+}
+
+/** The exchange's XP, plus the profession milestone it unlocked, if any. */
+function awardStrike(req: Resolve, ex: Exchange, decided: Decided): OutcomeParts {
+  const defenceXp = Math.max(1, ex.playerDamage)
+  const talentUnlocked = awardExchange(
+    req.db,
+    req.bus,
+    req.userId,
+    { skill: req.ctx.pc.skill, xp: decided.xp, defenceXp, constitutionXp: defenceXp },
+    req.progress,
+  )
+  return { ...decided, defenceXp, constitutionXp: defenceXp, talentUnlocked }
+}
+
+interface HitParts {
+  ctx: EncounterContext
+  correct: boolean
+  ate: HitOutcome['ate']
+  ex: Exchange
+  p: OutcomeParts
+}
+
+function hitOutcome(h: HitParts): HitOutcome {
+  return {
+    correct: h.correct,
+    skill: h.ctx.pc.skill,
+    ...strikeView(h.ex),
+    ...encounterNumbers(h.ctx),
+    ...h.p,
+    ate: h.ate,
+  }
+}
+
+function strikeView(ex: Exchange) {
+  return {
+    damage: ex.damage,
+    crit: ex.crit,
+    haste: ex.haste,
+    monsterHp: ex.monsterHp,
+    playerDamage: ex.playerDamage,
+    playerHp: ex.playerHp,
+  }
+}
+
+function encounterNumbers(ctx: EncounterContext) {
+  return {
     monsterMaxHp: ctx.monsterMaxHp,
     monsterDamage: ctx.monsterDamage,
     monsterLevel: ctx.monsterLevel,
-    playerDamage: blow.playerDamage,
-    playerHp,
     playerMaxHp: ctx.maxHp,
-    outcome,
-    drops,
-    xp,
-    defenceXp,
-    constitutionXp,
-    ate: eaten.ate,
-    talentUnlocked,
   }
 }

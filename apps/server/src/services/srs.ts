@@ -79,6 +79,12 @@ function saveSchedule(db: Db, userId: string, cardId: string, state: FsrsState, 
   })
 }
 
+/** How many days since the card's previous review (0 for a new card). */
+function elapsedDaysOf(prev: FsrsState, now: number): number {
+  if (prev.state === 'new' || prev.lastReviewAt == null) return 0
+  return Math.max(0, (now - prev.lastReviewAt) / DAY_MS)
+}
+
 /**
  * Advances a card's FSRS-6 schedule after a review, appends to the review log
  * and emits `srs.updated`. `source` records which surface fed the schedule.
@@ -95,32 +101,62 @@ export function recordReview(
   const prev = prevStateOf(getSrs(db, userId, cardId))
   const now = Date.now()
   const rating = ratingFromScore(score, correct)
+  const next = advance(db, userId, prev, rating, now)
+  saveSchedule(db, userId, cardId, next.state, now)
+  const source = opts.source ?? 'practice'
   const retention = desiredRetention(db, userId)
-  const elapsedDays =
-    prev.state === 'new' || prev.lastReviewAt == null
-      ? 0
-      : Math.max(0, (now - prev.lastReviewAt) / DAY_MS)
-  const { state, intervalDays, dueAt } = schedule(prev, rating, now, {
-    desiredRetention: retention,
+  logReview({ db, userId, cardId, rating, prev, next, retention, now, source })
+  emitSrs(bus, userId, cardId, rating, next.state)
+  return scheduleResult(rating, next.state, next.intervalDays, next.dueAt)
+}
+
+/** The card's next schedule, at this member's retention and learning steps. */
+function advance(db: Db, userId: string, prev: FsrsState, rating: Rating, now: number) {
+  return schedule(prev, rating, now, {
+    desiredRetention: desiredRetention(db, userId),
     learningSteps: readStudyPrefs(db, userId).learningSteps,
   })
-  saveSchedule(db, userId, cardId, state, now)
-  addSrsReview(db, {
-    userId,
-    cardId,
-    rating,
-    stateBefore: prev.state,
-    stateAfter: state.state,
-    stabilityBefore: prev.stability,
-    stabilityAfter: state.stability,
-    difficultyBefore: prev.difficulty,
-    difficultyAfter: state.difficulty,
-    intervalDays,
-    elapsedDays,
-    desiredRetention: retention,
-    dueAt,
-    source: opts.source ?? 'practice',
+}
+
+interface ReviewLog {
+  db: Db
+  userId: string
+  cardId: string
+  rating: Rating
+  prev: FsrsState
+  next: { state: FsrsState; intervalDays: number; dueAt: number }
+  retention: number
+  now: number
+  source: string
+}
+
+/** Appends the FSRS review log: enough history to replay the card later. */
+function logReview(r: ReviewLog): void {
+  addSrsReview(r.db, {
+    userId: r.userId,
+    cardId: r.cardId,
+    rating: r.rating,
+    stateBefore: r.prev.state,
+    stateAfter: r.next.state.state,
+    stabilityBefore: r.prev.stability,
+    stabilityAfter: r.next.state.stability,
+    difficultyBefore: r.prev.difficulty,
+    difficultyAfter: r.next.state.difficulty,
+    intervalDays: r.next.intervalDays,
+    elapsedDays: elapsedDaysOf(r.prev, r.now),
+    desiredRetention: r.retention,
+    dueAt: r.next.dueAt,
+    source: r.source,
   })
+}
+
+function emitSrs(
+  bus: EventBus,
+  userId: string,
+  cardId: string,
+  rating: Rating,
+  state: FsrsState,
+): void {
   bus.emit('srs.updated', {
     userId,
     cardId,
@@ -130,6 +166,15 @@ export function recordReview(
     rating,
     state: state.state,
   })
+}
+
+/** The wire-facing scheduling outcome of one review. */
+function scheduleResult(
+  rating: Rating,
+  state: FsrsState,
+  intervalDays: number,
+  dueAt: number,
+): ReviewSchedule {
   return {
     rating,
     state: state.state,
@@ -212,25 +257,50 @@ export function studyBudget(
 ): StudyBudget {
   const prefs = readStudyPrefs(db, userId)
   const extra = readDailyExtra(db, userId, now)
-  const { newCards, reviews } = dailyReviewCounts(db, userId, startOfUtcDay(now))
+  const counts = dailyReviewCounts(db, userId, startOfUtcDay(now))
   const ids = (loaded?.cards ?? listCards(db, userId)).map((c) => c.id)
   const map = loaded?.srs ?? srsStateMap(db, userId)
-  const newPerDay = prefs.newPerDay <= 0 ? 0 : prefs.newPerDay + extra.newExtra
-  const maxReviewsPerDay =
-    prefs.maxReviewsPerDay <= 0 ? 0 : prefs.maxReviewsPerDay + extra.reviewsExtra
-  const newUnlimited = newPerDay === 0
-  const reviewsUnlimited = maxReviewsPerDay === 0
+  const limits = dailyLimits(prefs, extra)
   return {
-    newPerDay,
-    maxReviewsPerDay,
-    newToday: newCards,
-    reviewsToday: reviews,
-    newRemaining: newUnlimited ? countNew(ids, map) : Math.max(0, newPerDay - newCards),
-    reviewsRemaining: reviewsUnlimited
-      ? countDue(ids, map, now)
-      : Math.max(0, maxReviewsPerDay - reviews),
+    ...limits,
+    newToday: counts.newCards,
+    reviewsToday: counts.reviews,
+    ...remaining({ ids, map, now, limits, counts }),
+  }
+}
+
+interface BudgetCtx {
+  ids: string[]
+  map: Map<string, FsrsState>
+  now: number
+  limits: ReturnType<typeof dailyLimits>
+  counts: { newCards: number; reviews: number }
+}
+
+/** How much of each budget is left; an unlimited budget counts what is available. */
+function remaining(c: BudgetCtx) {
+  const newUnlimited = c.limits.newPerDay === 0
+  const reviewsUnlimited = c.limits.maxReviewsPerDay === 0
+  return {
     newUnlimited,
     reviewsUnlimited,
+    newRemaining: newUnlimited
+      ? countNew(c.ids, c.map)
+      : Math.max(0, c.limits.newPerDay - c.counts.newCards),
+    reviewsRemaining: reviewsUnlimited
+      ? countDue(c.ids, c.map, c.now)
+      : Math.max(0, c.limits.maxReviewsPerDay - c.counts.reviews),
+  }
+}
+
+/** Today's effective limits: the preference plus any "study more", 0 = unlimited. */
+function dailyLimits(
+  prefs: ReturnType<typeof readStudyPrefs>,
+  extra: ReturnType<typeof readDailyExtra>,
+) {
+  return {
+    newPerDay: prefs.newPerDay <= 0 ? 0 : prefs.newPerDay + extra.newExtra,
+    maxReviewsPerDay: prefs.maxReviewsPerDay <= 0 ? 0 : prefs.maxReviewsPerDay + extra.reviewsExtra,
   }
 }
 

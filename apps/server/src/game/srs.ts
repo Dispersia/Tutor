@@ -146,6 +146,33 @@ export interface ScheduleResult {
   rating: Rating
 }
 
+/** The knobs and clock one `schedule` call works with. */
+interface SchedCtx {
+  now: number
+  rating: Rating
+  desiredRetention: number
+  maxInterval: number
+  learningSteps: number[]
+  relearningSteps: number[]
+}
+
+const inSteps = (prev: FsrsState): boolean =>
+  prev.state === 'learning' || prev.state === 'relearning'
+
+const stepsFor = (prev: FsrsState, ctx: SchedCtx): number[] =>
+  prev.state === 'relearning' ? ctx.relearningSteps : ctx.learningSteps
+
+/** The interval that brings stability down to the desired retention, clamped. */
+function reviewInterval(stability: number, ctx: SchedCtx): number {
+  return clamp(nextInterval(stability, ctx.desiredRetention), 1, ctx.maxInterval)
+}
+
+/** When the next step of a learning/relearning ladder falls due. */
+function stepDelay(steps: number[], step: number, now: number): number {
+  const minutes = steps[Math.min(step, steps.length - 1)] ?? 10
+  return now + minutes * MIN_MS
+}
+
 /** Advances a card one review, the way Anki's FSRS scheduler does. */
 export function schedule(
   prev: FsrsState,
@@ -153,177 +180,133 @@ export function schedule(
   now: number,
   opts: ScheduleOptions = {},
 ): ScheduleResult {
-  const desiredRetention = opts.desiredRetention ?? 0.9
-  const maxInterval = opts.maxIntervalDays ?? MAX_INTERVAL_DAYS
-  const learningSteps = opts.learningSteps ?? LEARNING_STEPS
-  const relearningSteps = opts.relearningSteps ?? RELEARNING_STEPS
+  const ctx = schedCtx(now, rating, opts)
+  if (prev.state === 'new') return newCard(prev, ctx)
+  const elapsed = prev.lastReviewAt == null ? 0 : Math.max(0, (now - prev.lastReviewAt) / DAY_MS)
+  // A same-day review is FSRS short-term memory, not a new interval.
+  if (elapsed < 1) return sameDay(prev, ctx)
+  const r = retrievability(prev.stability, elapsed)
+  return rating === AGAIN ? lapse(prev, r, ctx) : reviewPass(prev, r, ctx)
+}
 
-  const elapsedDays =
-    prev.state === 'new' || prev.lastReviewAt == null
-      ? 0
-      : Math.max(0, (now - prev.lastReviewAt) / DAY_MS)
-
-  const reviewInterval = (stability: number): number =>
-    clamp(nextInterval(stability, desiredRetention), 1, maxInterval)
-
-  const stepDelay = (steps: number[], step: number): number => {
-    const minutes = steps[Math.min(step, steps.length - 1)] ?? 10
-    return now + minutes * MIN_MS
+function schedCtx(now: number, rating: Rating, opts: ScheduleOptions): SchedCtx {
+  return {
+    now,
+    rating,
+    desiredRetention: opts.desiredRetention ?? 0.9,
+    maxInterval: opts.maxIntervalDays ?? MAX_INTERVAL_DAYS,
+    learningSteps: opts.learningSteps ?? LEARNING_STEPS,
+    relearningSteps: opts.relearningSteps ?? RELEARNING_STEPS,
   }
+}
 
-  // --- a brand new card ------------------------------------------------------
-  if (prev.state === 'new') {
-    const stability = initialStability(rating)
-    const difficulty = initialDifficulty(rating)
-    const base: FsrsState = {
-      state: 'learning',
-      step: 0,
-      stability,
-      difficulty,
-      reps: prev.reps + 1,
-      lapses: rating === AGAIN ? 1 : 0,
-      intervalDays: 0,
-      dueAt: 0,
-      lastReviewAt: now,
-      lastRating: rating,
-    }
-    if (rating === EASY || learningSteps.length === 0) {
-      // Easy graduates straight away
-      const intervalDays = reviewInterval(stability)
-      return {
-        state: {
-          ...base,
-          state: 'review',
-          step: 0,
-          intervalDays,
-          dueAt: now + intervalDays * DAY_MS,
-        },
-        intervalDays,
-        dueAt: now + intervalDays * DAY_MS,
-        rating,
-      }
-    }
-    // Again/Hard stay on the first step; Good moves to the second step
-    const step = rating === GOOD && learningSteps.length > 1 ? 1 : 0
-    const dueAt = stepDelay(learningSteps, step)
-    return {
-      state: { ...base, step, dueAt, intervalDays: 0 },
-      intervalDays: 0,
-      dueAt,
-      rating,
-    }
+/** A brand-new card: Easy graduates at once, otherwise it enters the ladder. */
+function newCard(prev: FsrsState, ctx: SchedCtx): ScheduleResult {
+  const stability = initialStability(ctx.rating)
+  const base: FsrsState = {
+    state: 'learning',
+    step: 0,
+    stability,
+    difficulty: initialDifficulty(ctx.rating),
+    reps: prev.reps + 1,
+    lapses: ctx.rating === AGAIN ? 1 : 0,
+    intervalDays: 0,
+    dueAt: 0,
+    lastReviewAt: ctx.now,
+    lastRating: ctx.rating,
   }
+  if (ctx.rating === EASY || ctx.learningSteps.length === 0) return graduate(base, stability, ctx)
+  // Again/Hard stay on the first step; Good moves to the second step.
+  const step = ctx.rating === GOOD && ctx.learningSteps.length > 1 ? 1 : 0
+  return stayStep(base, ctx.learningSteps, step, ctx)
+}
 
-  const r = retrievability(prev.stability, elapsedDays)
-  const inSteps = prev.state === 'learning' || prev.state === 'relearning'
-  const steps = prev.state === 'relearning' ? relearningSteps : learningSteps
-
-  // --- same-day review: FSRS short-term memory ------------------------------
-  if (elapsedDays < 1) {
-    const stability = sameDayStability(prev.stability, rating)
-    const difficulty = nextDifficulty(prev.difficulty, rating)
-    const base: FsrsState = {
-      ...prev,
-      stability,
-      difficulty,
-      reps: prev.reps + 1,
-      lapses: rating === AGAIN ? prev.lapses + 1 : prev.lapses,
-      lastReviewAt: now,
-      lastRating: rating,
-    }
-    if (inSteps) {
-      const step = rating === GOOD || rating === EASY ? prev.step + 1 : prev.step
-      if (step >= steps.length || rating === EASY) {
-        const intervalDays = reviewInterval(stability)
-        return {
-          state: {
-            ...base,
-            state: 'review',
-            step: 0,
-            intervalDays,
-            dueAt: now + intervalDays * DAY_MS,
-          },
-          intervalDays,
-          dueAt: now + intervalDays * DAY_MS,
-          rating,
-        }
-      }
-      const dueAt = stepDelay(steps, step)
-      return { state: { ...base, step, dueAt, intervalDays: 0 }, intervalDays: 0, dueAt, rating }
-    }
-    // a review card answered again the same day just keeps its interval
-    return {
-      state: { ...base, intervalDays: prev.intervalDays },
-      intervalDays: prev.intervalDays,
-      dueAt: prev.dueAt,
-      rating,
-    }
-  }
-
-  // --- a lapse ---------------------------------------------------------------
-  if (rating === AGAIN) {
-    const stability = stabilityAfterForget(prev.stability, prev.difficulty, r)
-    const difficulty = nextDifficulty(prev.difficulty, rating)
-    const dueAt = stepDelay(relearningSteps, 0)
-    return {
-      state: {
-        ...prev,
-        state: 'relearning',
-        step: 0,
-        stability,
-        difficulty,
-        reps: prev.reps + 1,
-        lapses: prev.lapses + 1,
-        intervalDays: 0,
-        dueAt,
-        lastReviewAt: now,
-        lastRating: rating,
-      },
-      intervalDays: 0,
-      dueAt,
-      rating,
-    }
-  }
-
-  // --- a successful review ---------------------------------------------------
-  const stability = stabilityAfterRecall(prev.stability, prev.difficulty, r, rating)
-  const difficulty = nextDifficulty(prev.difficulty, rating)
+/** A same-day review: short-term stability, and the ladder moves in steps. */
+function sameDay(prev: FsrsState, ctx: SchedCtx): ScheduleResult {
+  const stability = sameDayStability(prev.stability, ctx.rating)
   const base: FsrsState = {
     ...prev,
     stability,
-    difficulty,
+    difficulty: nextDifficulty(prev.difficulty, ctx.rating),
     reps: prev.reps + 1,
-    lastReviewAt: now,
-    lastRating: rating,
+    lapses: ctx.rating === AGAIN ? prev.lapses + 1 : prev.lapses,
+    lastReviewAt: ctx.now,
+    lastRating: ctx.rating,
   }
+  if (!inSteps(prev)) return keepInterval(base, prev, ctx)
+  const steps = stepsFor(prev, ctx)
+  const step = ctx.rating === GOOD || ctx.rating === EASY ? prev.step + 1 : prev.step
+  if (step >= steps.length || ctx.rating === EASY) return graduate(base, stability, ctx)
+  return stayStep(base, steps, step, ctx)
+}
 
-  if (inSteps) {
-    const step = rating === HARD ? prev.step : prev.step + 1
-    if (step >= steps.length) {
-      const intervalDays = reviewInterval(stability)
-      return {
-        state: {
-          ...base,
-          state: 'review',
-          step: 0,
-          intervalDays,
-          dueAt: now + intervalDays * DAY_MS,
-        },
-        intervalDays,
-        dueAt: now + intervalDays * DAY_MS,
-        rating,
-      }
-    }
-    const dueAt = stepDelay(steps, step)
-    return { state: { ...base, step, dueAt, intervalDays: 0 }, intervalDays: 0, dueAt, rating }
-  }
-
-  const intervalDays = reviewInterval(stability)
+/** A review card answered again the same day just keeps its interval. */
+function keepInterval(base: FsrsState, prev: FsrsState, ctx: SchedCtx): ScheduleResult {
   return {
-    state: { ...base, state: 'review', step: 0, intervalDays, dueAt: now + intervalDays * DAY_MS },
+    state: { ...base, intervalDays: prev.intervalDays },
+    intervalDays: prev.intervalDays,
+    dueAt: prev.dueAt,
+    rating: ctx.rating,
+  }
+}
+
+/** A lapse: back to relearning, with a shrunken stability. */
+function lapse(prev: FsrsState, r: number, ctx: SchedCtx): ScheduleResult {
+  const stability = stabilityAfterForget(prev.stability, prev.difficulty, r)
+  const dueAt = stepDelay(ctx.relearningSteps, 0, ctx.now)
+  const state: FsrsState = {
+    ...prev,
+    state: 'relearning',
+    step: 0,
+    stability,
+    difficulty: nextDifficulty(prev.difficulty, ctx.rating),
+    reps: prev.reps + 1,
+    lapses: prev.lapses + 1,
+    intervalDays: 0,
+    dueAt,
+    lastReviewAt: ctx.now,
+    lastRating: ctx.rating,
+  }
+  return { state, intervalDays: 0, dueAt, rating: ctx.rating }
+}
+
+/** A successful review after a real interval: graduate, or advance the ladder. */
+function reviewPass(prev: FsrsState, r: number, ctx: SchedCtx): ScheduleResult {
+  const stability = stabilityAfterRecall(prev.stability, prev.difficulty, r, ctx.rating)
+  const base: FsrsState = {
+    ...prev,
+    stability,
+    difficulty: nextDifficulty(prev.difficulty, ctx.rating),
+    reps: prev.reps + 1,
+    lastReviewAt: ctx.now,
+    lastRating: ctx.rating,
+  }
+  if (!inSteps(prev)) return graduate(base, stability, ctx)
+  const steps = stepsFor(prev, ctx)
+  const step = ctx.rating === HARD ? prev.step : prev.step + 1
+  return step >= steps.length ? graduate(base, stability, ctx) : stayStep(base, steps, step, ctx)
+}
+
+/** Leaves the ladder: the card is in review with a real day+ interval. */
+function graduate(base: FsrsState, stability: number, ctx: SchedCtx): ScheduleResult {
+  const intervalDays = reviewInterval(stability, ctx)
+  const dueAt = ctx.now + intervalDays * DAY_MS
+  return {
+    state: { ...base, state: 'review', step: 0, intervalDays, dueAt },
     intervalDays,
-    dueAt: now + intervalDays * DAY_MS,
-    rating,
+    dueAt,
+    rating: ctx.rating,
+  }
+}
+
+/** Waits on the next learning/relearning step, still due today. */
+function stayStep(base: FsrsState, steps: number[], step: number, ctx: SchedCtx): ScheduleResult {
+  const dueAt = stepDelay(steps, step, ctx.now)
+  return {
+    state: { ...base, step, dueAt, intervalDays: 0 },
+    intervalDays: 0,
+    dueAt,
+    rating: ctx.rating,
   }
 }
 

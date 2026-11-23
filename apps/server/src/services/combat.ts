@@ -22,6 +22,7 @@ import {
   statsOf,
   type ActiveSetBonus,
 } from '../game/gear'
+import type { Bonuses } from '../game/modifiers'
 import {
   ITEM_BY_ID,
   combatStyleForTags,
@@ -61,12 +62,20 @@ export interface PlayerCombat {
   setBonuses: ActiveSetBonus[]
 }
 
+type EquipmentRow = ReturnType<typeof listEquipment>[number]
+
+/** The weapon's trained skill, the worn stats, and the raw power/armour. */
+interface Loadout {
+  skill: SkillId
+  combatStyle: CombatStyle
+  stats: GearStats
+  totalPower: number
+  totalArmour: number
+  armourCounts: Partial<Record<ArmourType, number>>
+}
+
 /** The player's effective combat level, used to scale monsters. */
-export function combatLevel(
-  db: Db,
-  userId: string,
-  levels?: Map<string, number>,
-): number {
+export function combatLevel(db: Db, userId: string, levels?: Map<string, number>): number {
   return Math.max(
     skillLevelOf(db, userId, 'attack', levels),
     skillLevelOf(db, userId, 'strength', levels),
@@ -80,14 +89,16 @@ export function combatLevel(
 /** The active set bonuses for the current loadout (without the full combat maths). */
 export function loadoutSetBonuses(db: Db, userId: string): ActiveSetBonus[] {
   ensureWornGear(db, userId)
+  return activeSetBonuses(armourCounts(db, userId))
+}
+
+function armourCounts(db: Db, userId: string): Partial<Record<ArmourType, number>> {
   const counts: Partial<Record<ArmourType, number>> = {}
   for (const row of listEquipment(db, userId)) {
     const item = ITEM_BY_ID.get(row.itemId)
-    if (item?.armourType) {
-      counts[item.armourType] = (counts[item.armourType] ?? 0) + 1
-    }
+    if (item?.armourType) counts[item.armourType] = (counts[item.armourType] ?? 0) + 1
   }
-  return activeSetBonuses(counts)
+  return counts
 }
 
 /**
@@ -103,12 +114,24 @@ export function loadPlayerCombat(
 ): PlayerCombat {
   ensureWornGear(db, userId)
   const b = aggregateBonuses(db, userId, levels)
+  const load = loadout(db, userId)
+  const setBonuses = activeSetBonuses(load.armourCounts)
+  const boosted = applySetBonuses(load.stats, load.totalArmour, load.totalPower, setBonuses)
+  return combatNumbers({ db, userId, levels, b, load, setBonuses, boosted })
+}
+
+function loadout(db: Db, userId: string): Loadout {
   const eq = listEquipment(db, userId)
   const weapon = eq.find((e) => e.slot === 'mainHand' || e.slot === 'weapon')
   const weaponItem = weapon ? ITEM_BY_ID.get(weapon.itemId) : undefined
-  const skill = weaponSkill(weaponItem?.tags)
-  const combatStyle = combatStyleForTags(weaponItem?.tags)
+  return {
+    skill: weaponSkill(weaponItem?.tags),
+    combatStyle: combatStyleForTags(weaponItem?.tags),
+    ...gearTotals(db, userId, eq),
+  }
+}
 
+function gearTotals(db: Db, userId: string, eq: EquipmentRow[]) {
   let stats = emptyStats()
   let totalPower = 0
   let totalArmour = 0
@@ -116,56 +139,91 @@ export function loadPlayerCombat(
   for (const row of eq) {
     const item = ITEM_BY_ID.get(row.itemId)
     if (!item) continue
-    if (item.armourType) {
-      armourCounts[item.armourType] = (armourCounts[item.armourType] ?? 0) + 1
-    }
-    const instance = row.instanceId ? getGearInstance(db, userId, row.instanceId) : undefined
-    stats = addStats(stats, instance ? parseStats(instance.statsJson) : statsOf(item))
-    // An enchant adds its stat points straight onto the piece (§13.5.3.2).
-    const def = instance ? enchantOf(instance) : undefined
-    if (def) stats = { ...stats, [def.stat]: stats[def.stat] + def.value }
-    totalPower += instance?.power ?? item.power ?? 0
-    totalArmour += instance?.armour ?? item.armour ?? 0
+    if (item.armourType) armourCounts[item.armourType] = (armourCounts[item.armourType] ?? 0) + 1
+    const piece = pieceTotals(db, userId, row, item, stats)
+    stats = piece.stats
+    totalPower += piece.power
+    totalArmour += piece.armour
   }
+  return { stats, totalPower, totalArmour, armourCounts }
+}
 
-  const setBonuses = activeSetBonuses(armourCounts)
-  const boosted = applySetBonuses(stats, totalArmour, totalPower, setBonuses)
-  stats = boosted.stats
-  totalArmour = boosted.armour
-  totalPower = boosted.power
+/** One worn piece's contribution, including the enchant's flat stat points. */
+function pieceTotals(db: Db, userId: string, row: EquipmentRow, item: ItemDef, running: GearStats) {
+  const instance = row.instanceId ? getGearInstance(db, userId, row.instanceId) : undefined
+  let stats = addStats(running, instance ? parseStats(instance.statsJson) : statsOf(item))
+  const def = instance ? enchantOf(instance) : undefined
+  if (def) stats = { ...stats, [def.stat]: stats[def.stat] + def.value }
+  return {
+    stats,
+    power: instance?.power ?? item.power ?? 0,
+    armour: instance?.armour ?? item.armour ?? 0,
+  }
+}
 
-  const derived = deriveStats(stats, skill)
+interface Assembly {
+  db: Db
+  userId: string
+  levels?: Map<string, number>
+  b: Bonuses
+  load: Loadout
+  setBonuses: ActiveSetBonus[]
+  boosted: { stats: GearStats; armour: number; power: number }
+}
+
+function combatNumbers(a: Assembly): PlayerCombat {
+  const derived = deriveStats(a.boosted.stats, a.load.skill)
   // Tier bands grant an account-wide passive (§13.5.3), on top of the rolled and
   // enchanted piece stats.
-  const band = accountBandBonuses(db, userId)
-  const crit = derived.crit + band.crit
-  const haste = derived.haste + band.haste
-  const mastery = derived.mastery + band.mastery
-  const lifesteal = band.lifesteal
-  const stamina = Math.round(stats.stamina + band.stamina)
-  stats = { ...stats, stamina }
+  const band = accountBandBonuses(a.db, a.userId)
+  const stamina = Math.round(a.boosted.stats.stamina + band.stamina)
   return {
-    skill,
-    combatStyle,
-    maxHp: playerMaxHp(skillLevelOf(db, userId, 'constitution', levels), b.hp, totalArmour, stamina),
+    skill: a.load.skill,
+    combatStyle: a.load.combatStyle,
+    armour: a.boosted.armour,
+    weaponPower: a.boosted.power,
+    bodyArmour: a.boosted.armour,
+    gearScore: gearScore(a.boosted.stats, a.boosted.armour, a.boosted.power),
+    setBonuses: a.setBonuses,
+    ...vitals(a, derived, band, stamina),
+    ...passives(a.boosted.stats, derived, band, stamina),
+  }
+}
+
+/** Max HP and power: the profession level, the worn gear and the passives. */
+function vitals(
+  a: Assembly,
+  derived: ReturnType<typeof deriveStats>,
+  band: ReturnType<typeof accountBandBonuses>,
+  stamina: number,
+) {
+  const level = (skill: SkillId) => skillLevelOf(a.db, a.userId, skill, a.levels)
+  return {
+    maxHp: playerMaxHp(level('constitution'), a.b.hp, a.boosted.armour, stamina),
     power: playerPower(
-      skillLevelOf(db, userId, skill, levels),
-      totalPower,
-      b.damage,
+      level(a.load.skill),
+      a.boosted.power,
+      a.b.damage,
       derived.primary,
-      mastery,
+      derived.mastery + band.mastery,
     ),
-    armour: totalArmour,
-    weaponPower: totalPower,
-    bodyArmour: totalArmour,
-    stats,
+  }
+}
+
+/** The derived stat totals: band passives plus the rounded stamina. */
+function passives(
+  stats: GearStats,
+  derived: ReturnType<typeof deriveStats>,
+  band: ReturnType<typeof accountBandBonuses>,
+  stamina: number,
+) {
+  return {
+    stats: { ...stats, stamina },
     stamina,
-    crit,
-    haste,
-    mastery,
-    lifesteal,
-    gearScore: gearScore(stats, totalArmour, totalPower),
-    setBonuses,
+    crit: derived.crit + band.crit,
+    haste: derived.haste + band.haste,
+    mastery: derived.mastery + band.mastery,
+    lifesteal: band.lifesteal,
   }
 }
 
@@ -236,11 +294,13 @@ export function bestPotion(db: Db, userId: string): ItemDef | undefined {
 }
 
 /** What a fight-start potion did: raise power, raise max HP, or nothing. */
+type Drank = { item: string; buff: { kind: 'power' | 'maxHp'; value: number } } | null
+
 interface DrinkResult {
   maxHp: number
   powerBonus: number
   potionId: string | null
-  drank: { item: string; buff: { kind: 'power' | 'maxHp'; value: number } } | null
+  drank: Drank
 }
 
 /** Drinks the best buff potion at the start of a fight, returning its effect. */
@@ -258,54 +318,76 @@ function drinkBestPotion(db: Db, bus: EventBus, userId: string, maxHp: number): 
   }
 }
 
-export function startEncounter(
-  db: Db,
-  bus: EventBus,
-  userId: string,
-  monsterId: string,
-):
-  | {
-      ok: true
-      monster: MonsterDef
-      encounter: {
-        monsterId: string
-        monsterHp: number
-        monsterMaxHp: number
-        monsterDamage: number
-        monsterLevel: number
-        xpReward: number
-        playerHp: number
-        playerMaxHp: number
-      }
-      drank: { item: string; buff: { kind: 'power' | 'maxHp'; value: number } } | null
-    }
+/** The encounter numbers a fresh fight starts with. */
+export interface EncounterStart {
+  monsterId: string
+  monsterHp: number
+  monsterMaxHp: number
+  monsterDamage: number
+  monsterLevel: number
+  xpReward: number
+  playerHp: number
+  playerMaxHp: number
+}
+
+export type StartResult =
+  | { ok: true; monster: MonsterDef; encounter: EncounterStart; drank: Drank }
   | {
       ok: false
       error: string
       missing?: UnlockReq[]
       equipMissing?: { slot: string; tag: string }
-    } {
+    }
+
+export function startEncounter(
+  db: Db,
+  bus: EventBus,
+  userId: string,
+  monsterId: string,
+): StartResult {
   const m = MONSTER_BY_ID.get(monsterId)
   if (!m) return { ok: false, error: 'unknown monster' }
-  const state = monsterState(db, userId, m)
-  if (!state.unlocked) {
-    return {
-      ok: false,
-      error: 'locked',
-      missing: state.missing,
-      equipMissing: state.equipMissing ?? undefined,
-    }
-  }
-
+  const locked = lockResult(db, userId, m)
+  if (locked) return locked
   const pc = loadPlayerCombat(db, userId, loadProgress(db, userId).levels)
   const potion = drinkBestPotion(db, bus, userId, pc.maxHp)
   // HP carries between fights: resume from what's left, clamped to this fight's
   // max HP (which a restore potion may have raised).
   const startHp = currentHp(db, userId, potion.maxHp)
+  upsertEncounter(db, userId, startRow(monsterId, m, potion, startHp))
+  return startOk(monsterId, m, potion, startHp)
+}
 
-  // Monsters are **fixed** (docs §13.5): their numbers never move, so the buffs a
-  // player stacks read as power, not as a modifier that cancels itself out.
-  upsertEncounter(db, userId, {
+function startOk(
+  monsterId: string,
+  m: MonsterDef,
+  potion: DrinkResult,
+  startHp: number,
+): StartResult {
+  return {
+    ok: true,
+    monster: m,
+    encounter: startView(monsterId, m, potion, startHp),
+    drank: potion.drank,
+  }
+}
+
+/** The refusal when the monster is locked for this player, else undefined. */
+function lockResult(db: Db, userId: string, m: MonsterDef): StartResult | undefined {
+  const state = monsterState(db, userId, m)
+  if (state.unlocked) return undefined
+  return {
+    ok: false,
+    error: 'locked',
+    missing: state.missing,
+    equipMissing: state.equipMissing ?? undefined,
+  }
+}
+
+// Monsters are **fixed** (docs §13.5): their numbers never move, so the buffs a
+// player stacks read as power, not as a modifier that cancels itself out.
+function startRow(monsterId: string, m: MonsterDef, potion: DrinkResult, startHp: number) {
+  return {
     monsterId,
     monsterHp: m.hp,
     playerHp: startHp,
@@ -319,20 +401,23 @@ export function startEncounter(
     foodEaten: 0,
     totalDamage: 0,
     xpEarned: 0,
-  })
+  }
+}
+
+function startView(
+  monsterId: string,
+  m: MonsterDef,
+  potion: DrinkResult,
+  startHp: number,
+): EncounterStart {
   return {
-    ok: true,
-    monster: m,
-    encounter: {
-      monsterId,
-      monsterHp: m.hp,
-      monsterMaxHp: m.hp,
-      monsterDamage: m.damage,
-      monsterLevel: m.level,
-      xpReward: m.xp,
-      playerHp: startHp,
-      playerMaxHp: potion.maxHp,
-    },
-    drank: potion.drank,
+    monsterId,
+    monsterHp: m.hp,
+    monsterMaxHp: m.hp,
+    monsterDamage: m.damage,
+    monsterLevel: m.level,
+    xpReward: m.xp,
+    playerHp: startHp,
+    playerMaxHp: potion.maxHp,
   }
 }
