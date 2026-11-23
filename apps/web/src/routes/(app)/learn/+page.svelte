@@ -14,19 +14,14 @@
   import { session } from '#lib/session.svelte'
   import { activeDeck, loadActiveDeck, setActiveDeck } from '#lib/activeDeck.svelte'
   import { ACCENT } from '#lib/theme'
-  import { autoGrow } from '#lib/grow'
   import Spinner from '#lib/components/Spinner.svelte'
   import CardEditor from '#lib/components/CardEditor.svelte'
   import DeckSettings from '#lib/components/DeckSettings.svelte'
   import PathDeck from '#lib/components/learn/PathDeck.svelte'
-  import {
-    LANGUAGES,
-    cell,
-    groupedActions,
-    langLabel,
-    orderDecks,
-    usableActions,
-  } from '#lib/learnview'
+  import DeckBuilder from '#lib/components/learn/DeckBuilder.svelte'
+  import ImportPanel from '#lib/components/learn/ImportPanel.svelte'
+  import ProfessionPicker from '#lib/components/learn/ProfessionPicker.svelte'
+  import { groupedActions, orderDecks, usableActions } from '#lib/learnview'
   import { peekCached } from '#lib/cache'
 
   // Seed from the last fetch so returning to Learn renders the path at once.
@@ -72,29 +67,8 @@
   /** The same actions grouped by profession, for the selector. */
   const groups = $derived(groupedActions(ref))
 
-  onMount(async () => {
-    try {
-      const [c, s, sk, prefs] = await Promise.all([
-        getCurriculum(),
-        getSrsStats(),
-        getSkills().catch(() => null),
-        api<{ deckInstruction?: string }>('/api/settings').catch(() => null),
-      ])
-      // the active deck leads; then the frequency path — that is where you start
-      await loadActiveDeck()
-      decks = orderDecks(c.decks, activeDeck.id)
-      stats = s
-      ref = sk
-      // the prompt you gave on an earlier deck follows you into every new one
-      if (prefs?.deckInstruction) instruction = prefs.deckInstruction
-      buildLang = session.user?.targetLang ?? 'zh'
-      const saved = localStorage.getItem(storageKey)
-      if (saved && usable.some((u) => u.action.id === saved)) actionId = saved
-    } catch (e) {
-      error = (e as Error).message
-    } finally {
-      loading = false
-    }
+  onMount(() => {
+    void init()
   })
 
   /** While a deck is generating in the background, follow its progress. */
@@ -104,6 +78,41 @@
     }, 4000)
     return () => clearInterval(timer)
   })
+
+  async function init() {
+    try {
+      const [c, s, sk, prefs] = await Promise.all([
+        getCurriculum(),
+        getSrsStats(),
+        getSkills().catch(() => null),
+        api<{ deckInstruction?: string }>('/api/settings').catch(() => null),
+      ])
+      await applyLoaded(c, s, sk, prefs?.deckInstruction)
+    } catch (e) {
+      error = (e as Error).message
+    } finally {
+      loading = false
+    }
+  }
+
+  /** Applies a fresh path, stats, professions and the remembered deck prompt. */
+  async function applyLoaded(
+    c: { decks: CurriculumDeck[] },
+    s: SrsStats,
+    sk: SkillsResponse | null,
+    prompt: string | undefined,
+  ) {
+    // the active deck leads; then the frequency path — that is where you start
+    await loadActiveDeck()
+    decks = orderDecks(c.decks, activeDeck.id)
+    stats = s
+    ref = sk
+    // the prompt you gave on an earlier deck follows you into every new one
+    if (prompt) instruction = prompt
+    buildLang = session.user?.targetLang ?? 'zh'
+    const saved = localStorage.getItem(storageKey)
+    if (saved && usable.some((u) => u.action.id === saved)) actionId = saved
+  }
 
   function chooseProfession(e: Event) {
     actionId = (e.target as HTMLSelectElement).value
@@ -179,27 +188,36 @@
 
   /** Step 1: read the .apkg's fields so the learner can pick the real word. */
   async function inspectApkg(e: Event) {
-    const input = e.target as HTMLInputElement
-    const file = input.files?.[0]
+    const file = (e.target as HTMLInputElement).files?.[0]
     if (!file || importing) return
     importing = true
     importError = ''
     try {
-      const form = new FormData()
-      form.set('file', file, file.name)
-      const info = await inspectDeck(form)
+      const info = await readApkg(file)
       importFile = file
-      inspection = info
-      wordField = info.suggested.wordField
-      readingField = info.suggested.readingField
-      meaningField = info.suggested.meaningField
-      // the deck's own script wins over the profile's target language
-      importLang = info.suggestedLang ?? session.user?.targetLang ?? 'zh'
+      applyInspection(info)
     } catch (err) {
       importError = (err as Error).message
     } finally {
       importing = false
     }
+  }
+
+  /** Uploads the .apkg for inspection. */
+  function readApkg(file: File): Promise<AnkiInspection> {
+    const form = new FormData()
+    form.set('file', file, file.name)
+    return inspectDeck(form)
+  }
+
+  /** Seeds the mapping pickers from the deck's suggested fields. */
+  function applyInspection(info: AnkiInspection) {
+    inspection = info
+    wordField = info.suggested.wordField
+    readingField = info.suggested.readingField
+    meaningField = info.suggested.meaningField
+    // the deck's own script wins over the profile's target language
+    importLang = info.suggestedLang ?? session.user?.targetLang ?? 'zh'
   }
 
   /** Step 2: build the deck from the chosen fields. */
@@ -208,14 +226,7 @@
     importing = true
     importError = ''
     try {
-      const form = new FormData()
-      form.set('file', importFile, importFile.name)
-      form.set('wordField', String(wordField))
-      form.set('readingField', String(readingField))
-      form.set('meaningField', String(meaningField))
-      if (instruction.trim()) form.set('instruction', instruction.trim())
-      if (importLang) form.set('targetLang', importLang)
-      await importDeck(form)
+      await importDeck(importForm(importFile))
       importFile = null
       inspection = null
       await reload()
@@ -224,6 +235,18 @@
     } finally {
       importing = false
     }
+  }
+
+  /** The import form: the file, the chosen fields and the deck prompt. */
+  function importForm(file: File): FormData {
+    const form = new FormData()
+    form.set('file', file, file.name)
+    form.set('wordField', String(wordField))
+    form.set('readingField', String(readingField))
+    form.set('meaningField', String(meaningField))
+    if (instruction.trim()) form.set('instruction', instruction.trim())
+    if (importLang) form.set('targetLang', importLang)
+    return form
   }
 
   function cancelImport() {
@@ -272,147 +295,28 @@
   <!-- Desktop: the composer sits in a left rail, the path fills the page. -->
   <div class="xl:grid xl:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] xl:items-start xl:gap-24">
     <div>
-      <section class="panel panel-accent mb-4 p-4" style="--accent: {ACCENT.azure}">
-        <p class="eyebrow">Build a deck</p>
-        <p class="mt-1 text-xs text-ink-400">
-          Describe what you want. It pulls a real frequency list and writes the cards — one new word
-          at a time.
-        </p>
-        <label class="mt-2 block text-xs text-ink-400">
-          Language
-          <select bind:value={buildLang} class="field mt-1">
-            {#each LANGUAGES as l (l.code)}<option value={l.code}>{l.label}</option>{/each}
-          </select>
-        </label>
-        <label class="mt-2 block text-xs text-ink-400">
-          What to learn
-          <textarea
-            bind:value={instruction}
-            use:autoGrow={160}
-            rows="2"
-            placeholder="a traditional Chinese frequency list, with grammar, using only traditional characters and zhuyin"
-            class="field mt-1 resize-none"
-          ></textarea>
-        </label>
-        <button
-          type="button"
-          onclick={build}
-          disabled={building || !instruction.trim()}
-          class="btn btn-primary mt-2 w-full py-3"
-        >
-          {#if building}<Spinner size={15} label="Building the deck" /> Pulling the list &amp; writing
-            cards…{:else}Build deck{/if}
-        </button>
-        {#if buildError}
-          <p class="banner mt-2" style="--accent: {ACCENT.ember}" role="alert">{buildError}</p>
-        {/if}
-        <label class="link link-btn mt-3 w-full justify-center text-xs">
-          {#if importing}<Spinner size={12} label="Reading the deck" /> Reading the deck…{:else}…or
-            import an Anki deck (.apkg){/if}
-          <input
-            type="file"
-            accept=".apkg,.colpkg"
-            class="hidden"
-            onchange={inspectApkg}
-            disabled={importing}
-          />
-        </label>
-        {#if importError}
-          <p class="banner mt-2" style="--accent: {ACCENT.ember}" role="alert">{importError}</p>
-        {/if}
-      </section>
+      <DeckBuilder
+        bind:instruction
+        bind:buildLang
+        {building}
+        {buildError}
+        {importing}
+        {importError}
+        onBuild={build}
+        onInspect={inspectApkg}
+      />
 
       {#if inspection}
-        <section class="panel panel-accent mb-4 p-4" style="--accent: {ACCENT.violet}">
-          <div class="flex items-baseline justify-between">
-            <p class="eyebrow">Import {inspection.name ?? 'Anki deck'}</p>
-            <span class="text-xs text-ink-400">{inspection.noteCount} notes</span>
-          </div>
-          <p class="mt-1 text-xs text-ink-400">
-            Pick the deck's language and which field is the real word. The whole deck is imported —
-            the AI weaves sentence and grammar cards through its words and fills it in the
-            background.
-          </p>
-
-          <label class="mt-3 block text-xs text-ink-400">
-            Language
-            <select bind:value={importLang} class="field mt-1">
-              {#if importLang && !LANGUAGES.some((l) => l.code === importLang)}
-                <option value={importLang}>{importLang}</option>
-              {/if}
-              {#each LANGUAGES as l (l.code)}<option value={l.code}>{l.label}</option>{/each}
-            </select>
-          </label>
-          {#if inspection.suggestedLang}
-            <p class="mt-1 text-xs text-jade-400">
-              Detected {langLabel(inspection.suggestedLang)} from the deck.
-            </p>
-          {/if}
-
-          <label class="mt-3 block text-xs text-ink-400">
-            Word field
-            <select bind:value={wordField} class="field mt-1">
-              {#each inspection.fields as f, i (i)}<option value={i}>{f}</option>{/each}
-            </select>
-          </label>
-
-          <div class="mt-2 grid grid-cols-2 gap-2">
-            <label class="block text-xs text-ink-400">
-              Reading (optional)
-              <select bind:value={readingField} class="field mt-1">
-                <option value={-1}>None</option>
-                {#each inspection.fields as f, i (i)}<option value={i}>{f}</option>{/each}
-              </select>
-            </label>
-            <label class="block text-xs text-ink-400">
-              Meaning (optional)
-              <select bind:value={meaningField} class="field mt-1">
-                <option value={-1}>None</option>
-                {#each inspection.fields as f, i (i)}<option value={i}>{f}</option>{/each}
-              </select>
-            </label>
-          </div>
-
-          <div class="mt-3 overflow-x-auto">
-            <table class="w-full text-left text-xs text-ink-400">
-              <thead>
-                <tr
-                  >{#each inspection.fields as f (f)}<th class="pr-2 font-normal">{f}</th
-                    >{/each}</tr
-                >
-              </thead>
-              <tbody>
-                {#each inspection.sample.slice(0, 3) as row, r (r)}
-                  <tr>
-                    {#each row as value, i (i)}<td class="pr-2 text-ink-300">{cell(value)}</td
-                      >{/each}
-                  </tr>
-                {/each}
-              </tbody>
-            </table>
-          </div>
-
-          <div class="mt-3 flex gap-2">
-            <button
-              type="button"
-              onclick={confirmImport}
-              disabled={importing}
-              class="btn btn-primary flex-1 py-3"
-            >
-              {#if importing}<Spinner size={15} label="Building the deck" /> Building…{:else}Build
-                deck
-              {/if}
-            </button>
-            <button
-              type="button"
-              onclick={cancelImport}
-              disabled={importing}
-              class="btn btn-ghost px-4"
-            >
-              Cancel
-            </button>
-          </div>
-        </section>
+        <ImportPanel
+          {inspection}
+          bind:importLang
+          bind:wordField
+          bind:readingField
+          bind:meaningField
+          {importing}
+          onConfirm={confirmImport}
+          onCancel={cancelImport}
+        />
       {/if}
     </div>
 
@@ -420,41 +324,7 @@
       {#if decks.length === 0}
         <p class="text-sm text-ink-400">No decks yet — describe one above and build it.</p>
       {:else}
-        <section class="panel mb-4 p-4" style="--accent: {ACCENT.arcane}">
-          <div class="flex items-baseline justify-between">
-            <p class="eyebrow">Profession</p>
-            {#if selected}
-              <span class="chip" style="--accent: {ACCENT.arcane}">
-                {selected.skill.icon}
-                {selected.skill.name}
-              </span>
-            {/if}
-          </div>
-          {#if groups.length === 0}
-            <p class="mt-2 text-sm text-ink-400">
-              No profession is ready to train.
-              <a href={href('/skills')} class="link">Unlock one in Skills</a>.
-            </p>
-          {:else}
-            <select value={actionId} onchange={chooseProfession} class="field mt-2">
-              <option value="">Choose a profession…</option>
-              {#each groups as group (group.skill.id)}
-                <optgroup label="{group.skill.icon} {group.skill.name}">
-                  {#each group.actions as action (action.id)}
-                    <option value={action.id}>{action.name}</option>
-                  {/each}
-                </optgroup>
-              {/each}
-            </select>
-            {#if selected}
-              <p class="mt-2 text-xs text-ink-400">{selected.action.description}</p>
-            {:else}
-              <p class="mt-2 text-xs text-brass-300">
-                Pick a profession first — lessons train that profession.
-              </p>
-            {/if}
-          {/if}
-        </section>
+        <ProfessionPicker {groups} {selected} {actionId} onChoose={chooseProfession} />
 
         {#each decks as d (d.deckId)}
           <PathDeck

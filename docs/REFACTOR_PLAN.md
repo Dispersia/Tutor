@@ -513,10 +513,10 @@ too: `equipItem`/`applyEnchant`/`grantItems`/`awardXp`/`recordReview`/
 `completeAction` fold their trailing arguments into one options object and the
 `band` table calls `bandDef(spec)` directly, so `eslint.config.js` drops its
 `wideSignatures` list (`max-params` is now on everywhere except the two legacy
-scopes). The page shells are next, smallest first: `home` (404 → 104 lines) and
-`inventory` (462 → 240) are done — their pure maths live in `lib/homeview.ts` /
-`lib/inventoryview.ts` and their markup in `lib/components/<feature>/`, and both
-are off the `legacyBig` list. Still open: `learn`, `skills/[id]`, `settings`,
+scopes). The page shells are next, smallest first: `home` (404 → 104 lines),
+`inventory` (462 → 240) and `learn` (490 → 360) are done — their pure maths live
+in `lib/<feature>view.ts` and their markup in `lib/components/<feature>/`, and all
+three are off the `legacyBig` list. Still open: `skills/[id]`, `settings`,
 `practice` (and `chat`/`combat`/`skills`, whose scripts still hold long
 functions) get the Phase 6 treatment — pure derivations into
 `lib/<feature>view.ts`, presentational pieces into `lib/components/<feature>/`,
