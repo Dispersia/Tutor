@@ -41,7 +41,13 @@ async function clipBytes(
   if (existing) return existing
   // Not pre-recorded yet (a card made before the recording finished, or an older
   // deck): synth this one voice now and keep it for every later play.
-  await audio.ensureVoice(card.back, card.targetLang, userId, voiceId)
+  await audio.ensureVoice({
+    text: card.back,
+    language: card.targetLang,
+    kana: card.readings.kana,
+    userId,
+    voiceId,
+  })
   return audio.clip(card.back, card.targetLang, voiceId)
 }
 
@@ -67,7 +73,7 @@ export function registerAudio(app: App) {
 /** How the background recorder is doing (pending clips, stored, failures). */
 function statusHandler(c: Context<AppEnv>) {
   const audio = c.get('deps').audio
-  const empty = { pending: 0, running: false, recorded: 0, failed: 0, voices: 0 }
+  const empty = { pending: 0, running: false, recorded: 0, failed: 0, rejected: 0, voices: 0 }
   return c.json(audio?.status() ?? empty)
 }
 

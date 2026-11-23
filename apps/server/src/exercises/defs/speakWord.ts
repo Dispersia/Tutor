@@ -164,30 +164,36 @@ function attemptDetail(transcript: string, f: Features, words: WordFeedback[]) {
 
 function judgePrompt(ctx: ExerciseContext, expected: string, a: AssessResult, f: Features): string {
   const reading = gradingReading(ctx)
-  const readingLine = reading ? `The correct reading is ${reading}. ` : ''
   const timings = f.words.map((w) => `${w.text}:${w.duration.toFixed(2)}s`).join(' ')
   const pauses = f.pauses.map((p) => `${p.after}+${p.seconds}s`).join(', ') || 'none'
-  const missing = f.missing.join('、') || 'none'
   return [
-    `Grade the pronunciation of ${label(ctx.card.targetLang)} text “${expected}”. ${readingLine}The learner said (ASR): “${a.transcript}”.`,
-    `Missing tokens: ${missing}. Character error rate: ${f.cer.toFixed(2)}.`,
-    `Word timings: ${timings}. Long pauses: ${pauses}. Length ${f.duration.toFixed(2)}s.`,
+    `Task: give pronunciation feedback on a learner reading ${label(ctx.card.targetLang)} aloud.`,
+    '',
+    `Expected text: ${expected}${reading ? `\nCorrect reading: ${reading}` : ''}`,
+    `What the speech recogniser heard: ${a.transcript}`,
+    `Not heard: ${f.missing.join('、') || 'nothing'}. Character error rate: ${f.cer.toFixed(2)}.`,
+    `Timing per word: ${timings}. Long pauses: ${pauses}. Total ${f.duration.toFixed(2)}s.`,
+    '',
     pronGuide(ctx),
-    `Write the summary and every word tip in the learner's native language (${label(ctx.learner.nativeLang)}), never in ${label(ctx.card.targetLang)}.`,
   ].join('\n')
 }
 
-/** The pronunciation-grading rules the judge must follow, with its languages. */
+/** How the judge should read the evidence, and what to return. */
 function pronGuide(ctx: ExerciseContext): string {
-  const target = label(ctx.card.targetLang)
   const native = label(ctx.learner.nativeLang)
   return [
-    `Write the summary and each word tip in the learner's native language (${native}); only the target tokens stay in ${target}. Be encouraging; flag the specific tokens that need work.`,
+    'How to read this evidence:',
+    '- The recogniser only guesses, and often mishears a short clip. A different word in the transcript is not proof of a wrong sound: trust it only where it agrees with the missing words and the timing.',
+    '- When nothing in the transcript matches the expected text, you cannot tell what was said. Say you could not hear it clearly and ask for one more try; do not diagnose a sound.',
+    ctx.card.targetLang === 'zh' &&
+      '- This is Taiwan Mandarin: ㄓ ㄔ ㄕ spoken as ㄗ ㄘ ㄙ (or the reverse) is a correct accent, not an error.',
     '',
-    'How to grade pronunciation:',
-    `- The reading above is authoritative: when you mention it, copy it exactly (it is Zhuyin / kana). Never write pinyin, and never describe a sound with a Latin-letter look-alike such as “shee”, “sh” or “see” — those misdescribe the sound and confuse the learner.`,
-    `- The ASR transcript is only a guess and often mis-hears a short clip. The learner is practising a ${target} accent where this is standard; do not assume a syllable was wrong just because the transcript shows another word.`,
-    `- If Mandarin: this is the Taiwan standard. A learner whose ㄓ/ㄔ/ㄕ come out as ㄗ/ㄘ/ㄙ (or the reverse) is speaking a correct accent — never mark that as an error.`,
-    `- If the transcript is a different word entirely and nothing matches the expected text, say you could not hear it clearly and ask the learner to say it once more. Do not invent a detailed pronunciation diagnosis.`,
-  ].join('\n')
+    'What to return:',
+    '- score 0 to 100, and correct = true when a listener would understand the whole text.',
+    `- summary: one or two encouraging ${native} sentences naming the one thing to work on.`,
+    `- words: one entry per word of the expected text, with ok and a short ${native} tip (an empty tip when ok).`,
+    '- When you name a sound, copy it from the correct reading exactly. Never spell a sound in Latin letters ("shee", "sh").',
+  ]
+    .filter((line): line is string => typeof line === 'string')
+    .join('\n')
 }

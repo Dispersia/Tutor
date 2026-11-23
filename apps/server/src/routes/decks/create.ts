@@ -15,7 +15,6 @@ import type { Planner } from '../../deck/plan'
 import { DECK_INSTRUCTION_KEY } from '../../deck/settings'
 import { roleReasoning } from '../../env'
 import { OpenRouter } from '../../llm/openrouter'
-import { MANDARIN_RULE } from '../../llm/prompts'
 import { resolveUserKey } from '../../llm/userkey'
 import { readingsFor } from '../../seed/service'
 import { bool, jsonBody, num, oneOf, str, strArray } from '../body'
@@ -28,28 +27,6 @@ const LANG_LABEL: Record<string, string> = {
   es: 'Spanish',
   fr: 'French',
   de: 'German',
-}
-
-const DECK_SCHEMA = {
-  type: 'object',
-  properties: {
-    cards: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          front: { type: 'string' },
-          back: { type: 'string' },
-          reading: { type: 'string' },
-          kana: { type: 'string' },
-        },
-        required: ['front', 'back', 'reading'],
-        additionalProperties: false,
-      },
-    },
-  },
-  required: ['cards'],
-  additionalProperties: false,
 }
 
 interface CreateBody {
@@ -206,7 +183,7 @@ async function generateTopicCards(
     model: getRoles(deps.db, userId, deps.defaults).generator,
     reasoning: roleReasoning.generator,
     schemaName: 'deck',
-    schema: DECK_SCHEMA,
+    schema: TOPIC_SCHEMA,
     messages: topicMessages(body, targetLang),
   })
   return json.cards
@@ -220,23 +197,55 @@ function topicMessages(
   const lang = LANG_LABEL[targetLang] ?? targetLang
   const topic = body.topic!.trim()
   const level = body.level ?? 'beginner'
-  return [
-    {
-      role: 'system',
-      content: `You generate vocabulary decks for a language learner. Be accurate and level-appropriate.\n${MANDARIN_RULE}`,
-    },
-    {
-      role: 'user',
-      content: `Create ${count} ${lang} vocabulary cards (level ${level}) about "${topic}". "front" is English, "back" is the ${lang} text. ${readingRule(targetLang)}`,
-    },
+  const request = [
+    `Write ${count} ${lang} vocabulary cards about "${topic}" for a ${level} learner.`,
+    '- front: the meaning in English. Separate several senses with " / ".',
+    `- back: the ${lang} word.`,
+    readingRule(targetLang),
   ]
+  return [
+    { role: 'system', content: TOPIC_SYSTEM },
+    { role: 'user', content: request.join('\n') },
+  ]
+}
+
+const TOPIC_SYSTEM =
+  'You write vocabulary cards for a language learner. Return only the JSON the schema asks for. ' +
+  'Choose common, useful words at the requested level, one word or short set phrase per card, with no duplicates.'
+
+/** What the topic generator returns: plain vocabulary, no templates or payloads. */
+const TOPIC_SCHEMA = {
+  type: 'object',
+  properties: {
+    cards: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          front: { type: 'string' },
+          back: { type: 'string' },
+          reading: { type: 'string' },
+          kana: { type: 'string' },
+        },
+        required: ['front', 'back', 'reading', 'kana'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['cards'],
+  additionalProperties: false,
 }
 
 /** The reading convention for the generated cards, by target language. */
 function readingRule(targetLang: string): string {
-  return targetLang === 'ja'
-    ? '"reading" is romaji and "kana" is the hiragana reading (furigana).'
-    : '"back" must be in Traditional characters (繁體字), never Simplified. "reading" is pinyin with tone marks — it is used only to derive Zhuyin and is never shown to the learner.'
+  if (targetLang === 'ja') {
+    return '- kana: the reading in hiragana. reading: the same reading in romaji.'
+  }
+  if (targetLang === 'zh') {
+    // Pinyin on purpose: the server derives Zhuyin from it and never shows it.
+    return '- back uses Traditional characters (繁體字). reading: pinyin with tone marks. kana: an empty string.'
+  }
+  return '- reading and kana: empty strings.'
 }
 
 interface TopicCardsCtx {

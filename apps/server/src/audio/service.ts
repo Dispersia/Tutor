@@ -14,7 +14,7 @@
  * for (it waits at most one short clip).
  */
 
-import type { Card } from '@tutor/core'
+import { voiceInstruct, type Card } from '@tutor/core'
 import type { Db } from '../db/client'
 import { cardLanguages, listCards } from '../db/repo'
 import type { SpeechSupervisor } from '../speech/supervisor'
@@ -27,19 +27,53 @@ import {
   removeClip,
   writeClip,
 } from './store'
+import { saysExactly } from './verify'
 import { CARD_VOICES, voiceAt, type CardVoice } from './voices'
 
 export interface TtsRequest {
   text: string
   language?: string
   instruct?: string
-  mode?: 'preset' | 'design'
   /** Peak-normalise the clip (card audio); chat playback leaves it off. */
   normalize?: boolean
 }
 
 /** Synthesizes one clip. Injected so tests run without the MLX gateway. */
 export type TtsFn = (req: TtsRequest) => Promise<Uint8Array>
+
+/**
+ * Transcribes a clip, so a recording can be graded before it is kept.
+ * `reference` is the expected text: the gateway uses it only to return Chinese
+ * in the same script, never to bias what it hears.
+ */
+export type AsrFn = (clip: Uint8Array, language: string, reference: string) => Promise<string>
+
+/** The real recogniser: POST the gateway's `/v1/asr` through the supervisor. */
+export function gatewayAsr(sup: SpeechSupervisor): AsrFn {
+  return async (clip, language, reference) => {
+    await sup.ensure()
+    sup.begin()
+    try {
+      return await postAsr(sup.url, { clip, language, reference })
+    } finally {
+      sup.end()
+    }
+  }
+}
+
+async function postAsr(
+  url: string,
+  req: { clip: Uint8Array; language: string; reference: string },
+): Promise<string> {
+  const form = new FormData()
+  form.set('file', new Blob([req.clip as unknown as BlobPart], { type: 'audio/wav' }), 'clip.wav')
+  form.set('language', req.language)
+  form.set('reference', req.reference)
+  const signal = AbortSignal.timeout(60_000)
+  const res = await fetch(`${url}/v1/asr`, { method: 'POST', body: form, signal })
+  if (!res.ok) throw new Error(`asr -> ${res.status}: ${await res.text().catch(() => '')}`)
+  return ((await res.json()) as { text?: string }).text ?? ''
+}
 
 /** The real TTS: POST the gateway's `/v1/tts` through the supervisor, so the
  * request keeps the sidecar alive and counts against its idle timer. */
@@ -62,7 +96,6 @@ async function postTts(url: string, req: TtsRequest): Promise<Uint8Array> {
     body: JSON.stringify({
       text: req.text,
       language: req.language,
-      mode: req.mode ?? 'design',
       instruct: req.instruct,
       normalize: req.normalize ?? false,
     }),
@@ -78,6 +111,8 @@ export interface AudioJob {
   userId: string
   text: string
   language: string
+  /** The card's kana reading. Used only to grade the clip, never to synthesise it. */
+  kana?: string
 }
 
 /**
@@ -98,6 +133,8 @@ export interface AudioStatus {
   recorded: number
   /** Failed attempts (a later run retries them). */
   failed: number
+  /** Clips thrown away because every take said something other than the text. */
+  rejected: number
   /** Voices recorded per card. */
   voices: number
 }
@@ -109,9 +146,9 @@ export interface AudioService {
   /** Reads one recorded clip, or undefined when it is missing. */
   clip(text: string, language: string, voiceId: string): Uint8Array | undefined
   /** Records one voice for a text (no-op when already recorded). */
-  ensureVoice(text: string, language: string, userId: string, voiceId: string): Promise<void>
+  ensureVoice(job: AudioJob & { voiceId: string }): Promise<void>
   /** Records every voice for a text. */
-  ensure(text: string, language: string, userId: string): Promise<void>
+  ensure(job: AudioJob): Promise<void>
   /** Queues texts in the background; duplicates and complete ones are skipped.
    * Returns how many new jobs were added. */
   enqueue(jobs: AudioJob[]): number
@@ -133,6 +170,8 @@ interface QueueState {
   current: string | null
   recorded: number
   failed: number
+  /** Clip keys no take passed for; not retried until the next restart. */
+  rejected: Set<string>
 }
 
 /** Everything the recording helpers read, threaded as a parameter. */
@@ -140,21 +179,34 @@ interface AudioStore {
   db: Db
   dataDir: string
   tts: TtsFn
+  /** Absent in tests and tools that record without grading. */
+  asr?: AsrFn
   q: QueueState
 }
 
-export function createAudioService(opts: { db: Db; dataDir: string; tts: TtsFn }): AudioService {
-  const store: AudioStore = {
-    db: opts.db,
-    dataDir: opts.dataDir,
-    tts: opts.tts,
-    q: emptyQueue(),
-  }
+export interface AudioServiceOptions {
+  db: Db
+  dataDir: string
+  tts: TtsFn
+  /** When given, every clip is transcribed and kept only if it says its text. */
+  asr?: AsrFn
+}
+
+export function createAudioService(opts: AudioServiceOptions): AudioService {
+  const store: AudioStore = { ...opts, q: emptyQueue() }
   return service(store)
 }
 
 function emptyQueue(): QueueState {
-  return { pending: [], queued: new Set(), running: false, current: null, recorded: 0, failed: 0 }
+  return {
+    pending: [],
+    queued: new Set(),
+    running: false,
+    current: null,
+    recorded: 0,
+    failed: 0,
+    rejected: new Set(),
+  }
 }
 
 /** The public surface, closing over the store the helpers read. */
@@ -164,9 +216,8 @@ function service(store: AudioStore): AudioService {
     complete: (text, language) => complete(store, text, language),
     clip: (text, language, voiceId) =>
       readClip(store.db, store.dataDir, clipKey(store, { text, language, voiceId })),
-    ensureVoice: (text, language, userId, voiceId) =>
-      ensureVoice(store, { text, language, userId, voiceId }),
-    ensure: (text, language, userId) => ensureText(store, text, language, userId),
+    ensureVoice: (job) => ensureVoice(store, job),
+    ensure: (job) => ensureText(store, job),
     enqueue: (jobs) => enqueue(store, jobs),
     enqueueDeck: (userId, deckId) => enqueueDeck(store, userId, deckId),
     enqueueUser: (userId) => enqueueUser(store, userId),
@@ -177,10 +228,12 @@ function service(store: AudioStore): AudioService {
 
 const keyOf = (j: AudioJob): string => `${j.language}\u0000${j.text}`
 
+/** Nothing left to record: every voice is on disk, or was given up on. */
 function complete(s: AudioStore, text: string, language: string): boolean {
-  return CARD_VOICES.every((v) =>
-    hasClip(s.db, s.dataDir, clipKey(s, { text, language, voiceId: v.id })),
-  )
+  return CARD_VOICES.every((v) => {
+    const hash = clipKey(s, { text, language, voiceId: v.id })
+    return hasClip(s.db, s.dataDir, hash) || s.q.rejected.has(hash)
+  })
 }
 
 /** One voice's clip of a text in a language. */
@@ -219,36 +272,50 @@ function clipOwner(s: AudioStore, hash: string): string {
   return findClip(s.db, hash)?.userId ?? ''
 }
 
-interface VoiceJob {
-  text: string
-  language: string
-  userId: string
-  voiceId: string
-}
+type VoiceJob = AudioJob & { voiceId: string }
 
 async function ensureVoice(s: AudioStore, job: VoiceJob): Promise<void> {
   const voice = CARD_VOICES.find((v) => v.id === job.voiceId)
   if (!voice) throw new Error(`unknown voice ${job.voiceId}`)
   const hash = clipKey(s, job)
-  if (hasClip(s.db, s.dataDir, hash)) return
-  const bytes = await s.tts({
-    text: job.text,
-    language: job.language,
-    instruct: voice.instruct,
-    mode: 'design',
-    normalize: true,
-  })
-  if (bytes.length === 0) throw new Error('tts produced no audio')
-  writeClip(s.db, s.dataDir, job.userId, hash, bytes)
+  if (hasClip(s.db, s.dataDir, hash) || s.q.rejected.has(hash)) return
+  const bytes = await recordGraded(s, job, voice)
+  if (bytes) writeClip(s.db, s.dataDir, job.userId, hash, bytes)
+  else s.q.rejected.add(hash)
 }
 
-async function ensureText(
+/** How many takes a clip gets before it is given up on. */
+const TAKES = 3
+
+/**
+ * Records a clip and grades it: the recogniser must hear the card's text and
+ * nothing else. The model is random per take, so a bad take is simply retried;
+ * undefined when no take passed (a missing clip beats a wrong one).
+ */
+async function recordGraded(
   s: AudioStore,
-  text: string,
-  language: string,
-  userId: string,
-): Promise<void> {
-  for (const v of CARD_VOICES) await ensureVoice(s, { text, language, userId, voiceId: v.id })
+  job: VoiceJob,
+  voice: CardVoice,
+): Promise<Uint8Array | undefined> {
+  for (let take = 1; take <= TAKES; take++) {
+    const bytes = await s.tts({
+      // The model has no language switch: the accent rides in the description.
+      text: job.text,
+      language: job.language,
+      instruct: voiceInstruct(voice.instruct, job.language),
+      normalize: true,
+    })
+    if (bytes.length === 0) throw new Error('tts produced no audio')
+    if (!s.asr) return bytes
+    const heard = await s.asr(bytes, job.language, job.text)
+    if (saysExactly(job, heard)) return bytes
+    console.warn(`[audio] take ${take}/${TAKES} of "${job.text}" (${voice.id}) said "${heard}"`)
+  }
+  return undefined
+}
+
+async function ensureText(s: AudioStore, job: AudioJob): Promise<void> {
+  for (const v of CARD_VOICES) await ensureVoice(s, { ...job, voiceId: v.id })
 }
 
 function enqueue(s: AudioStore, jobs: AudioJob[]): number {
@@ -268,7 +335,7 @@ function enqueue(s: AudioStore, jobs: AudioJob[]): number {
 function enqueueCards(s: AudioStore, cards: Card[], userId: string): number {
   return enqueue(
     s,
-    cards.map((c) => ({ userId, text: c.back, language: c.targetLang })),
+    cards.map((c) => ({ userId, text: c.back, language: c.targetLang, kana: c.readings.kana })),
   )
 }
 
@@ -294,6 +361,7 @@ function status(s: AudioStore): AudioStatus {
     current: s.q.current,
     recorded: s.q.recorded,
     failed: s.q.failed,
+    rejected: s.q.rejected.size,
     voices: CARD_VOICES.length,
   }
 }
@@ -311,7 +379,7 @@ async function pump(s: AudioStore): Promise<void> {
 async function runJob(s: AudioStore, job: AudioJob): Promise<void> {
   s.q.current = job.text
   try {
-    await ensureText(s, job.text, job.language, job.userId)
+    await ensureText(s, job)
     s.q.recorded++
   } catch (err) {
     s.q.failed++

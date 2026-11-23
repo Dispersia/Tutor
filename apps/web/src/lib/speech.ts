@@ -48,10 +48,8 @@ export function stopAudio(): void {
 }
 
 export interface SpeakOptions {
-  voice?: string
   language?: string
-  mode?: 'preset' | 'design'
-  /** Style cue sent to the TTS model (see TEACHER_INSTRUCT). */
+  /** The voice description sent to the TTS model (see `speechOpts`). */
   instruct?: string
 }
 
@@ -168,8 +166,29 @@ function speakerApi(state: SpeakerState, started: Promise<void>, opts: SpeakOpti
   }
 }
 
+/** A bracketed reading after a word: Zhuyin, toned pinyin, or kana furigana. */
+const BRACKETED_READING =
+  /[（(][^()（）]*[\u3100-\u312f\u02c7\u02ca\u02cb\u02d9āáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜ][^()（）]*[)）]|[（(][\u3040-\u309f\s]+[)）]/g
+
+/**
+ * The text a speech model should read. A chat reply can carry markdown, emoji
+ * or a reading in brackets; the model reads those out literally or stumbles on
+ * them, so they are removed before synthesis. Empty when nothing is left to say.
+ */
+export function speakable(text: string): string {
+  const plain = text
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1') // [label](url) -> label
+    .replace(BRACKETED_READING, '')
+    .replace(/^\s*(?:[-•]|\d+[.)])\s+/gm, '') // list markers
+    .replace(/[*_`#>~|]+/g, ' ')
+    .replace(/\p{Extended_Pictographic}|\ufe0f|\u200d/gu, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+  return /[\p{L}\p{N}]/u.test(plain) ? plain : ''
+}
+
 function pushText(state: SpeakerState, opts: SpeakOptions, text: string): void {
-  const t = text.trim()
+  const t = speakable(text)
   if (state.cancelled || state.closed || !t) return
   const audio = fetchTts(t, opts)
   // If cancel() drops this item before the loop awaits it, the rejection must

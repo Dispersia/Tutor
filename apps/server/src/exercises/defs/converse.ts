@@ -86,9 +86,30 @@ function fallbackResult(back: string, text: string, target: string): GradeResult
   return { score: usedWord ? 90 : hasTarget ? 55 : 30, correct: usedWord, expected: back, feedback }
 }
 
+/** What counts as using the word: its meaning, not the sentence's grammar. */
+const USE_RUBRIC = [
+  'Judge only whether the word is used with its meaning. Grammar, word order, particles and spelling do not decide the grade.',
+  'correct = true: a real sentence in which the word carries its meaning, even if the sentence has other mistakes.',
+  'correct = false: the word is missing, stands alone, or does not fit what the sentence says.',
+  'score: 90 to 100 when correct and natural, 70 to 89 when correct with mistakes, under 50 when not correct.',
+].join('\n')
+
 /** The judge prompt: only the word's use is judged, not the grammar. */
 function prompt(ctx: ExerciseContext, text: string): string {
   const lang = label(ctx.card.targetLang)
   const native = label(ctx.learner.nativeLang)
-  return `The learner is practising ${lang}. They must write or say a full sentence that *uses* the word “${ctx.card.back}” (${ctx.card.front}). Judge only whether the word is used correctly for the sentence — its meaning fits the sentence — NOT whether the sentence is grammatical. Set correct=true whenever the learner makes a genuine attempt to use the word with its intended meaning, even if the sentence has grammar, word-order, spelling or particle mistakes; correct those mistakes briefly in the feedback instead of failing the card. Set correct=false only when the word is missing or clearly does not fit the sentence's meaning (the wrong word for that sentence). Repeating the word alone is not a sentence and must score low. The learner wrote/said: “${text}”. Grade the attempt (0-100) and give a short feedback. Only suggest a "tip" when the learner can still improve: never repeat, quote or lightly extend the learner's own sentence as the suggested version — it must not be the sentence they already wrote. If their sentence is already correct and natural, praise it and stop; do not invent a longer sentence, and do not tell them to use a sentence they just used. Write the feedback in the learner's native language (${native}), never in ${lang}; only the word and any target-language example stay in ${lang}.`
+  return [
+    `Task: the learner must use a ${lang} word in a sentence of their own.`,
+    '',
+    `Word: ${ctx.card.back} (${ctx.card.front})`,
+    `Learner's sentence: ${text}`,
+    '',
+    USE_RUBRIC,
+    '',
+    `feedback, in ${native}, two short sentences at most:`,
+    '- The sentence is natural: brief praise and nothing more.',
+    `- The sentence has mistakes: give the corrected ${lang} sentence and say what changed.`,
+    '- The word does not fit: say why in a few words.',
+    "Never offer the learner's own sentence back as a suggestion, and never suggest a longer sentence than the task needs.",
+  ].join('\n')
 }

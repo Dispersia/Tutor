@@ -1,16 +1,18 @@
 import { expect, test } from 'bun:test'
 import {
-  CONVERSATION_LANGUAGE_RULE,
   NATIVE_FEEDBACK_REMINDER,
   NATIVE_FEEDBACK_RULE,
+  conversationSystem,
+  judgeSystem,
   langName,
+  scriptRule,
+  systemPrompt,
 } from './prompts'
 
-test('native feedback rule names both languages and forbids the target', () => {
+test('native feedback rule names both languages', () => {
   const rule = NATIVE_FEEDBACK_RULE('en', 'zh')
-  expect(rule).toContain('English')
+  expect(rule).toContain('Write all feedback in English')
   expect(rule).toContain('Mandarin')
-  expect(rule).toContain('Never write the feedback in Mandarin')
 })
 
 test('native feedback rule still works without a target language', () => {
@@ -20,16 +22,52 @@ test('native feedback rule still works without a target language', () => {
 })
 
 test('the reminder is a short last-word instruction', () => {
-  const line = NATIVE_FEEDBACK_REMINDER('en', 'zh')
-  expect(line).toContain('English only')
-  expect(line).toContain('never in Mandarin')
+  expect(NATIVE_FEEDBACK_REMINDER('en', 'zh')).toBe(
+    'Write the feedback in English, not in Mandarin.',
+  )
+  expect(NATIVE_FEEDBACK_REMINDER('en')).toBe('Write the feedback in English.')
 })
 
-test('conversation rule keeps the dialogue but explains in the native language', () => {
-  const rule = CONVERSATION_LANGUAGE_RULE('en', 'ja')
-  expect(rule).toContain('Hold the conversation in Japanese')
-  expect(rule).toContain('native language (English)')
-  expect(rule).toContain('Never explain in Japanese')
+test('the script rule follows the deck, and says nothing for other languages', () => {
+  expect(scriptRule('zh')).toContain('Traditional characters')
+  expect(scriptRule('zh')).toContain('Zhuyin')
+  // a pinyin deck is never told to write Zhuyin
+  const pinyin = scriptRule('zh', { variant: 'simplified', readingScript: 'pinyin' })
+  expect(pinyin).toContain('Simplified characters')
+  expect(pinyin).toContain('pinyin')
+  expect(pinyin).not.toContain('Zhuyin')
+  expect(scriptRule('ja')).toContain('kana')
+  expect(scriptRule('yue')).not.toContain('Zhuyin')
+  expect(scriptRule('es')).toBe('')
+})
+
+test('the conversation prompt names both languages and asks for speakable text', () => {
+  const prompt = conversationSystem({ nativeLang: 'en', targetLang: 'ja' })
+  expect(prompt).toContain('Japanese conversation partner')
+  expect(prompt).toContain('native language is English')
+  expect(prompt).toContain('text-to-speech')
+  expect(prompt).toContain('no markdown')
+  // a Japanese learner is never told about Chinese scripts
+  expect(prompt).not.toContain('Zhuyin')
+  expect(prompt).not.toContain('Traditional')
+})
+
+test('a Spanish prompt carries no script rule and no stray blank bullet', () => {
+  const prompt = conversationSystem({ nativeLang: 'en', targetLang: 'es' })
+  expect(prompt.endsWith('romanization after a word.')).toBe(true)
+  expect(judgeSystem({ nativeLang: 'en', targetLang: 'es' })).not.toMatch(/\n-?\s*$/)
+})
+
+test('systemPrompt appends the caller’s extra instruction last', () => {
+  const [msg] = systemPrompt(
+    'conversation',
+    { nativeLang: 'en', targetLang: 'zh' },
+    'Talk about food.',
+  )
+  expect(msg!.role).toBe('system')
+  expect(msg!.content.endsWith('Talk about food.')).toBe(true)
+  const [judge] = systemPrompt('judge', { nativeLang: 'en', targetLang: 'zh' })
+  expect(judge!.content).toContain('Write all feedback in English')
 })
 
 test('langName resolves short codes with an English fallback', () => {

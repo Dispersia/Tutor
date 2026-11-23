@@ -15,13 +15,11 @@
     SpeechStatus,
     StudyPrefs,
   } from '#lib/types'
-  import { setVoicePrefs } from '#lib/voices'
   import { EMPTY_ROLES } from '#lib/settingsview'
   import StudySettings from '#lib/components/settings/StudySettings.svelte'
   import RigAlertsSection from '#lib/components/settings/RigAlertsSection.svelte'
   import OpenRouterKey from '#lib/components/settings/OpenRouterKey.svelte'
   import ModelRoles from '#lib/components/settings/ModelRoles.svelte'
-  import VoiceSettings from '#lib/components/settings/VoiceSettings.svelte'
   import SpeechSection from '#lib/components/settings/SpeechSection.svelte'
   import NumberSetting from '#lib/components/settings/NumberSetting.svelte'
   import AccountSection from '#lib/components/settings/AccountSection.svelte'
@@ -33,8 +31,6 @@
   let models = $state<ModelInfo[]>([])
   let modelFilter = $state('')
   let modelsLoading = $state(false)
-  let voiceMode = $state<'preset' | 'design'>('preset')
-  let voices = $state<Record<string, string>>({})
   let keyStatus = $state<'user' | 'server' | false>(false)
   let keyInput = $state('')
   let handle = $state('')
@@ -73,7 +69,6 @@
   type SettingsPayload = {
     roles: Roles
     roleDefaults: Roles
-    voice: { mode: 'preset' | 'design'; voices: Record<string, string> }
     study?: StudyPrefs
     openrouter: { key: 'user' | 'server' | false }
     foodThreshold?: number
@@ -84,9 +79,6 @@
   function applySettings(s: SettingsPayload) {
     roles = s.roles
     roleDefaults = s.roleDefaults
-    voiceMode = s.voice.mode
-    voices = s.voice.voices
-    setVoicePrefs({ mode: voiceMode, voices })
     if (s.study) {
       study = s.study
       stepsText = (s.study.learningSteps ?? []).join(', ')
@@ -192,21 +184,6 @@
     }
   }
 
-  async function saveVoice() {
-    note = ''
-    try {
-      await api('/api/settings', {
-        method: 'PUT',
-        body: JSON.stringify({ voice: { mode: voiceMode, voices } }),
-      })
-      // playback reads this module directly — no reload needed
-      setVoicePrefs({ mode: voiceMode, voices })
-      note = 'Voice settings saved.'
-    } catch (e) {
-      error = (e as Error).message
-    }
-  }
-
   /** Puts one scalar knob and shows the note. */
   async function saveScalar(patch: Record<string, number>, message: string) {
     note = ''
@@ -304,8 +281,6 @@
     onFilter={loadModels}
     onSave={saveRoles}
   />
-
-  <VoiceSettings bind:voiceMode bind:voices onSave={saveVoice} />
 
   <SpeechSection {speech} {waking} onWake={wake} onFree={isAdmin ? free : undefined} />
 

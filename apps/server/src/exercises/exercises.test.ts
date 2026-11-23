@@ -348,10 +348,9 @@ test("converse asks the judge for the tip in the learner's native language", asy
   }
   const inst = await def.generate(c)
   await def.grade(c, inst, '我喜歡你好嗎')
-  expect(prompt).toContain('native language (English)')
-  expect(prompt).toContain('never in Mandarin')
+  expect(prompt).toContain('feedback, in English')
   // The tip must not recycle the learner's own sentence as the suggestion.
-  expect(prompt).toContain('never repeat, quote or lightly extend')
+  expect(prompt).toContain("Never offer the learner's own sentence back")
 })
 
 test('translate.back_to_front asks the judge for native-language feedback', async () => {
@@ -364,7 +363,7 @@ test('translate.back_to_front asks the judge for native-language feedback', asyn
   }
   const inst = await def.generate(c)
   await def.grade(c, inst, 'genitive marker')
-  expect(prompt).toContain('native language (English)')
+  expect(prompt).toContain('one short English sentence')
 })
 
 test('speak_word.gradeAudio uses the injected assessor', async () => {
@@ -478,7 +477,7 @@ test('speak_word.gradeAudio hands the judge the exact reading, not a Latin appro
   const r = await def.gradeAudio!(c, inst, new Uint8Array())
   expect(prompt).toContain('ㄕˋ')
   expect(prompt).toContain('Taiwan')
-  expect(prompt.toLowerCase()).toContain('never write pinyin')
+  expect(prompt).toContain('Never spell a sound in Latin letters')
   expect(r.score).toBe(100)
 })
 

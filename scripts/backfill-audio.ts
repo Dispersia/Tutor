@@ -21,7 +21,7 @@
  */
 
 import { join } from 'node:path'
-import { createAudioService, gatewayTts } from '../apps/server/src/audio/service'
+import { createAudioService, gatewayAsr, gatewayTts } from '../apps/server/src/audio/service'
 import { openDb } from '../apps/server/src/db/client'
 import { listUsers } from '../apps/server/src/db/repo'
 import { decks } from '../apps/server/src/db/schema'
@@ -44,6 +44,7 @@ const audio = createAudioService({
   db,
   dataDir: env.dataDir,
   tts: gatewayTts(supervisor),
+  asr: gatewayAsr(supervisor),
 })
 
 console.log('[audio] starting the speech gateway…')

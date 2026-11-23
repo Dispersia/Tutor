@@ -125,7 +125,11 @@ const TRANSLATION_SCHEMA = {
   additionalProperties: false,
 } as const
 
-const SYSTEM = `You translate single sentences into English for a language-learning card. For each item, translate what the WHOLE sentence MEANS, naturally and idiomatically — never word by word. A Chinese "我想你。" is "I miss you." (never "I think you."); a Japanese "請坐。" style literal gloss like "Book exists here" is "The book is here.". Return one plain English sentence per item: no notes, no quotes, no "Translate:", no romanization/pinyin, no alternative separated by "/", no "(polite)" or "(classifier)". Keep it short.`
+const SYSTEM = `You translate sentences into English for language-learning cards. Return only the JSON the schema asks for, with one entry per id.
+
+For each sentence, write the one natural English sentence a native speaker would use for the same meaning. Translate the meaning, not the words in order: 我想你。 is "I miss you.", not "I think you."; 本があります。 is "There is a book.", not "Book exists."
+
+Each translation is a single plain sentence and nothing else: no notes, quotes, alternatives, romanization or bracketed labels.`
 
 async function translateBatch(
   or: InstanceType<typeof OpenRouter>,

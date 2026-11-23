@@ -16,10 +16,10 @@ import type { Card } from '@tutor/core'
 import type { Db } from '../db/client'
 import { listCards } from '../db/repo'
 import type { ChatMessage, OpenRouter } from '../llm/openrouter'
-import { langName } from '../llm/prompts'
+import { langName, scriptRule } from '../llm/prompts'
 import { roleReasoning } from '../env'
 import { leapsAhead } from './context'
-import { readingRules, stripMetaCommentary, type PlannedCard } from './plan'
+import { stripMetaCommentary, type PlannedCard } from './plan'
 import type { CharacterVariant } from '../frequency/source'
 
 /** How many example cards one model call audits. */
@@ -211,7 +211,7 @@ function batchMessages(ctx: SweepCtx, batch: Card[]): ChatMessage[] {
   const system = systemFor(
     langName(ctx.deck.targetLang),
     langName(ctx.deck.sourceLang),
-    readingRules(ctx.deck.targetLang, ctx.deck.variant),
+    scriptRule(ctx.deck.targetLang, ctx.deck),
   )
   return [
     { role: 'system', content: system },
@@ -221,13 +221,10 @@ function batchMessages(ctx: SweepCtx, batch: Card[]): ChatMessage[] {
 
 function userPrompt(ctx: SweepCtx, batch: Card[]): string {
   const items = batch.map((c, index) => auditItem(ctx, c, index))
-  return `Instruction that built this deck: ${ctx.deck.instruction}
-Target language: ${langName(ctx.deck.targetLang)}. Learner's language: ${langName(ctx.deck.sourceLang)}.
+  return `The instruction this deck was built from: ${ctx.deck.instruction}
 
-Cards to audit (JSON). Each card lists "known": the words the learner has met at that card's step. A rewrite may use nothing outside that list.
-${JSON.stringify(items)}
-
-Return JSON: { cards: [ { index, drop?, front?, back?, reading?, payload?, reason? } ] } — include every index.`
+Cards to proofread:
+${JSON.stringify(items)}`
 }
 
 /** One card as the model sees it: its content plus the words known at its step. */
@@ -474,21 +471,19 @@ function chunk<T>(items: T[], size: number): T[][] {
 }
 
 function systemFor(lang: string, source: string, rules: string): string {
-  return `You audit example cards in a beginner ${lang} deck. You return only the requested JSON.
+  return `You proofread the example cards of a beginner ${lang} deck for a ${source} speaker. Return only the JSON the schema asks for, with one entry for every index.
 
-A card is good only when it is something a native speaker would actually say, uses only words the learner has already met (n+1), and carries no meta-commentary. Fix each card, or drop it.
+Each card comes with "known": the words the learner has met by that card. A good card is something a native speaker would really say, uses only its known words, and holds no notes or commentary.
 
-Drop a card ONLY when (a) it is ungrammatical or semantically odd, or (b) it names a word outside the card's "known" list. Never drop a card merely because it does not use a particular word, or because a nicer sentence exists.
+For each card choose one:
+- Good as it is: return its index alone.
+- Fixable: return its index with only the corrected fields.
+- Not fixable: return its index with drop=true and a one-line reason. Drop a card only when it is ungrammatical or makes no sense, or when no natural sentence can be made from its known words.
 
-Script rules — follow these exactly:
-${rules}
-- Write the blank in a cloze prompt as three underscores with no surrounding spaces ("我___書。", not "我 ___ 书").
-
-Rules:
-- Sentence cards: "back" is the ${lang} sentence; "front" and payload.gloss are its plain translation in ${source}. The sentence may use ONLY the words in that card's "known" list plus the card's own new word. Keep it short and concrete. If no natural, grammatical sentence can be made, set drop=true. Never output a semantically odd sentence such as "My you." or "Daddy is one year old? No.".
-- Grammar cards: return a payload object for EVERY grammar card, with prompt = a ${lang} sentence with the practised word replaced by "___" (no spaces around it), answer = the missing ${lang} word or form, and rule = a short ${source} label. Example: prompt "你好___？", answer "嗎". Only when a cloze truly cannot work for the grammar point (e.g. a pure verb-form drill) may prompt be a short, clean ${source} sentence instead. Never return only a label: a fix must include the payload. Never drop a grammar card only because it is not a cloze; drop it only when the grammar point itself cannot be practised with the known words.
-- Keep payload.options (2-3 candidate ${lang} forms including the answer) when the card already has options. payload.explanation is one short ${source} sentence shown after answering. "back" is the ${lang} answer; "front" is a short ${source} label (it is only a fallback for the prompt).
-- Never put notes, parentheticals, reasoning or alternatives in any field. front/gloss are plain translations and nothing else.
-- Keep each card anchored on the same new word it already practises. Do not change which word a card teaches.
-- For a card that is already good, return its index alone (no drop, no fields). For one you fix, return the corrected fields. For one that cannot be saved, return drop=true with a one-line reason.`
+How to fix:
+- Keep the card on the word it already practises, and use only its known words.
+- Sentence cards: back is the ${lang} sentence, short and concrete. front and payload.gloss are the same single natural ${source} translation of the whole sentence.
+- Grammar cards: always return a payload. payload.prompt is a ${lang} sentence with one word replaced by ___ (three underscores, no spaces around them), payload.answer and back are the missing word, payload.rule and front are a few ${source} words naming the point, and payload.explanation is one short ${source} sentence. Keep payload.options when the card has them. Example: prompt "你好___？", answer "嗎".
+- A field holds its content and nothing else: no notes, alternatives or brackets.
+${rules ? `- ${rules}` : ''}`
 }

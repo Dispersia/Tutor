@@ -3,6 +3,7 @@ import type { Deps } from './context'
 import {
   AUDIO_BACKFILL_KEY,
   createAudioService,
+  gatewayAsr,
   gatewayTts,
   type AudioService,
 } from './audio/service'
@@ -26,7 +27,12 @@ export function buildDeps(cfg: typeof env): Built {
   clearDeckBuilds(db)
   const or = new OpenRouter(cfg.openrouterKey)
   const supervisor = speechSupervisor(cfg)
-  const audio = createAudioService({ db, dataDir: cfg.dataDir, tts: gatewayTts(supervisor) })
+  const audio = createAudioService({
+    db,
+    dataDir: cfg.dataDir,
+    tts: gatewayTts(supervisor),
+    asr: gatewayAsr(supervisor),
+  })
   resumeBackfill(db, audio)
   return { deps: depsOf(cfg, { db, or, supervisor, audio }), close: () => sqlite.close() }
 }

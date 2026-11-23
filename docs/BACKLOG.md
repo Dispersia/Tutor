@@ -108,6 +108,19 @@ before work starts. `srv/` is `apps/server/src/`, `web/` is `apps/web/src/`.
 - **The three fixes from the sweep were never run** (no Python/MLX on the review
   machine): temp-file cleanup, sync upload handlers, the TTS temp file. Exercise
   `/v1/asr`, `/v1/assess` and `/v1/tts` once on the Mac.
+- **Clip grading has never run against the real gateway.** The server side is
+  tested with a fake recogniser; the gateway's new `reference` field on
+  `/v1/asr` is unrun. Watch `rejected` in `GET /api/audio/status` and the
+  `[audio] take n/3 … said …` log lines after the next backfill: they are the
+  per-language pass rate.
+- **Grading gaps.** Clips recorded before grading existed were never checked.
+  Live playback (chat replies, "hear it" on a card) is not graded. A word that
+  fails all three takes gets no clip until the next restart; if a language
+  fails often, the next step is to record the word three times in one take and
+  cut out the middle one with the aligner (not built).
+- **The per-language accent is unheard.** Voices now ask for an accent
+  (`packages/core/src/voice.ts`), but no clip was synthesised to confirm the
+  model honours it. Clips recorded before the change keep their old voice.
 - **The TTS runaway cap is dead**: `tts_synthesize` accepts `max_tokens`, `voice`,
   `language`, `mode`, `temperature` and forwards only `text` and `instruct`.
   `models.py`

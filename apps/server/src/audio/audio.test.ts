@@ -102,13 +102,13 @@ test('the voice set is two female and two male, all distinct', () => {
 
 test('ensure records every voice once, content-addressed and deduped', async () => {
   const { db, sqlite, audio, calls } = makeApp()
-  await audio.ensure('你好', 'zh', 'user-1')
+  await audio.ensure({ text: '你好', language: 'zh', userId: 'user-1' })
   expect(calls.length).toBe(4)
   expect(audio.complete('你好', 'zh')).toBe(true)
   for (const v of CARD_VOICES) expect(audio.clip('你好', 'zh', v.id)).toBeTruthy()
 
   // Recording the same text again is a no-op — the clips are already there.
-  await audio.ensure('你好', 'zh', 'user-1')
+  await audio.ensure({ text: '你好', language: 'zh', userId: 'user-1' })
   expect(calls.length).toBe(4)
 
   // Every clip is keyed by (voice, language, text), so a different voice is a new clip.
@@ -125,7 +125,7 @@ test('enqueueUser queues only the cards that still lack clips', async () => {
   const deck = createDeck(db, 'u1', { name: 'd', sourceLang: 'en', targetLang: 'zh' })
   addCard(db, 'u1', { deckId: deck.id, sourceLang: 'en', targetLang: 'zh', front: 'a', back: '一' })
   addCard(db, 'u1', { deckId: deck.id, sourceLang: 'en', targetLang: 'zh', front: 'b', back: '二' })
-  await audio.ensure('一', 'zh', 'u1')
+  await audio.ensure({ text: '一', language: 'zh', userId: 'u1' })
   const queued = audio.enqueueUser('u1')
   expect(queued).toBe(1)
   await drain(audio)
@@ -197,11 +197,11 @@ test('POST /api/audio/backfill queues the user cards and reports the queue', asy
 
 test('a word two languages share gets its own clip per language', async () => {
   const { sqlite, audio, calls } = makeApp()
-  await audio.ensure('先生', 'zh', 'u1')
+  await audio.ensure({ text: '先生', language: 'zh', userId: 'u1' })
   expect(audio.complete('先生', 'zh')).toBe(true)
   // the Mandarin recording must not satisfy the Japanese card
   expect(audio.complete('先生', 'ja')).toBe(false)
-  await audio.ensure('先生', 'ja', 'u1')
+  await audio.ensure({ text: '先生', language: 'ja', userId: 'u1' })
   expect(calls.filter((c) => c.language === 'ja').length).toBe(CARD_VOICES.length)
   sqlite.close()
 })
@@ -238,5 +238,48 @@ test('only the admin may cancel the shared queue, start a backfill or stop the g
   }
   expect((await post('/api/audio/cancel', admin.cookie)).status).toBe(200)
   expect((await post('/api/audio/backfill', admin.cookie)).status).toBe(202)
+  sqlite.close()
+})
+
+test('each clip is recorded in its language’s accent, and spoken as written', async () => {
+  const { sqlite, audio, calls } = makeApp()
+  await audio.ensureVoice({ text: '你好', language: 'zh', userId: 'u1', voiceId: 'f1' })
+  expect(calls[0]!.instruct).toContain('Taiwanese accent')
+  // a Japanese word keeps its kanji: the kanji carries the word, and so its pitch
+  await audio.ensureVoice({ text: '橋', language: 'ja', userId: 'u1', voiceId: 'f1' })
+  expect(calls[1]!.text).toBe('橋')
+  expect(calls[1]!.instruct).toContain('Japanese')
+  sqlite.close()
+})
+
+/** An audio service whose recogniser "hears" the scripted transcripts in order. */
+function gradedService(heard: string[]) {
+  const { db, sqlite } = openDb(':memory:')
+  const { tts, calls } = fakeTts()
+  const dataDir = mkdtempSync(join(tmpdir(), 'tutor-audio-'))
+  const asr = async () => heard.shift() ?? ''
+  return { sqlite, calls, audio: createAudioService({ db, dataDir, tts, asr }) }
+}
+
+test('a take that says more than the word is thrown away and recorded again', async () => {
+  // take 1 rambles on after the word, take 2 is clean
+  const { sqlite, audio, calls } = gradedService(['茶，我喜歡喝茶。', '茶'])
+  await audio.ensureVoice({ text: '茶', language: 'zh', userId: 'u1', voiceId: 'f1' })
+  expect(calls.length).toBe(2)
+  expect(audio.clip('茶', 'zh', 'f1')).toBeTruthy()
+  expect(audio.status().rejected).toBe(0)
+  sqlite.close()
+})
+
+test('when no take says the word, no clip is stored and it is not retried', async () => {
+  const { sqlite, audio, calls } = gradedService(['嗯', '好的', ''])
+  const job = { text: '茶', language: 'zh', userId: 'u1', voiceId: 'f1' }
+  await audio.ensureVoice(job)
+  expect(calls.length).toBe(3)
+  expect(audio.clip('茶', 'zh', 'f1')).toBeUndefined()
+  expect(audio.status().rejected).toBe(1)
+  // asking again does not burn three more takes
+  await audio.ensureVoice(job)
+  expect(calls.length).toBe(3)
   sqlite.close()
 })

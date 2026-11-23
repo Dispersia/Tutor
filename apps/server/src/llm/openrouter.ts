@@ -245,6 +245,8 @@ function jsonBody(opts: JsonOptions) {
     messages: opts.messages,
     usage: { include: true },
     reasoning: { effort: opts.reasoning ?? 'none' },
+    ...(opts.temperature != null ? { temperature: opts.temperature } : {}),
+    ...(opts.maxTokens != null ? { max_tokens: opts.maxTokens } : {}),
     response_format: {
       type: 'json_schema',
       json_schema: { name: opts.schemaName ?? 'result', strict: true, schema: opts.schema },

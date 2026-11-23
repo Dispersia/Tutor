@@ -2,11 +2,9 @@
   import { onMount } from 'svelte'
   import { goto } from '$app/navigation'
   import { page } from '$app/state'
-  import { api } from '#lib/api'
   import { logout, session } from '#lib/session.svelte'
   import { activeDeck, loadActiveDeck, setActiveDeck } from '#lib/activeDeck.svelte'
   import { href, stripBase } from '#lib/paths'
-  import { setVoicePrefs, type VoicePrefs } from '#lib/voices'
   import { htmlLang } from '#lib/lang'
   import { startRigAlerts } from '#lib/rigAlerts'
   import Icon from '#lib/components/Icon.svelte'
@@ -28,12 +26,7 @@
     if (tag) document.documentElement.lang = tag
   })
 
-  // Voice choices are per account and must reach every playback path, not just
-  // the Settings screen that saved them.
   onMount(() => {
-    api<{ voice?: VoicePrefs }>('/api/settings')
-      .then((s) => setVoicePrefs(s.voice))
-      .catch(() => {})
     // The deck chosen everywhere (free practice, Learn) lives in the profile
     // menu; load it once so every screen shares the same choice.
     void loadActiveDeck()

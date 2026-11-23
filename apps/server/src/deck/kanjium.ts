@@ -80,6 +80,11 @@ function index(): AccentIndex {
   return (cached ??= buildIndex())
 }
 
+/** Every kana reading the dictionary lists for a headword (empty when it has none). */
+export function kanjiumReadings(word: string): string[] {
+  return [...(index().word.get(word)?.keys() ?? [])].filter(Boolean)
+}
+
 /** Whether a spelling is written only in kana (so its headword may itself be the reading). */
 function isKanaWord(word: string): boolean {
   return /^[\u3040-\u30ff\u30fc]+$/.test(word)

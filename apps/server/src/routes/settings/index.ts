@@ -1,6 +1,6 @@
 /**
  * The member's own settings (docs/DESIGN.md §12.5, §10.1): read the whole view,
- * then patch roles, voice, study prefs and the scalar tuning knobs.
+ * then patch roles, study prefs and the scalar tuning knobs.
  */
 
 import type { Context } from 'hono'
@@ -17,11 +17,7 @@ import { readStudyPrefs, writeStudyPrefs, type StudyPrefs } from '../../services
 import { ROLES, type Role } from '../../env'
 import { hasUserKey, saveUserKey } from '../../llm/userkey'
 import type { App, AppEnv, Deps } from '../../context'
-import { bool, jsonBody, num, obj, oneOf, str, strArray, strRecord } from '../body'
-import { readVoicePrefs } from './voice'
-
-/** The voice modes the setting accepts. */
-const VOICE_MODES = ['preset', 'design'] as const
+import { bool, jsonBody, num, obj, str, strArray } from '../body'
 
 export function registerSettings(app: App) {
   app.get('/api/settings', (c) => c.json(settingsView(c.get('deps'), c.get('user')!.id)))
@@ -34,7 +30,6 @@ function settingsView(deps: Deps, userId: string) {
     roles: getRoles(deps.db, userId, deps.defaults),
     roleDefaults: deps.defaults,
     allowedRoles: ROLES,
-    voice: readVoicePrefs(deps.db, userId),
     study: readStudyPrefs(deps.db, userId),
     openrouter: { key: hasUserKey(deps, userId) },
     deckInstruction: rememberedDeckInstruction(deps.db, userId) ?? '',
@@ -49,7 +44,6 @@ async function updateSettings(c: Context<AppEnv>) {
   const body = await jsonBody(c)
   const roleErr = applyRoles(deps, userId, obj(body, 'roles'))
   if (roleErr) return c.json({ error: roleErr }, 400)
-  applyVoice(deps, userId, obj(body, 'voice'))
   const studyErr = applyStudy(deps, userId, obj(body, 'study'))
   if (studyErr) return c.json({ error: studyErr }, 400)
   applyScalars(deps, userId, body)
@@ -59,7 +53,6 @@ async function updateSettings(c: Context<AppEnv>) {
 function settingsReply(deps: Deps, userId: string) {
   return {
     roles: getRoles(deps.db, userId, deps.defaults),
-    voice: readVoicePrefs(deps.db, userId),
     study: readStudyPrefs(deps.db, userId),
   }
 }
@@ -78,14 +71,6 @@ function applyRoles(
   }
   setUserSetting(deps.db, userId, 'roles', JSON.stringify(current))
   return undefined
-}
-
-function applyVoice(deps: Deps, userId: string, voice?: Record<string, unknown>): void {
-  if (!voice) return
-  const mode = oneOf(voice, 'mode', VOICE_MODES)
-  if (mode) setUserSetting(deps.db, userId, 'voiceMode', mode)
-  const voices = strRecord(voice, 'voices')
-  if (voices) setUserSetting(deps.db, userId, 'voices', JSON.stringify(voices))
 }
 
 function applyStudy(

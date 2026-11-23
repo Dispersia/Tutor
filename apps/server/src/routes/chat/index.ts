@@ -8,7 +8,7 @@ import type { Context } from 'hono'
 import { addMessage, createSession, getOwnedSession, getRoles, listMessages } from '../../db/repo'
 import { ROLES, roleReasoning, type Role } from '../../env'
 import { OpenRouter, type ChatMessage, type Usage } from '../../llm/openrouter'
-import { CONVERSATION_LANGUAGE_RULE, NATIVE_FEEDBACK_RULE, systemPrompt } from '../../llm/prompts'
+import { systemPrompt } from '../../llm/prompts'
 import { resolveUserKey } from '../../llm/userkey'
 import type { App, AppEnv, Deps } from '../../context'
 import type { PublicUser } from '../../db/repo'
@@ -103,13 +103,8 @@ function messageList(
   body: ChatBody,
 ): ChatMessage[] {
   if (body.messages?.length) return body.messages
-  const rule =
-    role === 'conversation'
-      ? CONVERSATION_LANGUAGE_RULE(user.nativeLang, user.targetLang)
-      : NATIVE_FEEDBACK_RULE(user.nativeLang, user.targetLang)
-  const extra = [body.system, rule].filter(Boolean).join('\n')
   const history = listHistory(deps, sid)
-  const msgs = [...systemPrompt(role, extra), ...history]
+  const msgs = [...systemPrompt(role, user, body.system), ...history]
   if (body.text?.trim()) msgs.push({ role: 'user', content: body.text })
   return msgs
 }

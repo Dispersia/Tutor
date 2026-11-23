@@ -344,38 +344,43 @@ OpenRouter token stream ─► sentence splitter ─► /v1/tts (stream) ─► 
 ```
 
 - Chunk by sentence so playback starts before the full reply is generated.
-- VoxCPM2 has no named voices: each request carries an **`instruct`** — the voice
-  *description* — and the model renders that voice. The app sends one built-in
-  teacher description by default, or the learner's saved description in design
-  mode.
-- Because VoxCPM2 infers the language from the text, there is **no per-language
-  voice mapping and no fallback model**: `models.tts_kind_for()` returns the same
-  checkpoint for every language the app offers.
+- VoxCPM2 has no named voices and no language parameter: each request carries
+  an **`instruct`** — the voice *described in words* — and the language is
+  inferred from the text.
 
-#### Voice options (what "voice strategy" means)
+#### Voices (fixed, not a setting)
 
-| Option                        | What it is                                                                                                               | Setup       | Best for                                                                | Cost    |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ----------- | ----------------------------------------------------------------------- | ------- |
-| **Built-in teacher voice**    | VoxCPM2's zero-shot voice pinned with a fixed `instruct` ("a calm, professional teacher…").                              | none        | The default tutor voice everywhere; consistent across a deck            | low     |
-| **Voice design**              | Describe a voice in text ("a warm, patient female teacher in her 30s, slow clear articulation") and it _invents_ it.      | none        | A distinctive tutor persona; different voices per character in roleplay | low     |
-| **Reference cloning**         | Give a short clip; it speaks in that voice (`ref_audio`).                                                                | need a clip | Your tutor sounding like a specific person                               | medium  |
+There is nothing for the learner to configure. `packages/core/src/voice.ts`
+defines **four voices**, the same in every language: a **teenager** and a
+**teacher** of each gender. Recorded card audio uses all four (one clip each, a
+random one per play); live playback and each chat reply pick one at random.
 
-**Voice modes in Settings** are two-selectable and map straight onto VoxCPM2:
-
-- **Built-in voice:** one teacher voice for every language, styled by a fixed
-  description — nothing to choose, consistent by construction.
-- **Voice design:** write a description per language (e.g. "patient Mandarin
-  teacher, warm, slow") and the model invents that voice.
+- **Accent rides in the description.** Each language appends its accent to the
+  voice (`voiceInstruct`): Taiwanese Mandarin, Hong Kong Cantonese, Tokyo
+  Japanese, Seoul Korean, Hochdeutsch, Latin American Spanish, and so on. This is
+  a request, not a guarantee — the model documents dialect control only for
+  Chinese dialects.
+- **Text is spoken as written.** A Japanese word keeps its kanji even though a
+  kanji-only word (先生, 水) can be mistaken for Chinese: the kanji is what
+  identifies the word and its pitch accent, which kana alone cannot (橋 / 箸).
+  A wrong-language reading is caught by grading the clip, not by changing the
+  text.
+- **Every recorded clip is graded before it is kept.** The speech model is
+  unreliable on short text: it can add a sentence after a single word, make
+  noise instead of the word, or read a Japanese word as Chinese. So each take is
+  transcribed by the gateway's own recogniser and kept only if it says the
+  card's text and nothing else (`apps/server/src/audio/verify.ts`). A single
+  word must match exactly or sound identical (他 / 她, 橋 / 箸); a sentence may
+  differ by a few characters. A bad take is recorded again, up to three times;
+  if none passes, no clip is stored (`rejected` in `GET /api/audio/status`).
+  The recogniser checks words, not melody: it cannot hear a wrong pitch or accent.
 
 **Language coverage:** VoxCPM2 is tokenizer-free and covers all 30 of its
 languages, so **every** target the app offers (including ko / de / ru / yue) uses
 the same checkpoint — no routing table, no second model. Everything sits behind
 the same `/v1/tts` request, chosen by `models.tts_kind_for(language, mode)`.
 
-Because the optional backends are separate checkpoints, **keep only one TTS
-checkpoint resident at a time** and swap when the config changes (§8.3). Voice
-**cloning** is not built. Everything is config-driven (`speechOpts(lang)`), so
-switching never touches code.
+Voice **cloning** is not built.
 
 ### 9.3 ASR flow
 
@@ -508,12 +513,26 @@ per-role "test" button and show cost/latency so switching is informed.
 
 ### 10.3 Prompt architecture
 
-- System prompt = tutor persona + target language + learner level + **allowed
-  CEFR band** + correction policy (correct gently, don't switch to English).
-- Exercise prompts are assembled by the **exercise engine** (§11) from the card +
-  type, never hard-coded in the UI.
-- Keep prompts lean to control cost; cache stable prefixes where the provider
-  supports it.
+Every prompt is built on the server; the shared pieces live in
+`apps/server/src/llm/prompts.ts`. They are written for small models:
+
+- **One shape.** Who the model is, what it is given, what to return, then the few
+  rules that matter — each stated once, as a positive instruction. Graders get
+  labelled inputs (`Word:`, `Learner's answer:`) and an explicit meaning for
+  `correct`, `score` and `feedback`.
+- **Only the rules that apply.** The script rule (`scriptRule`) is derived from
+  the deck's own settings — Traditional or Simplified, Zhuyin or pinyin, kana — and
+  is attached only for the language it concerns. A pinyin deck is never told to
+  write Zhuyin, and a Japanese learner is never told about Chinese.
+- **The tutor's reply is spoken.** The conversation prompt asks for plain
+  sentences (no markdown, emoji or bracketed readings), and the client strips
+  anything of that kind before synthesis (`speakable` in `apps/web/src/lib/speech.ts`).
+- **Feedback is in the learner's language**, restated as the last line of every
+  grading request, because a small model otherwise drifts into the target language.
+- **The deck planner shows one worked example** in the deck's own language and
+  reading script (`deck/planPrompt.ts`); models copy an example's shape closely.
+- **Grading is repeatable** (temperature 0.2) and never blocks a review: a judge
+  that fails or times out falls back to the deterministic grade.
 
 ---
 
@@ -597,8 +616,8 @@ food words"), or manual entry.
 
 **Listening audio is pre-recorded.** A listening card plays files, not a fresh
 TTS call: when a card is created (or on the first play of an older one) its
-target text is recorded in four voices — two female and two male, pitched high
-and low — and stored content-addressed under `$TUTOR_DATA_DIR/audio/`
+target text is recorded in four voices — a teenager and a teacher of each
+gender (§9.2) — and stored content-addressed under `$TUTOR_DATA_DIR/audio/`
 (§12), keyed by voice, **language** and text: Mandarin, Japanese and Cantonese
 share written words (先生, 水), and each is read in its own language. `GET /api/cards/:id/audio` streams one voice (a random one per play, or
 `?variant=N`), so playback never wakes the speech model. Recording runs through
@@ -1457,7 +1476,7 @@ Screens (MVP):
 3. **Conversation** — full chat/voice with the tutor; TTS plays replies; mic
    toggle; correction highlights.
 4. **History** — browse past sessions and messages (permanent), replay audio.
-5. **Settings** — languages, **voices**, **per-role model picker** (§10.1), speech
+5. **Settings** — languages, **per-role model picker** (§10.1), speech
    idle timeout, "Free memory now", OpenRouter key status.
 
 Interaction details:

@@ -10,6 +10,7 @@ export * from './types'
 export * from './templates'
 export * from './metadata'
 export * from './idle'
+export * from './voice'
 
 export class ExerciseRegistry {
   #defs = new Map<string, ExerciseDef<unknown>>()

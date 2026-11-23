@@ -95,9 +95,22 @@ async function judgeMeaning(ctx: ExerciseContext, typed: string): Promise<GradeR
   }
 }
 
+/** Asks whether the typed answer is an acceptable meaning of the card's word. */
 function meaningPrompt(ctx: ExerciseContext, typed: string): string {
   const reading = displayReading(ctx)
-  return `The learner is studying ${label(ctx.card.targetLang)}. The card shows the word “${ctx.card.back}”${reading ? ` (${reading})` : ''}, whose meaning in ${label(ctx.card.sourceLang)} is given as “${ctx.card.front}” — a list of its senses separated by “/”. The learner answered with: “${typed}”. Decide whether the learner's answer is an acceptable meaning of the word. Accept any one of the listed senses or a standard synonym/paraphrase; reject answers that mean something else or are too vague. Give the feedback in the learner's native language (${label(ctx.card.sourceLang)}), not in ${label(ctx.card.targetLang)}.`
+  const source = label(ctx.card.sourceLang)
+  return [
+    `Task: decide whether the learner knows what a ${label(ctx.card.targetLang)} word means.`,
+    '',
+    `Word: ${ctx.card.back}${reading ? ` (${reading})` : ''}`,
+    `Accepted meanings in ${source}, separated by "/": ${ctx.card.front}`,
+    `Learner's answer: ${typed}`,
+    '',
+    'correct = true when the answer matches any accepted meaning, or is a synonym or close paraphrase of one. Ignore typos, capital letters, articles and a leading "to".',
+    'correct = false when it means something else or is too vague to show they know the word.',
+    'score: 100 for an accepted meaning, 80 to 95 for a synonym or paraphrase, under 50 when wrong.',
+    `feedback: when wrong, the meaning in one short ${source} sentence. When right, a few words at most.`,
+  ].join('\n')
 }
 
 // --- multiple choice ---------------------------------------------------------

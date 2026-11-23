@@ -86,6 +86,7 @@ function planReq(deck: Deck, card: Card, step: number, cards: Card[]) {
     // Everything the learner has met before this word — the n+1 vocabulary.
     knownWords: cards.filter((c) => before(c, step)).map((c) => c.back),
     count: 1,
+    reinforce: true,
     variant: settings.variant,
     readingScript: settings.readingScript,
     pitchAccent: false,

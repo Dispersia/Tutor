@@ -235,6 +235,10 @@ def asr(
     language: str | None = Form(None),
     hint: str | None = Form(None),
     lite: bool = Form(False),
+    # The expected text, used only to return Chinese in the same script
+    # (Traditional vs Simplified). Unlike `hint` it never biases the decoder,
+    # which is what a clip check needs.
+    reference: str | None = Form(None),
 ) -> dict:
     with _upload_as_wav(file) as wav:
         if not models.has_speech(str(wav)):
@@ -243,7 +247,7 @@ def asr(
         with manager.inference():
             model = manager.get("asr_lite" if lite else "asr")
             t0 = time.time()
-            out = models.asr_transcribe(model, str(wav), language, hint)
+            out = models.asr_transcribe(model, str(wav), language, hint, reference)
             ms = (time.time() - t0) * 1000
         return {"text": out["text"], "segments": out["segments"], "lang": language, "ms": ms}
 
