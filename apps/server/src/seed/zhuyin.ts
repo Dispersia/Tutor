@@ -156,40 +156,33 @@ function decompose(raw: string): { letters: string; tones: number[] } {
 /** One syllable: initial + true final → bopomofo + tone mark. */
 function convertSyllable(letters: string, tones: number[]): string {
   const tone = tones.find((t) => t > 0) ?? 0
-  let rest = letters
-  let initial = ''
+  const yw = ywFinal(letters)
+  if (yw) return finish('', yw, tone)
+  const { initial, rest } = splitInitial(letters)
+  return finish(initial, fixFinal(initial, rest), tone)
+}
 
-  if (rest.startsWith('y')) {
-    const mapped = Y_FINAL[rest.slice(1)]
-    if (mapped) {
-      return finish('', mapped, tone)
-    }
-  }
-  if (rest.startsWith('w')) {
-    const mapped = W_FINAL[rest.slice(1)]
-    if (mapped) {
-      return finish('', mapped, tone)
-    }
-  }
+/** A leading y/w spelling that maps to a whole final (yi, wu, ya, …). */
+function ywFinal(letters: string): string | undefined {
+  if (letters.startsWith('y')) return Y_FINAL[letters.slice(1)]
+  if (letters.startsWith('w')) return W_FINAL[letters.slice(1)]
+  return undefined
+}
 
-  const two = rest.slice(0, 2)
-  if (INITIALS_TWO[two]) {
-    initial = INITIALS_TWO[two]!
-    rest = rest.slice(2)
-  } else if (INITIALS_ONE[rest[0]!]) {
-    initial = INITIALS_ONE[rest[0]!]!
-    rest = rest.slice(1)
-  }
+function splitInitial(letters: string): { initial: string; rest: string } {
+  const two = letters.slice(0, 2)
+  if (INITIALS_TWO[two]) return { initial: INITIALS_TWO[two]!, rest: letters.slice(2) }
+  const one = letters[0] ? INITIALS_ONE[letters[0]] : undefined
+  return one ? { initial: one, rest: letters.slice(1) } : { initial: '', rest: letters }
+}
 
+/** Rewrites the final for j/q/x (ü written as u) and the silent zhi/chi/shi "i". */
+function fixFinal(initial: string, rest: string): string {
   // j/q/x write ü as u: ju → jü, jue → jüe, juan → jüan, jun → jün
-  if (initial && 'ㄐㄑㄒ'.includes(initial) && rest.startsWith('u')) {
-    rest = `v${rest.slice(1)}`
-  }
+  if (initial && 'ㄐㄑㄒ'.includes(initial) && rest.startsWith('u')) return `v${rest.slice(1)}`
   // zhi/chi/shi/ri/zi/ci/si: the "i" is not written in Zhuyin
-  if (initial && 'ㄓㄔㄕㄖㄗㄘㄙ'.includes(initial) && rest === 'i') {
-    rest = ''
-  }
-  return finish(initial, rest, tone)
+  if (initial && 'ㄓㄔㄕㄖㄗㄘㄙ'.includes(initial) && rest === 'i') return ''
+  return rest
 }
 
 function finish(initial: string, final: string, tone: number): string {
@@ -207,29 +200,43 @@ function segment(letters: string, tones: number[]): string[] {
   let i = 0
   while (i < letters.length) {
     // a stray "r" is the erhua suffix (哪儿 = na + r)
-    if (letters[i] === 'r' && (i + 1 >= letters.length || !isVowel(letters[i + 1]!))) {
+    if (isErhua(letters, i)) {
       out.push('er')
       i += 1
       continue
     }
-    const start = i
-    const two = letters.slice(i, i + 2)
-    if (INITIALS_TWO[two]) i += 2
-    else if (INITIALS_ONE[letters[i]!]) i += 1
-    else if (letters[i] === 'y' || letters[i] === 'w') i += 1
-    // match the longest final
-    const final = FINAL_KEYS.find((f) => letters.startsWith(f, i))
-    if (final) i += final.length
-    else if (i === start) i += 1 // unknown char: consume one to avoid a loop
-    out.push(letters.slice(start, i))
+    const { syl, next } = syllableAt(letters, i)
+    out.push(syl)
+    i = next
   }
-  // attach tones: each syllable owns the first tone > 0 inside its span
+  return applyTones(out, tones)
+}
+
+function isErhua(letters: string, i: number): boolean {
+  return letters[i] === 'r' && (i + 1 >= letters.length || !isVowel(letters[i + 1]!))
+}
+
+/** The pinyin syllable starting at `i`, and the index just past it. */
+function syllableAt(letters: string, i: number): { syl: string; next: number } {
+  const start = i
+  const two = letters.slice(i, i + 2)
+  if (INITIALS_TWO[two]) i += 2
+  else if (INITIALS_ONE[letters[i]!]) i += 1
+  else if (letters[i] === 'y' || letters[i] === 'w') i += 1
+  // match the longest final
+  const final = FINAL_KEYS.find((f) => letters.startsWith(f, i))
+  if (final) i += final.length
+  else if (i === start) i += 1 // unknown char: consume one to avoid a loop
+  return { syl: letters.slice(start, i), next: i }
+}
+
+/** Attaches tones: each syllable owns the first tone > 0 inside its span. */
+function applyTones(syllables: string[], tones: number[]): string[] {
   let pos = 0
-  return out.map((syl) => {
+  return syllables.map((syl) => {
     const span = tones.slice(pos, pos + syl.length)
     pos += syl.length
-    const t = span.find((t) => t > 0) ?? 0
-    return convertSyllable(syl, [t])
+    return convertSyllable(syl, [span.find((t) => t > 0) ?? 0])
   })
 }
 

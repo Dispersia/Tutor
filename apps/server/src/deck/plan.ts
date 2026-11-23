@@ -168,24 +168,6 @@ export function planPrompt(req: PlanRequest): string {
   const rules = readingRules(req.targetLang, req.variant)
   const script = req.readingScript ? `\nReading script: ${req.readingScript}.` : ''
   const topic = req.topic ? `\nTopic focus: ${req.topic}.` : ''
-  const known = req.knownWords.length
-    ? `\nWords the learner already knows (reuse freely, never re-introduce): ${req.knownWords.slice(-60).join(' ')}`
-    : ''
-  const batch = new Set(req.words.slice(0, req.count))
-  const hints = req.hints
-    ? Object.entries(req.hints)
-        .filter(([w]) => batch.has(w))
-        .map(
-          ([w, h]) =>
-            `- ${w}${h.reading ? ` [${h.reading}]` : ''}${h.meaning ? ` = ${h.meaning}` : ''}`,
-        )
-    : []
-  const hintBlock = hints.length
-    ? `\n\nHints from the learner's own deck (reading / meaning — verify, do not copy blindly):\n${hints.join('\n')}`
-    : ''
-  const pitch = req.pitchAccent
-    ? `\n\nThis deck wants pitch-accent metadata: for each vocab card add metadata.pitch (levels, syllables, drop) when you are confident of the standard accent.`
-    : ''
   return `Instruction (applies to this batch too): ${req.instruction}
 Target language: ${langName(req.targetLang)}. Learner's language: ${langName(req.sourceLang)}.${topic}${script}
 ${rules}
@@ -193,7 +175,36 @@ ${rules}
 Introduce the next ${req.count} new words from this list, in order (skip any already known):
 ${req.words.join(' ')}
 
-For each new word emit one "vocab" card. Weave in "sentence" cards — only when the sentence is natural, otherwise omit it — and "grammar" fill-in-the-blank cards (a target-language prompt with "___") when the instruction asks for grammar. Use only words already introduced.${known}${pitch}${hintBlock}`
+For each new word emit one "vocab" card. Weave in "sentence" cards — only when the sentence is natural, otherwise omit it — and "grammar" fill-in-the-blank cards (a target-language prompt with "___") when the instruction asks for grammar. Use only words already introduced.${knownLine(req)}${pitchLine(req)}${hintBlock(req)}`
+}
+
+function knownLine(req: PlanRequest): string {
+  if (!req.knownWords.length) return ''
+  const words = req.knownWords.slice(-60).join(' ')
+  return `\nWords the learner already knows (reuse freely, never re-introduce): ${words}`
+}
+
+function pitchLine(req: PlanRequest): string {
+  if (!req.pitchAccent) return ''
+  return `\n\nThis deck wants pitch-accent metadata: for each vocab card add metadata.pitch (levels, syllables, drop) when you are confident of the standard accent.`
+}
+
+/** The learner's own deck hints for the batch's words, when there are any. */
+function hintBlock(req: PlanRequest): string {
+  const hints = hintLines(req)
+  if (!hints.length) return ''
+  return `\n\nHints from the learner's own deck (reading / meaning — verify, do not copy blindly):\n${hints.join('\n')}`
+}
+
+function hintLines(req: PlanRequest): string[] {
+  if (!req.hints) return []
+  const batch = new Set(req.words.slice(0, req.count))
+  return Object.entries(req.hints)
+    .filter(([w]) => batch.has(w))
+    .map(
+      ([w, h]) =>
+        `- ${w}${h.reading ? ` [${h.reading}]` : ''}${h.meaning ? ` = ${h.meaning}` : ''}`,
+    )
 }
 
 /**
@@ -239,39 +250,50 @@ export function sanitizePlannedCard(card: PlannedCard): PlannedCard | undefined 
   if (!front || !back || META_MARKERS.test(front) || META_MARKERS.test(back)) return undefined
   // A blank belongs in a grammar prompt, never in the text a learner produces.
   if (back.includes('___')) return undefined
-
-  const payload = card.payload ? { ...card.payload } : undefined
-  if (payload) {
-    for (const key of ['gloss', 'prompt', 'rule', 'explanation']) {
-      const v = payload[key]
-      if (typeof v !== 'string') continue
-      const cleaned = stripMetaCommentary(v)
-      // A rule is a short label and an explanation one short sentence: anything
-      // long is the model thinking out loud, not something to show a learner.
-      if (!cleaned || cleaned.length > 200 || META_MARKERS.test(cleaned)) delete payload[key]
-      else payload[key] = cleaned
-    }
-    if (Array.isArray(payload.options)) {
-      payload.options = payload.options
-        .map((o) => (typeof o === 'string' ? stripMetaCommentary(o) : o))
-        .filter((o) => o !== '')
-    }
-    if (Array.isArray(payload.tokens)) {
-      payload.tokens = payload.tokens
-        .map((t) => (typeof t === 'string' ? t.trim() : t))
-        .filter((t) => t !== '')
-    }
-    // A sentence whose tokens no longer rebuild it is corrupt — drop it.
-    if (
-      card.template === 'sentence' &&
-      Array.isArray(payload.tokens) &&
-      payload.tokens.length >= 2 &&
-      !tokensMatchBack(payload.tokens, back)
-    ) {
-      return undefined
-    }
-  }
+  const payload = cleanPayload(card, back)
+  if (payload === null) return undefined
   return { ...card, front, back, payload }
+}
+
+/** Cleans the payload's free text; null when the card is no longer usable. */
+function cleanPayload(card: PlannedCard, back: string): Record<string, unknown> | undefined | null {
+  if (!card.payload) return undefined
+  const payload = { ...card.payload }
+  cleanText(payload)
+  cleanLists(payload)
+  // A sentence whose tokens no longer rebuild it is corrupt — drop it.
+  const corrupt =
+    card.template === 'sentence' &&
+    Array.isArray(payload.tokens) &&
+    payload.tokens.length >= 2 &&
+    !tokensMatchBack(payload.tokens, back)
+  return corrupt ? null : payload
+}
+
+/** Strips meta commentary from the payload's text fields, dropping unusable ones. */
+function cleanText(payload: Record<string, unknown>): void {
+  for (const key of ['gloss', 'prompt', 'rule', 'explanation']) {
+    const v = payload[key]
+    if (typeof v !== 'string') continue
+    const cleaned = stripMetaCommentary(v)
+    // A rule is a short label and an explanation one short sentence: anything
+    // long is the model thinking out loud, not something to show a learner.
+    if (!cleaned || cleaned.length > 200 || META_MARKERS.test(cleaned)) delete payload[key]
+    else payload[key] = cleaned
+  }
+}
+
+function cleanLists(payload: Record<string, unknown>): void {
+  if (Array.isArray(payload.options)) {
+    payload.options = payload.options
+      .map((o) => (typeof o === 'string' ? stripMetaCommentary(o) : o))
+      .filter((o) => o !== '')
+  }
+  if (Array.isArray(payload.tokens)) {
+    payload.tokens = payload.tokens
+      .map((t) => (typeof t === 'string' ? t.trim() : t))
+      .filter((t) => t !== '')
+  }
 }
 
 /** Normalises whatever the model returned into valid PlannedCards. */
@@ -280,24 +302,28 @@ export function normalizePlan(raw: unknown): PlannedCard[] {
   if (!Array.isArray(cards)) return []
   const out: PlannedCard[] = []
   for (const c of cards) {
-    const card = c as Partial<PlannedCard> & { template?: string }
-    if (!card || typeof card.front !== 'string' || typeof card.back !== 'string') continue
-    const template: PlanTemplate =
-      card.template === 'sentence' || card.template === 'grammar' ? card.template : 'vocab'
-    const cleaned = sanitizePlannedCard({
-      template,
-      front: card.front,
-      back: card.back,
-      reading: typeof card.reading === 'string' ? card.reading : undefined,
-      payload:
-        card.payload && typeof card.payload === 'object'
-          ? (card.payload as Record<string, unknown>)
-          : undefined,
-      metadata: normalizeMetadata(card.metadata),
-    })
-    if (cleaned) out.push(cleaned)
+    const card = toPlanned(c)
+    if (card) out.push(card)
   }
   return out
+}
+
+function toPlanned(c: unknown): PlannedCard | undefined {
+  const card = c as Partial<PlannedCard> & { template?: string }
+  if (!card || typeof card.front !== 'string' || typeof card.back !== 'string') return undefined
+  const template: PlanTemplate =
+    card.template === 'sentence' || card.template === 'grammar' ? card.template : 'vocab'
+  return sanitizePlannedCard({
+    template,
+    front: card.front,
+    back: card.back,
+    reading: typeof card.reading === 'string' ? card.reading : undefined,
+    payload:
+      card.payload && typeof card.payload === 'object'
+        ? (card.payload as Record<string, unknown>)
+        : undefined,
+    metadata: normalizeMetadata(card.metadata),
+  })
 }
 
 /** Keeps only annotations we can store, normalising pitch into a contour. */

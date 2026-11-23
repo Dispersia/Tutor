@@ -110,18 +110,33 @@ function band(
   stat: BandStat,
   after?: BandDef['after'],
 ): BandDef {
+  return bandDef({ line, tier, id, name, icon, stat, after })
+}
+
+interface BandSpec {
+  line: BandLine
+  tier: number
+  id: BandId
+  name: string
+  icon: string
+  stat: BandStat
+  after?: BandDef['after']
+}
+
+function bandDef(spec: BandSpec): BandDef {
+  const { id, stat, tier } = spec
   return {
     id,
-    line,
+    line: spec.line,
     tier,
-    name,
-    icon,
+    name: spec.name,
+    icon: spec.icon,
     reagent: `${id}_reagent`,
     gearUnlockLevel: 40,
     buff: { stat, value: BUFF_VALUE[stat], label: BUFF_LABEL[stat] },
     enchant: { stat, value: ENCHANT_VALUE[stat], label: ENCHANT_LABEL[stat] },
     enchantLevel: tier * 5,
-    after,
+    after: spec.after,
   }
 }
 

@@ -11,7 +11,14 @@ import {
   type BandId,
   type BandStat,
 } from '../game/bands'
-import { ACTION_BY_ID, ACTIONS, ENCHANT_BY_ID, type EnchantDef, type ItemDef } from '../game/skills'
+import {
+  ACTION_BY_ID,
+  ACTIONS,
+  ENCHANT_BY_ID,
+  type ActionDef,
+  type EnchantDef,
+  type ItemDef,
+} from '../game/skills'
 
 /** Parse a gear instance's enchant list (band ids, or `gem:<type>` tokens). */
 export function parseEnchants(json: string | null | undefined): string[] {
@@ -82,33 +89,43 @@ export interface BandView {
 /** The band board for an artisan page: each metal with its shared score. */
 export function bandView(db: Db, userId: string): BandView[] {
   const xpByBand = bandXpMap(db, userId)
-  return BANDS.map((band) => {
-    const xp = xpByBand.get(band.id) ?? 0
-    const info = bandLevelInfo(xp)
-    const gear = ACTIONS.filter((a) => a.band === band.id)
-    const gearUnlocked = gear.filter((a) => (a.bandLevel ?? 1) <= info.level).length
-    const locked = gear.filter((a) => (a.bandLevel ?? 1) > info.level)
-    const next = locked.length
-      ? locked.reduce((m, a) => ((a.bandLevel ?? 1) < (m.bandLevel ?? 1) ? a : m))
-      : null
-    return {
-      id: band.id,
-      name: band.name,
-      icon: band.icon,
-      tier: band.tier,
-      xp,
-      ...info,
-      gearUnlockLevel: band.gearUnlockLevel,
-      buffLabel: band.buff.label,
-      buffStat: band.buff.stat,
-      buffValue: band.buff.value * Math.max(0, info.level - 1),
-      enchantLabel: band.enchant.label,
-      enchantLevel: band.enchantLevel,
-      gearTotal: gear.length,
-      gearUnlocked,
-      nextUnlock: next ? { level: next.bandLevel ?? 1, name: next.name } : null,
-    }
-  })
+  return BANDS.map((band) => bandViewOf(band, xpByBand.get(band.id) ?? 0))
+}
+
+function bandViewOf(band: BandDef, xp: number): BandView {
+  const info = bandLevelInfo(xp)
+  const gear = ACTIONS.filter((a) => a.band === band.id)
+  const locked = gear.filter((a) => (a.bandLevel ?? 1) > info.level)
+  return {
+    id: band.id,
+    name: band.name,
+    icon: band.icon,
+    tier: band.tier,
+    xp,
+    ...info,
+    ...bandLabels(band, info.level),
+    gearTotal: gear.length,
+    gearUnlocked: gear.length - locked.length,
+    nextUnlock: nextUnlock(locked),
+  }
+}
+
+function bandLabels(band: BandDef, level: number) {
+  return {
+    gearUnlockLevel: band.gearUnlockLevel,
+    buffLabel: band.buff.label,
+    buffStat: band.buff.stat,
+    buffValue: band.buff.value * Math.max(0, level - 1),
+    enchantLabel: band.enchant.label,
+    enchantLevel: band.enchantLevel,
+  }
+}
+
+/** The lowest-level locked piece — the next gear this band teases. */
+function nextUnlock(locked: ActionDef[]): { level: number; name: string } | null {
+  if (!locked.length) return null
+  const next = locked.reduce((m, a) => ((a.bandLevel ?? 1) < (m.bandLevel ?? 1) ? a : m))
+  return { level: next.bandLevel ?? 1, name: next.name }
 }
 
 /** The account-wide passive every band level grants (crit, lifesteal, …). */
