@@ -6,18 +6,28 @@
 import type { Context } from 'hono'
 import type { App, AppEnv } from '../../context'
 import { deleteDeck, getDeck, updateDeckSettings } from '../../db/repo'
-import { publicDeckSettings } from '../../deck/settings'
+import { publicDeckSettings, type DeckSettings } from '../../deck/settings'
+import { bool, jsonBody, obj, oneOf, str, strArray } from '../body'
 import { deckView } from './view'
 
-interface PatchDeckBody {
-  name?: string
-  settings?: {
-    showReadings?: boolean
-    readingScript?: string
-    variant?: 'traditional' | 'simplified'
-    disabledExercises?: string[]
-    pitchAccent?: boolean
-  }
+const VARIANTS = ['traditional', 'simplified'] as const
+
+/** The settings a PATCH carries, keeping only the keys actually sent. */
+function readSettings(body: Record<string, unknown>): Partial<DeckSettings> {
+  const settings = obj(body, 'settings')
+  if (!settings) return {}
+  const patch: Partial<DeckSettings> = {}
+  const showReadings = bool(settings, 'showReadings')
+  if (showReadings !== undefined) patch.showReadings = showReadings
+  const readingScript = str(settings, 'readingScript')
+  if (readingScript !== undefined) patch.readingScript = readingScript
+  const variant = oneOf(settings, 'variant', VARIANTS)
+  if (variant !== undefined) patch.variant = variant
+  const disabled = strArray(settings, 'disabledExercises')
+  if (disabled !== undefined) patch.disabledExercises = disabled
+  const pitchAccent = bool(settings, 'pitchAccent')
+  if (pitchAccent !== undefined) patch.pitchAccent = pitchAccent
+  return patch
 }
 
 export function registerDeckSettings(app: App) {
@@ -41,9 +51,9 @@ async function patchDeckHandler(c: Context<AppEnv>) {
   const user = c.get('user')!
   const deckId = String(c.req.param('id'))
   if (!getDeck(deps.db, deckId, user.id)) return c.json({ error: 'not found' }, 404)
-  const body = (await c.req.json().catch(() => ({}))) as PatchDeckBody
-  const settings = body.settings
-    ? updateDeckSettings(deps.db, deckId, user.id, body.settings)
+  const patch = readSettings(await jsonBody(c))
+  const settings = Object.keys(patch).length
+    ? updateDeckSettings(deps.db, deckId, user.id, patch)
     : undefined
   return c.json({
     deck: deckView(getDeck(deps.db, deckId, user.id)!),

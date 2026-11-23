@@ -7,11 +7,21 @@
 import type { Context } from 'hono'
 import type { App, AppEnv } from '../../context'
 import { deletePushSubscription, upsertPushSubscription } from '../../db/repo'
+import { jsonBody, obj, str } from '../body'
 import { vapidKeys } from '../../push/webpush'
 
 interface SubscribeBody {
   endpoint?: string
   keys?: { p256dh?: string; auth?: string }
+}
+
+/** Reads a browser push subscription's endpoint and its two keys. */
+function readSubscribe(body: Record<string, unknown>): SubscribeBody {
+  const keys = obj(body, 'keys')
+  return {
+    endpoint: str(body, 'endpoint'),
+    keys: keys ? { p256dh: str(keys, 'p256dh'), auth: str(keys, 'auth') } : undefined,
+  }
 }
 
 export function registerPushSubscribe(app: App) {
@@ -28,7 +38,7 @@ async function keyHandler(c: Context<AppEnv>) {
 
 async function subscribeHandler(c: Context<AppEnv>) {
   const user = c.get('user')!
-  const body = (await c.req.json().catch(() => ({}))) as SubscribeBody
+  const body = readSubscribe(await jsonBody(c))
   const endpoint = body.endpoint?.trim()
   const p256dh = body.keys?.p256dh
   const auth = body.keys?.auth
@@ -53,8 +63,8 @@ function isHttpsEndpoint(endpoint: string): boolean {
 }
 
 async function unsubscribeHandler(c: Context<AppEnv>) {
-  const body = (await c.req.json().catch(() => ({}))) as { endpoint?: string }
-  if (!body.endpoint) return c.json({ error: 'endpoint required' }, 400)
-  deletePushSubscription(c.get('deps').db, body.endpoint)
+  const endpoint = str(await jsonBody(c), 'endpoint')
+  if (!endpoint) return c.json({ error: 'endpoint required' }, 400)
+  deletePushSubscription(c.get('deps').db, endpoint)
   return c.json({ ok: true })
 }

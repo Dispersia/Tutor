@@ -6,12 +6,13 @@
 import { streamSSE, type SSEStreamingApi } from 'hono/streaming'
 import type { Context } from 'hono'
 import { addMessage, createSession, getOwnedSession, getRoles, listMessages } from '../../db/repo'
-import { roleReasoning, type Role } from '../../env'
+import { ROLES, roleReasoning, type Role } from '../../env'
 import { OpenRouter, type ChatMessage, type Usage } from '../../llm/openrouter'
 import { CONVERSATION_LANGUAGE_RULE, NATIVE_FEEDBACK_RULE, systemPrompt } from '../../llm/prompts'
 import { resolveUserKey } from '../../llm/userkey'
 import type { App, AppEnv, Deps } from '../../context'
 import type { PublicUser } from '../../db/repo'
+import { jsonBody, obj, oneOf, str } from '../body'
 
 const EMPTY_USAGE: Usage = { promptTokens: 0, completionTokens: 0, totalTokens: 0, costUsd: 0 }
 
@@ -22,6 +23,31 @@ interface ChatBody {
   text?: string
   system?: string
   messages?: ChatMessage[]
+}
+
+/** The `messages` array, keeping only the well-formed chat messages. */
+function chatMessages(v: unknown): ChatMessage[] | undefined {
+  if (!Array.isArray(v)) return undefined
+  const msgs = v.filter(isChatMessage)
+  return msgs.length ? msgs : undefined
+}
+
+function isChatMessage(m: unknown): m is ChatMessage {
+  if (!m || typeof m !== 'object') return false
+  const { role, content } = m as { role?: unknown; content?: unknown }
+  return typeof role === 'string' && typeof content === 'string'
+}
+
+/** Reads a streamed-chat request. */
+function readChatBody(body: Record<string, unknown>): ChatBody {
+  return {
+    sessionId: str(body, 'sessionId'),
+    role: oneOf(body, 'role', ROLES),
+    model: str(body, 'model'),
+    text: str(body, 'text'),
+    system: str(body, 'system'),
+    messages: chatMessages(body.messages),
+  }
 }
 
 /** Everything one streamed reply needs, resolved before the stream opens. */
@@ -51,8 +77,8 @@ async function chatHandler(c: Context<AppEnv>) {
   const user = c.get('user')!
   const key = await resolveUserKey(deps, user.id)
   if (!key) return c.json({ error: 'No OpenRouter key — add one in Settings.' }, 502)
-  const body = (await c.req.json().catch(() => ({}))) as ChatBody
-  const role = (body.role ?? 'conversation') as Role
+  const body = readChatBody(await jsonBody(c))
+  const role = body.role ?? 'conversation'
   const model = body.model ?? getRoles(deps.db, user.id, deps.defaults)[role]
   const sid = ensureSession(deps, user, body.sessionId)
   const msgs = messageList(deps, user, sid, role, body)
@@ -150,14 +176,25 @@ interface JsonBody {
   schemaName?: string
 }
 
+/** Reads a structured (JSON-schema) completion request. */
+function readJsonBody(body: Record<string, unknown>): JsonBody {
+  return {
+    role: oneOf(body, 'role', ROLES),
+    model: str(body, 'model'),
+    messages: chatMessages(body.messages) ?? [],
+    schema: obj(body, 'schema') ?? {},
+    schemaName: str(body, 'schemaName'),
+  }
+}
+
 /** Structured (JSON-schema) completion — used by the graders. */
 async function jsonHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
   const key = await resolveUserKey(deps, user.id)
   if (!key) return c.json({ error: 'No OpenRouter key — add one in Settings.' }, 502)
-  const body = (await c.req.json().catch(() => ({}))) as JsonBody
-  const role = (body.role ?? 'judge') as Role
+  const body = readJsonBody(await jsonBody(c))
+  const role = body.role ?? 'judge'
   const model = body.model ?? getRoles(deps.db, user.id, deps.defaults)[role]
   try {
     const { json, usage } = await runJson(new OpenRouter(key, deps.or.baseUrl), model, role, body)

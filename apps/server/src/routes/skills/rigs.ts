@@ -3,6 +3,7 @@
 import type { Context } from 'hono'
 import { setRigChoice, stopRig } from '../../services'
 import type { App, AppEnv } from '../../context'
+import { jsonBody, str } from '../body'
 import { boardSkills, gearPayload } from './board'
 
 export function registerSkillRigs(app: App) {
@@ -17,10 +18,9 @@ export function registerSkillRigs(app: App) {
 async function chooseRecipe(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
-  const { actionId, choiceId } = (await c.req.json().catch(() => ({}))) as {
-    actionId?: string
-    choiceId?: string
-  }
+  const body = await jsonBody(c)
+  const actionId = str(body, 'actionId')
+  const choiceId = str(body, 'choiceId')
   if (!actionId || !choiceId) return c.json({ error: 'actionId and choiceId required' }, 400)
   if (!setRigChoice(deps.db, user.id, actionId, choiceId)) {
     return c.json({ error: 'unknown choice' }, 400)
@@ -38,7 +38,7 @@ async function chooseRecipe(c: Context<AppEnv>) {
 async function stopRigHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
-  const { actionId } = (await c.req.json().catch(() => ({}))) as { actionId?: string }
+  const actionId = str(await jsonBody(c), 'actionId')
   if (!actionId) return c.json({ error: 'actionId required' }, 400)
   const stopped = stopRig(deps.db, deps.events, user.id, actionId)
   const board = boardSkills(deps, user.id)

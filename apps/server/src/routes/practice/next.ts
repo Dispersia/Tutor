@@ -32,6 +32,7 @@ import {
   pickStudyCard,
   resolveLesson,
 } from './select'
+import { jsonBody, str } from '../body'
 
 /** The request body of a "next drill" call. */
 interface NextBody extends ActionRequest {
@@ -51,6 +52,18 @@ interface Served {
   error?: GuardError
 }
 
+/** Reads a "next drill" request: which action, lesson, deck or card to serve. */
+function readNextBody(body: Record<string, unknown>): NextBody {
+  return {
+    actionId: str(body, 'actionId'),
+    choiceId: str(body, 'choiceId'),
+    deckId: str(body, 'deckId'),
+    exerciseId: str(body, 'exerciseId'),
+    lessonId: str(body, 'lessonId'),
+    cardId: str(body, 'cardId'),
+  }
+}
+
 export function registerNext(app: App) {
   app.post('/api/practice/next', (c) => nextHandler(c))
 }
@@ -58,7 +71,7 @@ export function registerNext(app: App) {
 async function nextHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
-  const body = (await c.req.json().catch(() => ({}))) as NextBody
+  const body = readNextBody(await jsonBody(c))
   const prefs = readStudyPrefs(deps.db, user.id)
   const gate = actionGate(deps, user.id, body)
   if (gate.error) return c.json(gate.error.body, gate.error.status)

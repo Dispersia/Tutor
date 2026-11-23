@@ -18,18 +18,11 @@ import { readStudyPrefs, writeStudyPrefs, type StudyPrefs } from '../../game/stu
 import { ROLES, type Role } from '../../env'
 import { hasUserKey, saveUserKey } from '../../llm/userkey'
 import type { App, AppEnv, Deps } from '../../context'
-import { readVoicePrefs, type VoicePrefs } from './voice'
+import { bool, jsonBody, num, obj, oneOf, str, strArray, strRecord } from '../body'
+import { readVoicePrefs } from './voice'
 
-/** The request body of `PUT /api/settings`, every section optional. */
-interface SettingsBody {
-  roles?: Partial<Record<Role, string>>
-  voice?: Partial<VoicePrefs>
-  study?: Partial<StudyPrefs>
-  prefs?: Record<string, string>
-  dailyGoal?: number
-  foodThreshold?: number
-  desiredRetention?: number
-}
+/** The voice modes the setting accepts. */
+const VOICE_MODES = ['preset', 'design'] as const
 
 export function registerSettings(app: App) {
   app.get('/api/settings', (c) => c.json(settingsView(c.get('deps'), c.get('user')!.id)))
@@ -55,11 +48,11 @@ function settingsView(deps: Deps, userId: string) {
 async function updateSettings(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const userId = c.get('user')!.id
-  const body = (await c.req.json().catch(() => ({}))) as SettingsBody
-  const roleErr = applyRoles(deps, userId, body.roles)
+  const body = await jsonBody(c)
+  const roleErr = applyRoles(deps, userId, obj(body, 'roles'))
   if (roleErr) return c.json({ error: roleErr }, 400)
-  applyVoice(deps, userId, body.voice)
-  const studyErr = applyStudy(deps, userId, body.study)
+  applyVoice(deps, userId, obj(body, 'voice'))
+  const studyErr = applyStudy(deps, userId, obj(body, 'study'))
   if (studyErr) return c.json({ error: studyErr }, 400)
   applyScalars(deps, userId, body)
   return c.json(settingsReply(deps, userId))
@@ -76,9 +69,9 @@ function settingsReply(deps: Deps, userId: string) {
 function applyRoles(
   deps: Deps,
   userId: string,
-  roles?: Partial<Record<Role, string>>,
+  roles?: Record<string, unknown>,
 ): string | undefined {
-  if (!roles || typeof roles !== 'object') return undefined
+  if (!roles) return undefined
   const current = getRoles(deps.db, userId, deps.defaults)
   for (const [role, model] of Object.entries(roles)) {
     if (!ROLES.includes(role as Role)) return `unknown role: ${role}`
@@ -89,19 +82,22 @@ function applyRoles(
   return undefined
 }
 
-function applyVoice(deps: Deps, userId: string, voice?: Partial<VoicePrefs>): void {
+function applyVoice(deps: Deps, userId: string, voice?: Record<string, unknown>): void {
   if (!voice) return
-  if (voice.mode === 'preset' || voice.mode === 'design') {
-    setUserSetting(deps.db, userId, 'voiceMode', voice.mode)
-  }
-  if (voice.voices && typeof voice.voices === 'object') {
-    setUserSetting(deps.db, userId, 'voices', JSON.stringify(voice.voices))
-  }
+  const mode = oneOf(voice, 'mode', VOICE_MODES)
+  if (mode) setUserSetting(deps.db, userId, 'voiceMode', mode)
+  const voices = strRecord(voice, 'voices')
+  if (voices) setUserSetting(deps.db, userId, 'voices', JSON.stringify(voices))
 }
 
-function applyStudy(deps: Deps, userId: string, study?: Partial<StudyPrefs>): string | undefined {
-  if (!study || typeof study !== 'object') return undefined
-  if (study.activeDeckId !== undefined && !deckExists(deps, userId, study.activeDeckId)) {
+function applyStudy(
+  deps: Deps,
+  userId: string,
+  study?: Record<string, unknown>,
+): string | undefined {
+  if (!study) return undefined
+  const activeDeckId = str(study, 'activeDeckId')
+  if (activeDeckId !== undefined && !deckExists(deps, userId, activeDeckId)) {
     return 'unknown deck'
   }
   writeStudyPrefs(deps.db, userId, studyPatch(study))
@@ -114,17 +110,24 @@ function deckExists(deps: Deps, userId: string, wanted: unknown): boolean {
   return listDecks(deps.db, userId).some((d) => d.id === wanted)
 }
 
-function studyPatch(study: Partial<StudyPrefs>): Partial<StudyPrefs> {
+function studyPatch(study: Record<string, unknown>): Partial<StudyPrefs> {
   const patch: Partial<StudyPrefs> = {}
-  if (typeof study.showZhuyin === 'boolean') patch.showZhuyin = study.showZhuyin
-  if (typeof study.showFurigana === 'boolean') patch.showFurigana = study.showFurigana
-  if (typeof study.newPerDay === 'number') patch.newPerDay = study.newPerDay
-  if (typeof study.maxReviewsPerDay === 'number') patch.maxReviewsPerDay = study.maxReviewsPerDay
-  if (typeof study.autoReinforce === 'boolean') patch.autoReinforce = study.autoReinforce
-  if (Array.isArray(study.disabledExercises))
-    patch.disabledExercises = knownExercises(study.disabledExercises)
-  if (Array.isArray(study.learningSteps)) patch.learningSteps = positiveSteps(study.learningSteps)
-  if (study.activeDeckId !== undefined) patch.activeDeckId = study.activeDeckId || null
+  const showZhuyin = bool(study, 'showZhuyin')
+  if (showZhuyin !== undefined) patch.showZhuyin = showZhuyin
+  const showFurigana = bool(study, 'showFurigana')
+  if (showFurigana !== undefined) patch.showFurigana = showFurigana
+  const newPerDay = num(study, 'newPerDay')
+  if (newPerDay !== undefined) patch.newPerDay = newPerDay
+  const maxReviews = num(study, 'maxReviewsPerDay')
+  if (maxReviews !== undefined) patch.maxReviewsPerDay = maxReviews
+  const autoReinforce = bool(study, 'autoReinforce')
+  if (autoReinforce !== undefined) patch.autoReinforce = autoReinforce
+  const disabled = strArray(study, 'disabledExercises')
+  if (disabled) patch.disabledExercises = knownExercises(disabled)
+  const steps = study.learningSteps
+  if (Array.isArray(steps)) patch.learningSteps = positiveSteps(steps)
+  const activeDeckId = str(study, 'activeDeckId')
+  if (activeDeckId !== undefined) patch.activeDeckId = activeDeckId || null
   return patch
 }
 
@@ -140,21 +143,18 @@ function positiveSteps(steps: number[]): number[] {
   return steps.filter((n): n is number => typeof n === 'number' && Number.isFinite(n) && n > 0)
 }
 
-function applyScalars(deps: Deps, userId: string, body: SettingsBody): void {
-  if (body.prefs && typeof body.prefs === 'object') {
-    for (const [k, v] of Object.entries(body.prefs)) setUserSetting(deps.db, userId, k, String(v))
+function applyScalars(deps: Deps, userId: string, body: Record<string, unknown>): void {
+  const prefs = strRecord(body, 'prefs')
+  if (prefs) for (const [k, v] of Object.entries(prefs)) setUserSetting(deps.db, userId, k, v)
+  const dailyGoal = num(body, 'dailyGoal')
+  if (dailyGoal !== undefined) setDailyGoal(deps.db, userId, dailyGoal)
+  const foodThreshold = num(body, 'foodThreshold')
+  if (foodThreshold !== undefined) {
+    setUserSetting(deps.db, userId, 'foodThreshold', String(clamp(foodThreshold, 10, 90)))
   }
-  if (typeof body.dailyGoal === 'number') setDailyGoal(deps.db, userId, body.dailyGoal)
-  if (typeof body.foodThreshold === 'number') {
-    setUserSetting(deps.db, userId, 'foodThreshold', String(clamp(body.foodThreshold, 10, 90)))
-  }
-  if (typeof body.desiredRetention === 'number') {
-    setUserSetting(
-      deps.db,
-      userId,
-      'desiredRetention',
-      String(clamp(body.desiredRetention, 70, 97)),
-    )
+  const desiredRetention = num(body, 'desiredRetention')
+  if (desiredRetention !== undefined) {
+    setUserSetting(deps.db, userId, 'desiredRetention', String(clamp(desiredRetention, 70, 97)))
   }
 }
 
@@ -166,7 +166,7 @@ function clamp(n: number, lo: number, hi: number): number {
 async function saveKey(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
-  const { key } = (await c.req.json().catch(() => ({}))) as { key?: string }
+  const key = str(await jsonBody(c), 'key')
   await saveUserKey(deps, user.id, key ?? '')
   return c.json({ ok: true, openrouter: { key: hasUserKey(deps, user.id) } })
 }

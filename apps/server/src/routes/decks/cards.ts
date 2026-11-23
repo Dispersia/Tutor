@@ -7,6 +7,7 @@ import { parsePitchContour } from '@tutor/core'
 import type { Context } from 'hono'
 import type { App, AppEnv, Deps } from '../../context'
 import { addCard, getCard, getDeck, listCards, updateCard } from '../../db/repo'
+import { jsonBody, num, obj, str, strRecord } from '../body'
 import { deckView } from './view'
 
 /** The deck row as `getDeck` returns it. */
@@ -26,6 +27,18 @@ interface PatchBody {
   back?: string
   readings?: Record<string, string>
   metadata?: Record<string, unknown>
+}
+
+/** Reads a hand-authored card from the request body. */
+function readNewCard(body: Record<string, unknown>): NewCardBody {
+  return {
+    front: str(body, 'front'),
+    back: str(body, 'back'),
+    type: str(body, 'type'),
+    reading: str(body, 'reading'),
+    step: num(body, 'step'),
+    payload: obj(body, 'payload'),
+  }
 }
 
 export function registerDeckCards(app: App) {
@@ -53,7 +66,7 @@ async function addCardHandler(c: Context<AppEnv>) {
   const user = c.get('user')!
   const deck = getDeck(deps.db, String(c.req.param('id')), user.id)
   if (!deck) return c.json({ error: 'not found' }, 404)
-  const body = (await c.req.json().catch(() => ({}))) as NewCardBody
+  const body = readNewCard(await jsonBody(c))
   const front = body.front?.trim()
   const back = body.back?.trim()
   if (!front || !back) return c.json({ error: 'front and back are required' }, 400)
@@ -103,24 +116,20 @@ async function patchCardHandler(c: Context<AppEnv>) {
   const cardId = String(c.req.param('cardId'))
   const card = getCard(deps.db, cardId, user.id)
   if (!card || card.deckId !== String(c.req.param('id'))) return c.json({ error: 'not found' }, 404)
-  const body = (await c.req.json().catch(() => ({}))) as PatchBody
-  updateCard(deps.db, cardId, user.id, cardPatch(card.metadata, body))
+  updateCard(deps.db, cardId, user.id, cardPatch(card.metadata, await jsonBody(c)))
   return c.json({ card: getCard(deps.db, cardId, user.id) })
 }
 
-function cardPatch(current: Record<string, unknown>, body: PatchBody) {
-  const patch: {
-    front?: string
-    back?: string
-    readings?: Record<string, string>
-    metadata?: Record<string, unknown>
-  } = {}
-  if (typeof body.front === 'string') patch.front = body.front
-  if (typeof body.back === 'string') patch.back = body.back
-  if (body.readings && typeof body.readings === 'object') patch.readings = body.readings
-  if (body.metadata && typeof body.metadata === 'object') {
-    patch.metadata = mergeMetadata(current, body.metadata)
-  }
+function cardPatch(current: Record<string, unknown>, body: Record<string, unknown>): PatchBody {
+  const patch: PatchBody = {}
+  const front = str(body, 'front')
+  if (front !== undefined) patch.front = front
+  const back = str(body, 'back')
+  if (back !== undefined) patch.back = back
+  const readings = strRecord(body, 'readings')
+  if (readings) patch.readings = readings
+  const metadata = obj(body, 'metadata')
+  if (metadata) patch.metadata = mergeMetadata(current, metadata)
   return patch
 }
 

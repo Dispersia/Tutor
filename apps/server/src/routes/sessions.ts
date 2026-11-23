@@ -6,6 +6,20 @@ import {
   type NewSession,
 } from '../db/repo'
 import type { App } from '../context'
+import { jsonBody, oneOf, str } from './body'
+
+const SESSION_KINDS = ['chat', 'voice', 'mixed'] as const
+
+/** Reads the metadata a new session can carry. */
+function readNewSession(body: Record<string, unknown>): NewSession {
+  return {
+    id: str(body, 'id'),
+    deckId: str(body, 'deckId'),
+    kind: oneOf(body, 'kind', SESSION_KINDS),
+    lang: str(body, 'lang'),
+    title: str(body, 'title'),
+  }
+}
 
 export function registerSessions(app: App) {
   // Every query is scoped to the signed-in user — separate history per person.
@@ -16,7 +30,7 @@ export function registerSessions(app: App) {
 
   app.post('/api/sessions', async (c) => {
     const user = c.get('user')!
-    const body = (await c.req.json().catch(() => ({}))) as NewSession
+    const body = readNewSession(await jsonBody(c))
     return c.json(createSession(c.get('deps').db, user.id, body), 201)
   })
 

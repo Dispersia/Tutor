@@ -3,6 +3,7 @@
 import type { Context } from 'hono'
 import { chooseTalent, talentView } from '../../services'
 import type { App, AppEnv } from '../../context'
+import { jsonBody, str } from '../body'
 
 export function registerSkillTalents(app: App) {
   app.post('/api/skills/talents', (c) => chooseTalentHandler(c))
@@ -12,7 +13,7 @@ export function registerSkillTalents(app: App) {
 async function chooseTalentHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
-  const { talentId } = (await c.req.json().catch(() => ({}))) as { talentId?: string }
+  const talentId = str(await jsonBody(c), 'talentId')
   if (!talentId) return c.json({ error: 'talentId required' }, 400)
   const res = chooseTalent(deps.db, deps.events, user.id, talentId)
   if (!res.ok) return c.json({ error: res.error }, 400)

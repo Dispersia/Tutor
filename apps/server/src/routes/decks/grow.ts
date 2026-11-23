@@ -9,12 +9,18 @@ import { getDeck } from '../../db/repo'
 import { growDeck, startDeckGrowth } from '../../deck/generate'
 import { plannerFor } from '../../deck/planner'
 import type { Planner } from '../../deck/plan'
+import { bool, jsonBody, num, str } from '../body'
 import { deckView } from './view'
 
 interface GrowBody {
   topic?: string
   count?: number
-  all?: boolean
+  all: boolean
+}
+
+/** Reads a grow request: a topic, a batch size, and whether to finish the deck. */
+function growBody(body: Record<string, unknown>): GrowBody {
+  return { topic: str(body, 'topic'), count: num(body, 'count'), all: bool(body, 'all') === true }
 }
 
 interface GrowReq {
@@ -34,7 +40,7 @@ async function growHandler(c: Context<AppEnv>) {
   const user = c.get('user')!
   const deckId = String(c.req.param('id'))
   if (!getDeck(deps.db, deckId, user.id)) return c.json({ error: 'not found' }, 404)
-  const body = (await c.req.json().catch(() => ({}))) as GrowBody
+  const body = growBody(await jsonBody(c))
   const planner = await plannerFor(deps, user.id)
   if (!planner) return c.json({ error: 'No OpenRouter key — add one in Settings.' }, 502)
   const req = { c, deps, deckId, body, planner }

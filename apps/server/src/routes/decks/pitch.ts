@@ -19,6 +19,7 @@ import {
 import { roleReasoning } from '../../env'
 import { OpenRouter } from '../../llm/openrouter'
 import { resolveUserKey } from '../../llm/userkey'
+import { bool, jsonBody } from '../body'
 
 export function registerDeckPitch(app: App) {
   app.post('/api/decks/:id/pitch', (c) => pitchHandler(c))
@@ -30,8 +31,7 @@ async function pitchHandler(c: Context<AppEnv>) {
   const deckId = String(c.req.param('id'))
   const deck = getDeck(deps.db, deckId, user.id)
   if (!deck) return c.json({ error: 'not found' }, 404)
-  const body = (await c.req.json().catch(() => ({}))) as { force?: boolean }
-  const force = body.force === true
+  const force = bool(await jsonBody(c), 'force') === true
   const cards = listCards(deps.db, user.id, deckId)
   if (pitchTargets(cards, { force }).length === 0) {
     return c.json({ updated: 0, total: cards.length })

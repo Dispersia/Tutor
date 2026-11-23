@@ -18,6 +18,7 @@ import { OpenRouter } from '../../llm/openrouter'
 import { MANDARIN_RULE } from '../../llm/prompts'
 import { resolveUserKey } from '../../llm/userkey'
 import { readingsFor } from '../../seed/service'
+import { bool, jsonBody, num, oneOf, str, strArray } from '../body'
 import { deckView } from './view'
 
 const LANG_LABEL: Record<string, string> = {
@@ -66,11 +67,29 @@ interface CreateBody {
   pitchAccent?: boolean
 }
 
+/** Reads a deck-creation request, dropping any wrong-typed field. */
+function readCreateBody(body: Record<string, unknown>): CreateBody {
+  return {
+    instruction: str(body, 'instruction'),
+    name: str(body, 'name'),
+    targetLang: str(body, 'targetLang'),
+    sourceLang: str(body, 'sourceLang'),
+    level: str(body, 'level'),
+    topic: str(body, 'topic'),
+    count: num(body, 'count'),
+    variant: oneOf(body, 'variant', ['traditional', 'simplified'] as const),
+    readingScript: str(body, 'readingScript'),
+    showReadings: bool(body, 'showReadings'),
+    disabledExercises: strArray(body, 'disabledExercises'),
+    pitchAccent: bool(body, 'pitchAccent'),
+  }
+}
+
 export function registerDeckCreate(app: App) {
   app.post('/api/decks', async (c) => {
     const deps = c.get('deps')
     const user = c.get('user')!
-    const body = (await c.req.json().catch(() => ({}))) as CreateBody
+    const body = readCreateBody(await jsonBody(c))
     if (body.instruction?.trim()) return createFromInstruction(c, deps, body)
     if (body.topic?.trim()) return createFromTopic(c, deps, body)
     const deck = createDeck(deps.db, user.id, {

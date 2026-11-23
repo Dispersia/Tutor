@@ -27,6 +27,7 @@ import {
 import { readStudyPrefs } from '../game/study'
 import { exerciseCtx, pickNextExercise, pickReviewCard, type SessionUser } from './practice'
 import type { App, AppEnv, Deps } from '../context'
+import { bool, jsonBody, str } from './body'
 
 type PlayerCombat = ReturnType<typeof loadPlayerCombat>
 type MonsterRow = NonNullable<ReturnType<typeof getEncounter>>
@@ -147,7 +148,7 @@ function deckLevelOf(view: NonNullable<EncounterView>): string {
 async function startCombat(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
-  const { monsterId } = (await c.req.json().catch(() => ({}))) as { monsterId?: string }
+  const monsterId = str(await jsonBody(c), 'monsterId')
   if (!monsterId) return c.json({ error: 'monsterId required' }, 400)
   if (countReviewCards(deps, user.id) === 0) {
     return c.json({ error: 'Review some cards in Practice before you fight.' }, 409)
@@ -202,10 +203,20 @@ interface HitBody {
   timedOut?: boolean
 }
 
+/** Reads a combat hit: the exercise, the card and the learner's answer. */
+function readHit(body: Record<string, unknown>): HitBody {
+  return {
+    exerciseId: str(body, 'exerciseId'),
+    cardId: str(body, 'cardId'),
+    answer: body.answer,
+    timedOut: bool(body, 'timedOut'),
+  }
+}
+
 async function hitCombat(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
-  const body = (await c.req.json().catch(() => ({}))) as HitBody
+  const body = readHit(await jsonBody(c))
   const card = body.cardId ? getCard(deps.db, body.cardId, user.id) : undefined
   if (!card) return c.json({ error: 'card not found' }, 404)
   const def = body.exerciseId ? registry.get(body.exerciseId) : undefined

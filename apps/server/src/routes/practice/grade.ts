@@ -10,6 +10,7 @@ import { actionGate, type ActionRequest } from './action'
 import { exerciseCtx } from './exerciseCtx'
 import { judgeFor } from './judge'
 import { finalizeReview, recordAttempt, uncountedOutcome } from './record'
+import { jsonBody, num, str } from '../body'
 
 interface GradeBody extends ActionRequest {
   exerciseId?: string
@@ -19,6 +20,19 @@ interface GradeBody extends ActionRequest {
   lessonId?: string
 }
 
+/** Reads a grade request: the exercise, the card and the learner's answer. */
+function readGradeBody(body: Record<string, unknown>): GradeBody {
+  return {
+    actionId: str(body, 'actionId'),
+    choiceId: str(body, 'choiceId'),
+    exerciseId: str(body, 'exerciseId'),
+    cardId: str(body, 'cardId'),
+    answer: body.answer,
+    latencyMs: num(body, 'latencyMs'),
+    lessonId: str(body, 'lessonId'),
+  }
+}
+
 export function registerGrade(app: App) {
   app.post('/api/practice/grade', (c) => gradeHandler(c))
 }
@@ -26,7 +40,7 @@ export function registerGrade(app: App) {
 async function gradeHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
-  const body = (await c.req.json().catch(() => ({}))) as GradeBody
+  const body = readGradeBody(await jsonBody(c))
   const card = body.cardId ? getCard(deps.db, body.cardId, user.id) : undefined
   if (!card) return c.json({ error: 'card not found' }, 404)
   const def = body.exerciseId ? registry.get(body.exerciseId) : undefined

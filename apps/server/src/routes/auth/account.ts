@@ -11,6 +11,7 @@ import {
 } from '../../db/repo'
 import { hashPassword, verifyPassword } from '../../auth'
 import type { App, AppEnv } from '../../context'
+import { jsonBody, str } from '../body'
 import { currentUser, endSession, startSession } from './session'
 
 interface RegisterBody {
@@ -20,6 +21,18 @@ interface RegisterBody {
   nativeLang?: string
   targetLang?: string
   level?: string
+}
+
+/** Reads a registration request. */
+function readRegister(body: Record<string, unknown>): RegisterBody {
+  return {
+    username: str(body, 'username'),
+    password: str(body, 'password'),
+    handle: str(body, 'handle'),
+    nativeLang: str(body, 'nativeLang'),
+    targetLang: str(body, 'targetLang'),
+    level: str(body, 'level'),
+  }
 }
 
 interface GuardError {
@@ -40,7 +53,7 @@ export function registerAccounts(app: App) {
 
 async function registerHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
-  const body = (await c.req.json().catch(() => ({}))) as RegisterBody
+  const body = readRegister(await jsonBody(c))
   const username = body.username?.trim()
   const password = body.password ?? ''
   const invalid = validateRegister(username, password)
@@ -85,10 +98,13 @@ async function makeUser(
 
 async function loginHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
-  const body = (await c.req.json().catch(() => ({}))) as { username?: string; password?: string }
-  const username = body.username?.trim() ?? ''
+  const body = await jsonBody(c)
+  const username = str(body, 'username')?.trim() ?? ''
   const user = username ? getUserByUsername(deps.db, username) : undefined
-  if (!user?.passwordHash || !(await verifyPassword(body.password ?? '', user.passwordHash))) {
+  if (
+    !user?.passwordHash ||
+    !(await verifyPassword(str(body, 'password') ?? '', user.passwordHash))
+  ) {
     return c.json({ error: 'invalid username or password' }, 401)
   }
   startSession(c, user.id)
@@ -103,16 +119,17 @@ function meView(c: Context<AppEnv>) {
 async function updateMe(c: Context<AppEnv>) {
   const user = currentUser(c)
   if (!user) return c.json({ error: 'unauthorized' }, 401)
-  const body = (await c.req.json().catch(() => ({}))) as Record<string, string>
+  const body = await jsonBody(c)
   const patch = profilePatch(body)
   if (Object.keys(patch).length) updateUser(c.get('deps').db, user.id, patch)
   return c.json({ user: publicUser(getUserById(c.get('deps').db, user.id)!) })
 }
 
-function profilePatch(body: Record<string, string>): Record<string, string> {
+function profilePatch(body: Record<string, unknown>): Record<string, string> {
   const patch: Record<string, string> = {}
   for (const k of ['handle', 'nativeLang', 'targetLang', 'level']) {
-    if (typeof body[k] === 'string' && body[k]) patch[k] = body[k]
+    const v = str(body, k)
+    if (v) patch[k] = v
   }
   return patch
 }

@@ -11,13 +11,14 @@ import {
   unequipItem,
 } from '../../services'
 import type { App, AppEnv } from '../../context'
+import { jsonBody, num, str } from '../body'
 import { gearPayload } from './board'
 
-interface EquipBody {
+/** The piece to equip: an exact instance, a base item, and where it goes. */
+interface EquipPiece {
   itemId?: string
   instanceId?: string
   slot?: string
-  unequip?: boolean
 }
 
 export function registerSkillGear(app: App) {
@@ -43,23 +44,28 @@ function gearHandler(c: Context<AppEnv>) {
 async function equipHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
-  const body = (await c.req.json().catch(() => ({}))) as EquipBody
-  if (body.unequip && body.slot) {
-    unequipItem(deps.db, user.id, body.slot)
+  const body = await jsonBody(c)
+  const slot = str(body, 'slot')
+  if (body.unequip && slot) {
+    unequipItem(deps.db, user.id, slot)
     return c.json(gearPayload(deps, user.id))
   }
-  return equipPiece(c, body)
+  return equipPiece(c, {
+    itemId: str(body, 'itemId'),
+    instanceId: str(body, 'instanceId'),
+    slot,
+  })
 }
 
-async function equipPiece(c: Context<AppEnv>, body: EquipBody) {
+async function equipPiece(c: Context<AppEnv>, piece: EquipPiece) {
   const deps = c.get('deps')
   const user = c.get('user')!
-  const instance = body.instanceId
-    ? gearView(deps.db, user.id).find((g) => g.id === body.instanceId)
+  const instance = piece.instanceId
+    ? gearView(deps.db, user.id).find((g) => g.id === piece.instanceId)
     : undefined
-  const itemId = body.itemId ?? instance?.itemId
+  const itemId = piece.itemId ?? instance?.itemId
   if (!itemId) return c.json({ error: 'itemId or instanceId required' }, 400)
-  const res = equipItem(deps.db, deps.events, user.id, itemId, instance?.id, body.slot)
+  const res = equipItem(deps.db, deps.events, user.id, itemId, instance?.id, piece.slot)
   if (!res.ok) return c.json({ error: res.error, missing: res.missing }, 400)
   return c.json(gearPayload(deps, user.id))
 }
@@ -68,7 +74,7 @@ async function equipPiece(c: Context<AppEnv>, body: EquipBody) {
 async function discardHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
-  const { instanceId } = (await c.req.json().catch(() => ({}))) as { instanceId?: string }
+  const instanceId = str(await jsonBody(c), 'instanceId')
   if (!instanceId) return c.json({ error: 'instanceId required' }, 400)
   const res = discardGear(deps.db, user.id, instanceId)
   if (!res.ok) return c.json({ error: res.error }, 400)
@@ -79,7 +85,7 @@ async function discardHandler(c: Context<AppEnv>) {
 async function salvageHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
-  const { instanceId } = (await c.req.json().catch(() => ({}))) as { instanceId?: string }
+  const instanceId = str(await jsonBody(c), 'instanceId')
   if (!instanceId) return c.json({ error: 'instanceId required' }, 400)
   const res = salvageGear(deps.db, deps.events, user.id, instanceId)
   if (!res.ok) return c.json({ error: res.error }, 400)
@@ -93,10 +99,9 @@ async function salvageHandler(c: Context<AppEnv>) {
 async function enchantHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
-  const { instanceId, enchantId } = (await c.req.json().catch(() => ({}))) as {
-    instanceId?: string
-    enchantId?: string
-  }
+  const body = await jsonBody(c)
+  const instanceId = str(body, 'instanceId')
+  const enchantId = str(body, 'enchantId')
   if (!instanceId || !enchantId) {
     return c.json({ error: 'instanceId and enchantId required' }, 400)
   }
@@ -109,12 +114,10 @@ async function enchantHandler(c: Context<AppEnv>) {
 async function distillHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
-  const { itemId, count } = (await c.req.json().catch(() => ({}))) as {
-    itemId?: string
-    count?: number
-  }
+  const body = await jsonBody(c)
+  const itemId = str(body, 'itemId')
   if (!itemId) return c.json({ error: 'itemId required' }, 400)
-  const res = distillItem(deps.db, deps.events, user.id, itemId, count ?? 1)
+  const res = distillItem(deps.db, deps.events, user.id, itemId, num(body, 'count') ?? 1)
   if (!res.ok) return c.json({ error: res.error }, 400)
   return c.json({ xp: res.xp, essence: res.essence, ...gearPayload(deps, user.id) })
 }
