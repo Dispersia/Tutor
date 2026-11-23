@@ -141,3 +141,12 @@ service-uninstall:
     launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
     rm -f "$HOME/Library/LaunchAgents/$label.plist"
     echo "removed $label"
+
+# build the current checkout and (re)start it — the dev iteration loop
+#
+# Rebuilds ./result from this checkout (the /tutor build), reinstalls/restarts
+# the `dev.tutor.serve` agent so it picks up the new binary, and waits for
+# /api/health. Re-run after every edit; the tailnet URL keeps working. See
+# deploy/deploy.sh (and AGENTS.md).
+deploy:
+    ./deploy/deploy.sh

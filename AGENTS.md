@@ -10,8 +10,16 @@ in `docs/BACKLOG.md` — remove an item there when you fix it.
 ## Update the launchd server after completing a task
 
 tutor runs on this Mac as a per-user **launchd** agent, so code in the working
-checkout is not live until that agent is restarted on a fresh build. **When you
-finish a task, update the launchd server:**
+checkout is not live until that agent is restarted on a fresh build. **After every
+change, redeploy:**
+
+```sh
+./deploy/deploy.sh        # or `just deploy` — same script
+```
+
+That script does `just package` (nix build -> `./result/bin/tutor`, base path
+`/tutor`), reinstalls and restarts `dev.tutor.serve` onto the new binary, and
+waits for `/api/health`. The manual equivalent is:
 
 ```sh
 just package                                           # nix build -> ./result/bin/tutor (base path /tutor)
@@ -32,6 +40,11 @@ curl -s http://127.0.0.1:4318/api/health               # sanity check
   mount. Logs are in `~/Library/Logs/tutor.log` and `tutor.err.log`.
 - Only changes in this repo need this. `data/` and `models/` are runtime state and
   are never rebuilt, and docs-only changes can skip it.
+- `nix build` sees the git tree, so `git add` new files before deploying —
+  untracked files are silently left out of the build.
+- The `/tutor` route itself is declarative: `routes.tutor.port = 4318` under
+  `services.tailnetGateway` in `~/nixos/hosts/Aarons-Mac-Mini/default.nix` (the
+  gateway daemon runs `tailscale serve`). Only the app comes from this checkout.
 
 `deploy/README.md` also documents a declarative `nix-darwin` variant (the
 `services.tutor` launchd module, deployed with `sudo darwin-rebuild switch

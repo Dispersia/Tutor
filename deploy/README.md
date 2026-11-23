@@ -48,11 +48,17 @@ For a machine without the declarative setup:
 ```bash
 just package             # -> ./result/bin/tutor (the /tutor gateway build; see below)
 just package-root        # the variant that serves at / (plain `tailscale serve`)
+just deploy              # package + reinstall/restart the agent + wait for health
 just service-install     # per-user launchd agent (starts at login, restarts on crash)
 just tailscale-serve     # HTTPS on the tailnet (root path — needs the root build)
 just tailscale-unserve   # turn it off
 just service-uninstall   # remove the agent
 ```
+
+> `just deploy` (or `./deploy/deploy.sh`) is the one-shot used on this Mac after
+> every code change: it builds the `/tutor` variant, reinstalls/restarts
+> `dev.tutor.serve`, and waits for `/api/health` (see `AGENTS.md`). It also retires
+> the nix-darwin `org.nixos.tutor` agent if that is still loaded.
 
 > The base path is baked into the build. `just package` (`nix build`) is the
 > **`/tutor` build**, for a tailnet gateway that mounts the app at `/tutor` — the
