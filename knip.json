@@ -16,9 +16,7 @@
     "packages/core": {
       "entry": ["src/**/*.test.ts"],
       "project": ["src/**/*.ts"]
-    },
-    "packages/speech": { "project": ["src/**/*.ts"] },
-    "packages/ui": { "project": ["src/**/*.{ts,svelte}"] }
+    }
   },
   "ignoreDependencies": ["svelte-eslint-parser", "drizzle-kit", "tailwindcss"]
 }
