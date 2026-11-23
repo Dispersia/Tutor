@@ -2,7 +2,6 @@
   import { onMount } from 'svelte'
   import { goto } from '$app/navigation'
   import { page } from '$app/state'
-  import { componentFor } from '#lib/components/exercises'
   import {
     gradeExercise,
     gradeSpeak,
@@ -29,13 +28,18 @@
   } from '#lib/curriculum'
   import { href } from '#lib/paths'
   import { wakeSpeech } from '#lib/speech'
-  import { ACCENT, categoryAccent } from '#lib/theme'
-  import Icon from '#lib/components/Icon.svelte'
+  import { ACCENT } from '#lib/theme'
   import Spinner from '#lib/components/Spinner.svelte'
-  import RigReport from '#lib/components/practice/RigReport.svelte'
-  import ResultCard from '#lib/components/practice/ResultCard.svelte'
-  import { lessonLabel, nextLessonAfter, quietClock } from '#lib/practiceview'
+  import PracticeHeader from '#lib/components/practice/PracticeHeader.svelte'
+  import DoneTodayPanel from '#lib/components/practice/DoneTodayPanel.svelte'
+  import SkillReward from '#lib/components/practice/SkillReward.svelte'
+  import ResultActions from '#lib/components/practice/ResultActions.svelte'
+  import ExerciseStage from '#lib/components/practice/ExerciseStage.svelte'
+  import { nextLessonAfter, nextLessonTitleOf, quietClock } from '#lib/practiceview'
+  import { answerBody, nextDrillBody, practiceLessonHref, speakForm } from '#lib/practiceview'
   import { peekCached } from '#lib/cache'
+
+  type GradeReply = Awaited<ReturnType<typeof gradeExercise>>
 
   // Seed the header and deck picker from the last fetch, so entering Practice
   // shows them at once; the drill itself still comes from the server.
@@ -109,14 +113,15 @@
     actionId ? (ref?.skills.find((s) => s.actions.some((a) => a.id === actionId))?.name ?? '') : '',
   )
   const words = $derived((result?.detail?.words as WordFeedback[] | undefined) ?? [])
-  const nextLessonTitle = $derived.by(() => {
-    const next = curriculum.flatMap((d) => d.lessons).find((l) => l.id === nextLessonId)
-    return next?.newWord ?? next?.title ?? ''
-  })
+  const nextLessonTitle = $derived(nextLessonTitleOf(curriculum, nextLessonId))
   /** A spoken answer that missed: offer a re-record loop until it lands. */
   const canRetry = $derived(Boolean(instance && spoke && result && !result.correct))
 
-  onMount(async () => {
+  onMount(() => {
+    void init()
+  })
+
+  async function init() {
     try {
       const [d, s, sk, srs] = await Promise.all([
         listDecks(),
@@ -124,27 +129,39 @@
         getSkills().catch(() => null),
         getSrsStats().catch(() => null),
       ])
-      decks = d.decks
-      // Free practice opens on the deck chosen everywhere (the profile menu);
-      // an explicit `?deck=` link still wins for that visit.
-      await loadActiveDeck()
-      deckId = deckParam ?? activeDeck.id ?? decks[0]?.id ?? ''
-      stats = s
-      srsStats = srs
-      quietUntil = s.quietUntil ?? 0
-      ref = sk
-      if (lessonId) {
-        const c = await getCurriculum().catch(() => null)
-        curriculum = c?.decks ?? []
-        applyLesson(lessonId)
-      }
+      await applyLoaded(d, s, sk, srs)
+      if (lessonId) await loadLesson(lessonId)
       await loadNext()
     } catch (e) {
       error = (e as Error).message
     } finally {
       loading = false
     }
-  })
+  }
+
+  async function applyLoaded(
+    d: { decks: Deck[] },
+    s: Stats,
+    sk: SkillsResponse | null,
+    srs: SrsStats | null,
+  ) {
+    decks = d.decks
+    // Free practice opens on the deck chosen everywhere (the profile menu);
+    // an explicit `?deck=` link still wins for that visit.
+    await loadActiveDeck()
+    deckId = deckParam ?? activeDeck.id ?? decks[0]?.id ?? ''
+    stats = s
+    srsStats = srs
+    quietUntil = s.quietUntil ?? 0
+    ref = sk
+  }
+
+  /** Loads the path and points the header at a lesson id. */
+  async function loadLesson(id: string) {
+    const c = await getCurriculum().catch(() => null)
+    curriculum = c?.decks ?? []
+    applyLesson(id)
+  }
 
   /** Re-reads the spaced-repetition totals (called after every graded answer). */
   async function refreshSrs() {
@@ -152,6 +169,26 @@
   }
 
   async function loadNext() {
+    resetForNext()
+    try {
+      const r = await nextExercise(nextDrillBody({ actionId, choiceId, lessonId, deckId }))
+      if (!r.instance || r.done) {
+        // Daily budget spent: show the goal instead of a drill.
+        doneToday = true
+        void refreshSrs()
+        return
+      }
+      instance = r.instance
+      followLesson(r)
+      startedAt = Date.now()
+      if (r.instance.modality === 'voice' || r.instance.modality === 'mixed') void warmSpeech()
+    } catch (e) {
+      error = (e as Error).message
+    }
+  }
+
+  /** Clears the previous card's state before a fresh drill. */
+  function resetForNext() {
     error = ''
     result = null
     skill = null
@@ -163,31 +200,17 @@
     recorded = false
     attempt = 0
     spoke = false
-    try {
-      const body: { actionId?: string; lessonId?: string; deckId?: string; choiceId?: string } = {}
-      if (actionId) body.actionId = actionId
-      if (actionId && choiceId) body.choiceId = choiceId
-      if (lessonId) body.lessonId = lessonId
-      if (!actionId && !lessonId && deckId) body.deckId = deckId
-      const r = await nextExercise(body)
-      if (!r.instance || r.done) {
-        // Daily budget spent: show the goal instead of a drill.
-        doneToday = true
-        void refreshSrs()
-        return
-      }
-      instance = r.instance
-      // A one-word step has nothing else to drill while its learning step
-      // waits, so the queue moves on to the path's next word: follow the card
-      // that is actually on screen instead of pinning the header to the first.
-      if (lessonId && r.lessonId && r.lessonId !== lessonId) {
-        lessonId = r.lessonId
-        applyLesson(lessonId)
-      }
-      startedAt = Date.now()
-      if (r.instance.modality === 'voice' || r.instance.modality === 'mixed') void warmSpeech()
-    } catch (e) {
-      error = (e as Error).message
+  }
+
+  /**
+   * A one-word step has nothing else to drill while its learning step waits, so
+   * the queue moves on to the path's next word: follow the card that is actually
+   * on screen instead of pinning the header to the first.
+   */
+  function followLesson(r: Awaited<ReturnType<typeof nextExercise>>) {
+    if (lessonId && r.lessonId && r.lessonId !== lessonId) {
+      lessonId = r.lessonId
+      applyLesson(lessonId)
     }
   }
 
@@ -245,35 +268,38 @@
     error = ''
     spoke = false
     try {
-      const r = await gradeExercise({
-        exerciseId: instance.exerciseId,
-        cardId: instance.cardId,
-        answer,
-        latencyMs: Date.now() - startedAt,
-        actionId,
-        lessonId,
-        choiceId,
-      })
-      // A first-exposure teach step has no result screen: it records that the
-      // card was introduced, then moves straight to the drill for that word.
-      if (wasIntro) {
-        stats = r.stats
-        quietUntil = r.stats.quietUntil ?? quietUntil
-        await loadNext()
-        return
-      }
-      result = r.result
-      skill = r.skill
-      srs = r.srs ?? null
-      lessonCompleted = Boolean(r.lessonCompleted)
-      stats = r.stats
-      quietUntil = r.stats.quietUntil ?? quietUntil
+      const r = await gradeExercise(
+        answerBody({ instance, answer, startedAt, actionId, lessonId, choiceId }),
+      )
+      if (wasIntro) await finishIntro(r.stats)
+      else applyResult(r)
     } catch (e) {
       error = (e as Error).message
     } finally {
       busy = false
       void refreshSrs()
     }
+  }
+
+  // A first-exposure teach step has no result screen: it records that the card
+  // was introduced, then moves straight to the drill for that word.
+  async function finishIntro(s: Stats) {
+    applyStats(s)
+    await loadNext()
+  }
+
+  /** Applies a graded reply: result, rewards, lesson flag and stats. */
+  function applyResult(r: GradeReply) {
+    result = r.result
+    skill = r.skill
+    srs = r.srs ?? null
+    lessonCompleted = Boolean(r.lessonCompleted)
+    applyStats(r.stats)
+  }
+
+  function applyStats(s: Stats) {
+    stats = s
+    quietUntil = s.quietUntil ?? quietUntil
   }
 
   async function submitAudio(blob: Blob) {
@@ -284,22 +310,10 @@
     spoke = true
     attempt += 1
     try {
-      const form = new FormData()
-      form.set('file', blob, 'clip.webm')
-      form.set('cardId', instance.cardId)
-      form.set('exerciseId', instance.exerciseId)
-      form.set('latencyMs', String(Date.now() - startedAt))
-      if (isRetry) form.set('retry', 'true')
-      if (actionId) form.set('actionId', actionId)
-      if (choiceId) form.set('choiceId', choiceId)
-      if (lessonId) form.set('lessonId', lessonId)
-      const r = await gradeSpeak(form)
-      result = r.result
-      skill = r.skill
-      srs = r.srs ?? null
-      lessonCompleted = Boolean(r.lessonCompleted)
-      stats = r.stats
-      quietUntil = r.stats.quietUntil ?? quietUntil
+      const r = await gradeSpeak(
+        speakForm({ blob, isRetry, instance, startedAt, actionId, choiceId, lessonId }),
+      )
+      applyResult(r)
       // A silent clip is not a countable attempt: the next try is still the
       // first one, so it records as usual.
       if (!isRetry) recorded = !r.result.detail?.noSpeech
@@ -339,13 +353,6 @@
     nextLessonId = nextLessonAfter(curriculum, id)
   }
 
-  /** A practice URL for a lesson that keeps the selected profession action. */
-  function lessonHref(id: string): string {
-    const query = new URLSearchParams({ lesson: id })
-    if (actionId) query.set('action', actionId)
-    return href(`/practice?${query.toString()}`)
-  }
-
   /**
    * "Next" after a result: within a lesson, fetch the next drill; once the
    * lesson is complete, continue on the next lesson of the path instead of
@@ -359,21 +366,25 @@
         await loadNext()
         return
       }
-      // refresh the path so the lesson just finished counts as done
-      const c = await getCurriculum().catch(() => null)
-      if (c) curriculum = c.decks
-      const id = nextLessonAfter(curriculum, lessonId ?? '')
-      if (!id) {
-        await goto(href('/learn'))
-        return
-      }
-      lessonId = id
-      applyLesson(id)
-      await goto(lessonHref(id), { replaceState: true })
-      await loadNext()
+      await advanceLesson()
     } finally {
       advancing = false
     }
+  }
+
+  /** After a finished lesson: refresh the path and continue on the next lesson. */
+  async function advanceLesson() {
+    const c = await getCurriculum().catch(() => null)
+    if (c) curriculum = c.decks
+    const id = nextLessonAfter(curriculum, lessonId ?? '')
+    if (!id) {
+      await goto(href('/learn'))
+      return
+    }
+    lessonId = id
+    applyLesson(id)
+    await goto(practiceLessonHref(id, actionId), { replaceState: true })
+    await loadNext()
   }
 
   /**
@@ -409,80 +420,19 @@
 <svelte:window onkeydown={onKeydown} />
 
 <div class="lg:mx-auto lg:max-w-2xl">
-  <div
-    class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-ink-700 pt-4 pb-4 mb-4"
-  >
-    <div class="min-w-0">
-      <h1 class="display text-3xl text-ink-100">
-        {actionId ? skillName : lesson ? lesson.title : 'Free practice'}
-      </h1>
-      <p class="sub mt-2">
-        {actionId
-          ? actionName
-          : lesson
-            ? `${lessonLabel(lesson)} · ${lesson.learned}/${lesson.cards} learned`
-            : 'Spaced repetition picks what’s due'}
-      </p>
-    </div>
-    <div class="flex flex-wrap items-center gap-2 text-xs">
-      {#if skillMap.get(skill?.skillId ?? '')}
-        <span class="chip" style="--accent: {ACCENT.violet}">
-          {skillMap.get(skill!.skillId)!.icon}
-          {skillMap.get(skill!.skillId)!.name}
-          {skill!.level ?? ''}
-        </span>
-      {/if}
-      <button
-        type="button"
-        onclick={() => applyQuiet(!quietActive)}
-        class="chip chip--press gap-1"
-        style="--accent: {quietActive ? ACCENT.brass : ACCENT.azure}"
-        title={quietActive
-          ? 'Listen & speak cards return when this ends — turn it off now'
-          : 'Hide listen & speak cards for 15 min'}
-        aria-pressed={quietActive}
-      >
-        <Icon name="mute" size={12} />
-        {quietActive ? quietLeft : 'Can’t speak?'}
-      </button>
-      <span
-        class="chip"
-        style="--accent: {ACCENT.gold}"
-        title="Study XP from graded cards and won fights — fills your daily goal"
-      >
-        {stats?.xp ?? 0} XP
-      </span>
-      {#if srsStats}
-        <span
-          class="chip"
-          style="--accent: {srsStats.due > 0 ? ACCENT.azure : ACCENT.jade}"
-          title="Cards due for review across your decks"
-        >
-          {srsStats.due} due
-        </span>
-        {#if srsStats.budget && !srsStats.budget.newUnlimited}
-          <span
-            class="chip"
-            style="--accent: {srsStats.budget.newRemaining > 0 ? ACCENT.violet : ACCENT.jade}"
-            title="New cards left in today's budget"
-          >
-            {srsStats.budget.newRemaining} new
-          </span>
-        {/if}
-      {/if}
-    </div>
-  </div>
-
-  {#if quietActive}
-    <div class="panel panel-accent mb-4 p-3 text-xs" style="--accent: {ACCENT.brass}">
-      <span class="text-brass-300">Text-only mode</span>
-      — listen &amp; speak cards are hidden for
-      <span class="gold">{quietLeft}</span>.
-      <button type="button" onclick={() => applyQuiet(false)} class="cursor-pointer underline"
-        >Turn off</button
-      >
-    </div>
-  {/if}
+  <PracticeHeader
+    {actionId}
+    {skillName}
+    {lesson}
+    {actionName}
+    {skill}
+    {skillMap}
+    {quietActive}
+    {quietLeft}
+    {stats}
+    {srsStats}
+    onQuiet={applyQuiet}
+  />
 
   {#if !focused && decks.length > 1}
     <label class="mb-4 block">
@@ -505,27 +455,7 @@
     <p class="banner" style="--accent: {ACCENT.ember}" role="alert">{error}</p>
     <button onclick={loadNext} class="btn btn-ghost mt-3 px-3 py-2 text-xs">Back</button>
   {:else if doneToday}
-    <div class="panel panel-accent p-5 text-center" style="--accent: {ACCENT.jade}">
-      <p class="display text-lg text-jade-300">That’s everything for now</p>
-      <p class="mt-2 text-sm text-ink-300">
-        {#if srsStats?.budget}
-          {#if !srsStats.budget.newUnlimited}
-            {srsStats.budget.newToday}/{srsStats.budget.newPerDay} new
-          {/if}
-          {#if !srsStats.budget.newUnlimited && !srsStats.budget.reviewsUnlimited}·{/if}
-          {#if !srsStats.budget.reviewsUnlimited}
-            {srsStats.budget.reviewsToday}/{srsStats.budget.maxReviewsPerDay} reviews
-          {/if}
-        {/if}
-      </p>
-      <p class="mt-1 text-xs text-ink-400">
-        Nothing is due and no new words are left in this deck.
-      </p>
-      <div class="mt-4 flex flex-col gap-2">
-        <button onclick={doStudyMore} class="btn btn-primary w-full py-3">Study more</button>
-        <a href={href('/learn')} class="btn btn-ghost w-full py-3">Back to Learn</a>
-      </div>
-    </div>
+    <DoneTodayPanel {srsStats} onStudyMore={doStudyMore} />
   {:else if result}
     {#if lessonCompleted}
       <div class="panel panel-accent mb-3 p-4 text-center" style="--accent: {ACCENT.jade}">
@@ -538,91 +468,31 @@
       </div>
     {/if}
     {#if skill}
-      <div class="mb-3 flex flex-wrap gap-2">
-        <span class="chip" style="--accent: {ACCENT.azure}">
-          {skillMap.get(skill.skillId)?.icon ?? ''}
-          {actionName ?? skillMap.get(skill.skillId)?.name ?? skill.skillId}
-          +{skill.xp} xp
-          {#if skill.leveledUp && skill.level}· Lv {skill.level}!{/if}
-        </span>
-        {#each skill.gained as g (g.item)}
-          <span class="chip" style="--accent: {ACCENT.jade}">
-            +{g.count}
-            {itemMap.get(g.item)?.icon ?? ''}
-            {itemMap.get(g.item)?.name ?? g.item}
-          </span>
-        {/each}
-        {#if skill.idleXp > 0}
-          <span class="chip" style="--accent: {ACCENT.gold}">
-            Rigs earned +{skill.idleXp} xp
-          </span>
-        {/if}
-        {#if skill.talentUnlocked}
-          <a href={href(`/skills/${skill.skillId}`)} class="chip" style="--accent: {ACCENT.gold}">
-            Talent unlocked — choose one
-          </a>
-        {/if}
-      </div>
-      {#if skill.idle}
-        <RigReport
-          idle={skill.idle}
-          accent={skill.idle.maxed
-            ? ACCENT.jade
-            : categoryAccent(skillMap.get(skill.skillId)?.category ?? '')}
-          rigsRunning={skill.rigsRunning ?? 1}
-          maxLiveRigs={skill.maxLiveRigs ?? 2}
-          stoppedName={skill.stoppedRig?.name}
-        />
-      {/if}
+      <SkillReward {skill} {skillMap} {actionName} {itemMap} />
     {/if}
 
-    <ResultCard {result} {words} {srs} {canRetry} {attempt} />
-    {#if canRetry}
-      <div class="mt-4 flex flex-col gap-2">
-        <button onclick={retry} class="btn btn-primary w-full py-3">
-          <Icon name="mic" size={15} /> Try again
-        </button>
-        <button onclick={nextStep} disabled={advancing} class="btn btn-ghost w-full py-3">
-          {#if advancing}<Spinner size={15} label="Loading the next card" />{:else}Next →{/if}
-        </button>
-      </div>
-    {:else if lessonCompleted && nextLessonId}
-      <button onclick={nextStep} disabled={advancing} class="btn btn-primary mt-4 w-full py-3">
-        {#if advancing}<Spinner size={15} label="Loading the next lesson" />{:else}Next lesson →
-          {nextLessonTitle ? ` ${nextLessonTitle}` : ''}{/if}
-      </button>
-    {:else if !lessonCompleted}
-      <button onclick={nextStep} disabled={advancing} class="btn btn-primary mt-4 w-full py-3">
-        {#if advancing}<Spinner size={15} label="Loading the next card" />{:else}Next →{/if}
-      </button>
-    {/if}
+    <ResultActions
+      {result}
+      {words}
+      {srs}
+      {canRetry}
+      {attempt}
+      {lessonCompleted}
+      {nextLessonId}
+      {nextLessonTitle}
+      {advancing}
+      onRetry={retry}
+      onNext={nextStep}
+    />
   {:else if instance}
-    {@const Comp = componentFor(instance.exerciseId)}
-    {#if needsSpeech && speechWarm !== 'ready'}
-      <p
-        class="mb-2 flex items-center gap-2 text-xs {speechWarm === 'error'
-          ? 'text-ember-300'
-          : 'text-ink-400'}"
-      >
-        {#if speechWarm === 'error'}
-          Speech model didn’t start — audio may be unavailable.
-        {:else}
-          <Spinner size={12} label="Starting the speech model" /> Starting the speech model…
-        {/if}
-      </p>
-    {/if}
-    <div class="panel p-5">
-      <Comp {instance} {busy} onsubmit={submit} onspeak={submitAudio} />
-      {#if instance.modality === 'voice'}
-        <button
-          type="button"
-          onclick={() => applyQuiet(true)}
-          class="btn btn-ghost mt-4 w-full py-2.5 text-xs"
-          title="Hide listen/speak cards for 15 minutes"
-        >
-          <Icon name="mute" size={13} /> I can’t speak or listen right now — hide these for 15 min
-        </button>
-      {/if}
-    </div>
+    <ExerciseStage
+      {instance}
+      {busy}
+      {needsSpeech}
+      {speechWarm}
+      onsubmit={submit}
+      onspeak={submitAudio}
+      onQuiet={applyQuiet}
+    />
   {/if}
 </div>

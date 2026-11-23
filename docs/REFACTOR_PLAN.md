@@ -1,14 +1,16 @@
 # Tutor — decomposition & architecture plan
 
-> Status: **phases 0–14 landed, phase 15 half done.** A second pass (Phases 9–13)
-> split the two mega routes, the grammar tables, the schema and the web skills
-> client, lowered the function budget to 20 lines, and fixed the action-level map
-> rebuild. Phase 14 then worked the function burn-down to zero — the exemption
-> list is gone and every function fits. Phase 15's route validation and the last
-> wide signatures are done too; only the remaining web `+page.svelte` shells are
-> open — see §8.2. Goal: no mega files, no mega structs, no mega methods. Small
-> files, small pure functions, like‑with‑like, modern practices. §8 records each
-> phase; §8.1 is the re-audit that opened the second pass.
+> Status: **phases 0–15 landed except the last web scripts.** A second pass
+> (Phases 9–13) split the two mega routes, the grammar tables, the schema and the
+> web skills client, lowered the function budget to 20 lines, and fixed the
+> action-level map rebuild. Phase 14 then worked the function burn-down to zero —
+> the exemption list is gone and every function fits. Phase 15 validated the
+> request bodies, folded the last wide signatures and split all six large web
+> `+page.svelte` shells; what remains is the long functions in the `chat`,
+> `combat` and `skills` scripts, a per-feature CSS split, and the shared
+> board/player loader — see §8.2. Goal: no mega files, no mega structs, no mega
+> methods. Small files, small pure functions, like‑with‑like, modern practices.
+> §8 records each phase; §8.1 is the re-audit that opened the second pass.
 
 ---
 
@@ -513,16 +515,14 @@ too: `equipItem`/`applyEnchant`/`grantItems`/`awardXp`/`recordReview`/
 `completeAction` fold their trailing arguments into one options object and the
 `band` table calls `bandDef(spec)` directly, so `eslint.config.js` drops its
 `wideSignatures` list (`max-params` is now on everywhere except the two legacy
-scopes). The page shells are next, smallest first: `home` (404 → 104 lines),
-`inventory` (462 → 240), `learn` (490 → 360), `skills/[id]` (558 → 268) and
-`settings` (568 → 357) are done — their pure maths live in `lib/<feature>view.ts`
-and their markup in `lib/components/<feature>/`, and all five are off the
-`legacyBig` list. Still open: `practice` (and `chat`/`combat`/`skills`, whose
-scripts still hold long functions) get the Phase 6 treatment — pure derivations
-into `lib/<feature>view.ts`, presentational pieces into
-`lib/components/<feature>/`, and `styles/components.css` split per feature. Then
-the `Deps`/per-request context (findings 3–4) gains one shared board/player
-loader.
+scopes). The page shells are done, smallest first: `home` (404 → 104 lines),
+`inventory` (462 → 240), `learn` (490 → 360), `skills/[id]` (558 → 268),
+`settings` (568 → 357) and `practice` (628 → 503 physical but inside the counted
+budget). Their pure maths live in `lib/<feature>view.ts` and their markup in
+`lib/components/<feature>/`, and all six are off the `legacyBig` list. Still
+open: the long functions in the `chat`, `combat` and `skills` scripts (they stay
+on `legacyBig` until split), a `styles/components.css` split per feature, and the
+`Deps`/per-request context (findings 3–4) gaining one shared board/player loader.
 
 ---
 

@@ -5,6 +5,7 @@
 
 import type { CurriculumDeck, LessonDTO } from './curriculum'
 import type { SrsOutcome } from './exercises'
+import { href } from './paths'
 
 const RATING_NAMES = { 1: 'Again', 2: 'Hard', 3: 'Good', 4: 'Easy' } as const
 
@@ -39,4 +40,91 @@ export function nextLessonAfter(curriculum: CurriculumDeck[], id: string): strin
 export function quietClock(until: number, now: number): string {
   const s = Math.max(0, Math.ceil((until - now) / 1000))
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+}
+
+/** The `POST /api/practice/next` body for the current URL selection. */
+export interface NextDrillRequest {
+  actionId?: string
+  choiceId?: string
+  lessonId?: string
+  deckId: string
+}
+
+export function nextDrillBody(p: NextDrillRequest): {
+  actionId?: string
+  lessonId?: string
+  deckId?: string
+  choiceId?: string
+} {
+  const body: { actionId?: string; lessonId?: string; deckId?: string; choiceId?: string } = {}
+  if (p.actionId) body.actionId = p.actionId
+  if (p.actionId && p.choiceId) body.choiceId = p.choiceId
+  if (p.lessonId) body.lessonId = p.lessonId
+  if (!p.actionId && !p.lessonId && p.deckId) body.deckId = p.deckId
+  return body
+}
+
+/** The word the next lesson introduces, for the "next lesson" button label. */
+export function nextLessonTitleOf(curriculum: CurriculumDeck[], id: string | undefined): string {
+  const next = curriculum.flatMap((d) => d.lessons).find((l) => l.id === id)
+  return next?.newWord ?? next?.title ?? ''
+}
+
+/** A practice URL for a lesson that keeps the selected profession action. */
+export function practiceLessonHref(id: string, actionId?: string): string {
+  const query = new URLSearchParams({ lesson: id })
+  if (actionId) query.set('action', actionId)
+  return href(`/practice?${query.toString()}`)
+}
+
+/** The JSON body for a typed answer to the current drill. */
+export interface AnswerBody {
+  exerciseId: string
+  cardId: string
+  answer: unknown
+  latencyMs?: number
+  actionId?: string
+  lessonId?: string
+  choiceId?: string
+}
+
+export function answerBody(p: {
+  instance: { exerciseId: string; cardId: string }
+  answer: unknown
+  startedAt: number
+  actionId?: string
+  lessonId?: string
+  choiceId?: string
+}): AnswerBody {
+  return {
+    exerciseId: p.instance.exerciseId,
+    cardId: p.instance.cardId,
+    answer: p.answer,
+    latencyMs: Date.now() - p.startedAt,
+    actionId: p.actionId,
+    lessonId: p.lessonId,
+    choiceId: p.choiceId,
+  }
+}
+
+/** The multipart body for a recorded answer (a retry is flagged). */
+export function speakForm(p: {
+  blob: Blob
+  isRetry: boolean
+  instance: { exerciseId: string; cardId: string }
+  startedAt: number
+  actionId?: string
+  lessonId?: string
+  choiceId?: string
+}): FormData {
+  const form = new FormData()
+  form.set('file', p.blob, 'clip.webm')
+  form.set('cardId', p.instance.cardId)
+  form.set('exerciseId', p.instance.exerciseId)
+  form.set('latencyMs', String(Date.now() - p.startedAt))
+  if (p.isRetry) form.set('retry', 'true')
+  if (p.actionId) form.set('actionId', p.actionId)
+  if (p.choiceId) form.set('choiceId', p.choiceId)
+  if (p.lessonId) form.set('lessonId', p.lessonId)
+  return form
 }
