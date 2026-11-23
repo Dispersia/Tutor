@@ -31,3 +31,7 @@ apps/web/static/vad/
 __pycache__/
 *.pyc
 *.tsbuildinfo
+
+# regenerable (design/tutor/tools/fetch-fonts.sh) and review screenshots
+design/tutor/assets/fonts/
+.impeccable/review/
