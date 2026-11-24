@@ -47,6 +47,7 @@ export interface ExerciseInstance {
 export interface GradeResult {
   score: number
   correct: boolean
+  answer?: string
   expected?: string
   feedback?: string
   detail?: Record<string, unknown>

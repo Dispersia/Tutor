@@ -24,6 +24,7 @@ export interface StudyBudget {
 export interface Grade {
   score: number
   correct: boolean
+  answer?: string
   expected?: string
   feedback?: string
   xp: number
@@ -78,6 +79,7 @@ export interface BuiltDeck {
 export interface ActivityDay {
   day: string
   xp: number
+  reviews: number
 }
 
 export interface Stats {

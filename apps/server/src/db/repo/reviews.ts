@@ -87,6 +87,24 @@ function gradedCount(db: Db, userId: UserId, since: number): number {
   return Number(row?.n ?? 0)
 }
 
+const reviewDay = (offsetMin: number) =>
+  sql<string>`date(${reviews.createdAt} / 1000 + ${offsetMin * 60}, 'unixepoch')`
+
+export function reviewsByDay(
+  db: Db,
+  userId: UserId,
+  offsetMin = 0,
+): { day: string; count: number }[] {
+  const day = reviewDay(offsetMin)
+  return db
+    .select({ day, count: sql<number>`count(*)` })
+    .from(reviews)
+    .where(eq(reviews.userId, userId))
+    .groupBy(day)
+    .all()
+    .map((r) => ({ day: r.day, count: Number(r.count) }))
+}
+
 export function cardsGradedSince(db: Db, userId: UserId, since: number): number {
   const row = db
     .select({ n: sql<number>`count(distinct ${reviews.cardId})` })

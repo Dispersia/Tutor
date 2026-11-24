@@ -179,8 +179,8 @@ function expectTrainingAwarded(g: Graded) {
   expect(g.skill.idle?.runSec).toBe(600)
   expect(g.skill.idle?.intervalSec).toBeGreaterThan(2)
   expect(g.skill.idle?.maxRunSec).toBe(3 * 60 * 60)
-  expect(g.skill.idle?.runFullAtCompletions).toBe(50)
-  expect(g.skill.idle?.runProgress).toBeCloseTo(1 / 50, 6)
+  expect(g.skill.idle?.runFullAtCompletions).toBe(25)
+  expect(g.skill.idle?.runProgress).toBeCloseTo(1 / 25, 6)
   expect(g.skill.idle?.maxed).toBe(false)
 }
 

@@ -523,7 +523,9 @@ Every prompt is built on the server; the shared pieces live in
 - **Only the rules that apply.** The script rule (`scriptRule`) is derived from
   the deck's own settings — Traditional or Simplified, Zhuyin or pinyin, kana — and
   is attached only for the language it concerns. A pinyin deck is never told to
-  write Zhuyin, and a Japanese learner is never told about Chinese.
+  write Zhuyin, and a Japanese learner is never told about Chinese. Graders read
+  the deck through the card they grade, so a Simplified deck is graded in
+  Simplified; with no card, the app's default (Traditional with Zhuyin) stands.
 - **The tutor's reply is spoken.** The conversation prompt asks for plain
   sentences (no markdown, emoji or bracketed readings), and the client strips
   anything of that kind before synthesis (`speakable` in `apps/web/src/lib/speech.ts`).
@@ -531,6 +533,10 @@ Every prompt is built on the server; the shared pieces live in
   grading request, because a small model otherwise drifts into the target language.
 - **The deck planner shows one worked example** in the deck's own language and
   reading script (`deck/planPrompt.ts`); models copy an example's shape closely.
+- **A language's traps are named, not assumed.** For Chinese the planner is told
+  that 這/那 are not places and 來/去 need one (`motionRule`), and the build drops
+  a sentence that still writes 來這/去那 (`motionWithoutPlace` in
+  `deck/context.ts`) — an odd sentence teaches something wrong.
 - **Grading is repeatable** (temperature 0.2) and never blocks a review: a judge
   that fails or times out falls back to the deterministic grade.
 
@@ -663,6 +669,14 @@ The server layout (game / db / services / routes, and the content tables) is in
 | `multiple_choice`         | text       | ✅    | exact                        |
 | `sentence_build`          | text       | ✅    | token order (n+1 vocabulary) |
 | `fill_blank` / `roleplay` | mixed      | later | judge                        |
+
+**Multiple choice reuses what the member has met.** For a vocab card the wrong
+answers are other met cards' backs; for a sentence card they are the card's own
+sentence with one token swapped for each `payload.distractor` — the planner's
+"known words that do not belong in the sentence" (`defs/multipleChoice.ts`). The
+swap lands on the token that shares the longest suffix and closest length with
+the replacement, so a weekday card offers 本日は土曜日です beside 本日は金曜日です
+instead of four unrelated words.
 
 ### 11.4 Game systems plug in via an event bus
 
@@ -826,10 +840,11 @@ copper, `Mine essence` more essence — not more of everything), artisans +0.5%
 bonus-product chance/level, Agility +0.5% **XP to every profession**/level, combat
 +1% power/level, Slayer +1% rare drops/level, Thieving +2% coins/level.
 
-**The curve is scaled for the idle era.** One action level costs
-`100 + (level − 1) · 10` XP, so maxing a single action is ≈58.4k XP and a 4-action
-profession ≈234k — **10× the drill-only curve**, because a live rig also earns XP on
-its own (§13.5.1). Level 100 is a long goal, not an impossible one.
+**The curve ramps up.** One action level costs `50 + ⌊(level − 1)² / 4⌋` XP: the
+first levels are minutes of a run, level 60 costs ≈920 XP, and maxing one action is
+≈84.6k XP (a 4-action profession ≈338k). **Early levels are quick, the late climb
+is steep**, and a live rig also earns XP on its own (§13.5.1). Level 100 is a long
+goal, not an impossible one.
 
 **The profession level is derived — the mean of its actions, out of 100.** A
 profession has no XP of its own, and every action is capped at level 100, so a
@@ -1004,7 +1019,7 @@ game reward *taking a break* and *coming back*.
    complete 1 drill          complete 10 more             come back in 3h
    ─────────────────         ─────────────────            ──────────────
    +1 ore  (the strike)      +1 ore  (the strike)         bank is full
-   run: 1 / 10s for 10 min   run: 1 / 7s for 45 min       pick new drills
+   run: 1 / 19s for 10 min   run: 1 / 15s for 45 min      pick new drills
 ```
 
 **Nothing ticks.** There is no scheduler, no worker, no timer. A run is *not* a
@@ -1031,14 +1046,14 @@ be rebalanced later without rewriting anyone's bank.
 **The curves.** The *rate* is a saturating exponential; the *run length* is a
 **straight, equally-stepped climb**. Both are tunable in `game/idle.ts` (`IDLE`
 constants): the first drill is slow and short, a long-lived action approaches a
-2-second ceiling, and **50 completions buy the full 3 hours** — every completion
-before that adds the same slice of time.
+**10-second ceiling** (the default cap; talents will lower it), and **25 completions
+buy the full 3 hours** — every completion before that adds the same slice of time.
 
 ```
-intervalSeconds(c, tier) = tierFactor(tier) · (2 + 8 · 2^(−c/15))   // 10s → 2s per item
-runSeconds(c)            = 600 + (10800 − 600) · min(c−1, 49)/49    // 10 min → 3 h at c=50
-tierFactor(tier)         = 1 + 0.35·(tier − 1)                      // tier 1 ×1 … tier 5 ×2.4
-xpPerCraft               = 0.5                                      // action XP per completed craft
+intervalSeconds(c, tier) = tierFactor(tier) · (10 + 10 · 2^(−c/10))  // 20s → 10s per item
+runSeconds(c)            = 600 + (10800 − 600) · min(c−1, 24)/24     // 10 min → 3 h at c=25
+tierFactor(tier)         = 1 + 0.35·(tier − 1)                       // tier 1 ×1 … tier 5 ×2.4
+xpPerCraft               = 0.9                                       // action XP per completed craft
 ```
 
 **A live run earns XP too.** A drill hands over the action's `xp`; while a run is
@@ -1049,10 +1064,12 @@ left running levels its profession the same way drilling does, just by the clock
 that is what makes "leave it running and come back" pay in levels, not only in ore.
 `settleAll` accrues it in the same closed-form pass as the items (a completion
 count already *is* the craft count, so nothing new is stored), and the action XP
-curve is scaled **10×** against the drill-only era to absorb the new income (see
-§13.5: ~58.4k XP to cap an action). `xpPerCraft` is `0.5`, so a full 3-hour maxed
-run pays ~2.7k XP — enough that the machines carry most of the leveling, but capping
-an action takes ~22 such runs rather than a couple.
+curve was raised and steepened for the idle era (see §13.5: ~84.6k XP to cap an
+action). `xpPerCraft` is `0.9`, so a full 3-hour maxed run pays ~0.95k XP — enough
+that the machines carry most of the leveling, but capping an action takes ~89 such
+runs rather than a couple. At one maxed tier-1 rig that puts level 60 around **60
+hours**, and level 100 around 260, with talent XP bonuses meant to shorten the climb
+later.
 
 **Tier slows the rig, not the run.** Higher-tier actions run proportionally slower
 per item (`tierFactor`) but keep the same run length, so deep content (adamant,
@@ -1063,25 +1080,25 @@ table below is tier 1; multiply the interval by `tierFactor` for deeper rigs.
 **A flurry of drills can't buy unlimited time.** A drill does not *stack* onto
 the previous end; it **re-bases** the run to `rigRunSec(completions)` from that
 drill. So a burst of completions makes the next run longer *in step with the
-count* — 10 buy ~40 min, the 50th buys the full 3 h, and it never exceeds
+count* — 10 buy over an hour, the 25th buys the full 3 h, and it never exceeds
 `maxRunSec`. (`extendRig` sets the end outright, and `settleRig` re-clamps on
 every read, so any older row written before this held is trimmed on its next
 settle.) Summing a per-drill slice instead reached the 3-hour ceiling after only
 ~10 rapid drills, which is why a handful of cards used to buy a full night.
 
-| completions | 1 | 10 | 30 | 50 | 100 | 300 |
+| completions | 1 | 10 | 25 | 50 | 100 | 300 |
 | --- | --- | --- | --- | --- | --- | --- |
-| one item every | 9.6s | 7.0s | 4.0s | 2.8s | 2.1s | 2.0s |
-| a run lasts | 10m | 0.7h | 1.8h | 3h | 3h | 3h |
-| items per run | 62 | 351 | 1.7k | 3.9k | 5.2k | 5.4k |
-| XP per run | 31 | 176 | 830 | 1.9k | 2.6k | 2.7k |
+| one item every | 19.3s | 15.0s | 11.8s | 10.3s | 10.0s | 10.0s |
+| a run lasts | 10m | 1.2h | 3h | 3h | 3h | 3h |
+| items per run | 31 | 295 | 918 | 1,047 | 1,079 | 1,080 |
+| XP per run | 28 | 265 | 826 | 942 | 971 | 972 |
 
 **The climb is visible.** A rig's view carries how far it is toward the cap —
 `runProgress` (0 → 1) and a `maxed` flag the moment a completion buys the full 3
-hours. The practice result draws it as a bar with `N/50 to 3h`, and once the rig is
+hours. The practice result draws it as a bar with `N/25 to 3h`, and once the rig is
 maxed it says so outright: the run is as long and fast as it will ever be, so the
 next drills are better spent on a different action. The profession page shows the
-same `N/50` count per action, so the board is where you decide what to power next.
+same `N/25` count per action, so the board is where you decide what to power next.
 
 **Every action is a rig**, including the artisans. A gathering rig makes something
 from nothing; an artisan rig *transforms* — its run consumes the recipe inputs and
@@ -1128,28 +1145,28 @@ supply rigs must run — a few hours for starter gear, and **roughly a whole day
 the deep gear**, which is seven or eight "leave it running" sessions spread across days
 of study.
 
-The budget is legible, not vibes: an action needs `⌈58410 / xp⌉` drills to reach 100
+The budget is legible, not vibes: an action needs `⌈84575 / xp⌉` drills to reach 100
 *if you only drill* — but a live rig also pays `xpPerCraft` per item, so the levels
-come from the machines too (a full 3-hour run of a maxed rig is ~2.7k XP, about a
-twentieth of a cap). Material costs are chosen so the **scarcest raw material** it
+come from the machines too (a full 3-hour run of a maxed rig is ~0.95k XP, about a
+ninetieth of a cap). Material costs are chosen so the **scarcest raw material** it
 consumes works out to the tier's target. Refinement is deliberately the *cheap,
 fast* feeder layer (a bar costs 2 ore); the **goal** actions carry the time.
 
 | action → Lv 100 | tier | drills | before | now | ~rig time |
 | --- | --- | --- | --- | --- | --- |
-| fletch an oak shortbow | 1 | 487 | 1 log | **12 logs** | 4h |
-| forge a bronze sword | 2 | 487 | 1 bar | **12 bars** | 8h |
-| fletch a willow longbow | 2 | 325 | 1 log | **24 logs** | 7h |
-| make a leather body | 2 | 418 | 3 leather | **14 leather** | 8h |
-| forge an iron sword | 3 | 325 | 2 bars | **20 bars** | 12h |
-| forge steel leggings | 3 | 266 | 3 bars | **20 bars** | 13h |
-| string a sapphire amulet | 3 | 266 | 1 gem | **24 gems** | 12h |
-| forge a steel platebody | 4 | 195 | 3 bars | **40 bars** | 18h |
-| forge a mythril sword | 4 | 183 | 2 bars | **30 bars** | 19h |
-| fletch a yew longbow | 4 | 195 | 2 logs | **48 logs** | 13h |
-| forge an adamant platebody | 5 | 133 | 3 bars | **38 bars** | 24h |
+| fletch an oak shortbow | 1 | 705 | 1 log | **12 logs** | 4h |
+| forge a bronze sword | 2 | 705 | 1 bar | **12 bars** | 8h |
+| fletch a willow longbow | 2 | 471 | 1 log | **24 logs** | 7h |
+| make a leather body | 2 | 605 | 3 leather | **14 leather** | 8h |
+| forge an iron sword | 3 | 471 | 2 bars | **20 bars** | 12h |
+| forge steel leggings | 3 | 385 | 3 bars | **20 bars** | 13h |
+| string a sapphire amulet | 3 | 385 | 1 gem | **24 gems** | 12h |
+| forge a steel platebody | 4 | 282 | 3 bars | **40 bars** | 18h |
+| forge a mythril sword | 4 | 265 | 2 bars | **30 bars** | 19h |
+| fletch a yew longbow | 4 | 282 | 2 logs | **48 logs** | 13h |
+| forge an adamant platebody | 5 | 193 | 3 bars | **38 bars** | 24h |
 
-(The `drills` column is the **drill-only** count at the 10× curve — a live rig pays
+(The `drills` column is the **drill-only** count at the steeper curve — a live rig pays
 `xpPerCraft` per item it makes, so in practice the machines still do most of the
 leveling and you only drill to keep them alive.)
 
@@ -1162,8 +1179,8 @@ combat keeps its food economy, and `hide` for leather armour still comes from co
 drills (a deliberate combat side-chain). The `strike` and the rig consume the same
 scaled costs, so an artisan drill still *gates on materials* — you just get those
 materials from machines now. Combat numbers are untouched, and the idler still can't
-substitute for studying: you have to drill to **start** the machines, and the action
-XP curve is scaled 10× so passive income sharpens the loop instead of replacing it.
+substitute for studying: you have to drill to **start** the machines, and the steep
+action XP curve keeps passive income sharpening the loop instead of replacing it.
 The runs reward *coming back*; the drills remain the reason to open the app.
 
 ### 13.5.2 Rig alerts — a nudge before the machine stops
@@ -1172,8 +1189,9 @@ A run that expires silently is wasted time: the player has to drill again to kee
 the machine alive. So when a run drops **under 30 minutes**, the app sends one
 notification — "Mine copper is running low — 22 minutes left — drill to keep it
 going" — with a tap that opens Home. The alert is a *come back and drill* nudge, not
-a completion receipt. Runs shorter than the lead time (the first drill's 10-minute
-run) are ignored, because there is nothing to extend yet.
+a completion receipt. It only fires for runs that have grown **past an hour**, so a
+young rig never nags while you are still drilling it up; shorter runs are ignored,
+because there is little to extend yet.
 
 **Two paths, one switch.** The server pushes through the browser's push service, so
 the alert arrives with the app closed. While the app is open, a local timer arms the
@@ -1274,10 +1292,10 @@ every artisan shares (§13.5.3).
 
 Enchanting has **one** track: `Distill`. You pick an item from your inventory, burn it,
 and learn from it — XP is a **percentage of the item's coin value**
-(`DISTILL_XP_PER_VALUE`, 6 XP per coin), so an endgame piece levels Enchanting faster
+(`DISTILL_XP_PER_VALUE`, 9 XP per coin), so an endgame piece levels Enchanting faster
 than a raw ore but never instantly. The rate is priced against the curve: level 100
-costs **58,410 XP**, so capping Enchanting takes ~9,735 coins of burned value — about
-**975 coins a day over 10 days**. Distilling also yields the item's **family essence**
+costs **84,575 XP**, so capping Enchanting takes ~9,397 coins of burned value — about
+**940 coins a day over 10 days**. Distilling also yields the item's **family essence**
 (metal, cloth, leather, wood or gem), the reagent every enchant is built from. Burning
 is the point: Distill is the sink that eats surplus materials and gear.
 

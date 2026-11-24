@@ -394,6 +394,7 @@
         {nextLessonId}
         {nextLessonTitle}
         {advancing}
+        spoken={spoke}
         onRetry={retry}
         onNext={nextStep}
       />

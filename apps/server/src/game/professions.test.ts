@@ -63,14 +63,16 @@ test('combat actions are gated by forged/fletched gear', () => {
 })
 
 test('skill XP curve + level info', () => {
-  expect(skillXpForLevel(1)).toBe(100)
-  expect(skillXpForLevel(2)).toBe(110)
-  expect(skillLevelInfo(0)).toMatchObject({ level: 1, intoLevel: 0, forNext: 100 })
-  expect(skillLevelInfo(100)).toMatchObject({ level: 2, intoLevel: 0 })
-  expect(skillLevelInfo(210)).toMatchObject({ level: 3 })
+  expect(skillXpForLevel(1)).toBe(50)
+  expect(skillXpForLevel(2)).toBe(50)
+  expect(skillXpForLevel(10)).toBe(70)
+  expect(skillXpForLevel(60)).toBe(920)
+  expect(skillLevelInfo(0)).toMatchObject({ level: 1, intoLevel: 0, forNext: 50 })
+  expect(skillLevelInfo(100)).toMatchObject({ level: 3, intoLevel: 0 })
+  expect(skillLevelInfo(200)).toMatchObject({ level: 4 })
   let total = 0
   for (let i = 1; i < ACTION_MAX_LEVEL; i++) total += skillXpForLevel(i)
-  expect(total).toBe(58_410)
+  expect(total).toBe(84_575)
 })
 
 test('action levels cap at 100 (so a profession reads out of 100)', () => {

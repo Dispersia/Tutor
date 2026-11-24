@@ -102,6 +102,14 @@ function outranks(a: TextGrade, b: TextGrade): boolean {
   return a.score > b.score
 }
 
+export function answerText(answer: unknown): string | undefined {
+  if (typeof answer === 'string') return answer.trim() || undefined
+  if (Array.isArray(answer)) return answer.filter(Boolean).join('').trim() || undefined
+  const tokens = (answer as { tokens?: unknown } | null)?.tokens
+  if (Array.isArray(tokens)) return tokens.filter(Boolean).join('').trim() || undefined
+  return undefined
+}
+
 export function feedbackFor(score: number, expected: string): string | undefined {
   if (score >= 100) return undefined
   if (score >= 80) return `Almost! The answer is ${expected}.`

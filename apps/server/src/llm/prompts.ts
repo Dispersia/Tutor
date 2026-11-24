@@ -105,15 +105,25 @@ export function conversationSystem(learner: Learner): string {
   )
 }
 
-export function judgeSystem(learner: Learner): string {
+export function judgeSystem(learner: Learner, prefs: ScriptPrefs = {}): string {
   return lines(
     'You grade one answer from a language learner. Return only the JSON the schema asks for.',
     `- ${NATIVE_FEEDBACK_RULE(learner.nativeLang, learner.targetLang)}`,
     '- Feedback is one or two short sentences spoken to the learner as "you": kind, specific, no markdown.',
     '- Grade what the task asks about and nothing else.',
-    bullet(scriptRule(learner.targetLang)),
+    bullet(scriptRule(learner.targetLang, prefs)),
   )
 }
+
+/** The last line of a grading request: the language rule and the deck's script rule, restated. */
+export const JUDGE_REMINDER = (
+  nativeLang: string | null | undefined,
+  targetLang: string | null | undefined,
+  prefs: ScriptPrefs = {},
+): string =>
+  [NATIVE_FEEDBACK_REMINDER(nativeLang, targetLang), characterRule(targetLang, prefs)]
+    .filter((part) => part !== '')
+    .join(' ')
 
 const ROLE_TASK: Record<Exclude<Role, 'conversation'>, string> = {
   judge: 'You grade a language learner. Be precise and kind, and return only what is asked for.',

@@ -255,7 +255,7 @@ async function buildCtx(
       seen: metWords(req.deps, req.user, req.data, req.card),
       distractors: 3,
     }),
-    judge: await judgeFor(c),
+    judge: await judgeFor(c, req.card),
   }
 }
 

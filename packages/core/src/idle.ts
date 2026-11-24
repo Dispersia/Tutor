@@ -1,13 +1,13 @@
 export const IDLE = {
-  firstIntervalSec: 10,
-  floorIntervalSec: 2,
-  intervalHalfLife: 15,
+  firstIntervalSec: 20,
+  floorIntervalSec: 10,
+  intervalHalfLife: 10,
   firstRunSec: 10 * 60,
   maxRunSec: 3 * 60 * 60,
-  runFullAtCompletions: 50,
+  runFullAtCompletions: 25,
   tierStep: 0.35,
   maxCreditSec: 24 * 60 * 60,
-  xpPerCraft: 0.5,
+  xpPerCraft: 0.9,
 } as const
 
 const clamp = (n: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, n))

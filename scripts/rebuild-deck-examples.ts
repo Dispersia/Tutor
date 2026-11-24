@@ -82,10 +82,7 @@ if (process.env.REBUILD_DRY === '1') {
 }
 const planner = llmPlanner(new OpenRouter(key, undefined), model, roleReasoning.generator)
 
-const instruction =
-  'a Japanese deck from the Kaishi 1.5k word list. Include natural example sentences ' +
-  'and short grammar points that use only words already introduced (strict n+1, one ' +
-  'new word per step). Write readings in kana only.'
+const instruction = (settings.instruction as string | undefined) ?? 'Continue the deck'
 
 const created = await createDeckForBuild(db, userId, {
   instruction,
@@ -99,7 +96,7 @@ const created = await createDeckForBuild(db, userId, {
   showReadings: settings.showReadings as boolean | undefined,
   disabledExercises: settings.disabledExercises as string[] | undefined,
   pitchAccent: settings.pitchAccent as boolean | undefined,
-  sourceLabel: 'Kaishi 1.5k',
+  sourceLabel: deckRow.name,
   planner,
 })
 const ctx = {

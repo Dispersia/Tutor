@@ -1,15 +1,36 @@
 @layer components {
   .heat {
+    --heat-weeks: 18;
     --heat-cell: 0.75rem;
+    width: fit-content;
+    margin-inline: auto;
   }
-  @media (min-width: 1280px) {
-    .heat {
-      --heat-cell: 1rem;
-    }
+
+  .heat__grid {
+    display: grid;
+    gap: 3px;
+    grid-template-columns: repeat(var(--heat-weeks, 18), var(--heat-cell));
   }
+
+  .heat__days {
+    grid-auto-flow: column;
+    grid-template-rows: repeat(7, var(--heat-cell));
+  }
+
+  .heat__cell {
+    padding: 0;
+    border-radius: 2px;
+  }
+
   @media (max-width: 430px) {
     .heat {
       --heat-cell: 0.6rem;
+    }
+  }
+
+  @media (min-width: 640px) {
+    .heat {
+      --heat-cell: 1.5rem;
     }
   }
 }

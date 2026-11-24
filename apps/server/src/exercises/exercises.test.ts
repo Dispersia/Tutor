@@ -258,6 +258,38 @@ test('multiple_choice generates choices incl. the answer and grades exactly', as
   expect((await def.grade(c, inst, '再見')).correct).toBe(false)
 })
 
+test('multiple_choice makes sentence options for a sentence card', async () => {
+  const def = registry.get('multiple_choice')!
+  const c = ctx({
+    type: 'phrase',
+    front: 'I drink tea.',
+    back: '我喝茶',
+    payload: { tokens: ['我', '喝', '茶'], gloss: 'I drink tea.', distractors: ['你', '他'] },
+  })
+  const inst = await def.generate(c)
+  const choices = inst.data.choices as string[]
+  expect(choices).toContain('我喝茶')
+  expect(choices).toContain('你喝茶')
+  expect(choices).toContain('他喝茶')
+  expect((await def.grade(c, inst, '你喝茶')).correct).toBe(false)
+})
+
+test('multiple_choice swaps the closest word in a Japanese sentence', async () => {
+  const def = registry.get('multiple_choice')!
+  const c = ctx({
+    targetLang: 'ja',
+    type: 'phrase',
+    front: 'Today is Friday.',
+    back: '本日は金曜日です',
+    payload: { tokens: ['本日', 'は', '金曜日', 'です'], distractors: ['土曜日', '月曜日'] },
+  })
+  const inst = await def.generate(c)
+  const choices = inst.data.choices as string[]
+  expect(choices).toContain('本日は金曜日です')
+  expect(choices).toContain('本日は土曜日です')
+  expect(choices).toContain('本日は月曜日です')
+})
+
 test('type_listen exposes audio text', async () => {
   const def = registry.get('type_listen')!
   const c = ctx()

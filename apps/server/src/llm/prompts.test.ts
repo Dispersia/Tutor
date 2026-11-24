@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test'
 import {
+  JUDGE_REMINDER,
   NATIVE_FEEDBACK_REMINDER,
   NATIVE_FEEDBACK_RULE,
   conversationSystem,
@@ -38,6 +39,17 @@ test('the script rule follows the deck, and says nothing for other languages', (
   expect(scriptRule('ja')).toContain('kana')
   expect(scriptRule('yue')).not.toContain('Zhuyin')
   expect(scriptRule('es')).toBe('')
+})
+
+test('the judge follows the deck script and restates it in the reminder', () => {
+  expect(judgeSystem({ nativeLang: 'en', targetLang: 'zh' })).toContain('Traditional characters')
+  expect(judgeSystem({ nativeLang: 'en', targetLang: 'zh' }, { variant: 'simplified' })).toContain(
+    'Simplified characters',
+  )
+  expect(JUDGE_REMINDER('en', 'zh')).toBe(
+    'Write the feedback in English, not in Mandarin. Write Mandarin in Traditional characters (繁體字), never Simplified.',
+  )
+  expect(JUDGE_REMINDER('en', 'ja')).toBe('Write the feedback in English, not in Japanese.')
 })
 
 test('the conversation prompt names both languages and asks for speakable text', () => {

@@ -3,10 +3,16 @@ import type { ServerCard } from '../../db/repo'
 import type { Card, ExerciseContext } from '@tutor/core'
 import type { Deps } from '../../context'
 import { getDeck, otherBacks } from '../../db/repo'
+import type { ScriptPrefs } from '../../llm/prompts'
 import { readStudyPrefs, showsReadings, type StudyPrefs } from '../../services/study'
 import { learnerOf, readingMap, type SessionUser } from './select'
 
 export { learnerOf, type SessionUser }
+
+export function scriptPrefsFor(deps: Deps, card: ServerCard): ScriptPrefs {
+  const deck = card.deckId ? getDeck(deps.db, card.deckId) : undefined
+  return { variant: deck?.settings?.variant, readingScript: deck?.settings?.readingScript }
+}
 
 export function showReadingsFor(
   deps: Deps,

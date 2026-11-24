@@ -4,7 +4,7 @@ import type { Card, ExerciseContext, ExerciseDef, GradeResult } from '@tutor/cor
 import type { Context } from 'hono'
 import type { App, AppEnv, Deps } from '../../context'
 import { getCard, type PublicUser } from '../../db/repo'
-import { INTRODUCE_ID, registry } from '../../exercises'
+import { INTRODUCE_ID, registry, answerText } from '../../exercises'
 import { knownWords } from '../../services'
 import { actionGate, type ActionRequest } from './action'
 import { exerciseCtx, learnerOf } from './exerciseCtx'
@@ -73,6 +73,8 @@ async function gradeAttempt(call: GradeCall) {
   const ctx = await gradeCtx(call)
   const instance = await def.generate(ctx)
   const result: GradeResult = await def.grade(ctx, instance, body.answer)
+  const answer = answerText(body.answer)
+  if (answer) result.answer = answer
   const xp = def.id === INTRODUCE_ID ? 0 : def.xp(result, instance)
   recordAttempt(deps, {
     userId: user.id,
@@ -89,7 +91,7 @@ async function gradeCtx(call: GradeCall): Promise<ExerciseContext> {
   const { c, deps, user, card } = call
   return {
     ...exerciseCtx(deps, user, card, { known: knownWords(deps.db, user.id), distractors: 3 }),
-    judge: await judgeFor(c),
+    judge: await judgeFor(c, card),
   }
 }
 

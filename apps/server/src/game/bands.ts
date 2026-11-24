@@ -207,7 +207,7 @@ export function bandXpForLevel(level: number): number {
 
 export const BAND_MAX_LEVEL = 100
 
-const BAND_CURVE: LevelCurve = { base: 100, step: 10, max: BAND_MAX_LEVEL }
+const BAND_CURVE: LevelCurve = { base: 50, step: 0.25, power: 2, max: BAND_MAX_LEVEL }
 
 export function bandXpToLevel(level: number): number {
   let total = 0

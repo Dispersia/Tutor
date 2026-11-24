@@ -1,7 +1,7 @@
 import { curveLevelInfo, curveXpForLevel, type LevelCurve } from '../curve'
 import type { SkillLevelInfo } from './types'
 
-const ACTION_CURVE: LevelCurve = { base: 100, step: 10 }
+const ACTION_CURVE: LevelCurve = { base: 50, step: 0.25, power: 2 }
 
 export function skillXpForLevel(level: number): number {
   return curveXpForLevel(ACTION_CURVE, level)
@@ -24,4 +24,4 @@ export function actionLevelInfo(xp: number): SkillLevelInfo {
   }
 }
 
-export const ACTION_XP_TO_MAX = 58_410
+export const ACTION_XP_TO_MAX = 84_575

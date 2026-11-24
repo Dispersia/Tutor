@@ -9,9 +9,10 @@
     srs: SrsOutcome | null
     canRetry: boolean
     attempt: number
+    spoken: boolean
   }
 
-  let { result, words, srs, canRetry, attempt }: Props = $props()
+  let { result, words, srs, canRetry, attempt, spoken }: Props = $props()
 </script>
 
 <div class="panel panel-accent p-5" style="--accent: {result.correct ? ACCENT.jade : ACCENT.brass}">
@@ -21,8 +22,14 @@
     </span>
     <span class="text-sm text-ink-300">{result.score}/100</span>
   </div>
-  {#if result.expected}
+  {#if result.answer}
     <p class="mt-2 text-sm text-ink-300">
+      {spoken ? 'You said' : 'You answered'}:
+      <span class="display text-lg text-ink-100">{result.answer}</span>
+    </p>
+  {/if}
+  {#if result.expected && result.expected !== result.answer}
+    <p class="mt-1 text-sm text-ink-300">
       Answer: <span class="display text-lg text-ink-100">{result.expected}</span>
     </p>
   {/if}

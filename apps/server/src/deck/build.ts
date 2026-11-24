@@ -246,6 +246,7 @@ function persistBatch(req: PersistReq) {
       readingScript: ctx.readingScript,
       startStep: state.step,
       futureWords: state.future,
+      knownWords: state.known,
     },
     planned,
   )

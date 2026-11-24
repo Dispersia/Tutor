@@ -1,6 +1,7 @@
 export interface LevelCurve {
   base: number
   step: number
+  power?: number
   max?: number
 }
 
@@ -12,7 +13,9 @@ export interface CurveLevelInfo {
 }
 
 export function curveXpForLevel(curve: LevelCurve, level: number): number {
-  return curve.base + (level - 1) * curve.step
+  const steps = Math.max(0, level - 1)
+  if (!curve.power || curve.power === 1) return curve.base + steps * curve.step
+  return curve.base + Math.floor(curve.step * steps ** curve.power)
 }
 
 export function curveLevelInfo(curve: LevelCurve, xp: number): CurveLevelInfo {

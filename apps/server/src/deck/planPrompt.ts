@@ -53,6 +53,7 @@ export function planPrompt(req: PlanRequest): string {
     `Target language: ${langName(req.targetLang)}. Learner's language: ${langName(req.sourceLang)}.`,
     req.topic && `Topic: ${req.topic}.`,
     scriptRule(req.targetLang, req),
+    motionRule(req),
     '',
     `New words for this batch, in order (${req.words.length}): ${req.words.join(' ')}`,
     knownLine(req),
@@ -65,6 +66,15 @@ export function planPrompt(req: PlanRequest): string {
   ]
     .filter((line): line is string => typeof line === 'string')
     .join('\n')
+}
+
+function motionRule(req: PlanRequest): string | undefined {
+  if (req.targetLang !== 'zh' && req.targetLang !== 'yue') return undefined
+  return (
+    'In Chinese, 這 and 那 mean "this" and "that", never "here" and "there": a verb of motion ' +
+    '(來, 去) must be followed by a place, as in 來這裡 or 去學校, so never write 來這 or 去那. ' +
+    'Leave the sentence card out when no place word is known yet.'
+  )
 }
 
 function knownLine(req: PlanRequest): string {

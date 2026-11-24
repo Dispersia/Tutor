@@ -110,13 +110,47 @@ export function maxStep(cards: { payload: Record<string, unknown> }[]): number {
 
 export function leapsAhead(card: PlannedCard, future: ReadonlySet<string>): boolean {
   if (future.size === 0) return false
-  const tokens = card.payload?.tokens
-  if (Array.isArray(tokens) && tokens.some((t) => typeof t === 'string' && future.has(t))) {
-    return true
-  }
-  const answer = card.payload?.answer
+  const { tokens, distractors, answer } = card.payload ?? {}
+  if (hasFuture(tokens, future) || hasFuture(distractors, future)) return true
   if (typeof answer === 'string' && future.has(answer)) return true
   return future.has(card.back)
+}
+
+function hasFuture(value: unknown, future: ReadonlySet<string>): boolean {
+  return Array.isArray(value) && value.some((t) => typeof t === 'string' && future.has(t))
+}
+
+const HAN = /[\u3400-\u9fff\uf900-\ufaff]/
+
+function unseenTokens(targetLang: string, card: PlannedCard, known: ReadonlySet<string>): boolean {
+  if (targetLang !== 'zh' && targetLang !== 'yue') return false
+  if (card.template !== 'sentence') return false
+  const tokens = stringsOf(card.payload?.tokens)
+  const distractors = stringsOf(card.payload?.distractors)
+  return [...tokens, ...distractors].some((word) => !wordKnown(word, known))
+}
+
+function stringsOf(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : []
+}
+
+function wordKnown(word: string, known: ReadonlySet<string>): boolean {
+  if (known.has(word)) return true
+  const chars = [...word].filter((ch) => HAN.test(ch))
+  return chars.length === 0 || chars.every((ch) => known.has(ch))
+}
+
+const CLAUSE_FINAL_DEMONSTRATIVE = /[來来去][這这那](?=[，。、！？,.!?\s]|$)/u
+
+export function motionWithoutPlace(targetLang: string, card: PlannedCard): boolean {
+  if (targetLang !== 'zh' && targetLang !== 'yue') return false
+  return card.template === 'sentence' && CLAUSE_FINAL_DEMONSTRATIVE.test(card.back)
+}
+
+function skipExample(card: PlannedCard, opts: PersistOpts, known: ReadonlySet<string>): boolean {
+  if (leapsAhead(card, opts.futureWords)) return true
+  if (unseenTokens(opts.targetLang, card, known)) return true
+  return motionWithoutPlace(opts.targetLang, card)
 }
 
 export function persistCards(
@@ -128,19 +162,27 @@ export function persistCards(
 ): { newWords: string[]; cardCount: number } {
   let step = opts.startStep
   const newWords: string[] = []
+  const known = new Set(opts.knownWords ?? [])
   let cardCount = 0
   for (const c of planned) {
-    step = bookkeep(c, opts, step, newWords)
-    if (c.template !== 'vocab' && leapsAhead(c, opts.futureWords)) continue
+    step = bookkeep(c, opts, step, newWords, known)
+    if (c.template !== 'vocab' && skipExample(c, opts, known)) continue
     persistOne({ db, userId, deckId, opts, card: c, step: Math.max(step, 1) })
     cardCount++
   }
   return { newWords, cardCount }
 }
 
-function bookkeep(c: PlannedCard, opts: PersistOpts, step: number, newWords: string[]): number {
+function bookkeep(
+  c: PlannedCard,
+  opts: PersistOpts,
+  step: number,
+  newWords: string[],
+  known: Set<string>,
+): number {
   if (c.template !== 'vocab') return step
   newWords.push(c.back)
+  known.add(c.back)
   opts.futureWords.delete(c.back)
   return step + 1
 }
@@ -151,6 +193,7 @@ interface PersistOpts {
   readingScript?: string
   startStep: number
   futureWords: Set<string>
+  knownWords?: string[]
 }
 
 interface PersistReq {

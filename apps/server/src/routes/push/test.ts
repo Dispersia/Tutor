@@ -3,7 +3,7 @@ import type { App, AppEnv } from '../../context'
 import { deletePushSubscription, listActiveRigs, listPushSubscriptions } from '../../db/repo'
 import { ACTION_BY_ID } from '../../game/skills'
 import { rigRunSec } from '../../game/idle'
-import { RIG_ALERT_LEAD_SEC } from '../../push/notify'
+import { RIG_ALERT_LEAD_SEC, RIG_ALERT_MIN_RUN_SEC } from '../../push/notify'
 import { sendPush } from '../../push/webpush'
 import { fail } from '../errors'
 
@@ -21,7 +21,7 @@ async function testHandler(c: Context<AppEnv>) {
   for (const sub of subs) {
     const res = await sendPush(db, sub, {
       title: 'Rig alerts are on',
-      body: 'You will get a nudge when a rig has 30 minutes left.',
+      body: 'You will get a nudge when a long rig has 30 minutes left.',
       url: '/home',
       tag: 'rigs-test',
       force: true,
@@ -37,7 +37,7 @@ function rigsHandler(c: Context<AppEnv>) {
   const user = c.get('user')!
   const now = Date.now()
   const rigs = listActiveRigs(c.get('deps').db, user.id, now).map((r) => rigView(r, now))
-  return c.json({ leadSec: RIG_ALERT_LEAD_SEC, rigs })
+  return c.json({ leadSec: RIG_ALERT_LEAD_SEC, minRunSec: RIG_ALERT_MIN_RUN_SEC, rigs })
 }
 
 function rigView(r: { actionId: string; runEndsAt: number; completions: number }, now: number) {

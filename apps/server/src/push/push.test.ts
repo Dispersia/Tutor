@@ -4,7 +4,7 @@ import type { Db } from '../db/client'
 import { openDb } from '../db/client'
 import { createUser, upsertPushSubscription } from '../db/repo'
 import { actionProgress } from '../db/schema'
-import { RIG_ALERT_LEAD_SEC, runRigAlerts } from './notify'
+import { RIG_ALERT_LEAD_SEC, RIG_ALERT_MIN_RUN_SEC, runRigAlerts } from './notify'
 import { sendPush, vapidKeys } from './webpush'
 
 const enc = new TextEncoder()
@@ -223,6 +223,22 @@ test('ignores short runs and runs outside the lead window', async () => {
   expect(calls).toHaveLength(0)
 })
 
+test('stays quiet until a run has grown past an hour', async () => {
+  const { db } = openDb(':memory:')
+  const user = createUser(db, { username: 'alice' })
+  const now = Date.now()
+  rig(db, user.id, now + 20 * 60_000, 5, 'mine-copper')
+  upsertPushSubscription(db, {
+    userId: user.id,
+    endpoint: 'https://push.example/a',
+    p256dh: 'p',
+    auth: 'a',
+  })
+  const { calls, send } = stubSend()
+  expect(await runRigAlerts({ db, send, now })).toEqual({ users: 0, rigs: 0 })
+  expect(calls).toHaveLength(0)
+})
+
 test('drops a dead subscription and leaves the deadline unannounced', async () => {
   const { db, sqlite } = openDb(':memory:')
   const user = createUser(db, { username: 'alice' })
@@ -245,6 +261,10 @@ test('drops a dead subscription and leaves the deadline unannounced', async () =
 
 test('lead time is half an hour', () => {
   expect(RIG_ALERT_LEAD_SEC).toBe(1800)
+})
+
+test('the minimum run is an hour', () => {
+  expect(RIG_ALERT_MIN_RUN_SEC).toBe(3600)
 })
 
 test('sendPush prunes on 401/403 and bounds the request with a timeout', async () => {

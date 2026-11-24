@@ -62,8 +62,9 @@
 <section class="mb-5 panel panel-accent p-4" style={accentStyle(ACCENT.jade)}>
   <h2 class="display text-sm text-ink-100">Rig alerts</h2>
   <p class="mt-1 text-xs text-ink-400">
-    A notification when a rig's run drops under 30 minutes, so you can drill once more and keep it
-    going. This switch is per device: turn it on for your phone and your computer separately.
+    A notification when a long rig's run drops under 30 minutes, so you can drill once more and keep
+    it going. Short runs are left alone. This switch is per device: turn it on for your phone and
+    your computer separately.
   </p>
   {#if !canNotify}
     <p class="mt-3 text-xs text-ink-400">This browser cannot show notifications.</p>

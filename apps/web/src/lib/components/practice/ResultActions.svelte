@@ -10,6 +10,7 @@
     srs: SrsOutcome | null
     canRetry: boolean
     attempt: number
+    spoken: boolean
     lessonCompleted: boolean
     nextLessonId: string | undefined
     nextLessonTitle: string
@@ -24,6 +25,7 @@
     srs,
     canRetry,
     attempt,
+    spoken,
     lessonCompleted,
     nextLessonId,
     nextLessonTitle,
@@ -33,7 +35,7 @@
   }: Props = $props()
 </script>
 
-<ResultCard {result} {words} {srs} {canRetry} {attempt} />
+<ResultCard {result} {words} {srs} {canRetry} {attempt} {spoken} />
 {#if canRetry}
   <div class="mt-4 flex flex-col gap-2">
     <button onclick={onRetry} class="btn btn-primary w-full py-3">

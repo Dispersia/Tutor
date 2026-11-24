@@ -9,6 +9,7 @@ import { translateBackToFront, translateFrontToBack } from './defs/translate'
 import { typeListen } from './defs/typeListen'
 
 export { INTRODUCE_ID } from './defs/introduce'
+export { answerText } from './grading'
 
 export const registry = new ExerciseRegistry()
   .register(introduce)

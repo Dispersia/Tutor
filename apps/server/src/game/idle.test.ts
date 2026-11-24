@@ -23,20 +23,23 @@ const BAR: RigRecipe = {
 
 describe('idle curves', () => {
   test('interval starts slow, speeds up and saturates at the floor', () => {
-    expect(rigIntervalSec(0)).toBe(10)
-    expect(rigIntervalSec(15)).toBeCloseTo(6, 6)
-    expect(rigIntervalSec(60)).toBeCloseTo(2.5, 6)
-    for (const c of [0, 1, 5, 30, 120, 1000]) expect(rigIntervalSec(c)).toBeGreaterThanOrEqual(2)
+    expect(rigIntervalSec(0)).toBe(20)
+    expect(rigIntervalSec(10)).toBeCloseTo(15, 6)
+    expect(rigIntervalSec(50)).toBeCloseTo(10.3125, 6)
+    for (const c of [0, 1, 5, 30, 120, 1000]) expect(rigIntervalSec(c)).toBeGreaterThanOrEqual(10)
     expect(rigIntervalSec(500)).toBeCloseTo(IDLE.floorIntervalSec, 3)
   })
 
-  test('run length climbs evenly from 10 min to 3 h at 50 completions', () => {
+  test('run length climbs evenly from 10 min to 3 h at the completion cap', () => {
     expect(rigRunSec(0)).toBe(600)
     expect(rigRunSec(1)).toBe(600)
     expect(rigRunSec(IDLE.runFullAtCompletions)).toBeCloseTo(IDLE.maxRunSec, 6)
 
     const step = rigRunSec(2) - rigRunSec(1)
-    expect(step).toBeCloseTo((IDLE.maxRunSec - IDLE.firstRunSec) / 49, 6)
+    expect(step).toBeCloseTo(
+      (IDLE.maxRunSec - IDLE.firstRunSec) / (IDLE.runFullAtCompletions - 1),
+      6,
+    )
     for (let c = 1; c < IDLE.runFullAtCompletions; c++) {
       expect(rigRunSec(c + 1) - rigRunSec(c)).toBeCloseTo(step, 6)
     }

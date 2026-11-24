@@ -1,5 +1,13 @@
 import type { UserId } from '../ids'
-import { addXpEvent, getStats, sumXp, upsertStats, xpByDay, xpForDay } from '../db/repo'
+import {
+  addXpEvent,
+  getStats,
+  reviewsByDay,
+  sumXp,
+  upsertStats,
+  xpByDay,
+  xpForDay,
+} from '../db/repo'
 import type { Db } from '../db/client'
 import type { EventBus } from '../events'
 import { levelInfo } from '../game/levels'
@@ -38,21 +46,23 @@ export function weekStart(day: string): string {
 export interface ActivityDay {
   day: string
   xp: number
+  reviews: number
 }
 
 export function activitySeries(
   db: Db,
   userId: UserId,
-  weeks = 18,
+  weeks = 53,
 ): { today: string; days: ActivityDay[] } {
   const offset = userOffsetMin(db, userId)
   const today = dayOf(Date.now(), offset)
   const byDay = new Map(xpByDay(db, userId, offset).map((r) => [r.day, r.amount]))
+  const reviews = new Map(reviewsByDay(db, userId, offset).map((r) => [r.day, r.count]))
   const gridStart = shiftDay(weekStart(today), -(weeks - 1) * 7)
   const days: ActivityDay[] = []
   for (let i = 0; i < weeks * 7; i++) {
     const d = shiftDay(gridStart, i)
-    days.push({ day: d, xp: byDay.get(d) ?? 0 })
+    days.push({ day: d, xp: byDay.get(d) ?? 0, reviews: reviews.get(d) ?? 0 })
   }
   return { today, days }
 }

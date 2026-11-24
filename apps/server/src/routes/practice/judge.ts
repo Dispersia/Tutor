@@ -1,21 +1,24 @@
 import type { Context } from 'hono'
 import type { AppEnv } from '../../context'
+import type { ServerCard } from '../../db/repo'
 import { getRoles } from '../../db/repo'
 import { roleReasoning } from '../../env'
 import { OpenRouter } from '../../llm/openrouter'
-import { NATIVE_FEEDBACK_REMINDER, judgeSystem } from '../../llm/prompts'
+import { JUDGE_REMINDER, judgeSystem } from '../../llm/prompts'
 import { resolveUserKey } from '../../llm/userkey'
+import { scriptPrefsFor } from './exerciseCtx'
 
-export async function judgeFor(c: Context<AppEnv>) {
+export async function judgeFor(c: Context<AppEnv>, card?: ServerCard) {
   const deps = c.get('deps')
   const user = c.get('user')!
   const key = await resolveUserKey(deps, user.id)
   if (!key) return undefined
+  const prefs = card ? scriptPrefsFor(deps, card) : {}
   return makeJudge({
     or: new OpenRouter(key, deps.or.baseUrl),
     model: getRoles(deps.db, user.id, deps.defaults).judge,
-    system: judgeSystem(user),
-    reminder: NATIVE_FEEDBACK_REMINDER(user.nativeLang, user.targetLang),
+    system: judgeSystem(user, prefs),
+    reminder: JUDGE_REMINDER(user.nativeLang, user.targetLang, prefs),
   })
 }
 

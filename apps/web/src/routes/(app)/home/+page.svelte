@@ -8,8 +8,8 @@
   import { LANG_NAMES } from '#lib/voices'
   import { htmlLang } from '#lib/lang'
   import { cachedResource } from '#lib/resource.svelte'
-  import { bankSummary, heatWeeks, levelLabelFor, rigRows, xpToGoal } from '#lib/homeview'
-  import ActivityHeatmap from '#lib/components/home/ActivityHeatmap.svelte'
+  import { bankSummary, levelLabelFor, rigRows, xpToGoal } from '#lib/homeview'
+  import ActivityPanel from '#lib/components/home/ActivityPanel.svelte'
   import ProgressList from '#lib/components/home/ProgressList.svelte'
   import RigList from '#lib/components/home/RigList.svelte'
   import BankStrip from '#lib/components/home/BankStrip.svelte'
@@ -27,7 +27,6 @@
   const levelLabel = $derived(levelLabelFor(lang, session.user?.level))
   const toGoal = $derived(xpToGoal(stats))
   const days = $derived(stats?.activity?.days ?? [])
-  const weeks = $derived(heatWeeks(days.length))
   const rigs = $derived(rigRows(skills, board.fetchedAt, board.now))
   const bank = $derived(bankSummary(skills))
 
@@ -67,23 +66,15 @@
     <button type="button" class="btn btn-ghost px-3 py-2 text-xs" onclick={load}>Retry</button>
   </div>
 {:else}
-  <div class="xl:grid xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] xl:gap-5">
-    <section
-      class="panel panel-accent mt-4 p-4 xl:flex xl:flex-col"
-      style={accentStyle(ACCENT.jade)}
-    >
-      <div class="flex items-baseline justify-between gap-3">
-        <h2 class="eyebrow" style="color: var(--accent)">Activity</h2>
-        <span class="text-xs text-ink-400">last {weeks} weeks</span>
-      </div>
+  <div class="lg:grid lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] lg:gap-5">
+    <ActivityPanel {days} today={stats?.activity?.today} goal={stats?.dailyGoal} />
 
-      <ActivityHeatmap {days} today={stats?.activity?.today} />
-    </section>
+    <div class="min-w-0">
+      <ProgressList {stats} {toGoal} />
 
-    <ProgressList {stats} {toGoal} />
+      <RigList {rigs} />
+
+      <BankStrip coins={bank.coins} kinds={bank.kinds} worn={bank.worn} />
+    </div>
   </div>
-
-  <RigList {rigs} />
-
-  <BankStrip coins={bank.coins} kinds={bank.kinds} worn={bank.worn} />
 {/if}

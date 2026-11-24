@@ -288,8 +288,8 @@ test('settling twice over the same instant never double counts', () => {
   const { db, bus, user, sqlite } = setup()
   const t0 = 1_500_000_000_000
   completeAction(db, bus, user.id, { actionId: 'mine-copper', now: t0 })
-  const once = settleRigs(db, bus, user.id, t0 + 30_000)
-  const twice = settleRigs(db, bus, user.id, t0 + 30_000)
+  const once = settleRigs(db, bus, user.id, t0 + 60_000)
+  const twice = settleRigs(db, bus, user.id, t0 + 60_000)
   expect(once.gained.length).toBeGreaterThan(0)
   expect(twice.gained).toEqual([])
   expect(once.xp.get('mine-copper')).toBeGreaterThan(0)

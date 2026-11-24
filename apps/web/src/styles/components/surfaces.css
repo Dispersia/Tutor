@@ -7,7 +7,7 @@
     background: var(--surface);
     box-shadow:
       inset 0 1px 0 oklch(1 0 0 / 0.04),
-      0 4px 0 oklch(0.13 0.03 280);
+      0 4px 0 oklch(0.11 0.005 280);
   }
 
   .panel-accent {
@@ -15,7 +15,7 @@
     --surface: color-mix(in oklab, var(--accent) 4%, var(--color-ink-850));
     box-shadow:
       inset 0 3px 0 var(--accent),
-      0 4px 0 color-mix(in oklab, var(--accent) 18%, oklch(0.13 0.03 280));
+      0 4px 0 color-mix(in oklab, var(--accent) 18%, oklch(0.11 0.005 280));
   }
 
   .panel--press {

@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { openDb } from '../db/client'
 import { createDeck, createUser, listCards } from '../db/repo'
 import { acceptPlanned, fillDeck } from './build'
-import { readingsForPlanned, zhuyinFromPinyin } from './context'
+import { motionWithoutPlace, readingsForPlanned, zhuyinFromPinyin } from './context'
 import { mandarinSentenceZhuyin } from './mandarin'
 import type { PlannedCard, Planner } from './plan'
 
@@ -14,12 +14,25 @@ const sentence = (back: string, tokens: string[]): PlannedCard => ({
   payload: { tokens },
 })
 
+const example = (back: string, tokens: string[], distractors: string[]): PlannedCard => ({
+  template: 'sentence',
+  front: `m ${back}`,
+  back,
+  payload: { tokens, distractors },
+})
+
+const examplesOf = (
+  db: ReturnType<typeof emptyDeck>['db'],
+  userId: ReturnType<typeof emptyDeck>['userId'],
+  deckId: ReturnType<typeof emptyDeck>['deckId'],
+) => listCards(db, userId, deckId).filter((c) => c.payload.template !== 'vocab')
+
 const ctx = { instruction: 'x', targetLang: 'es', sourceLang: 'en' }
 
-function emptyDeck() {
+function emptyDeck(targetLang = 'es') {
   const { db, sqlite } = openDb(':memory:')
   const user = createUser(db, { username: 'b', passwordHash: 'x' })
-  const deck = createDeck(db, user.id, { name: 'd', sourceLang: 'en', targetLang: 'es' })
+  const deck = createDeck(db, user.id, { name: 'd', sourceLang: 'en', targetLang })
   const vocabOf = () =>
     listCards(db, user.id, deck.id)
       .filter((c) => c.payload.template === 'vocab')
@@ -65,6 +78,95 @@ test('invented vocabulary is not persisted', async () => {
   })
   expect(res.newWords).toEqual(['a', 'b'])
   expect(vocabOf()).toEqual(['a', 'b'])
+  sqlite.close()
+})
+
+test('a Chinese motion verb left without a place is a bad sentence', () => {
+  const bad = sentence('來這，去那。', ['來', '這', '去', '那'])
+  expect(motionWithoutPlace('zh', bad)).toBe(true)
+  expect(motionWithoutPlace('zh', sentence('來這裡。', ['來', '這裡']))).toBe(false)
+  expect(motionWithoutPlace('zh', sentence('我去了。', ['我', '去', '了']))).toBe(false)
+  expect(motionWithoutPlace('zh', sentence('去這家店。', ['去', '這', '家', '店']))).toBe(false)
+  expect(motionWithoutPlace('es', bad)).toBe(false)
+})
+
+test('the build drops a Chinese sentence that writes 來這 or 去那', async () => {
+  const { db, sqlite, userId, deckId } = emptyDeck('zh')
+  const planner: Planner = async (req) => [
+    ...req.words.map(vocab),
+    sentence('來這，去那。', ['來', '這', '去', '那']),
+  ]
+  await fillDeck(db, userId, deckId, {
+    ctx: { ...ctx, targetLang: 'zh' },
+    opts: { words: ['我', '去'], count: 2 },
+    planner,
+  })
+  const examples = listCards(db, userId, deckId).filter((c) => c.payload.template !== 'vocab')
+  expect(examples).toEqual([])
+  sqlite.close()
+})
+
+test('a Chinese sentence that uses a word introduced later is dropped', async () => {
+  const { db, sqlite, userId, deckId } = emptyDeck('zh')
+  const planner: Planner = async (req) => [
+    vocab('我'),
+    sentence('我喝朋友。', ['我', '喝', '朋友']),
+    ...req.words.filter((w) => w !== '我').map(vocab),
+  ]
+  await fillDeck(db, userId, deckId, {
+    ctx: { ...ctx, targetLang: 'zh' },
+    opts: { words: ['我', '喝', '朋友'], count: 3 },
+    planner,
+  })
+  expect(examplesOf(db, userId, deckId)).toEqual([])
+  sqlite.close()
+})
+
+test('a Chinese sentence that uses a word outside the deck is dropped', async () => {
+  const { db, sqlite, userId, deckId } = emptyDeck('zh')
+  const planner: Planner = async (req) => [
+    ...req.words.map(vocab),
+    sentence('我愛海。', ['我', '愛', '海']),
+  ]
+  await fillDeck(db, userId, deckId, {
+    ctx: { ...ctx, targetLang: 'zh' },
+    opts: { words: ['我', '愛'], count: 2 },
+    planner,
+  })
+  expect(examplesOf(db, userId, deckId)).toEqual([])
+  sqlite.close()
+})
+
+test('a Chinese sentence keeps a compound of known characters', async () => {
+  const { db, sqlite, userId, deckId } = emptyDeck('zh')
+  const planner: Planner = async (req) => [
+    ...req.words.map(vocab),
+    sentence('我愛你的。', ['我', '愛', '你的']),
+  ]
+  await fillDeck(db, userId, deckId, {
+    ctx: { ...ctx, targetLang: 'zh' },
+    opts: { words: ['我', '愛', '你', '的'], count: 4 },
+    planner,
+  })
+  expect(examplesOf(db, userId, deckId)).toHaveLength(1)
+  sqlite.close()
+})
+
+test('a sentence whose distractor is an unmet word is dropped', async () => {
+  const { db, sqlite, userId, deckId } = emptyDeck('zh')
+  const planner: Planner = async () => [
+    vocab('我'),
+    vocab('喝'),
+    vocab('茶'),
+    example('我喝茶。', ['我', '喝', '茶'], ['書']),
+    vocab('書'),
+  ]
+  await fillDeck(db, userId, deckId, {
+    ctx: { ...ctx, targetLang: 'zh' },
+    opts: { words: ['我', '喝', '茶', '書'], count: 4 },
+    planner,
+  })
+  expect(examplesOf(db, userId, deckId)).toEqual([])
   sqlite.close()
 })
 

@@ -58,24 +58,36 @@ function markSeen(key: string): void {
   } catch {}
 }
 
-export function scheduleRigAlerts(rigs: RigClock[], leadSec: number): () => void {
+export function scheduleRigAlerts(
+  rigs: RigClock[],
+  leadSec: number,
+  minRunSec: number,
+): () => void {
   const timers: ReturnType<typeof setTimeout>[] = []
   const now = Date.now()
   for (const rig of rigs) {
-    if (rig.runSec <= leadSec) continue
-    const fireAt = rig.runEndsAt - leadSec * 1000
-    if (fireAt <= now) continue
-    const key = `${rig.actionId}:${rig.runEndsAt}`
-    if (seen(key)) continue
-    timers.push(
-      setTimeout(() => {
-        void announce(rig, key)
-      }, fireAt - now),
-    )
+    const timer = armRig(rig, leadSec, minRunSec, now)
+    if (timer) timers.push(timer)
   }
   return () => {
     for (const t of timers) clearTimeout(t)
   }
+}
+
+function armRig(
+  rig: RigClock,
+  leadSec: number,
+  minRunSec: number,
+  now: number,
+): ReturnType<typeof setTimeout> | null {
+  if (rig.runSec <= minRunSec) return null
+  const fireAt = rig.runEndsAt - leadSec * 1000
+  if (fireAt <= now) return null
+  const key = `${rig.actionId}:${rig.runEndsAt}`
+  if (seen(key)) return null
+  return setTimeout(() => {
+    void announce(rig, key)
+  }, fireAt - now)
 }
 
 async function announce(rig: RigClock, key: string): Promise<void> {
@@ -138,10 +150,14 @@ async function refreshRigs(state: RigAlertState): Promise<void> {
     return
   }
   try {
-    const { leadSec, rigs } = await api<{ leadSec: number; rigs: RigClock[] }>('/api/rigs')
+    const { leadSec, minRunSec, rigs } = await api<{
+      leadSec: number
+      minRunSec: number
+      rigs: RigClock[]
+    }>('/api/rigs')
     if (state.stopped) return
     state.cancel?.()
-    state.cancel = scheduleRigAlerts(rigs, leadSec)
+    state.cancel = scheduleRigAlerts(rigs, leadSec, minRunSec)
   } catch {}
 }
 

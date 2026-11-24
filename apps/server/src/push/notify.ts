@@ -14,7 +14,7 @@ import { rigRunSec } from '../game/idle'
 import { sendPush } from './webpush'
 
 export const RIG_ALERT_LEAD_SEC = 30 * 60
-const MIN_RUN_SEC = RIG_ALERT_LEAD_SEC
+export const RIG_ALERT_MIN_RUN_SEC = 60 * 60
 const TICK_MS = 60_000
 const TTL_SEC = RIG_ALERT_LEAD_SEC
 
@@ -46,7 +46,7 @@ export async function runRigAlerts(deps: RigAlertDeps): Promise<RigAlertResult> 
 function dueByUser(db: Db, now: number): Map<UserId, DueRigRow[]> {
   const byUser = new Map<UserId, DueRigRow[]>()
   for (const row of dueRigAlerts(db, now, RIG_ALERT_LEAD_SEC * 1000)) {
-    if (rigRunSec(row.completions) <= MIN_RUN_SEC) continue
+    if (rigRunSec(row.completions) <= RIG_ALERT_MIN_RUN_SEC) continue
     const list = byUser.get(row.userId)
     if (list) list.push(row)
     else byUser.set(row.userId, [row])

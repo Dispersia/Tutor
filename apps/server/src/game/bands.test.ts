@@ -269,7 +269,7 @@ test('crushing a gem yields dust for Enchanting (§13.5.3.1)', () => {
   expect(ruby.produces).toEqual([{ item: 'ruby_dust', count: 1 }])
 })
 
-test('the action ladder costs 58,410 XP to level 100 (§13.5)', () => {
+test('the action ladder costs 84,575 XP to level 100 (§13.5)', () => {
   let total = 0
   for (let i = 1; i < ACTION_MAX_LEVEL; i++) total += skillXpForLevel(i)
   expect(total).toBe(ACTION_XP_TO_MAX)

@@ -73,6 +73,8 @@ async function gradeSpoken(call: SpeakCall) {
   try {
     const instance = await call.def.generate(ctx)
     const result = await call.def.gradeAudio!(ctx, instance, audio)
+    const transcript = result.detail?.transcript
+    if (typeof transcript === 'string' && transcript.trim()) result.answer = transcript.trim()
     if (result.detail?.noSpeech || fields.retry) {
       return c.json(uncountedOutcome(deps, user.id, result))
     }
@@ -88,7 +90,7 @@ async function speakCtx(call: SpeakCall): Promise<ExerciseContext> {
   return {
     ...exerciseCtx(deps, user, card, { known: knownWords(deps.db, user.id) }),
     assess,
-    judge: await judgeFor(c),
+    judge: await judgeFor(c, card),
   }
 }
 

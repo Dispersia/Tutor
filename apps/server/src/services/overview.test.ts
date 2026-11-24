@@ -2,6 +2,7 @@ import { toCardId } from '../ids'
 import { expect, test } from 'bun:test'
 import { openDb } from '../db/client'
 import {
+  addReview,
   addXpEvent,
   createUser,
   getSrs,
@@ -51,6 +52,7 @@ test('activitySeries lays out Monday-first weeks and buckets today', () => {
   const { db, sqlite } = openDb(':memory:')
   const user = createUser(db, { username: 'carol', passwordHash: 'x' })
   addXpEvent(db, user.id, 25, 'review', 'a')
+  addReview(db, { cardId: toCardId('c1'), userId: user.id, exerciseId: 'recall', score: 1 })
 
   const { today, days } = activitySeries(db, user.id, 4)
   expect(days.length).toBe(28)
@@ -58,7 +60,19 @@ test('activitySeries lays out Monday-first weeks and buckets today', () => {
   const idx = days.findIndex((d) => d.day === today)
   expect(idx).toBeGreaterThanOrEqual(21)
   expect(days[idx]!.xp).toBe(25)
+  expect(days[idx]!.reviews).toBe(1)
   expect(days.filter((d) => d.xp > 0).length).toBe(1)
+  expect(days.filter((d) => d.reviews > 0).length).toBe(1)
+  sqlite.close()
+})
+
+test('activitySeries fills a year of quiet days when nothing happened', () => {
+  const { db, sqlite } = openDb(':memory:')
+  const user = createUser(db, { username: 'dave', passwordHash: 'x' })
+
+  const { days } = activitySeries(db, user.id)
+  expect(days.length).toBe(53 * 7)
+  expect(days.every((d) => d.xp === 0 && d.reviews === 0)).toBe(true)
   sqlite.close()
 })
 
