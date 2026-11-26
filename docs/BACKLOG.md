@@ -42,12 +42,6 @@ returned 6.18 GB).
    places it has produced plumbing rather than clarity (`combatResolve.ts`,
    `practice/next.ts`). Raising it to 30–40 with a complexity limit is a policy
    change, so it was not made.
-4. **Two "levels" and only one is visible.** `stats.level` is the global-XP level
-   from `game/levels.ts`: it is stored, it emits `level.up` (which nothing
-   subscribes to) and it travels as `leveledUp` on a graded drill (which the web
-   ignores). Everything the member sees is the **account level**, the mean of
-   their skill levels. Either surface the XP level (a header badge plus a
-   level-up toast) or delete it, the event and the field. `srv/services/overview.ts`
 
 ## 3. Bugs
 

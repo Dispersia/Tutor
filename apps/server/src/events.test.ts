@@ -20,23 +20,24 @@ test('subscribe, emit and unsubscribe', () => {
 test('a failing handler does not break others', () => {
   const bus = new EventBus()
   let reached = false
-  bus.on('level.up', () => {
+  bus.on('skill.level.up', () => {
     throw new Error('boom')
   })
-  bus.on('level.up', () => {
+  bus.on('skill.level.up', () => {
     reached = true
   })
-  bus.emit('level.up', { userId: toUserId('u'), level: 2 })
+  bus.emit('skill.level.up', { userId: toUserId('u'), actionId: 'a', skillId: 's', level: 2 })
   expect(reached).toBe(true)
-  expect(bus.handlerCount('level.up')).toBe(2)
+  expect(bus.handlerCount('skill.level.up')).toBe(2)
 })
 
 function txFixture() {
   const { db, sqlite } = openDb(':memory:')
   const bus = new EventBus()
   const seen: number[] = []
-  bus.on('level.up', (e) => seen.push(e.level))
-  const levelUp = (level: number) => bus.emit('level.up', { userId: toUserId('u'), level })
+  bus.on('skill.level.up', (e) => seen.push(e.level))
+  const levelUp = (level: number) =>
+    bus.emit('skill.level.up', { userId: toUserId('u'), actionId: 'a', skillId: 's', level })
   return { db, sqlite, bus, seen, levelUp }
 }
 
@@ -64,7 +65,7 @@ test('an event emitted inside a transaction is delivered after commit, not befor
 test('the write is already committed when the handler runs', () => {
   const { db, sqlite, bus, levelUp } = txFixture()
   let visible: string | undefined
-  bus.on('level.up', () => {
+  bus.on('skill.level.up', () => {
     visible = getSetting(db, 'k')
   })
   inTransaction(db, (tx) => {
@@ -124,7 +125,7 @@ test('a rolled-back savepoint drops only its own events', () => {
 
 test('a handler that throws after commit does not break the transaction caller', () => {
   const { db, sqlite, bus, seen, levelUp } = txFixture()
-  bus.on('level.up', () => {
+  bus.on('skill.level.up', () => {
     throw new Error('boom')
   })
   expect(inTransaction(db, () => (levelUp(5), 'ok'))).toBe('ok')

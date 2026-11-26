@@ -34,7 +34,6 @@ export const xpEvents = sqliteTable(
 export const stats = sqliteTable('stats', {
   userId: text('user_id').$type<UserId>().primaryKey(),
   xpTotal: integer('xp_total').notNull().default(0),
-  level: integer('level').notNull().default(1),
   streakDays: integer('streak_days').notNull().default(0),
   lastActiveDay: text('last_active_day'),
   dailyGoal: integer('daily_goal').notNull().default(50),

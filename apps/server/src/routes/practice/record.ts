@@ -20,7 +20,7 @@ import {
 import { settleAction } from './action'
 
 export interface ReviewOutcome {
-  result: GradeResult & { xp: number; leveledUp: boolean }
+  result: GradeResult & { xp: number }
   skill: ReturnType<typeof settleAction>
   srs: ReturnType<typeof recordReview> | null
   lessonCompleted: boolean
@@ -48,7 +48,7 @@ function addReviewRow(deps: Deps, input: AttemptInput): void {
 
 export function uncountedOutcome(deps: Deps, userId: UserId, result: GradeResult): ReviewOutcome {
   return {
-    result: { ...result, xp: 0, leveledUp: false },
+    result: { ...result, xp: 0 },
     skill: null,
     srs: null,
     lessonCompleted: false,
@@ -104,13 +104,13 @@ interface Settled {
 
 function finalizeWrites(deps: Deps, input: FinalizeInput): Settled {
   const { userId, result } = input
-  const leveledUp = awardReviewXp(deps, userId, input)
+  awardReviewXp(deps, userId, input)
   touchActivity(deps.db, deps.events, userId)
   emitCompleted(deps, input)
   const skill = settleAction(deps, userId, input.actionId, result, input.choiceId)
   const srs = reviewSchedule(deps, userId, input)
   const outcome: ReviewOutcome = {
-    result: { ...result, xp: input.xp, leveledUp },
+    result: { ...result, xp: input.xp },
     skill,
     srs,
     lessonCompleted: lessonDone(deps, input, srs),
@@ -119,13 +119,12 @@ function finalizeWrites(deps: Deps, input: FinalizeInput): Settled {
   return { outcome, lapses: srs.lapses }
 }
 
-function awardReviewXp(deps: Deps, userId: UserId, input: FinalizeInput): boolean {
-  const { leveledUp } = awardXp(deps.db, deps.events, userId, {
+function awardReviewXp(deps: Deps, userId: UserId, input: FinalizeInput): void {
+  awardXp(deps.db, deps.events, userId, {
     amount: input.xp,
     reason: 'review',
     sourceId: input.def.id,
   })
-  return leveledUp
 }
 
 function reviewSchedule(deps: Deps, userId: UserId, input: FinalizeInput) {

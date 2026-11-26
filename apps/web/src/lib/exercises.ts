@@ -29,7 +29,6 @@ export interface Grade {
   expected?: string
   feedback?: string
   xp: number
-  leveledUp?: boolean
   detail?: Record<string, unknown>
 }
 

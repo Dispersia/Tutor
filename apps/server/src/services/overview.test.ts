@@ -76,24 +76,20 @@ test('activitySeries fills a year of quiet days when nothing happened', () => {
   sqlite.close()
 })
 
-test('awardXp appends to the ledger, levels up and emits events', () => {
+test('awardXp appends to the ledger and emits events', () => {
   const { db, sqlite } = openDb(':memory:')
   const bus = new EventBus()
   const user = createUser(db, { username: 'alice', passwordHash: 'x' })
 
   const events: string[] = []
   bus.on('xp.awarded', (e) => events.push(`xp:${e.amount}:${e.total}`))
-  bus.on('level.up', (e) => events.push(`level:${e.level}`))
 
   awardXp(db, bus, user.id, { amount: 60, reason: 'review', sourceId: 'ex1' })
   expect(sumXp(db, user.id)).toBe(60)
-  expect(getStats(db, user.id).level).toBe(1)
 
   const r = awardXp(db, bus, user.id, { amount: 60, reason: 'review', sourceId: 'ex2' })
   expect(r.total).toBe(120)
-  expect(r.level).toBe(2)
-  expect(r.leveledUp).toBe(true)
-  expect(events).toEqual(['xp:60:60', 'xp:60:120', 'level:2'])
+  expect(events).toEqual(['xp:60:60', 'xp:60:120'])
   sqlite.close()
 })
 
@@ -126,7 +122,7 @@ test('rebuildStats reconstructs everything from the XP ledger', () => {
 
   addXpEvent(db, user.id, 60, 'review')
   addXpEvent(db, user.id, 90, 'review')
-  upsertStats(db, user.id, { xpTotal: 9999, level: 42, streakDays: 99, lastActiveDay: 'nope' })
+  upsertStats(db, user.id, { xpTotal: 9999, streakDays: 99, lastActiveDay: 'nope' })
 
   const rebuilt = rebuildStats(db, user.id)
   expect(rebuilt.xp).toBe(150)

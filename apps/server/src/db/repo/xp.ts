@@ -2,8 +2,9 @@ import type { UserId } from '../../ids'
 import { and, eq, sql } from 'drizzle-orm'
 import type { Db } from '../client'
 import { stats, xpEvents } from '../schema'
-import { DEFAULT_DAILY_GOAL } from '../../game/levels'
 import { id, now } from './helpers'
+
+export const DEFAULT_DAILY_GOAL = 50
 
 export function addXpEvent(
   db: Db,
@@ -56,7 +57,6 @@ export function getStats(db: Db, userId: UserId) {
     row ?? {
       userId,
       xpTotal: 0,
-      level: 1,
       streakDays: 0,
       lastActiveDay: null as string | null,
       dailyGoal: DEFAULT_DAILY_GOAL,
@@ -67,7 +67,6 @@ export function getStats(db: Db, userId: UserId) {
 
 export interface StatsPatch {
   xpTotal?: number
-  level?: number
   streakDays?: number
   lastActiveDay?: string | null
   dailyGoal?: number
@@ -78,7 +77,6 @@ export function upsertStats(db: Db, userId: UserId, patch: StatsPatch): void {
     .values({
       userId,
       xpTotal: patch.xpTotal ?? 0,
-      level: patch.level ?? 1,
       streakDays: patch.streakDays ?? 0,
       lastActiveDay: patch.lastActiveDay ?? null,
       dailyGoal: patch.dailyGoal ?? DEFAULT_DAILY_GOAL,

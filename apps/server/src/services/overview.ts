@@ -1,5 +1,6 @@
 import type { UserId } from '../ids'
 import {
+  DEFAULT_DAILY_GOAL,
   addXpEvent,
   getStats,
   reviewsByDay,
@@ -10,7 +11,6 @@ import {
 } from '../db/repo'
 import type { Db } from '../db/client'
 import type { EventBus } from '../events'
-import { DEFAULT_DAILY_GOAL, levelInfo } from '../game/levels'
 import { accountLevel } from './board'
 import { dayOf, userDay, userOffsetMin } from './clock'
 import { aggregateBonuses } from './progress'
@@ -84,18 +84,14 @@ export function awardXp(
   bus: EventBus,
   userId: UserId,
   req: { amount: number; reason: string; sourceId?: string },
-): { total: number; level: number; leveledUp: boolean } {
-  const before = getStats(db, userId).level
+): { total: number } {
   const bonus = aggregateBonuses(db, userId).globalXp
   const gained = Math.max(0, Math.round(req.amount * (1 + bonus)))
   addXpEvent(db, userId, gained, req.reason, req.sourceId)
   const total = sumXp(db, userId)
-  const info = levelInfo(total)
-  upsertStats(db, userId, { xpTotal: total, level: info.level })
+  upsertStats(db, userId, { xpTotal: total })
   bus.emit('xp.awarded', { userId, amount: gained, reason: req.reason, total })
-  const leveledUp = info.level > before
-  if (leveledUp) bus.emit('level.up', { userId, level: info.level })
-  return { total, level: info.level, leveledUp }
+  return { total }
 }
 
 export function touchActivity(db: Db, bus: EventBus, userId: UserId): number {
@@ -145,7 +141,6 @@ export function rebuildStats(db: Db, userId: UserId): GameSummary {
   const days = activeDays(db, userId)
   upsertStats(db, userId, {
     xpTotal: total,
-    level: levelInfo(total).level,
     streakDays: streakFromDays(days, userDay(db, userId)),
     lastActiveDay: days[0] ?? null,
   })

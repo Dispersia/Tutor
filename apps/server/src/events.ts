@@ -11,7 +11,6 @@ export interface GameEventMap {
     correct: boolean
   }
   'xp.awarded': { userId: UserId; amount: number; reason: string; total: number }
-  'level.up': { userId: UserId; level: number }
   'streak.updated': { userId: UserId; days: number }
   'skill.xp': {
     userId: UserId

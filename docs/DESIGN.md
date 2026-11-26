@@ -820,7 +820,7 @@ sessions(id, user_id, deck_id, kind /*chat|voice|mixed*/, lang,
 messages(id, session_id, role, text, audio_ref, model, tokens_in, tokens_out,
          cost_usd, created_at)                 -- PERMANENT history
 xp_events(id, user_id, amount, reason, source_id, created_at)  -- append-only
-stats(user_id, xp_total, level, streak_days, last_active_day, daily_goal,
+stats(user_id, xp_total, streak_days, last_active_day, daily_goal,
       updated_at)                              -- cached/derived
 settings(key, value)                           -- server-global (registration, etc.)
 audio_blobs(hash, user_id, path, bytes, mime, created_at)  -- files on disk
