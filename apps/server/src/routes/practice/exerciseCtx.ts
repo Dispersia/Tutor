@@ -24,6 +24,7 @@ export interface ExerciseCtxOpts {
   known: Set<string>
   prefs?: StudyPrefs
   cardPool?: Card[]
+  readings?: Record<string, string>
   seen?: string[]
   distractors?: number
 }
@@ -41,7 +42,7 @@ export function exerciseCtx(
     distractors: opts.distractors
       ? otherBacks(deps.db, user.id, card.targetLang, card.back, opts.distractors)
       : [],
-    readings: readingMap(deps.db, user.id, card.targetLang, opts.cardPool),
+    readings: opts.readings ?? readingMap(deps.db, user.id, card.targetLang, opts.cardPool),
     known: [...opts.known, card.back],
     seen: opts.seen ? [...opts.seen, card.back] : undefined,
     utterances: utteranceBacks(opts.cardPool, card.targetLang),

@@ -5,10 +5,11 @@ import type { EventBus } from '../events'
 import type { Bonuses } from '../game/modifiers'
 import { srsStateMap, type LoadedCards } from './srs'
 import { settleRigs } from './idle'
+import { actionLevelInfo } from '../game/skills'
 import { actionProgressView, skillSummaries, type ActionProgress } from './board'
 import { bandView } from './bands'
 import { talentView } from './talents'
-import { aggregateBonuses } from './progress'
+import { aggregateBonuses, type ProgressCtx } from './progress'
 
 export function loadLearnerData(db: Db, userId: UserId): LoadedCards {
   return { cards: listCards(db, userId), srs: srsStateMap(db, userId) }
@@ -26,19 +27,31 @@ export interface PlayerCtx {
 }
 
 export function loadPlayerCtx(db: Db, bus: EventBus, userId: UserId, now = Date.now()): PlayerCtx {
-  const settled = settleRigs(db, bus, userId, now)
   const byAction = actionProgressView(db, userId)
+  const pre = settleState(db, userId, byAction)
+  const settled = settleRigs(db, bus, userId, now, pre)
+  applyAwards(byAction, settled.awards)
   const levels = actionLevels(byAction)
-  const bands = bandView(db, userId)
   return {
     now,
     settled,
     byAction,
     levels,
-    bands,
+    bands: bandView(db, userId, byAction),
     progress: new Map(skillSummaries(db, userId, byAction).map((s) => [s.skillId, s])),
     talents: new Map(talentView(db, userId, levels).map((t) => [t.skillId, t])),
-    bonuses: aggregateBonuses(db, userId, levels),
+    bonuses: settled.awards.size ? aggregateBonuses(db, userId, levels) : pre.bonuses,
+  }
+}
+
+function settleState(db: Db, userId: UserId, byAction: Map<string, ActionProgress>): ProgressCtx {
+  const levels = actionLevels(byAction)
+  return { levels, bonuses: aggregateBonuses(db, userId, levels) }
+}
+
+function applyAwards(byAction: Map<string, ActionProgress>, awards: Map<string, number>): void {
+  for (const [actionId, xp] of awards) {
+    byAction.set(actionId, { actionId, xp, ...actionLevelInfo(xp) })
   }
 }
 

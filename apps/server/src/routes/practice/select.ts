@@ -16,7 +16,7 @@ import { selectCardId, selectStudyCardId, type FsrsState } from '../../game/srs'
 import { displayReading } from '../../text/readings'
 import { lessonCardsOf, parseLessonId } from '../../services/curriculum'
 import { readStudyPrefs, type StudyPrefs } from '../../services/study'
-import { srsStateMap } from '../../services/srs'
+import { srsStateMap, type LoadedCards } from '../../services/srs'
 
 export interface SessionUser {
   id: UserId
@@ -74,11 +74,13 @@ export function pickReviewCard(
   deps: Deps,
   userId: UserId,
   deckId?: DeckId,
+  loaded?: LoadedCards,
 ): ServerCard | undefined {
-  const srs = srsStateMap(deps.db, userId)
-  const ids = listCards(deps.db, userId, deckId)
-    .filter((c) => srs.has(c.id))
-    .map((c) => c.id)
+  const srs = loaded?.srs ?? srsStateMap(deps.db, userId)
+  const cards = loaded
+    ? loaded.cards.filter((c) => !deckId || c.deckId === deckId)
+    : listCards(deps.db, userId, deckId)
+  const ids = cards.filter((c) => srs.has(c.id)).map((c) => c.id)
   if (ids.length === 0) return undefined
   const id = selectCardId(ids, srs, Date.now())
   return id ? getCard(deps.db, id, userId) : undefined

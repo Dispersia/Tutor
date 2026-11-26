@@ -165,6 +165,7 @@ class Manager:
     _models: dict[str, Any] = field(default_factory=dict)
     _lock: threading.RLock = field(default_factory=threading.RLock)
     _infer: threading.Lock = field(default_factory=threading.Lock)
+    _load_lock: threading.Lock = field(default_factory=threading.Lock)
     _active: int = 0
     _last_activity: float = field(default_factory=time.time)
     _watchdog: threading.Thread | None = None
@@ -195,19 +196,34 @@ class Manager:
     def get(self, kind: str) -> Any:
         kind = _ALIASES.get(kind, kind)
         with self._lock:
-            self.touch()
             if kind in self._models:
+                self.touch()
                 return self._models[kind]
-            # only one TTS checkpoint resident at a time
+        # The manager lock is not held for the (slow) load itself, so /health
+        # and `resident()` keep answering while a cold start runs. `_load_lock`
+        # keeps two callers from loading the same checkpoint twice.
+        with self._load_lock:
+            with self._lock:
+                if kind in self._models:
+                    self.touch()
+                    return self._models[kind]
             if kind in TTS:
-                for other in TTS:
-                    if other != kind and other in self._models:
-                        log.info("evicting %s to make room for %s", other, kind)
-                        self._models.pop(other, None)
-                        clear_mlx_cache()
-                        gc.collect()
-            self._models[kind] = _load_model(kind, model_id(kind))
-            return self._models[kind]
+                self._evict_other_tts(kind)
+            model = _load_model(kind, model_id(kind))
+            with self._lock:
+                self.touch()
+                self._models[kind] = model
+            return model
+
+    def _evict_other_tts(self, kind: str) -> None:
+        with self._lock:
+            others = [other for other in TTS if other != kind and other in self._models]
+            for other in others:
+                log.info("evicting %s to make room for %s", other, kind)
+                self._models.pop(other, None)
+        if others:
+            clear_mlx_cache()
+            gc.collect()
 
     def resident(self) -> list[str]:
         with self._lock:
@@ -215,10 +231,13 @@ class Manager:
 
     # --- unloading --------------------------------------------------------
     def unload_all(self) -> dict[str, Any]:
-        with self._lock:
+        # Taking `_infer` waits for any in-flight inference to finish, so the
+        # weights and the Metal cache are never freed out from under a call.
+        with self._infer, self._load_lock:
             before = _rss_bytes()
             mlx_before = mlx_memory()
-            self._models.clear()
+            with self._lock:
+                self._models.clear()
             gc.collect()
             clear_mlx_cache()
             gc.collect()
@@ -452,14 +471,20 @@ def _collect_audio(results: Any) -> tuple[Any, int]:
     return arr, sample_rate
 
 
-def _voxcpm_synthesize(model: Any, text: str, instruct: str | None):
+def _voxcpm_synthesize(model: Any, text: str, instruct: str | None, max_tokens: int | None = None):
     """
     VoxCPM2 is tokenizer-free: it infers the language from the text and has no
     named voices. A description (`instruct`) switches it into voice-design mode,
     which is how the tutor pins one consistent teacher voice per language; with
     no description from the caller we fall back to the built-in teacher voice.
+
+    `max_tokens` is the real name of the generation cap — it is the number of
+    audio patches the model may emit before it is cut off.
     """
-    results = model.generate(text, instruct=instruct or DEFAULT_VOICE_INSTRUCT)
+    kwargs: dict[str, Any] = {"instruct": instruct or DEFAULT_VOICE_INSTRUCT}
+    if max_tokens:
+        kwargs["max_tokens"] = int(max_tokens)
+    results = model.generate(text, **kwargs)
     return _collect_audio(results)
 
 
@@ -470,12 +495,15 @@ def tts_synthesize(
     language: str | None = None,
     instruct: str | None = None,
     mode: str = "preset",
-    temperature: float | None = None,
     max_tokens: int | None = None,
 ):
+    """`voice`, `language` and `mode` are accepted for the HTTP edge but have no
+    counterpart in VoxCPM2's signature: it has no named voices, infers the
+    language from the text, and switches to voice design purely on `instruct`,
+    so only `instruct` and the `max_tokens` cap are forwarded."""
     if not _is_voxcpm(model):
         raise ValueError(f"unsupported TTS checkpoint: {type(model).__module__}")
-    return _voxcpm_synthesize(model, text, instruct)
+    return _voxcpm_synthesize(model, text, instruct, max_tokens)
 
 
 def write_wav(path: str | Path, arr: Any, sample_rate: int) -> None:

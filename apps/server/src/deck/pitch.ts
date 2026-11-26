@@ -3,6 +3,7 @@ import { parsePitchContour, pitchOf, type Card, type PitchContour } from '@tutor
 import type { Db } from '../db/client'
 import { listCards, updateCard, type ServerCard } from '../db/repo'
 import type { OpenRouter, ReasoningEffort } from '../llm/openrouter'
+import { displayReading } from '../text/readings'
 import { kanjiumContour } from './kanjium'
 
 export interface PitchWord {
@@ -47,7 +48,7 @@ export function pitchTargets<C extends Card>(cards: C[], opts: { force?: boolean
   return cards.filter(
     (card) =>
       isWordCard(card) &&
-      (card.readings.kana || card.readings.zhuyin) &&
+      Boolean(displayReading(card)) &&
       (opts.force === true || !pitchOf(card.metadata)),
   )
 }
@@ -105,7 +106,7 @@ async function annotateBatches(
 }
 
 function pitchRequest(card: ReturnType<typeof listCards>[number]) {
-  return { word: card.back, reading: card.readings.kana ?? card.readings.zhuyin ?? '' }
+  return { word: card.back, reading: displayReading(card) }
 }
 
 function applyContours(

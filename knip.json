@@ -18,5 +18,6 @@
       "project": ["src/**/*.ts"]
     }
   },
-  "ignoreDependencies": ["svelte-eslint-parser", "drizzle-kit", "tailwindcss"]
+  "ignoreDependencies": ["svelte-eslint-parser", "drizzle-kit", "tailwindcss"],
+  "ignoreBinaries": ["sqlite3"]
 }

@@ -5,6 +5,7 @@ import type { Deps } from '../../context'
 import { addReview } from '../../db/repo'
 import { maybeAutoGrow } from '../../deck/autoGrow'
 import { REINFORCE_LAPSES, reinforceLapsedCard } from '../../deck/reinforce'
+import { NEW_STATE } from '../../game/srs'
 import { readStudyPrefs } from '../../services/study'
 import {
   awardXp,
@@ -12,6 +13,7 @@ import {
   recordReview,
   summary,
   touchActivity,
+  type LoadedCards,
 } from '../../services'
 import { settleAction } from './action'
 
@@ -58,6 +60,7 @@ export interface FinalizeInput {
   def: ExerciseDef
   result: GradeResult
   xp: number
+  data: LoadedCards
   latencyMs?: number
   actionId?: string
   choiceId?: string
@@ -77,7 +80,7 @@ export function finalizeReview(deps: Deps, input: FinalizeInput): ReviewOutcome 
     result: { ...result, xp: input.xp, leveledUp },
     skill,
     srs,
-    lessonCompleted: lessonDone(deps, input),
+    lessonCompleted: lessonDone(deps, input, srs),
     stats: summary(deps.db, userId),
   }
 }
@@ -116,8 +119,30 @@ function maybeReinforce(deps: Deps, input: FinalizeInput, lapses: number): void 
   void reinforceLapsedCard(deps, input.userId, input.card.id).catch(() => {})
 }
 
-function lessonDone(deps: Deps, input: FinalizeInput): boolean {
-  return input.lessonId
-    ? checkLessonCompletion(deps.db, deps.events, input.userId, input.lessonId)
-    : false
+function lessonDone(
+  deps: Deps,
+  input: FinalizeInput,
+  reviewed: ReturnType<typeof recordReview>,
+): boolean {
+  if (!input.lessonId) return false
+  const data = reviewedData(input, reviewed)
+  return checkLessonCompletion(deps.db, deps.events, input.userId, input.lessonId, data)
+}
+
+function reviewedData(input: FinalizeInput, reviewed: ReturnType<typeof recordReview>) {
+  const srs = new Map(input.data.srs)
+  const prev = srs.get(input.card.id) ?? NEW_STATE
+  srs.set(input.card.id, {
+    ...prev,
+    state: reviewed.state,
+    intervalDays: reviewed.intervalDays,
+    dueAt: reviewed.dueAt,
+    stability: reviewed.stability,
+    difficulty: reviewed.difficulty,
+    step: reviewed.step,
+    reps: reviewed.reps,
+    lapses: reviewed.lapses,
+    lastRating: reviewed.rating,
+  })
+  return { cards: input.data.cards, srs }
 }

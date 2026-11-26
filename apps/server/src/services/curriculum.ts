@@ -7,7 +7,7 @@ import { countDue, isLearned, type FsrsState } from '../game/srs'
 import { publicDeckSettings } from '../deck/settings'
 import { lexiconOrder } from '../deck/lexicon'
 import { displayReading } from '../text/readings'
-import { srsStateMap } from './srs'
+import { srsStateMap, type LoadedCards } from './srs'
 import { readStudyPrefs, showsReadings, type StudyPrefs } from './study'
 
 export function curriculumView(db: Db, userId: UserId, now: number = Date.now()) {
@@ -90,15 +90,14 @@ export function checkLessonCompletion(
   bus: EventBus,
   userId: UserId,
   lessonId: string,
+  data: LoadedCards,
 ): boolean {
   const parts = parseLessonId(lessonId)
   if (!parts) return false
-  const deck = listDecks(db, userId).find((d) => d.id === parts.key)
-  if (!deck) return false
-  const lesson = buildLessons(parts.key, lessonCardsOf(listCards(db, userId, deck.id)))[parts.index]
+  const cards = data.cards.filter((c) => c.deckId === parts.key)
+  const lesson = buildLessons(parts.key, lessonCardsOf(cards))[parts.index]
   if (!lesson || lesson.cardIds.length === 0) return false
-  const srsMap = srsStateMap(db, userId)
-  if (!lesson.cardIds.every((id) => isLearned(srsMap.get(id)))) return false
+  if (!lesson.cardIds.every((id) => isLearned(data.srs.get(id)))) return false
   if (listLessonProgress(db, userId).some((p) => p.lessonId === lessonId)) return false
   completeLesson(db, userId, lessonId)
   bus.emit('lesson.completed', { userId, lessonId })

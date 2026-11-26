@@ -109,7 +109,8 @@ def to_wav16k(src: Path) -> Path:
 
     Never trust the extension: browsers send webm/opus (and other clients send
     mp4/ogg) that our own routes sometimes carry under a `.wav` name, so always
-    let ffmpeg sniff the container.
+    let ffmpeg sniff the container. Undecodable audio is the caller's mistake, so
+    it becomes a 400 instead of being handed to the models as a raw upload.
     """
     dst = src.with_suffix(".16k.wav")
     try:
@@ -120,8 +121,9 @@ def to_wav16k(src: Path) -> Path:
         )
         return dst
     except Exception as exc:
-        log.warning("ffmpeg normalise failed (%s); passing file through", exc)
-        return src
+        dst.unlink(missing_ok=True)
+        log.warning("ffmpeg could not decode the upload: %s", exc)
+        raise HTTPException(status_code=400, detail="could not decode the audio upload") from exc
 
 
 def _save_upload(file: UploadFile) -> Path:

@@ -7,36 +7,27 @@
 
 Everything here passes its tests but has only met fakes.
 
-1. **Back up `tutor.db`**, then start the new build. It applies migrations 0021
-   (lessons keyed by deck id), 0022 (private cards) and 0027 (drops the dead
-   `attempts` table and five write-only columns), plus a one-time startup step
-   that turns legacy equipment counts into gear pieces.
-2. **Update the Nix dependency hash.** `packages/speech` and `packages/ui` were
-   removed, which changes what the dependency derivation produces. If
-   `just package` reports a hash mismatch, paste the hash it prints into
-   `outputHash` in `nix/package.nix`.
-3. **The speech gateway (`python/speech/server.py`)**: temp-file cleanup, sync
-   upload handlers, the upload and text size caps, the `reference` field on
-   `/v1/asr`, and the new `/admin/shutdown`. No Python or MLX ran on the review
-   machine. Exercise `/v1/asr`, `/v1/assess` and `/v1/tts` once. (The dead
-   `/v1/align` route and the never-loaded VAD checkpoint are gone; the aligner
-   itself is still used by `/v1/assess`.)
-4. **Clip grading** against the real recogniser: watch `rejected` in
+1. **Clip grading** against the real recogniser: watch `rejected` in
    `GET /api/audio/status` and the `[audio] take n/3 … said …` log lines after the
    next backfill — they are the per-language pass rate.
-5. **The per-language accent**: voices ask for one (`packages/core/src/voice.ts`);
+2. **The per-language accent**: voices ask for one (`packages/core/src/voice.ts`);
    nobody has listened to confirm the model honours it.
-6. **The rewritten prompts**: no real model call was made. Grow one deck by a
+3. **The rewritten prompts**: no real model call was made. Grow one deck by a
    batch and hold one voice chat.
-7. **The web app in a browser.** Nothing was run in one. In particular:
+4. **The web app in a browser.** Nothing was run in one. In particular:
    - every page opens (the shared skills store writes state while a page starts;
      a `state_unsafe_mutation` error would point at `web/lib/skills/store.svelte.ts`);
    - the mic is released when leaving Chat mid-recording;
    - an expired session redirects to login;
    - the service worker: offline open, notification click, the reload after a deploy;
    - the four dialogs now trap focus and restore it — confirm on a phone.
-8. **CI**: `.github/workflows/ci.yml` runs `bun run verify` on push. It has not
-   run yet; it needs Git LFS available to the runner.
+5. **CI**: `.github/workflows/ci.yml` runs `bun run verify` on push (checkout
+   already pulls the Git LFS files). It has not run yet.
+
+The speech gateway is no longer on this list: it was exercised end to end on the
+Mac on 2026-11-26 (tts 0.93 s for a 2.08 s clip, asr 0.33 s, assess 0.37 s with
+eight word timings, upload/text caps and `/admin/shutdown` verified, unload
+returned 6.18 GB).
 
 ## 2. Decide
 
@@ -105,13 +96,16 @@ Everything here passes its tests but has only met fakes.
 
 ### Speech gateway (`python/speech`)
 
-- **The TTS runaway cap is dead**: `tts_synthesize` accepts `max_tokens`, `voice`,
-  `language`, `mode`, `temperature` and forwards only `text` and `instruct`.
-  Needs the model's real parameter names, checked on the Mac. `models.py`
-- **Lock scope**: `get()` holds the manager lock for a whole model load, so
-  `/health` hangs during a cold start; unload and cache-clear can run beside an
-  inference. `models.py`
-- An ffmpeg failure passes the raw upload on instead of answering 400.
+- **`/v1/tts` still accepts `voice`, `language` and `mode`**, but the VoxCPM2
+  checkpoint has no counterpart for any of them: it infers the language from the
+  text and enters voice-design mode purely on `instruct`. Decide whether to drop
+  them from the HTTP edge or keep them as no-ops for compatibility.
+  `models.py`, `server.py`
+- The gateway uses FastAPI's deprecated `@app.on_event("startup"/"shutdown")`
+  handlers; move them to a lifespan handler. `server.py`
+- Loading a model hits the Hugging Face API for the repo revision before reading
+  the local cache, so a cold start needs network even when the weights are on
+  disk (`models.py`, `load_model`).
 
 ### Packaging and deploy (read only — nothing here was run on a Mac)
 
@@ -128,26 +122,13 @@ Everything here passes its tests but has only met fakes.
 - `flake.nix` is `aarch64-darwin` only (no dev shell on Linux) and
   `nix flake check` is an `echo`.
 
-## 4. Performance
-
-- Combat builds the drill context twice per hit (grade, then the next drill).
-  `srv/routes/combat.ts`
-- `checkLessonCompletion` reloads the deck and the SRS map on every review.
-  `srv/services/curriculum.ts`
-- `loadPlayerCtx` still reads `action_progress` in the settle, the progress view
-  and the band view.
-
-## 5. Refactors worth scheduling
+## 4. Refactors worth scheduling
 
 1. **Over-fragmentation** (see §2.3): `combatResolve.ts` moves one exchange
    through nine single-use interfaces.
-2. **A few direct reading-key reads remain** outside `text/readings.ts`:
-   `srv/deck/pitch.ts`, `srv/audio/service.ts`, `srv/routes/audio.ts`.
-3. **Quality gates**: knip never fails (unused exports are advisory); nothing
-   lints or tests the Python; ESLint is not type-aware (no
-   `no-floating-promises`); there is no pre-commit hook.
-4. **Docs**: `design/tutor/` is a static prototype with an older palette than the
+2. **Quality gates**: nothing lints or tests the Python; ESLint is not type-aware
+   (no `no-floating-promises`); there is no pre-commit hook. (`knip` is a real
+   gate now — `bun run verify` fails on unused files, exports or dependencies.)
+3. **Docs**: `design/tutor/` is a static prototype with an older palette than the
    shipped one — archive or delete it. `.impeccable/design.json` (design-tool
-   state) is tracked while `.impeccable/review/` is ignored. `NOTICE.md` says the
-   bundled fonts are under the SIL Open Font License from memory; confirm against
-   each family's licence file.
+   state) is tracked while `.impeccable/review/` is ignored.

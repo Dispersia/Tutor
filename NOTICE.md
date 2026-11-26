@@ -17,9 +17,18 @@ from those two sources.
 
 ## Fonts (`apps/web/src/assets/*.woff2`)
 
-Subsets of Noto Sans / Noto Serif (JP, KR, SC, TC, Cyrillic), Rubik and Space
-Grotesk. These families are published under the SIL Open Font License 1.1; check
-each family's own licence file before redistributing the subsets.
+Subsets of eleven families, every one published under the SIL Open Font License
+1.1. They come from the [Fontsource](https://fontsource.org) packages listed in
+`design/tutor/tools/fetch-fonts.sh`; each package declares `OFL-1.1` (versions
+checked 2026-11-26). The full licence text is in
+`apps/web/src/assets/OFL.txt`.
+
+| Family                                | Copyright                              |
+| ------------------------------------- | -------------------------------------- |
+| Space Grotesk                         | 2020 The Space Grotesk Project Authors |
+| Rubik                                 | 2015 The Rubik Project Authors         |
+| Noto Serif (latin / greek / cyrillic) | 2022 The Noto Project Authors          |
+| Noto Sans and Noto Serif SC/TC/JP/KR  | Google Inc.                            |
 
 ## Speech models
 

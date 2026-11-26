@@ -15,10 +15,10 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "arch": "depcruise apps/server/src packages/core/src --config .dependency-cruiser.cjs",
-    "knip": "knip --no-exit-code",
+    "knip": "knip",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "verify": "bun run format:check && bun run lint && bun run arch && bun run typecheck && bun run --cwd apps/web check && bun test"
+    "verify": "bun run format:check && bun run lint && bun run arch && bun run knip && bun run typecheck && bun run --cwd apps/web check && bun test"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

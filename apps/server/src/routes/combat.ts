@@ -8,6 +8,7 @@ import {
   getEncounter,
   setPlayerHp,
   type PublicUser,
+  type ServerCard,
 } from '../db/repo'
 import { registry } from '../exercises'
 import { MONSTERS, MONSTER_BY_ID, type MonsterDef } from '../game/combat'
@@ -16,17 +17,20 @@ import {
   combatResolve,
   currentHp,
   DEFEAT_HP,
+  loadLearnerData,
   loadPlayerCombat,
   loadProgress,
   knownWords,
   startEncounter,
   summary,
+  type LoadedCards,
 } from '../services'
-import { readStudyPrefs } from '../services/study'
+import { readStudyPrefs, type StudyPrefs } from '../services/study'
 import {
   exerciseCtx,
   pickNextExercise,
   pickReviewCard,
+  readingMap,
   studyDeckId,
   type SessionUser,
 } from './practice'
@@ -39,18 +43,37 @@ import { idField, bool, jsonBody, str } from './body'
 type PlayerCombat = ReturnType<typeof loadPlayerCombat>
 type MonsterRow = NonNullable<ReturnType<typeof getEncounter>>
 
-async function buildDrill(deps: Deps, user: SessionUser) {
-  const card = pickReviewCard(deps, user.id, studyDeckId(deps, user.id))
-  if (!card) return null
-  const prefs = readStudyPrefs(deps.db, user.id)
-  const ctx = exerciseCtx(deps, user, card, {
-    known: knownWords(deps.db, user.id),
-    prefs,
+interface DrillEnv {
+  prefs: StudyPrefs
+  known: Set<string>
+  data: LoadedCards
+}
+
+function drillEnv(deps: Deps, userId: UserId): DrillEnv {
+  const data = loadLearnerData(deps.db, userId)
+  return {
+    prefs: readStudyPrefs(deps.db, userId),
+    known: knownWords(deps.db, userId, undefined, data),
+    data,
+  }
+}
+
+function drillContext(deps: Deps, user: SessionUser, card: ServerCard, env: DrillEnv) {
+  return exerciseCtx(deps, user, card, {
+    known: env.known,
+    prefs: env.prefs,
+    readings: readingMap(deps.db, user.id, card.targetLang, env.data.cards),
     distractors: 3,
   })
+}
+
+async function buildDrill(deps: Deps, user: SessionUser, env: DrillEnv) {
+  const card = pickReviewCard(deps, user.id, studyDeckId(deps, user.id), env.data)
+  if (!card) return null
+  const ctx = drillContext(deps, user, card, env)
   const def = pickNextExercise(deps.db, user.id, card, ctx.learner, {
     ctx,
-    disabled: new Set(prefs.disabledExercises),
+    disabled: new Set(env.prefs.disabledExercises),
   })
   if (!def) return null
   const instance = await def.generate(ctx)
@@ -124,7 +147,7 @@ async function combatBoard(c: Context<AppEnv>) {
   const player = loadPlayerCombat(deps.db, user.id, progress.levels)
   const level = combatLevel(deps.db, user.id, progress.levels)
   const view = encounterView(deps, user.id, progress.levels)
-  const drill = view ? await buildDrill(deps, user) : null
+  const drill = view ? await buildDrill(deps, user, drillEnv(deps, user.id)) : null
   return c.json({
     monsters: MONSTERS,
     player: playerView(deps, user.id, player, level),
@@ -157,7 +180,7 @@ async function beginFight(
   user: PublicUser,
   res: NonNullable<ReturnType<typeof startEncounter>> & { ok: true },
 ) {
-  const drill = await buildDrill(deps, user)
+  const drill = await buildDrill(deps, user, drillEnv(deps, user.id))
   if (!drill) {
     clearEncounter(deps.db, user.id)
     return fail(c, 409, 'No review cards available for this fight.')
@@ -205,10 +228,11 @@ async function hitCombat(c: Context<AppEnv>) {
   if (!def) return fail(c, 404, 'exercise not found')
   if (!fits(def, card, user)) return fail(c, 400, 'that exercise does not fit this card')
   if (!wasIssued(user.id, card.id, def.id)) return fail(c, 409, NOT_ISSUED_MESSAGE)
-  const result = await gradeHit(deps, user, card, def, body)
+  const env = drillEnv(deps, user.id)
+  const result = await gradeHit({ deps, user, card, def, body }, env)
   const hit = combatResolve(deps.db, deps.events, user.id, result.correct)
   if (!hit) return fail(c, 409, 'no active encounter')
-  return finishHit(c, deps, user, { result, hit })
+  return finishHit(c, deps, user, { result, hit }, env)
 }
 
 interface HitSettled {
@@ -216,33 +240,36 @@ interface HitSettled {
   hit: NonNullable<ReturnType<typeof combatResolve>>
 }
 
-async function finishHit(c: Context<AppEnv>, deps: Deps, user: PublicUser, settled: HitSettled) {
+async function finishHit(
+  c: Context<AppEnv>,
+  deps: Deps,
+  user: PublicUser,
+  settled: HitSettled,
+  env: DrillEnv,
+) {
   const view = encounterView(deps, user.id)
   return c.json({
     ...settled,
     encounter: view,
-    instance: await nextHitDrill(deps, user, settled.hit, view),
+    instance: await nextHitDrill(deps, user, settled.hit, view, env),
     stats: summary(deps.db, user.id),
   })
 }
 
-async function gradeHit(
-  deps: Deps,
-  user: PublicUser,
-  card: NonNullable<ReturnType<typeof getCard>>,
-  def: NonNullable<ReturnType<typeof registry.get>>,
-  body: HitBody,
-): Promise<GradeResult & { xp?: number }> {
-  if (body.timedOut) {
+interface GradeHit {
+  deps: Deps
+  user: PublicUser
+  card: NonNullable<ReturnType<typeof getCard>>
+  def: NonNullable<ReturnType<typeof registry.get>>
+  body: HitBody
+}
+
+async function gradeHit(hit: GradeHit, env: DrillEnv): Promise<GradeResult & { xp?: number }> {
+  if (hit.body.timedOut) {
     return { score: 0, correct: false, feedback: 'Out of time — the monster strikes.', xp: 0 }
   }
-  const prefs = readStudyPrefs(deps.db, user.id)
-  const ctx = exerciseCtx(deps, user, card, {
-    known: knownWords(deps.db, user.id),
-    prefs,
-    distractors: 3,
-  })
-  return def.grade(ctx, await def.generate(ctx), body.answer)
+  const ctx = drillContext(hit.deps, hit.user, hit.card, env)
+  return hit.def.grade(ctx, await hit.def.generate(ctx), hit.body.answer)
 }
 
 async function nextHitDrill(
@@ -250,7 +277,8 @@ async function nextHitDrill(
   user: PublicUser,
   hit: NonNullable<ReturnType<typeof combatResolve>>,
   view: EncounterView,
+  env: DrillEnv,
 ) {
   if (hit.outcome !== 'ongoing' || !view) return null
-  return (await buildDrill(deps, user))?.instance ?? null
+  return (await buildDrill(deps, user, env))?.instance ?? null
 }

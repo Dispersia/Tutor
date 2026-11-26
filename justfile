@@ -71,7 +71,7 @@ lint:
 ci:
     bun run verify
 
-# report dead code — advisory while the decomposition runs
+# dead-code gate: unused files, exports, dependencies and unlisted binaries
 knip:
     bun run knip
 

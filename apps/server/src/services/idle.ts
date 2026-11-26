@@ -14,6 +14,7 @@ import type { EventBus } from '../events'
 import {
   IDLE,
   MAX_LIVE_RIGS,
+  SETTLE_ORDER,
   capLiveRigs,
   extendRig,
   liveRigCount,
@@ -28,8 +29,6 @@ import {
 } from '../game/idle'
 import {
   ACTION_BY_ID,
-  ACTIONS,
-  SKILL_BY_ID,
   actionConsumes,
   actionExpected,
   actionOdds,
@@ -39,20 +38,8 @@ import {
 } from '../game/skills'
 import { distillBurn, distillPerCraft, getDistillConfig } from './distill'
 import { consumeItems, grantItems } from './items'
-import { awardActionXp, loadProgress, type ProgressCtx } from './progress'
+import { awardAllXp, loadProgress, type ProgressCtx } from './progress'
 import { atomic, inTransaction } from '../db/repo/helpers'
-
-const SETTLE_RANK: Record<string, number> = {
-  gathering: 0,
-  support: 1,
-  artisan: 2,
-  combat: 3,
-}
-const SETTLE_ORDER = [...ACTIONS].sort(
-  (a, b) =>
-    (SETTLE_RANK[SKILL_BY_ID.get(a.skillId)?.category ?? ''] ?? 9) -
-    (SETTLE_RANK[SKILL_BY_ID.get(b.skillId)?.category ?? ''] ?? 9),
-)
 
 export interface IdleRigView {
   actionId: string
@@ -78,6 +65,7 @@ export interface SettleReport {
   gained: Cost[]
   spent: Cost[]
   xp: Map<string, number>
+  awards: Map<string, number>
   rigs: Map<string, RigState>
   progress: ProgressCtx
 }
@@ -117,25 +105,35 @@ function rigClock(rig: RigState, action: ActionDef, now: number) {
   }
 }
 
-export function settleRigs(db: Db, bus: EventBus, userId: UserId, now = Date.now()): SettleReport {
-  return inTransaction(db, (tx) => settleRigsTx(tx, bus, userId, now))
+export function settleRigs(
+  db: Db,
+  bus: EventBus,
+  userId: UserId,
+  now = Date.now(),
+  progress?: ProgressCtx,
+): SettleReport {
+  return inTransaction(db, (tx) => settleRigsTx(tx, bus, userId, now, progress))
 }
 
-function settleRigsTx(db: Db, bus: EventBus, userId: UserId, now: number): SettleReport {
+function settleRigsTx(
+  db: Db,
+  bus: EventBus,
+  userId: UserId,
+  now: number,
+  pre?: ProgressCtx,
+): SettleReport {
   const bank = inventoryMap(db, userId)
   const before = new Map(bank)
   const rigs = listRigStates(db, userId)
-  const progress = loadProgress(db, userId)
+  const progress = pre ?? loadProgress(db, userId)
   const totals = settleEach({ db, userId, now, progress, bank, rigs })
   capAndPersist(db, userId, rigs, now)
   writeBank(db, userId, bank, before)
   const gained = toCosts(totals.produced)
   const spent = toCosts(totals.consumed)
-  for (const [actionId, amount] of totals.xp) {
-    awardActionXp(db, bus, userId, { actionId, amount, ctx: progress })
-  }
+  const awards = awardAllXp(db, bus, userId, totals.xp, progress)
   if (gained.length || spent.length) bus.emit('idle.settled', { userId, gained, spent })
-  return { gained, spent, xp: totals.xp, rigs, progress }
+  return { gained, spent, xp: totals.xp, awards, rigs, progress }
 }
 
 function inventoryMap(db: Db, userId: UserId): Map<string, number> {

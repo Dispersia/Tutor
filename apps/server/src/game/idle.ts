@@ -1,7 +1,20 @@
 import { IDLE, rigIntervalSec, rigRunFill, rigRunFull, rigRunGainSec, rigRunSec } from '@tutor/core'
-import type { Cost } from './skills'
+import { ACTIONS, SKILL_BY_ID, type ActionDef, type Cost } from './skills'
 
 export { IDLE, rigIntervalSec, rigRunFill, rigRunFull, rigRunGainSec, rigRunSec }
+
+const SETTLE_RANK: Record<string, number> = {
+  gathering: 0,
+  support: 1,
+  artisan: 2,
+  combat: 3,
+}
+
+export const SETTLE_ORDER: readonly ActionDef[] = [...ACTIONS].sort(
+  (a, b) =>
+    (SETTLE_RANK[SKILL_BY_ID.get(a.skillId)?.category ?? ''] ?? 9) -
+    (SETTLE_RANK[SKILL_BY_ID.get(b.skillId)?.category ?? ''] ?? 9),
+)
 
 const clamp = (n: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, n))
 

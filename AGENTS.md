@@ -2,9 +2,9 @@
 
 ## Before a task is done
 
-Run `bun run verify` (or `just ci`): format, lint, architecture rules, typecheck
-(server + web) and tests. Layout and conventions are in `docs/ARCHITECTURE.md`;
-the design is `docs/DESIGN.md`; open defects are
+Run `bun run verify` (or `just ci`): format, lint, architecture rules, dead-code
+findings (knip), typecheck (server + web) and tests. Layout and conventions are in
+`docs/ARCHITECTURE.md`; the design is `docs/DESIGN.md`; open defects are
 in `docs/BACKLOG.md` — remove an item there when you fix it.
 
 ## No comments in code

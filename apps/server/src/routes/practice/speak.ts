@@ -5,7 +5,7 @@ import type { Context } from 'hono'
 import type { App, AppEnv, Deps } from '../../context'
 import { getCard, type PublicUser } from '../../db/repo'
 import { registry } from '../../exercises'
-import { knownWords } from '../../services'
+import { knownWords, loadLearnerData, type LoadedCards } from '../../services'
 import { makeAssessor, type AssessFn } from '../../pronunciation/assess'
 import { actionGate } from './action'
 import { exerciseCtx } from './exerciseCtx'
@@ -42,7 +42,8 @@ async function speakHandler(c: Context<AppEnv>) {
   if (!wasIssued(user.id, card.id, def.id)) return fail(c, 409, NOT_ISSUED_MESSAGE)
   const gate = actionGate(deps, user.id, { actionId: fields.actionId, choiceId: fields.choiceId })
   if (gate.error) return failWith(c, gate.error)
-  return gradeSpoken({ c, deps, user, card, def, fields, file })
+  const data = loadLearnerData(deps.db, user.id)
+  return gradeSpoken({ c, deps, user, card, def, fields, data, file })
 }
 
 function spokenFields(form: FormData): SpokenFields {
@@ -65,6 +66,7 @@ interface SpeakCall {
   card: ServerCard
   def: ExerciseDef
   fields: SpokenFields
+  data: LoadedCards
   file: File
 }
 
@@ -90,7 +92,9 @@ async function speakCtx(call: SpeakCall): Promise<ExerciseContext> {
   const { c, deps, user, card } = call
   const assess: AssessFn = deps.assess ?? makeAssessor(deps, card.targetLang)
   return {
-    ...exerciseCtx(deps, user, card, { known: knownWords(deps.db, user.id) }),
+    ...exerciseCtx(deps, user, card, {
+      known: knownWords(deps.db, user.id, undefined, call.data),
+    }),
     assess,
     judge: await judgeFor(c, card),
   }
@@ -116,6 +120,7 @@ function finalizeArgs(call: SpeakCall, result: GradeResult, xp: number) {
     def,
     result,
     xp,
+    data: call.data,
     latencyMs: fields.latencyMs,
     actionId: fields.actionId,
     choiceId: fields.choiceId,

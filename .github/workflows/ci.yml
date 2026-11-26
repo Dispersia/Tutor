@@ -1,5 +1,6 @@
 # Every gate the repo has, on every push and pull request: format, lint,
-# architecture rules, typecheck (server + web) and tests. Same as `just ci`.
+# architecture rules, dead-code findings (knip), typecheck (server + web) and
+# tests. Same as `just ci`.
 name: ci
 
 on:

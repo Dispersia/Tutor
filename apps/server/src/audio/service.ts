@@ -5,6 +5,7 @@ import { cardLanguages, listCards } from '../db/repo'
 import { isUtterance } from '../exercises/payload'
 import { withGateway } from '../speech/gateway'
 import type { SpeechSupervisor } from '../speech/supervisor'
+import { displayReading } from '../text/readings'
 import {
   clipHash,
   findClip,
@@ -251,7 +252,7 @@ function enqueueCards(s: AudioStore, cards: Card[], userId: UserId): number {
     s,
     cards
       .filter(isUtterance)
-      .map((c) => ({ userId, text: c.back, language: c.targetLang, kana: c.readings.kana })),
+      .map((c) => ({ userId, text: c.back, language: c.targetLang, kana: displayReading(c) })),
   )
 }
 

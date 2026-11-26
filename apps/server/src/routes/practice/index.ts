@@ -13,5 +13,11 @@ export function registerPractice(app: App) {
   registerStudyMore(app)
 }
 
-export { type SessionUser, pickNextExercise, pickReviewCard, studyDeckId } from './select'
+export {
+  type SessionUser,
+  pickNextExercise,
+  pickReviewCard,
+  readingMap,
+  studyDeckId,
+} from './select'
 export { exerciseCtx } from './exerciseCtx'

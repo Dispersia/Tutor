@@ -5,9 +5,10 @@ import type { Context } from 'hono'
 import type { App, AppEnv, Deps } from '../../context'
 import { getCard, type PublicUser } from '../../db/repo'
 import { INTRODUCE_ID, registry, answerText } from '../../exercises'
-import { knownWords } from '../../services'
+import { knownWords, loadLearnerData, type LoadedCards } from '../../services'
 import { actionGate, type ActionRequest } from './action'
 import { exerciseCtx, learnerOf } from './exerciseCtx'
+import { readingMap } from './select'
 import { wasIssued } from './issued'
 import { judgeFor } from './judge'
 import { addReviewRow, finalizeReview, uncountedOutcome } from './record'
@@ -69,7 +70,8 @@ interface GradeCall {
 
 async function gradeAttempt(call: GradeCall) {
   const { c, deps, user, card, def, body } = call
-  const ctx = await gradeCtx(call)
+  const data = loadLearnerData(deps.db, user.id)
+  const ctx = await gradeCtx(call, data)
   const instance = await def.generate(ctx)
   const result: GradeResult = await def.grade(ctx, instance, body.answer)
   const answer = answerText(body.answer)
@@ -83,18 +85,22 @@ async function gradeAttempt(call: GradeCall) {
     latencyMs: body.latencyMs,
   })
   if (def.id === INTRODUCE_ID) return c.json(uncountedOutcome(deps, user.id, result))
-  return c.json(settleGrade(call, result, xp))
+  return c.json(settleGrade(call, result, xp, data))
 }
 
-async function gradeCtx(call: GradeCall): Promise<ExerciseContext> {
+async function gradeCtx(call: GradeCall, data: LoadedCards): Promise<ExerciseContext> {
   const { c, deps, user, card } = call
   return {
-    ...exerciseCtx(deps, user, card, { known: knownWords(deps.db, user.id), distractors: 3 }),
+    ...exerciseCtx(deps, user, card, {
+      known: knownWords(deps.db, user.id, undefined, data),
+      readings: readingMap(deps.db, user.id, card.targetLang, data.cards),
+      distractors: 3,
+    }),
     judge: await judgeFor(c, card),
   }
 }
 
-function settleGrade(call: GradeCall, result: GradeResult, xp: number) {
+function settleGrade(call: GradeCall, result: GradeResult, xp: number, data: LoadedCards) {
   const { deps, user, card, def, body } = call
   return finalizeReview(deps, {
     userId: user.id,
@@ -102,6 +108,7 @@ function settleGrade(call: GradeCall, result: GradeResult, xp: number) {
     def,
     result,
     xp,
+    data,
     latencyMs: body.latencyMs,
     actionId: body.actionId,
     choiceId: body.choiceId,

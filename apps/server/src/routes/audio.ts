@@ -2,6 +2,7 @@ import { toCardId, type UserId, type CardId } from '../ids'
 import { getCard, listCards, setSetting } from '../db/repo'
 import type { App, AppEnv } from '../context'
 import { AUDIO_BACKFILL_KEY, variantVoice } from '../audio/service'
+import { displayReading } from '../text/readings'
 import type { Context } from 'hono'
 import { adminOnly } from './guards'
 import { fail } from './errors'
@@ -34,7 +35,7 @@ async function clipBytes(
   await audio.ensureVoice({
     text: card.back,
     language: card.targetLang,
-    kana: card.readings.kana,
+    kana: displayReading(card),
     userId,
     voiceId,
   })

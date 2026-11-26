@@ -35,18 +35,24 @@ export function enchantOf(instance: { enchantJson: string }): EnchantDef | undef
   return id ? ENCHANT_BY_ID.get(id) : undefined
 }
 
-function bandXpMap(db: Db, userId: UserId): Map<BandId, number> {
+type ActionXp = ReadonlyMap<string, { xp: number }>
+
+function bandXpMap(actionXp: ActionXp): Map<BandId, number> {
   const out = new Map<BandId, number>()
-  for (const row of listActionProgress(db, userId)) {
-    const action = ACTION_BY_ID.get(row.actionId)
+  for (const [actionId, row] of actionXp) {
+    const action = ACTION_BY_ID.get(actionId)
     if (!action?.band) continue
     out.set(action.band, (out.get(action.band) ?? 0) + row.xp)
   }
   return out
 }
 
+function actionXpRows(db: Db, userId: UserId): ActionXp {
+  return new Map(listActionProgress(db, userId).map((r) => [r.actionId, r]))
+}
+
 export function bandLevelMap(db: Db, userId: UserId): Map<BandId, number> {
-  const xp = bandXpMap(db, userId)
+  const xp = bandXpMap(actionXpRows(db, userId))
   const out = new Map<BandId, number>()
   for (const band of BANDS) out.set(band.id, bandLevelInfo(xp.get(band.id) ?? 0).level)
   return out
@@ -73,8 +79,8 @@ export interface BandView {
   nextUnlock: { level: number; name: string } | null
 }
 
-export function bandView(db: Db, userId: UserId): BandView[] {
-  const xpByBand = bandXpMap(db, userId)
+export function bandView(db: Db, userId: UserId, actionXp?: ActionXp): BandView[] {
+  const xpByBand = bandXpMap(actionXp ?? actionXpRows(db, userId))
   return BANDS.map((band) => bandViewOf(band, xpByBand.get(band.id) ?? 0))
 }
 

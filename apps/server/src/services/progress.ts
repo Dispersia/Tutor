@@ -42,6 +42,21 @@ export function primaryActionId(skillId: SkillId): string {
   return actionsForSkill(skillId)[0]!.id
 }
 
+export function awardAllXp(
+  db: Db,
+  bus: EventBus,
+  userId: UserId,
+  totals: Map<string, number>,
+  ctx: ProgressCtx,
+): Map<string, number> {
+  const awards = new Map<string, number>()
+  for (const [actionId, amount] of totals) {
+    const award = awardActionXp(db, bus, userId, { actionId, amount, ctx })
+    awards.set(actionId, award.xp)
+  }
+  return awards
+}
+
 export function aggregateBonuses(db: Db, userId: UserId, levels?: Map<string, number>): Bonuses {
   return computeBonuses(
     levels ?? actionLevelMap(db, userId),
