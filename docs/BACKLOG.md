@@ -10,18 +10,16 @@ Everything here passes its tests but has only met fakes.
 1. **Clip grading** against the real recogniser: watch `rejected` in
    `GET /api/audio/status` and the `[audio] take n/3 … said …` log lines after the
    next backfill — they are the per-language pass rate.
-2. **The per-language accent**: voices ask for one (`packages/core/src/voice.ts`);
-   nobody has listened to confirm the model honours it.
-3. **The rewritten prompts**: no real model call was made. Grow one deck by a
+2. **The rewritten prompts**: no real model call was made. Grow one deck by a
    batch and hold one voice chat.
-4. **The web app in a browser.** Nothing was run in one. In particular:
+3. **The web app in a browser.** Nothing was run in one. In particular:
    - every page opens (the shared skills store writes state while a page starts;
      a `state_unsafe_mutation` error would point at `web/lib/skills/store.svelte.ts`);
    - the mic is released when leaving Chat mid-recording;
    - an expired session redirects to login;
    - the service worker: offline open, notification click, the reload after a deploy;
    - the four dialogs now trap focus and restore it — confirm on a phone.
-5. **CI**: `.github/workflows/ci.yml` runs `bun run verify` on push (checkout
+4. **CI**: `.github/workflows/ci.yml` runs `bun run verify` on push (checkout
    already pulls the Git LFS files). It has not run yet.
 
 The speech gateway is no longer on this list: it was exercised end to end on the

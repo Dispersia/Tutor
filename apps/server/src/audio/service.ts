@@ -1,5 +1,5 @@
 import { toUserId, type UserId, type DeckId } from '../ids'
-import { voiceInstruct, type Card } from '@tutor/core'
+import type { Card } from '@tutor/core'
 import type { Db } from '../db/client'
 import { cardLanguages, listCards } from '../db/repo'
 import { isUtterance } from '../exercises/payload'
@@ -217,7 +217,7 @@ async function recordGraded(
     const bytes = await s.tts({
       text: job.text,
       language: job.language,
-      instruct: voiceInstruct(voice.instruct, job.language),
+      instruct: voice.instruct,
       normalize: true,
     })
     if (bytes.length === 0) throw new Error('tts produced no audio')

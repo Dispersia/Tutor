@@ -45,22 +45,3 @@ export const VOICES: readonly Voice[] = [
 export function randomVoice(rand: () => number = Math.random): Voice {
   return VOICES[Math.floor(rand() * VOICES.length) % VOICES.length]!
 }
-
-const ACCENTS: Record<string, string> = {
-  zh: 'Speaks Mandarin Chinese with a standard Taiwanese accent (台灣國語).',
-  yue: 'Speaks Cantonese (粵語，廣東話) with a Hong Kong accent.',
-  ja: 'Speaks standard Japanese (Tokyo accent).',
-  ko: 'Speaks standard Korean (Seoul accent).',
-  de: 'Speaks standard German (Hochdeutsch).',
-  es: 'Speaks neutral Latin American Spanish.',
-  fr: 'Speaks standard French (Paris accent).',
-  it: 'Speaks standard Italian.',
-  pt: 'Speaks Brazilian Portuguese.',
-  ru: 'Speaks standard Russian (Moscow accent).',
-  en: 'Speaks General American English.',
-}
-
-export function voiceInstruct(description: string, lang: string | null | undefined): string {
-  const accent = lang ? ACCENTS[lang] : undefined
-  return accent ? `${description} ${accent}` : description
-}

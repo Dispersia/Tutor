@@ -356,11 +356,11 @@ defines **four voices**, the same in every language: a **teenager** and a
 **teacher** of each gender. Recorded card audio uses all four (one clip each, a
 random one per play); live playback and each chat reply pick one at random.
 
-- **Accent rides in the description.** Each language appends its accent to the
-  voice (`voiceInstruct`): Taiwanese Mandarin, Hong Kong Cantonese, Tokyo
-  Japanese, Seoul Korean, Hochdeutsch, Latin American Spanish, and so on. This is
-  a request, not a guarantee — the model documents dialect control only for
-  Chinese dialects.
+- **No accent control.** A voice is described only by age, gender and delivery.
+  An earlier version appended a per-language accent sentence to the description
+  ("Speaks Mandarin Chinese with a standard Taiwanese accent"); it was removed,
+  because the checkpoint documents dialect control only for Chinese dialects and
+  the language is already implied by the text being read.
 - **Text is spoken as written.** A Japanese word keeps its kanji even though a
   kanji-only word (先生, 水) can be mistaken for Chinese: the kanji is what
   identifies the word and its pitch accent, which kana alone cannot (橋 / 箸).

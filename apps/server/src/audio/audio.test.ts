@@ -270,13 +270,14 @@ test('only the admin may cancel the shared queue, start a backfill or stop the g
   sqlite.close()
 })
 
-test('each clip is recorded in its language’s accent, and spoken as written', async () => {
+test('each clip is spoken as written, in the voice’s own description', async () => {
   const { sqlite, audio, calls } = makeApp()
+  const f1 = CARD_VOICES.find((v) => v.id === 'f1')!
   await audio.ensureVoice({ text: '你好', language: 'zh', userId: toUserId('u1'), voiceId: 'f1' })
-  expect(calls[0]!.instruct).toContain('Taiwanese accent')
+  expect(calls[0]!.instruct).toBe(f1.instruct)
   await audio.ensureVoice({ text: '橋', language: 'ja', userId: toUserId('u1'), voiceId: 'f1' })
   expect(calls[1]!.text).toBe('橋')
-  expect(calls[1]!.instruct).toContain('Japanese')
+  expect(calls[1]!.instruct).toBe(f1.instruct)
   sqlite.close()
 })
 
