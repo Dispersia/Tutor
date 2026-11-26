@@ -7,9 +7,12 @@
 
 Everything here passes its tests but has only met fakes.
 
-1. **Clip grading** against the real recogniser: watch `rejected` in
+1. **Clip grading against the real recogniser**: watch `rejected` in
    `GET /api/audio/status` and the `[audio] take n/3 … said …` log lines after the
-   next backfill — they are the per-language pass rate.
+   next backfill — they are the per-language pass rate. Measured once, on
+   2026-11-26 after deleting the library: 40 cards (160 clips) re-recorded in
+   about four minutes, 159 stored, **1 rejected** (the recogniser kept hearing
+   米粉 for 米飯 and the grading correctly refused it) and 0 failures.
 2. **The rewritten prompts**: no real model call was made. Grow one deck by a
    batch and hold one voice chat.
 3. **The web app in a browser.** Nothing was run in one. In particular:
