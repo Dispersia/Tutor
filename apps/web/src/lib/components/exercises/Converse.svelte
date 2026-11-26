@@ -1,13 +1,13 @@
 <script lang="ts">
   import { onDestroy } from 'svelte'
   import type { Instance } from '#lib/exercises'
-  import { typingAttrs } from '#lib/lang'
   import type { PitchContour } from '#lib/types'
   import { Recorder, micSupported, MIN_CLIP_MS } from '#lib/recorder'
   import { stopAudio, transcribe } from '#lib/speech'
   import { ACCENT } from '#lib/theme'
   import CharCell from '../CharCell.svelte'
   import Icon from '../Icon.svelte'
+  import ImeInput from '../ime/ImeInput.svelte'
   import Spinner from '../Spinner.svelte'
 
   let {
@@ -111,14 +111,13 @@
       />
     </div>
   {/if}
-  <textarea
+  <ImeInput
     bind:value={answer}
-    onkeydown={onKeydown}
-    {...typingAttrs(answerLang)}
-    rows="2"
-    class="field"
+    lang={answerLang}
+    rows={2}
     placeholder="Write or say a sentence…"
-  ></textarea>
+    onkeydown={onKeydown}
+  />
   <div class="flex gap-2">
     {#if canMic}
       <button

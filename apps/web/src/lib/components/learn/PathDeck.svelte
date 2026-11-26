@@ -173,7 +173,7 @@
   </div>
   <div class="mt-3 flex items-center justify-center gap-4">
     <button type="button" onclick={() => onSettings(d)} class="link link-btn text-xs">
-      Deck settings
+      Path settings
     </button>
     <button type="button" onclick={() => onEdit(d)} class="link link-btn text-xs">
       Card metadata

@@ -1,12 +1,13 @@
 import type { ExerciseDef } from '@tutor/core'
-import { feedbackFor, gradeText } from '../grading'
+import { feedbackFor, gradeText, homophoneAnswer } from '../grading'
+import { isUtterance } from '../payload'
 import { displayReading, readingsOf } from '../shared'
 
 export const typeListen: ExerciseDef<string> = {
   id: 'type_listen',
   title: 'Listen and type',
   modality: 'voice',
-  supports: () => true,
+  supports: (card) => isUtterance(card),
   async generate(ctx) {
     return {
       exerciseId: this.id,
@@ -23,7 +24,11 @@ export const typeListen: ExerciseDef<string> = {
     }
   },
   async grade(ctx, _instance, answer) {
-    const g = gradeText(ctx.card.back, readingsOf(ctx), String(answer ?? ''))
+    const typed = String(answer ?? '')
+    if (homophoneAnswer(ctx.card.back, typed, ctx.card.targetLang)) {
+      return { score: 100, correct: true, expected: ctx.card.back }
+    }
+    const g = gradeText(ctx.card.back, readingsOf(ctx), typed)
     return {
       score: g.score,
       correct: g.correct,

@@ -5,14 +5,21 @@ import type { EventBus } from '../events'
 import { buildLessons } from '../game/curriculum'
 import { countDue, isLearned, type FsrsState } from '../game/srs'
 import { publicDeckSettings } from '../deck/settings'
+import { lexiconOrder } from '../deck/lexicon'
 import { displayReading } from '../text/readings'
 import { srsStateMap } from './srs'
+import { readStudyPrefs, showsReadings, type StudyPrefs } from './study'
 
 export function curriculumView(db: Db, userId: UserId) {
-  const decks = listDecks(db)
+  const decks = listDecks(db, userId)
   const srsMap = srsStateMap(db, userId)
   const completed = new Set(listLessonProgress(db, userId).map((r) => r.lessonId))
-  const ctx: CurriculumCtx = { srsMap, completed, now: Date.now() }
+  const ctx: CurriculumCtx = {
+    srsMap,
+    completed,
+    now: Date.now(),
+    prefs: readStudyPrefs(db, userId),
+  }
   return decks.map((d) => deckView(db, userId, d, ctx))
 }
 
@@ -20,6 +27,7 @@ interface CurriculumCtx {
   srsMap: Map<string, FsrsState>
   completed: Set<string>
   now: number
+  prefs: StudyPrefs
 }
 
 type DeckRow = ReturnType<typeof listDecks>[number]
@@ -28,6 +36,7 @@ type LessonRow = ReturnType<typeof buildLessons>[number]
 function deckView(db: Db, userId: UserId, d: DeckRow, ctx: CurriculumCtx) {
   const cards = listCards(db, userId, d.id)
   const ids = cards.map((c) => c.id)
+  const showReadings = d.settings.showReadings ?? showsReadings(ctx.prefs, d.targetLang)
   return {
     deckId: d.id,
     name: d.name,
@@ -39,7 +48,9 @@ function deckView(db: Db, userId: UserId, d: DeckRow, ctx: CurriculumCtx) {
     cardCount: Number(d.cardCount),
     learned: ids.filter((id) => isLearned(ctx.srsMap.get(id))).length,
     due: countDue(ids, ctx.srsMap, ctx.now),
-    lessons: buildLessons(deckKey(d), lessonCardsOf(cards)).map((l) => lessonView(l, ctx)),
+    lessons: buildLessons(deckKey(d), lessonCardsOf(cards, showReadings)).map((l) =>
+      lessonView(l, ctx),
+    ),
   }
 }
 
@@ -55,16 +66,17 @@ function lessonView(l: LessonRow, ctx: CurriculumCtx) {
 }
 
 function remainingWords(d: DeckRow): number | undefined {
-  if (!d.settings.words) return undefined
-  return Math.max(0, d.settings.words.length - (d.settings.cursor ?? 0))
+  const words = d.settings.words ?? lexiconOrder(d.targetLang)
+  if (!words) return undefined
+  return Math.max(0, words.length - (d.settings.cursor ?? 0))
 }
 
-function lessonCardsOf(cards: ReturnType<typeof listCards>) {
+function lessonCardsOf(cards: ReturnType<typeof listCards>, showReadings = true) {
   return cards.map((c) => ({
     id: c.id,
     front: c.front,
     back: c.back,
-    reading: cardDisplayReading(c),
+    reading: showReadings ? cardDisplayReading(c) : '',
     step: typeof c.payload?.step === 'number' ? c.payload.step : undefined,
   }))
 }
@@ -81,7 +93,7 @@ export function checkLessonCompletion(
 ): boolean {
   const parts = parseLessonId(lessonId)
   if (!parts) return false
-  const deck = listDecks(db).find((d) => d.id === parts.key)
+  const deck = listDecks(db, userId).find((d) => d.id === parts.key)
   if (!deck) return false
   const lesson = buildLessons(parts.key, lessonCardsOf(listCards(db, userId, deck.id)))[parts.index]
   if (!lesson || lesson.cardIds.length === 0) return false

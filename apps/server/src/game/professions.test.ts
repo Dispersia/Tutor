@@ -275,11 +275,11 @@ test('actions are listed in progression order: level required, then tier', () =>
 })
 
 test('the chains build on each other: multi-profession gates and new slots', () => {
-  expect(SKILL_BY_ID.get('enchanting')?.category).toBe('artisan')
+  expect(SKILL_BY_ID.get('enchanting')?.category).toBe('support')
   const distill = ACTIONS.find((a) => a.id === 'distill')!
   expect(distill.skillId).toBe('enchanting')
   const enchant = ACTIONS.find((a) => a.id === 'enchant-amulet')!
-  expect(enchant.skillId).toBe('crafting')
+  expect(enchant.skillId).toBe('jewelcrafting')
   expect(enchant.consumes?.map((c) => c.item).sort()).toEqual([
     'air_rune',
     'nature_rune',

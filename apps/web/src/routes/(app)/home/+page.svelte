@@ -14,6 +14,7 @@
   import ProgressList from '#lib/components/home/ProgressList.svelte'
   import RigList from '#lib/components/home/RigList.svelte'
   import BankStrip from '#lib/components/home/BankStrip.svelte'
+  import ConfirmDialog from '#lib/components/ConfirmDialog.svelte'
 
   const progress = cachedResource<Stats>('/api/stats', {
     auto: false,
@@ -25,9 +26,16 @@
 
   let busy = $state(false)
   let rigError = $state('')
+  let pendingRig = $state<RigRow | null>(null)
 
-  async function cancelRig(r: RigRow) {
-    if (!confirm(`Stop the ${r.actionName} rig? Its run ends now and frees a slot.`)) return
+  function cancelRig(r: RigRow) {
+    pendingRig = r
+  }
+
+  async function confirmStopRig() {
+    const r = pendingRig
+    if (!r) return
+    pendingRig = null
     busy = true
     rigError = ''
     try {
@@ -43,7 +51,7 @@
     board.patch({ skills: res.skills, rigs: res.rigs, items: res.items, inventory: res.inventory })
   }
 
-  const lang = $derived(session.user?.targetLang ?? 'zh')
+  const lang = $derived(activeDeckOf()?.targetLang ?? 'zh')
   const deckName = $derived(activeDeckOf()?.name)
   const levelLabel = $derived(levelLabelFor(lang, session.user?.level))
   const toGoal = $derived(xpToGoal(stats))
@@ -103,3 +111,13 @@
     </div>
   </div>
 {/if}
+
+<ConfirmDialog
+  open={pendingRig !== null}
+  title="Stop rig"
+  message={`Stop the ${pendingRig?.actionName ?? 'this'} rig? Its run ends now and frees a slot.`}
+  confirmLabel="Stop rig"
+  {busy}
+  onConfirm={confirmStopRig}
+  onCancel={() => (pendingRig = null)}
+/>

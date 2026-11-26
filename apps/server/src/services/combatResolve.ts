@@ -26,8 +26,6 @@ export interface HitOutcome {
   outcome: 'ongoing' | 'won' | 'lost'
   drops: Cost[]
   xp: number
-  defenceXp: number
-  constitutionXp: number
   ate: { item: string; heal: number; playerHp: number } | null
   talentUnlocked: number | null
 }
@@ -214,17 +212,16 @@ function awardExchange(
   db: Db,
   bus: EventBus,
   userId: UserId,
-  parts: { skill: SkillId; xp: number; defenceXp: number; constitutionXp: number },
+  parts: { skill: SkillId; xp: number },
   progress: ProgressCtx,
 ): number | null {
-  const awards = [
-    { actionId: primaryActionId(parts.skill), amount: parts.xp, ctx: progress },
-    { actionId: primaryActionId('defence'), amount: parts.defenceXp, ctx: progress },
-    { actionId: primaryActionId('constitution'), amount: parts.constitutionXp, ctx: progress },
-  ]
-    .filter((a) => a.amount > 0)
-    .map((a) => awardActionXp(db, bus, userId, a))
-  return awards.find((a) => a?.talentUnlocked)?.talentUnlocked ?? null
+  if (parts.xp <= 0) return null
+  const award = awardActionXp(db, bus, userId, {
+    actionId: primaryActionId(parts.skill),
+    amount: parts.xp,
+    ctx: progress,
+  })
+  return award.talentUnlocked
 }
 
 interface Exchange {
@@ -244,8 +241,6 @@ interface Decided {
 }
 
 interface OutcomeParts extends Decided {
-  defenceXp: number
-  constitutionXp: number
   talentUnlocked: number | null
 }
 
@@ -287,7 +282,7 @@ function runEncounter(req: Resolve): HitOutcome {
   const ex = strikeExchange(ctx, correct, eaten.playerHp, rand)
   if (correct) emitHit(req, ex)
   const decided = decideOutcome(ctx, progress, ex, rand)
-  const awarded = awardStrike(req, ex, decided)
+  const awarded = awardStrike(req, decided)
   settleExchange(req.db, req.bus, req.userId, ctx, {
     monsterHp: ex.monsterHp,
     playerHp: ex.playerHp,
@@ -349,16 +344,15 @@ function decideOutcome(
   return { outcome: 'ongoing', xp: ex.xp, drops: [] }
 }
 
-function awardStrike(req: Resolve, ex: Exchange, decided: Decided): OutcomeParts {
-  const defenceXp = Math.max(1, ex.playerDamage)
+function awardStrike(req: Resolve, decided: Decided): OutcomeParts {
   const talentUnlocked = awardExchange(
     req.db,
     req.bus,
     req.userId,
-    { skill: req.ctx.pc.skill, xp: decided.xp, defenceXp, constitutionXp: defenceXp },
+    { skill: req.ctx.pc.skill, xp: decided.xp },
     req.progress,
   )
-  return { ...decided, defenceXp, constitutionXp: defenceXp, talentUnlocked }
+  return { ...decided, talentUnlocked }
 }
 
 interface HitParts {

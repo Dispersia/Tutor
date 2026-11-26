@@ -299,7 +299,7 @@ test('DELETE /api/decks/:id removes the deck and its cards', async () => {
   sqlite.close()
 })
 
-test('a shared deck can only be deleted by its creator or the admin', async () => {
+test('a member only sees and deletes their own decks', async () => {
   const { app, sqlite } = makeApp()
   const admin = await signup(app, 'admin')
   const alice = await signup(app, 'alice')
@@ -313,10 +313,10 @@ test('a shared deck can only be deleted by its creator or the admin', async () =
   const url = `/api/decks/${created.deck.id}`
 
   const bobs = (await (await app.request('/api/decks', auth(bob))).json()) as { decks: unknown[] }
-  expect(bobs.decks.length).toBe(1)
-  expect((await app.request(`${url}/cards`, auth(bob))).status).toBe(200)
-  expect((await app.request(url, auth(bob, { method: 'DELETE' }))).status).toBe(403)
+  expect(bobs.decks.length).toBe(0)
+  expect((await app.request(`${url}/cards`, auth(bob))).status).toBe(404)
   expect((await app.request(`${url}/cards`, auth(alice))).status).toBe(200)
+  expect((await app.request(url, auth(bob, { method: 'DELETE' }))).status).toBe(403)
   expect((await app.request(url, auth(admin, { method: 'DELETE' }))).status).toBe(200)
   sqlite.close()
 })
@@ -516,6 +516,36 @@ test('POST /api/decks/inspect previews the deck fields before import', async () 
   sqlite.close()
 })
 
+test('POST /api/decks/import with kind=grammar makes taught grammar cards', async () => {
+  const { app, sqlite } = makeApp()
+  const cookie = await signup(app)
+  const apkg = readFileSync(join(import.meta.dir, 'anki/fixtures/sample.apkg'))
+  const form = new FormData()
+  form.set('file', new File([apkg], 'sample.apkg'))
+  form.set('targetLang', 'zh')
+  form.set('wordField', '0')
+  form.set('readingField', '1')
+  form.set('meaningField', '2')
+  form.set('kind', 'grammar')
+  const res = await app.request('/api/decks/import', auth(cookie, { method: 'POST', body: form }))
+  expect(res.status).toBe(201)
+  const body = (await res.json()) as DeckBody & { words: number; building: boolean }
+  expect(body.building).toBe(false)
+  expect(body.words).toBe(4)
+  const after = (await (
+    await app.request(`/api/decks/${body.deck.id}/cards`, auth(cookie))
+  ).json()) as {
+    cards: { type: string; front: string; back: string; payload: Record<string, unknown> }[]
+  }
+  expect(after.cards.length).toBe(4)
+  expect(after.cards.every((c) => c.type === 'grammar')).toBe(true)
+  expect(after.cards[0]!.back).toBe('我')
+  expect(after.cards[0]!.front).toBe('I, me')
+  expect(after.cards[0]!.payload.rule).toBe('I, me')
+  expect(after.cards[0]!.payload.answer).toBe('我')
+  sqlite.close()
+})
+
 test('POST /api/decks/import builds a whole deck from an uploaded Anki package', async () => {
   const { app, sqlite } = makeApp()
   const cookie = await signup(app)
@@ -668,20 +698,17 @@ test('a large build chunks the planner and keeps n+1 across chunks', async () =>
   const calls: PlanRequest[] = []
   const chunkPlanner: Planner = async (req) => {
     calls.push(req)
-    const vocab: PlannedCard[] = req.words.slice(0, req.count).map((w) => ({
-      template: 'vocab' as const,
-      front: `meaning ${w}`,
-      back: w,
-      reading: `r-${w}`,
-    }))
-    const first = req.words[0]
-    const sentence: PlannedCard = {
-      template: 'sentence',
-      front: 'build it',
-      back: first ?? '',
-      payload: { tokens: [first ?? ''] },
+    const cards: PlannedCard[] = []
+    for (const w of req.words.slice(0, req.count)) {
+      cards.push({ template: 'vocab', front: `meaning ${w}`, back: w, reading: `r-${w}` })
+      cards.push({
+        template: 'sentence',
+        front: 'build it',
+        back: `${w} ${w}`,
+        payload: { tokens: [w, w] },
+      })
     }
-    return [...vocab, sentence]
+    return cards
   }
   const { app, sqlite } = makeApp({ fetcher: bigFetcher, planner: chunkPlanner })
   const cookie = await signup(app)

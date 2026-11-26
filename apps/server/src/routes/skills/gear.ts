@@ -4,9 +4,12 @@ import {
   applyEnchant,
   discardGear,
   distillItem,
+  distillMode,
   equipItem,
   gearView,
   salvageGear,
+  setDistillMode,
+  toggleDistillItem,
   unequipItem,
 } from '../../services'
 import type { App, AppEnv } from '../../context'
@@ -26,6 +29,8 @@ export function registerSkillGear(app: App) {
   app.post('/api/skills/gear/salvage', (c) => salvageHandler(c))
   app.post('/api/skills/gear/enchant', (c) => enchantHandler(c))
   app.post('/api/skills/gear/distill', (c) => distillHandler(c))
+  app.post('/api/skills/gear/distill/mode', (c) => distillModeHandler(c))
+  app.post('/api/skills/gear/distill/toggle', (c) => distillToggleHandler(c))
 }
 
 function gearHandler(c: Context<AppEnv>) {
@@ -109,4 +114,22 @@ async function distillHandler(c: Context<AppEnv>) {
   const res = distillItem(deps.db, deps.events, user.id, itemId, num(body, 'count') ?? 1)
   if (!res.ok) return c.json({ error: res.error }, 400)
   return c.json({ xp: res.xp, essence: res.essence, ...gearPayload(deps, user.id) })
+}
+
+async function distillModeHandler(c: Context<AppEnv>) {
+  const deps = c.get('deps')
+  const user = c.get('user')!
+  const mode = distillMode(str(await jsonBody(c), 'mode') ?? '')
+  if (!mode) return c.json({ error: 'unknown mode' }, 400)
+  setDistillMode(deps.db, user.id, mode)
+  return c.json(gearPayload(deps, user.id))
+}
+
+async function distillToggleHandler(c: Context<AppEnv>) {
+  const deps = c.get('deps')
+  const user = c.get('user')!
+  const itemId = str(await jsonBody(c), 'itemId')
+  if (!itemId) return c.json({ error: 'itemId required' }, 400)
+  toggleDistillItem(deps.db, user.id, itemId)
+  return c.json(gearPayload(deps, user.id))
 }

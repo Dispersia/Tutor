@@ -13,7 +13,9 @@ Sources (both are Taiwan Mandarin, which is what Zhuyin is used for):
   dictionary. Its `heterophony1.list` gives each character's *preferred* reading
   (the ministry lists character readings in alphabetical order, not by frequency),
   `BPMFBase.txt` fills single characters it omits, and `BPMFMappings.txt` fills
-  words the ministry dictionary does not list.
+  words the ministry dictionary does not list. Where that preferred reading is a
+  合音 (contraction) the ministry marks as secondary, the ministry's primary
+  reading wins instead.
 
 Output: one `<word>\t<zhuyin>` line per entry, Zhuyin with tone marks (space
 separated syllables, neutral tone written `˙ㄅ…`).
@@ -83,25 +85,44 @@ def mcb_readings() -> tuple[dict[str, str], dict[str, str]]:
     return out, words
 
 
-def moe_readings() -> dict[str, str]:
+def moe_readings() -> tuple[dict[str, str], dict[str, set[str]]]:
     raw = lzma.decompress(download("dict-revised.json.xz", MOE_URL))
     data = json.loads(raw)
     out: dict[str, str] = {}
+    he_yin: dict[str, set[str]] = {}
     for entry in data:
         title = decode_title(entry.get("title"))
         if not title or not HAN.search(title):
             continue
+        first: str | None = None
         for heteronym in entry.get("heteronyms") or []:
             bopomofo = heteronym.get("bopomofo")
-            if bopomofo:
-                out.setdefault(title, clean(bopomofo))
-                break
-    return out
+            if not bopomofo:
+                continue
+            reading = clean(bopomofo)
+            if first is None:
+                first = reading
+            definitions = " ".join(d.get("def") or "" for d in heteronym.get("definitions") or [])
+            if "合音" in definitions:
+                he_yin.setdefault(title, set()).add(reading)
+        if first is not None:
+            out.setdefault(title, first)
+    return out, he_yin
+
+
+def preferred_char_reading(chars: dict[str, str], he_yin: dict[str, set[str]], moe: dict[str, str]) -> None:
+    # McBopomofo sometimes prefers a 合音 (contraction) the ministry records as a
+    # secondary reading, e.g. 這 ㄓㄟˋ instead of ㄓㄜˋ. Learners get the ministry's
+    # primary reading for those characters.
+    for char, reading in chars.items():
+        if reading in he_yin.get(char, ()) and char in moe:
+            chars[char] = moe[char]
 
 
 def main() -> None:
     chars, mcb_words = mcb_readings()
-    moe = moe_readings()
+    moe, he_yin = moe_readings()
+    preferred_char_reading(chars, he_yin, moe)
 
     table: dict[str, str] = dict(chars)
     for word, zhuyin in moe.items():

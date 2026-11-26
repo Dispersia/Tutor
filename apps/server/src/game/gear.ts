@@ -1,12 +1,4 @@
-import type {
-  ArmourType,
-  CombatStyle,
-  GearQuality,
-  GearStats,
-  ItemDef,
-  PrimaryStat,
-  SkillId,
-} from './skills'
+import type { ArmourType, CombatStyle, GearStats, ItemDef, PrimaryStat, SkillId } from './skills'
 
 export const EMPTY_STATS: GearStats = {
   strength: 0,
@@ -27,13 +19,6 @@ export const STAT_IDS = [
   'crit',
   'mastery',
 ] as const
-
-export const QUALITY_MULTIPLIER: Record<GearQuality, number> = {
-  common: 1,
-  uncommon: 1.15,
-  rare: 1.35,
-  epic: 1.6,
-}
 
 export function addStats(a: GearStats, b: Partial<GearStats>): GearStats {
   return {
@@ -204,86 +189,6 @@ export function deriveStats(stats: GearStats, skill: SkillId): DerivedStats {
   }
 }
 
-export interface GearRoll {
-  stats: GearStats
-  quality: GearQuality
-  armour: number
-  power: number
-}
-
-function rollQuality(rand: () => number): GearQuality {
-  const r = rand()
-  if (r < 0.08) return 'epic'
-  if (r < 0.28) return 'rare'
-  if (r < 0.65) return 'uncommon'
-  return 'common'
-}
-
-function affixPool(item: ItemDef): (keyof GearStats)[] {
-  const primary = item.combatStyle ? primaryForCombatStyle(item.combatStyle) : 'strength'
-  if (item.armourType === 'jewelry') {
-    return ['strength', 'agility', 'intellect', 'stamina', 'haste', 'crit', 'mastery']
-  }
-  return [primary, 'stamina', 'haste', 'crit', 'mastery']
-}
-
-export function rollGearStats(item: ItemDef, rand: () => number = Math.random): GearRoll {
-  const quality = rollQuality(rand)
-  const mult = QUALITY_MULTIPLIER[quality]
-  const level = Math.max(1, item.itemLevel ?? 1)
-  const stats = addAffixes({
-    stats: scaledBase(item, mult),
-    count: affixCount(quality),
-    pool: affixPool(item),
-    level,
-    mult,
-    rand,
-  })
-  return {
-    stats,
-    quality,
-    armour: scaled(item.armour ?? 0, mult),
-    power: scaled(item.power ?? 0, mult),
-  }
-}
-
-const scaled = (value: number, mult: number): number => Math.max(0, Math.round(value * mult))
-
-function scaledBase(item: ItemDef, mult: number): GearStats {
-  const base = item.stats ?? {}
-  let stats = EMPTY_STATS
-  for (const id of STAT_IDS) {
-    const value = base[id] ?? 0
-    if (value) stats = { ...stats, [id]: Math.max(1, Math.round(value * mult)) }
-  }
-  return stats
-}
-
-const affixCount = (quality: GearQuality): number =>
-  quality === 'epic' ? 3 : quality === 'rare' || quality === 'uncommon' ? 2 : 1
-
-interface AffixReq {
-  stats: GearStats
-  count: number
-  pool: (keyof GearStats)[]
-  level: number
-  mult: number
-  rand: () => number
-}
-
-function addAffixes(req: AffixReq): GearStats {
-  let stats = req.stats
-  for (let i = 0; i < req.count; i++) {
-    const id = req.pool[Math.floor(req.rand() * req.pool.length)]!
-    const amount = Math.max(
-      1,
-      Math.round((1 + req.level * 0.8) * req.mult * (0.7 + req.rand() * 0.6)),
-    )
-    stats = { ...stats, [id]: stats[id] + amount }
-  }
-  return stats
-}
-
 export function emptyStats(): GearStats {
   return { ...EMPTY_STATS }
 }
@@ -324,14 +229,14 @@ export function requirementSkill(item: ItemDef): SkillId | null {
     return 'attack'
   }
   if (item.slot === 'offHand') {
-    if (item.tags?.includes('shield')) return 'defence'
+    if (item.tags?.includes('shield')) return 'strength'
     const style = item.combatStyle ?? 'melee'
     if (style === 'ranged') return 'ranged'
     if (style === 'magic') return 'magic'
-    return 'defence'
+    return null
   }
   if (item.armourType === 'jewelry') return null
-  return 'defence'
+  return 'strength'
 }
 
 export function itemRequirements(item: ItemDef): Partial<Record<SkillId, number>> {

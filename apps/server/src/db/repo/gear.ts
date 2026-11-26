@@ -1,6 +1,6 @@
 import type { UserId, GearInstanceId, GearSetId } from '../../ids'
 import { and, count, eq, isNull } from 'drizzle-orm'
-import { rollGearStats, statsOf } from '../../game/gear'
+import { statsOf } from '../../game/gear'
 import type { ItemDef } from '../../game/skills'
 import type { Db } from '../client'
 import { equipment, gearInstances, gearSets } from '../schema'
@@ -50,6 +50,10 @@ export function listGearInstances(db: Db, userId: UserId) {
   return db.select().from(gearInstances).where(eq(gearInstances.userId, userId)).all()
 }
 
+export function listAllGearInstances(db: Db) {
+  return db.select().from(gearInstances).all()
+}
+
 export function getGearInstance(db: Db, userId: UserId, id: GearInstanceId) {
   return db
     .select()
@@ -97,6 +101,17 @@ export function setGearInstanceEnchant(
     .run()
 }
 
+export function setGearInstanceBaseline(
+  db: Db,
+  row: Pick<GearInstanceRow, 'userId' | 'id'>,
+  baseline: { statsJson: string; armour: number; power: number },
+): void {
+  db.update(gearInstances)
+    .set({ quality: 'common', ...baseline })
+    .where(and(eq(gearInstances.userId, row.userId), eq(gearInstances.id, row.id)))
+    .run()
+}
+
 export function deleteGearInstance(db: Db, userId: UserId, id: GearInstanceId): void {
   db.delete(gearInstances)
     .where(and(eq(gearInstances.userId, userId), eq(gearInstances.id, id)))
@@ -112,23 +127,15 @@ export function countGearPieces(db: Db, userId: UserId, itemId: string): number 
   return row?.n ?? 0
 }
 
-export function addGearPiece(
-  db: Db,
-  userId: UserId,
-  item: ItemDef,
-  rand?: () => number,
-): GearInstanceId {
-  const roll = rand
-    ? rollGearStats(item, rand)
-    : { quality: 'common', stats: statsOf(item), armour: item.armour ?? 0, power: item.power ?? 0 }
+export function addGearPiece(db: Db, userId: UserId, item: ItemDef): GearInstanceId {
   return addGearInstance(db, {
     userId,
     itemId: item.id,
     slot: item.slot!,
-    quality: roll.quality,
-    statsJson: JSON.stringify(roll.stats),
-    armour: roll.armour,
-    power: roll.power,
+    quality: 'common',
+    statsJson: JSON.stringify(statsOf(item)),
+    armour: item.armour ?? 0,
+    power: item.power ?? 0,
   })
 }
 

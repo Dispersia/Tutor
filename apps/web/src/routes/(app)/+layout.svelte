@@ -9,6 +9,7 @@
   import { startRigAlerts } from '#lib/rigAlerts'
   import { reportTimezone } from '#lib/timezone'
   import Icon from '#lib/components/Icon.svelte'
+  import ToastHost from '#lib/components/ToastHost.svelte'
   import type { LayoutProps } from './$types'
 
   let { children }: LayoutProps = $props()
@@ -129,7 +130,7 @@
         <label class="mb-2 block px-1.5">
           <span class="eyebrow text-ink-400">Studying</span>
           <select value={activeDeck.id ?? ''} onchange={onDeckChange} class="field mt-1 text-xs">
-            <option value="">All decks</option>
+            <option value="">All paths</option>
             {#each activeDeck.decks as d (d.id)}
               <option value={d.id}>{d.name}</option>
             {/each}
@@ -207,7 +208,7 @@
                   onchange={onDeckChange}
                   class="field mt-1 text-xs"
                 >
-                  <option value="">All decks</option>
+                  <option value="">All paths</option>
                   {#each activeDeck.decks as d (d.id)}
                     <option value={d.id}>{d.name}</option>
                   {/each}
@@ -270,3 +271,5 @@
     </ul>
   </nav>
 </div>
+
+<ToastHost />

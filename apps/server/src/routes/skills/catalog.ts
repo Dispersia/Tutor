@@ -1,5 +1,6 @@
 import type { Context } from 'hono'
 import { SKILLS, SKILL_BY_ID, type SkillId } from '../../game/skills'
+import { itemDetail } from '../../game/iteminfo'
 import { SYNERGY } from '../../game/talents'
 import { loadPlayerCtx } from '../../services'
 import type { App, AppEnv } from '../../context'
@@ -8,7 +9,16 @@ import { fail } from '../errors'
 
 export function registerSkillCatalog(app: App) {
   app.get('/api/skills', (c) => boardHandler(c))
+  app.get('/api/skills/items/:itemId', (c) => itemHandler(c))
   app.get('/api/skills/:id', (c) => skillPage(c))
+}
+
+function itemHandler(c: Context<AppEnv>) {
+  const id = c.req.param('itemId')
+  if (!id) return fail(c, 404, 'unknown item')
+  const detail = itemDetail(id)
+  if (!detail) return fail(c, 404, 'unknown item')
+  return c.json(detail)
 }
 
 function boardHandler(c: Context<AppEnv>) {

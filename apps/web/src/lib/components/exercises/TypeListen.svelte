@@ -1,9 +1,9 @@
 <script lang="ts">
   import type { Instance } from '#lib/exercises'
-  import { typingAttrs } from '#lib/lang'
   import { speak, speakCard } from '#lib/speech'
   import { speechOpts } from '#lib/voices'
   import Icon from '../Icon.svelte'
+  import ImeInput from '../ime/ImeInput.svelte'
   import Spinner from '../Spinner.svelte'
 
   let {
@@ -59,12 +59,7 @@
       /> Play again{/if}
   </button>
   {#if err}<p class="text-xs text-ember-300">{err}</p>{/if}
-  <input
-    bind:value={answer}
-    {...typingAttrs(answerLang)}
-    class="field text-lg"
-    placeholder="Type what you hear…"
-  />
+  <ImeInput bind:value={answer} lang={answerLang} placeholder="Type what you hear…" />
   <button
     type="submit"
     disabled={busy || !answer.trim()}

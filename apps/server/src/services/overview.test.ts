@@ -163,7 +163,7 @@ test('recordReview appends an FSRS revlog row with the before/after state', () =
   sqlite.close()
 })
 
-test('a brand-new card never graduates on its first answer', () => {
+test('a brand-new card graduates on its second answer, not the first', () => {
   const { db, sqlite } = openDb(':memory:')
   const bus = new EventBus()
   const user = createUser(db, { username: 'frank', passwordHash: 'x' })
@@ -186,7 +186,7 @@ test('a brand-new card never graduates on its first answer', () => {
   }
   expect(cur.state).toBe('review')
   expect(cur.intervalDays).toBeGreaterThanOrEqual(1)
-  expect(reviews).toBeGreaterThan(1)
+  expect(reviews).toBe(2)
 
   const wrong = recordReview(db, bus, user.id, {
     cardId: toCardId('card-1'),

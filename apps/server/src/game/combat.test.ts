@@ -28,8 +28,8 @@ test('a weapon decides the trained skill: sword→strength, bow→ranged, staff�
 })
 
 test('combat maths: HP, power and armour', () => {
-  expect(playerMaxHp(1, 0, 0)).toBe(24)
-  expect(playerMaxHp(10, 0.1, 3)).toBe(20 + 40 + 2 + 6)
+  expect(playerMaxHp(0, 0)).toBe(20)
+  expect(playerMaxHp(0.1, 3, 6)).toBe(20 + 2 + 6 + 18)
   expect(playerPower(1, 3, 0)).toBe(8)
   expect(playerPower(10, 6, 0)).toBe(24)
   expect(playerPower(1, 0, 0.5)).toBe(7)

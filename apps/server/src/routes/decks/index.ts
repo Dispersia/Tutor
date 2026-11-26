@@ -1,4 +1,5 @@
 import type { App } from '../../context'
+import { registerDeckAudit } from './audit'
 import { registerDeckCards } from './cards'
 import { registerDeckCreate } from './create'
 import { registerDeckGrow } from './grow'
@@ -15,4 +16,5 @@ export function registerDecks(app: App) {
   registerDeckGrow(app)
   registerDeckSettings(app)
   registerDeckPitch(app)
+  registerDeckAudit(app)
 }

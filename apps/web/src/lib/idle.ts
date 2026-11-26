@@ -15,6 +15,27 @@ export function rigGainedSince(
   return craftsToItems(dt / rig.intervalSec, rig.produces, 1 + rig.yieldBonus)
 }
 
+export function rigRunStartMs(rig: {
+  runEndsAt: number
+  runStartedAt: number
+  runSec: number
+}): number {
+  return rig.runStartedAt > 0 ? rig.runStartedAt : rig.runEndsAt - rig.runSec * 1000
+}
+
+export function rigRunLengthSec(rig: {
+  runEndsAt: number
+  runStartedAt: number
+  runSec: number
+}): number {
+  return (rig.runEndsAt - rigRunStartMs(rig)) / 1000
+}
+
+export function rigGatheredTotal(rig: IdleRigDTO | null, now: number): Record<string, number> {
+  if (!rig?.active) return {}
+  return rigGainedSince(rig, rigRunStartMs(rig), now)
+}
+
 export function rigSecondsLeft(rig: IdleRigDTO | null, now: number): number {
   if (!rig) return 0
   return Math.max(0, Math.round((rig.runEndsAt - now) / 1000))

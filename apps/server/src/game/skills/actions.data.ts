@@ -533,7 +533,7 @@ export const ACTIONS: ActionDef[] = [
 
   A({
     id: 'craft-vial',
-    skillId: 'crafting',
+    skillId: 'jewelcrafting',
     name: 'Blow a vial',
     description: 'For Herblore.',
     tier: 1,
@@ -543,7 +543,7 @@ export const ACTIONS: ActionDef[] = [
   }),
   A({
     id: 'craft-gem',
-    skillId: 'crafting',
+    skillId: 'jewelcrafting',
     name: 'Cut a gem',
     description: 'Uncut → cut.',
     tier: 2,
@@ -554,7 +554,7 @@ export const ACTIONS: ActionDef[] = [
   }),
   A({
     id: 'prospect',
-    skillId: 'crafting',
+    skillId: 'jewelcrafting',
     name: 'Prospect ore',
     description: 'Crush an ore you hold — may find nothing.',
     tier: 1,
@@ -582,7 +582,7 @@ export const ACTIONS: ActionDef[] = [
   ...GEM_TIERS.map((t) =>
     A({
       id: `cut-gems-${t.band}`,
-      skillId: 'crafting',
+      skillId: 'jewelcrafting',
       name: `Cut ${t.word.toLowerCase()} gems`,
       description: `Cut any rough ${t.word.toLowerCase()} gem.`,
       tier: t.tier,
@@ -600,7 +600,7 @@ export const ACTIONS: ActionDef[] = [
   ),
   A({
     id: 'craft-leather',
-    skillId: 'crafting',
+    skillId: 'jewelcrafting',
     name: 'Tan leather',
     description: 'Hide → leather.',
     tier: 1,
@@ -611,13 +611,13 @@ export const ACTIONS: ActionDef[] = [
   }),
   A({
     id: 'craft-leather-body',
-    skillId: 'crafting',
+    skillId: 'jewelcrafting',
     name: 'Make leather body',
     description: 'Light armour.',
     tier: 2,
     xp: 14,
     deckLevel: 'zhfreq',
-    requires: [{ skill: 'crafting', level: 5 }],
+    requires: [{ skill: 'jewelcrafting', level: 5 }],
     consumes: [{ item: 'leather', count: 14 }],
     produces: [{ item: 'leather_body', count: 1 }],
   }),
@@ -679,54 +679,6 @@ export const ACTIONS: ActionDef[] = [
   sewCloth('sew-silk-tome', 'silk', 'silk_tome', 9, 14),
 
   A({
-    id: 'burn-oak',
-    skillId: 'firemaking',
-    name: 'Burn oak',
-    description: 'Oak → ash.',
-    tier: 1,
-    xp: 8,
-    deckLevel: 'zhfreq',
-    consumes: [{ item: 'oak_log', count: 2 }],
-    produces: [{ item: 'ash', count: 1 }],
-  }),
-  A({
-    id: 'burn-willow',
-    skillId: 'firemaking',
-    name: 'Burn willow',
-    description: 'Needs Firemaking 10.',
-    tier: 2,
-    xp: 12,
-    deckLevel: 'jafreq',
-    requires: [{ skill: 'firemaking', level: 10 }],
-    consumes: [{ item: 'willow_log', count: 2 }],
-    produces: [{ item: 'ash', count: 1 }],
-  }),
-
-  A({
-    id: 'make-plank',
-    skillId: 'construction',
-    name: 'Saw a plank',
-    description: 'Log → plank.',
-    tier: 1,
-    xp: 10,
-    deckLevel: 'zhfreq',
-    consumes: [{ item: 'oak_log', count: 2 }],
-    produces: [{ item: 'plank', count: 1 }],
-  }),
-  A({
-    id: 'build-chair',
-    skillId: 'construction',
-    name: 'Build a chair',
-    description: 'Needs Construction 5.',
-    tier: 2,
-    xp: 14,
-    deckLevel: 'jafreq',
-    requires: [{ skill: 'construction', level: 5 }],
-    consumes: [{ item: 'plank', count: 2 }],
-    produces: [{ item: 'plank', count: 1 }],
-  }),
-
-  A({
     id: 'steal-coins',
     skillId: 'thieving',
     name: 'Pickpocket',
@@ -782,28 +734,6 @@ export const ACTIONS: ActionDef[] = [
     produces: [{ item: 'bones', count: 1 }],
   }),
   A({
-    id: 'train-defence',
-    skillId: 'defence',
-    name: 'Train defence',
-    description: 'Requires body armour.',
-    tier: 1,
-    xp: 14,
-    deckLevel: 'zhfreq',
-    equip: { slot: 'chest', tag: 'armour' },
-    produces: [{ item: 'hide', count: 1 }],
-  }),
-  A({
-    id: 'train-constitution',
-    skillId: 'constitution',
-    name: 'Endurance',
-    description: 'Requires body armour.',
-    tier: 1,
-    xp: 12,
-    deckLevel: 'jafreq',
-    equip: { slot: 'chest', tag: 'armour' },
-    produces: [{ item: 'bones', count: 1 }],
-  }),
-  A({
     id: 'train-ranged',
     skillId: 'ranged',
     name: 'Ranged practice',
@@ -825,32 +755,6 @@ export const ACTIONS: ActionDef[] = [
     deckLevel: 'jafreq',
     consumes: [{ item: 'air_rune', count: 4 }],
     produces: [{ item: 'uncut_gem', count: 1 }],
-  }),
-  A({
-    id: 'bury-bones',
-    skillId: 'prayer',
-    name: 'Bury bones',
-    description: 'Bones → grace.',
-    tier: 1,
-    xp: 10,
-    deckLevel: 'zhfreq',
-    consumes: [{ item: 'bones', count: 2 }],
-    produces: [{ item: 'grace', count: 1 }],
-  }),
-  A({
-    id: 'slay',
-    skillId: 'slayer',
-    name: 'Hunt',
-    description: 'Requires a melee weapon.',
-    tier: 2,
-    xp: 20,
-    deckLevel: 'zhfreq',
-    requires: [{ skill: 'attack', level: 10 }],
-    equip: { slot: 'mainHand', tag: 'melee' },
-    produces: [
-      { item: 'guam', count: 1 },
-      { item: 'bones', count: 1 },
-    ],
   }),
 
   A({
@@ -1021,7 +925,7 @@ export const ACTIONS: ActionDef[] = [
   ...GEM_TIERS.map((t) =>
     A({
       id: `set-gems-${t.band}`,
-      skillId: 'crafting',
+      skillId: 'jewelcrafting',
       name: `Set ${t.word.toLowerCase()} gems`,
       description: `Set a ${t.word.toLowerCase()} gem into a band.`,
       tier: t.tier,
@@ -1042,7 +946,7 @@ export const ACTIONS: ActionDef[] = [
   ),
   A({
     id: 'crush-gems',
-    skillId: 'crafting',
+    skillId: 'jewelcrafting',
     name: 'Crush gems',
     description: 'Break a cut gem into dust.',
     tier: 1,
@@ -1059,7 +963,7 @@ export const ACTIONS: ActionDef[] = [
   }),
   A({
     id: 'craft-sapphire-amulet',
-    skillId: 'crafting',
+    skillId: 'jewelcrafting',
     name: 'String a sapphire amulet',
     description: 'Needs Copper 14.',
     tier: 1,
@@ -1075,7 +979,7 @@ export const ACTIONS: ActionDef[] = [
   }),
   A({
     id: 'craft-lucky-charm',
-    skillId: 'crafting',
+    skillId: 'jewelcrafting',
     name: 'Craft a lucky charm',
     description: 'Needs Sapphire 8.',
     tier: 2,
@@ -1091,7 +995,7 @@ export const ACTIONS: ActionDef[] = [
   }),
   A({
     id: 'craft-rune-orb',
-    skillId: 'crafting',
+    skillId: 'jewelcrafting',
     name: 'Craft a rune orb',
     description: 'Needs Sapphire 6.',
     tier: 2,
@@ -1116,7 +1020,7 @@ export const ACTIONS: ActionDef[] = [
   }),
   A({
     id: 'enchant-amulet',
-    skillId: 'crafting',
+    skillId: 'jewelcrafting',
     name: 'Enchant sapphire amulet',
     description: 'Needs Sapphire 12.',
     tier: 2,
@@ -1133,7 +1037,7 @@ export const ACTIONS: ActionDef[] = [
   }),
   A({
     id: 'enchant-robe',
-    skillId: 'crafting',
+    skillId: 'jewelcrafting',
     name: 'Enchant a mystic robe',
     description: 'Needs Mystic 1.',
     tier: 3,
@@ -1149,7 +1053,7 @@ export const ACTIONS: ActionDef[] = [
   }),
   A({
     id: 'enchant-blade',
-    skillId: 'crafting',
+    skillId: 'jewelcrafting',
     name: 'Bind a blessed sword',
     description: 'Needs Mythril 3.',
     tier: 4,
@@ -1165,7 +1069,7 @@ export const ACTIONS: ActionDef[] = [
   }),
   A({
     id: 'enchant-trinket',
-    skillId: 'crafting',
+    skillId: 'jewelcrafting',
     name: 'Enchant a lucky charm',
     description: 'Needs Arcane 6.',
     tier: 3,

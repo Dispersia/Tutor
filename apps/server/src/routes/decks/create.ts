@@ -1,10 +1,18 @@
 import type { UserId, DeckId } from '../../ids'
 import type { Context } from 'hono'
 import type { App, AppEnv, Deps } from '../../context'
-import { addCard, createDeck, getDeck, getRoles, setUserSetting } from '../../db/repo'
+import {
+  addCard,
+  createDeck,
+  getDeck,
+  getRoles,
+  setUserSetting,
+  type PublicUser,
+} from '../../db/repo'
 import { inTransaction } from '../../db/repo/helpers'
 import { buildDeck, parseInstruction } from '../../deck/generate'
-import { plannerFor } from '../../deck/planner'
+import { pathDeckName, pathInstruction, pathWords, PATH_BATCH } from '../../deck/path'
+import { plannerFor, reviewerFor } from '../../deck/planner'
 import type { Planner } from '../../deck/plan'
 import { DECK_INSTRUCTION_KEY } from '../../deck/settings'
 import { roleReasoning } from '../../env'
@@ -24,6 +32,7 @@ interface CreateBody {
   level?: string
   topic?: string
   count?: number
+  kind?: 'path' | 'custom'
   variant?: 'traditional' | 'simplified'
   readingScript?: string
   showReadings?: boolean
@@ -40,6 +49,7 @@ function readCreateBody(body: Record<string, unknown>): CreateBody {
     level: str(body, 'level'),
     topic: str(body, 'topic'),
     count: num(body, 'count'),
+    kind: oneOf(body, 'kind', ['path', 'custom'] as const),
     variant: oneOf(body, 'variant', ['traditional', 'simplified'] as const),
     readingScript: str(body, 'readingScript'),
     showReadings: bool(body, 'showReadings'),
@@ -53,28 +63,114 @@ export function registerDeckCreate(app: App) {
     const deps = c.get('deps')
     const user = c.get('user')!
     const body = readCreateBody(await jsonBody(c))
+    if (body.kind === 'path') return createFromPath(c, deps, body)
     if (body.instruction?.trim()) return createFromInstruction(c, deps, body)
     if (body.topic?.trim()) return createFromTopic(c, deps, body)
     const deck = createDeck(deps.db, user.id, {
       name: body.name?.trim() || 'My deck',
       sourceLang: body.sourceLang ?? user.nativeLang ?? 'en',
-      targetLang: body.targetLang ?? user.targetLang ?? 'zh',
+      targetLang: body.targetLang ?? 'zh',
       level: body.level,
     })
     return c.json({ deck, count: 0 }, 201)
   })
 }
 
+async function createFromPath(c: Context<AppEnv>, deps: Deps, body: CreateBody) {
+  const user = c.get('user')!
+  const planner = await plannerFor(deps, user.id)
+  if (!planner) return needKey(c)
+  try {
+    const built = await buildDeck(deps.db, user.id, await pathBuild(deps, user, body, planner))
+    deps.audio?.enqueueDeck(user.id, built.deckId)
+    return c.json({ deck: deckView(getDeck(deps.db, built.deckId)!), ...built }, 201)
+  } catch (err) {
+    return fail(c, 502, (err as Error).message)
+  }
+}
+
+type PathIdentity = Pick<
+  DeckBuildArgs,
+  | 'kind'
+  | 'name'
+  | 'targetLang'
+  | 'sourceLang'
+  | 'variant'
+  | 'readingScript'
+  | 'showReadings'
+  | 'disabledExercises'
+  | 'pitchAccent'
+>
+
+type PathRun = Pick<DeckBuildArgs, 'instruction' | 'sourceLabel' | 'count' | 'fetcher'>
+
+async function pathBuild(
+  deps: Deps,
+  user: PublicUser,
+  body: CreateBody,
+  planner: Planner,
+): Promise<DeckBuildArgs> {
+  const targetLang = body.targetLang ?? 'zh'
+  const parsed = parseInstruction('', targetLang)
+  const words = await pathVocabulary(deps, body, targetLang, parsed)
+  const settings = { ...pathIdentity(body, user, targetLang, parsed), ...pathRun(deps, targetLang) }
+  return { ...settings, words, planner, reviewer: await reviewerFor(deps, user.id) }
+}
+
+async function pathVocabulary(
+  deps: Deps,
+  body: CreateBody,
+  targetLang: string,
+  parsed: ReturnType<typeof parseInstruction>,
+): Promise<string[]> {
+  const words = await pathWords(targetLang, {
+    variant: body.variant ?? parsed.variant,
+    fetcher: deps.fetcher,
+  })
+  if (words.length === 0) throw new Error(`no word list for ${targetLang}`)
+  return words
+}
+
+function pathRun(deps: Deps, targetLang: string): PathRun {
+  return {
+    instruction: pathInstruction(targetLang),
+    sourceLabel: 'frequency path',
+    count: PATH_BATCH,
+    fetcher: deps.fetcher,
+  }
+}
+
+function pathIdentity(
+  body: CreateBody,
+  user: PublicUser,
+  targetLang: string,
+  parsed: ReturnType<typeof parseInstruction>,
+): PathIdentity {
+  return {
+    kind: 'path',
+    name: body.name?.trim() || pathDeckName(targetLang),
+    targetLang,
+    sourceLang: body.sourceLang ?? user.nativeLang ?? 'en',
+    variant: body.variant ?? parsed.variant,
+    readingScript: body.readingScript ?? parsed.readingScript,
+    showReadings: body.showReadings,
+    disabledExercises: body.disabledExercises,
+    pitchAccent: body.pitchAccent ?? parsed.pitchAccent,
+  }
+}
+
 async function createFromInstruction(c: Context<AppEnv>, deps: Deps, body: CreateBody) {
   const user = c.get('user')!
   const planner = await plannerFor(deps, user.id)
   if (!planner) return needKey(c)
+  const reviewer = await reviewerFor(deps, user.id)
   const instruction = body.instruction!.trim()
   try {
     const built = await buildDeck(deps.db, user.id, {
       ...instructionArgs({ body, instruction, deps, planner }),
-      targetLang: body.targetLang ?? user.targetLang ?? 'zh',
+      targetLang: body.targetLang ?? 'zh',
       sourceLang: body.sourceLang ?? user.nativeLang ?? 'en',
+      reviewer,
     })
     setUserSetting(deps.db, user.id, DECK_INSTRUCTION_KEY, instruction)
     deps.audio?.enqueueDeck(user.id, built.deckId)
@@ -115,7 +211,7 @@ async function createFromTopic(c: Context<AppEnv>, deps: Deps, body: CreateBody)
   const user = c.get('user')!
   const key = await resolveUserKey(deps, user.id)
   if (!key) return needKey(c)
-  const targetLang = body.targetLang ?? user.targetLang ?? 'zh'
+  const targetLang = body.targetLang ?? 'zh'
   const sourceLang = body.sourceLang ?? user.nativeLang ?? 'en'
   try {
     const cards = usableCards(await generateTopicCards(deps, user.id, key, body, targetLang))

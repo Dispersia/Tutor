@@ -1,15 +1,24 @@
 import { toSessionId, type SessionId } from '../../ids'
 import { streamSSE, type SSEStreamingApi } from 'hono/streaming'
 import type { Context } from 'hono'
-import { addMessage, createSession, getOwnedSession, getRoles, listMessages } from '../../db/repo'
+import {
+  addMessage,
+  createSession,
+  getOwnedSession,
+  getRoles,
+  listDecks,
+  listMessages,
+} from '../../db/repo'
 import { ROLES, roleReasoning, type Role } from '../../env'
 import { OpenRouter, type ChatMessage, type Usage } from '../../llm/openrouter'
 import { systemPrompt } from '../../llm/prompts'
+import { readStudyPrefs } from '../../services/study'
 import { needKey } from '../errors'
 import { resolveKey, type ResolvedKey } from '../../llm/userkey'
 import type { App, AppEnv, Deps } from '../../context'
 import type { PublicUser } from '../../db/repo'
 import { idField, jsonBody, obj, oneOf, str } from '../body'
+import { registerChatCard } from './card'
 
 const EMPTY_USAGE: Usage = { promptTokens: 0, completionTokens: 0, totalTokens: 0, costUsd: 0 }
 
@@ -71,6 +80,7 @@ interface StreamAcc {
 export function registerChat(app: App) {
   app.post('/api/chat', (c) => chatHandler(c))
   app.post('/api/chat/json', (c) => jsonHandler(c))
+  registerChatCard(app)
 }
 
 async function chatHandler(c: Context<AppEnv>) {
@@ -81,28 +91,45 @@ async function chatHandler(c: Context<AppEnv>) {
   const body = allowed(readChatBody(await jsonBody(c)), resolved.source)
   const role = body.role ?? 'conversation'
   const model = body.model ?? getRoles(deps.db, user.id, deps.defaults)[role]
-  const sid = ensureSession(deps, user, body.sessionId)
-  const msgs = messageList(deps, user, sid, role, body)
-  if (body.text?.trim()) addMessage(deps.db, { sessionId: sid, role: 'user', text: body.text })
+  const session = ensureSession(deps, user, body.sessionId)
+  const msgs = messageList(deps, user, session, role, body)
+  if (body.text?.trim())
+    addMessage(deps.db, { sessionId: session.id, role: 'user', text: body.text })
   const or = new OpenRouter(resolved.key, deps.or.baseUrl)
-  return streamReply({ c, deps, or, model, role, sid, msgs })
+  return streamReply({ c, deps, or, model, role, sid: session.id, msgs })
 }
 
-function ensureSession(deps: Deps, user: PublicUser, sessionId?: SessionId): SessionId {
-  if (sessionId && getOwnedSession(deps.db, sessionId, user.id)) return sessionId
-  return createSession(deps.db, user.id, { kind: 'chat', lang: user.targetLang ?? undefined }).id
+function ensureSession(
+  deps: Deps,
+  user: PublicUser,
+  sessionId?: SessionId,
+): { id: SessionId; lang: string | null } {
+  if (sessionId) {
+    const existing = getOwnedSession(deps.db, sessionId, user.id)
+    if (existing) return { id: sessionId, lang: existing.lang }
+  }
+  const row = createSession(deps.db, user.id, { kind: 'chat', lang: chatLang(deps, user.id) })
+  return { id: row.id, lang: row.lang }
+}
+
+function chatLang(deps: Deps, userId: PublicUser['id']): string | undefined {
+  const prefs = readStudyPrefs(deps.db, userId)
+  const decks = listDecks(deps.db, userId)
+  const active = prefs.activeDeckId ? decks.find((d) => d.id === prefs.activeDeckId) : undefined
+  return (active ?? decks[0])?.targetLang
 }
 
 function messageList(
   deps: Deps,
   user: PublicUser,
-  sid: SessionId,
+  session: { id: SessionId; lang: string | null },
   role: Role,
   body: ChatBody,
 ): ChatMessage[] {
   if (body.messages?.length) return body.messages
-  const history = listHistory(deps, sid)
-  const msgs = [...systemPrompt(role, user, body.system), ...history]
+  const learner = { nativeLang: user.nativeLang, targetLang: session.lang, level: user.level }
+  const history = listHistory(deps, session.id)
+  const msgs = [...systemPrompt(role, learner, body.system), ...history]
   if (body.text?.trim()) msgs.push({ role: 'user', content: body.text })
   return msgs
 }

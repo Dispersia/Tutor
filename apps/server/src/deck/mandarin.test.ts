@@ -17,6 +17,10 @@ test('single characters use their preferred reading', () => {
   expect(mandarinZhuyin('的')).toBe('ㄉㄜ˙')
 })
 
+test('a contraction reading never wins over the ministry primary', () => {
+  expect(mandarinZhuyin('這')).toBe('ㄓㄜˋ')
+})
+
 test('unknown input yields no reading', () => {
   expect(mandarinZhuyin('')).toBeUndefined()
   expect(mandarinZhuyin('zzz')).toBeUndefined()

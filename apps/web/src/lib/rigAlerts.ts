@@ -1,6 +1,7 @@
 import { api } from './api'
 import { base } from './paths'
 import { disablePush, enablePush, pushPermission, syncPush } from './push'
+import { rigRunLengthSec } from './idle'
 
 const ENABLED_KEY = 'tutor.rigAlerts'
 const SEEN_KEY = 'tutor.rigAlerts.seen'
@@ -11,6 +12,7 @@ export interface RigClock {
   actionId: string
   name: string
   runEndsAt: number
+  runStartedAt: number
   runSec: number
   secondsLeft: number
 }
@@ -80,7 +82,7 @@ function armRig(
   minRunSec: number,
   now: number,
 ): ReturnType<typeof setTimeout> | null {
-  if (rig.runSec <= minRunSec) return null
+  if (rigRunLengthSec(rig) <= minRunSec) return null
   const fireAt = rig.runEndsAt - leadSec * 1000
   if (fireAt <= now) return null
   const key = `${rig.actionId}:${rig.runEndsAt}`

@@ -2,7 +2,7 @@ import { cachedAt, writeCache } from '../cache'
 import { clock } from '../clock.svelte'
 import { anyRigActive } from '../idle'
 import { Resource } from '../resource.svelte'
-import type { ItemDTO, SkillDTO, SkillsResponse } from './types'
+import type { DistillConfigDTO, ItemDTO, SkillDTO, SkillsResponse } from './types'
 
 const SKILLS_PATH = '/api/skills'
 
@@ -15,6 +15,9 @@ class SkillsStore extends Resource<SkillsResponse> {
   readonly inventory = $derived(this.data?.inventory ?? [])
   readonly itemMap = $derived(byId(this.items))
   readonly skillMap = $derived(byId(this.skills))
+  readonly distill = $derived<DistillConfigDTO>(
+    this.data?.distill ?? { mode: 'max-value', allow: [] },
+  )
 
   constructor() {
     super(SKILLS_PATH)

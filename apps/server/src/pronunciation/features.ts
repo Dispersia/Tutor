@@ -1,7 +1,7 @@
 import type { AlignItem, WordFeedback } from '@tutor/core'
 import { levenshtein } from '../exercises/grading'
 import { tonelessKey } from '../text/normalize'
-import { charSound, soundAlike } from './variants'
+import { foldedSound, soundAlike } from './variants'
 
 const CJK = /[\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af]/
 const PUNCT = /^[\p{P}\p{S}]$/u
@@ -39,11 +39,7 @@ function multisetDiff(a: string[], b: string[], eq: (x: string, y: string) => bo
 const accentAware = (lang: string | undefined) => lang === 'zh'
 
 function foldForCompare(text: string, lang: string | undefined): string {
-  const base = tonelessKey(text)
-  if (!accentAware(lang)) return base
-  let out = ''
-  for (const ch of base) out += charSound(ch) ?? ch
-  return out
+  return accentAware(lang) ? foldedSound(text) : tonelessKey(text)
 }
 
 export interface WordTiming {

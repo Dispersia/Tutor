@@ -1,5 +1,42 @@
 import { expect, test } from 'bun:test'
-import { normalizePlan, stripMetaCommentary, tokensMatchBack } from './plan'
+import {
+  DECK_SCHEMA,
+  normalizePlan,
+  storedTemplate,
+  stripMetaCommentary,
+  tokensMatchBack,
+} from './plan'
+import type { PlannedCard } from './plan'
+
+interface CardVariant {
+  properties: { template: { const: string }; payload: { required?: string[] } }
+}
+
+function cardVariants(): CardVariant[] {
+  const items = DECK_SCHEMA.properties.cards.items as unknown as { anyOf: CardVariant[] }
+  return items.anyOf
+}
+
+test('the deck schema demands an explanation on grammar cards, and only those', () => {
+  const required = Object.fromEntries(
+    cardVariants().map((v) => [v.properties.template.const, v.properties.payload.required ?? []]),
+  )
+  expect(required).toEqual({ vocab: [], sentence: [], grammar: ['explanation'] })
+})
+
+test('storedTemplate treats a one-token sentence as a word', () => {
+  const sentence = (back: string, tokens: string[]): PlannedCard => ({
+    template: 'sentence',
+    front: `m ${back}`,
+    back,
+    payload: { tokens },
+  })
+  expect(storedTemplate({ template: 'vocab', front: 'yes', back: '네' })).toBe('vocab')
+  expect(storedTemplate({ template: 'grammar', front: 'x', back: 'y' })).toBe('grammar')
+  expect(storedTemplate(sentence('네.', ['네']))).toBe('vocab')
+  expect(storedTemplate(sentence('차를 마셔요.', ['차를', '마셔요.']))).toBe('sentence')
+  expect(storedTemplate({ template: 'sentence', front: 'x', back: '你好嗎？' })).toBe('sentence')
+})
 
 test('stripMetaCommentary removes the model’s asides but keeps plain glosses', () => {
   expect(stripMetaCommentary('My you. (Grammatically valid, though semantically odd)')).toBe(
@@ -14,6 +51,23 @@ test('stripMetaCommentary removes the model’s asides but keeps plain glosses',
   )
   expect(stripMetaCommentary('Translate: I guarantee.')).toBe('I guarantee.')
   expect(stripMetaCommentary('Meaning: to sleep')).toBe('to sleep')
+})
+
+test('normalizePlan keeps pitch metadata only for Japanese', () => {
+  const raw = {
+    cards: [
+      {
+        template: 'vocab',
+        front: 'student',
+        back: '학생',
+        metadata: { pitch: { syllables: ['학', '생'], levels: ['L', 'H'] } },
+      },
+    ],
+  }
+  expect(normalizePlan(raw, 'ko')[0]!.metadata).toBeUndefined()
+  expect(normalizePlan(raw, 'ja')[0]!.metadata).toEqual({
+    pitch: { levels: ['L', 'H'], drop: null, syllables: ['학', '생'] },
+  })
 })
 
 test('normalizePlan drops leaked reasoning and long rule dumps', () => {
@@ -33,7 +87,7 @@ test('normalizePlan drops leaked reasoning and long rule dumps', () => {
         front: 'you',
         back: '你',
         reading: 'ㄋㄧˇ',
-        payload: { explanation: 'x'.repeat(300) },
+        payload: { explanation: 'x'.repeat(1200) },
       },
       {
         template: 'vocab',
@@ -119,6 +173,179 @@ test('normalizePlan keeps everyday sentences that contain a conversational marke
     ],
   })
   expect(cards.map((c) => c.front)).toEqual(['to wait', "Let's go."])
+})
+
+test('normalizePlan drops a grammar card whose answer repeats the prompt', () => {
+  const cards = normalizePlan({
+    cards: [
+      {
+        template: 'grammar',
+        front: '有 indicates possession.',
+        back: '我有',
+        payload: {
+          prompt: '我___',
+          answer: '我有',
+          options: ['我在', '我是', '我有'],
+          rule: '有 indicates possession.',
+        },
+      },
+      {
+        template: 'grammar',
+        front: 'verb before object',
+        back: '喝',
+        payload: {
+          prompt: '我___茶。',
+          answer: '喝',
+          options: ['喝', '茶'],
+          rule: 'verb before object',
+        },
+      },
+    ],
+  })
+  expect(cards.map((c) => c.back)).toEqual(['喝'])
+})
+
+test('normalizePlan keeps a long, complete grammar explanation', () => {
+  const explanation =
+    '은 comes after a consonant and 는 after a vowel, and both mark the topic of the sentence. The mistake is using 는 after a consonant.'
+  const cards = normalizePlan({
+    cards: [
+      {
+        template: 'grammar',
+        front: 'Topic particle 는 / 은',
+        back: '는',
+        payload: {
+          prompt: '저___학생이에요.',
+          answer: '는',
+          options: ['는', '은'],
+          rule: 'topic particle',
+          explanation,
+        },
+      },
+    ],
+  })
+  expect(cards[0]!.payload?.explanation).toBe(explanation)
+})
+
+test('normalizePlan drops an intro grammar card that carries no explanation', () => {
+  const cards = normalizePlan({
+    cards: [
+      {
+        template: 'grammar',
+        front: 'Copula: 이에요 / 예요',
+        back: '이에요',
+        payload: {
+          prompt: '저 학생___.',
+          answer: '이에요',
+          options: ['이에요', '예요'],
+          rule: 'copula',
+          intro: true,
+        },
+      },
+      {
+        template: 'grammar',
+        front: 'Copula: 이에요 / 예요',
+        back: '이에요',
+        payload: {
+          prompt: '저 학생___.',
+          answer: '이에요',
+          options: ['이에요', '예요'],
+          rule: 'copula',
+          intro: true,
+          explanation: 'copula',
+        },
+      },
+    ],
+  })
+  expect(cards).toHaveLength(0)
+})
+
+test('normalizePlan keeps an intro explanation longer than the old cap', () => {
+  const explanation = '이에요 comes after a consonant and 예요 after a vowel. '.repeat(11).trim()
+  expect(explanation.length).toBeGreaterThan(420)
+  expect(explanation.length).toBeLessThan(800)
+  const cards = normalizePlan({
+    cards: [
+      {
+        template: 'grammar',
+        front: 'Copula: 이에요 / 예요',
+        back: '이에요',
+        payload: {
+          prompt: '저 학생___.',
+          answer: '이에요',
+          options: ['이에요', '예요'],
+          rule: 'copula',
+          intro: true,
+          explanation,
+        },
+      },
+    ],
+  })
+  expect(cards[0]!.payload?.explanation).toBe(explanation)
+})
+
+test('normalizePlan drops a bare-blank prompt and strips a clue that shows the answer', () => {
+  const cards = normalizePlan({
+    cards: [
+      {
+        template: 'grammar',
+        front: "Choose the correct particle for possession: 'I ___ book'.",
+        back: '的',
+        payload: {
+          prompt: '我___',
+          answer: '的',
+          options: ['的', '了', '不'],
+          rule: 'Possessive particle 的',
+        },
+      },
+      {
+        template: 'grammar',
+        front: 'Possessive Particle',
+        back: '的',
+        payload: {
+          prompt: '這是我___帽子。',
+          answer: '的',
+          options: ['的', '地', '得'],
+          rule: 'Use 的 to mark possession.',
+        },
+      },
+    ],
+  })
+  expect(cards.map((c) => c.back)).toEqual(['的'])
+  expect(cards[0]!.payload?.prompt).toBe('這是我___帽子。')
+  expect(cards[0]!.payload?.rule).toBeUndefined()
+})
+
+test('a grammar card with no blank becomes a vocab card, or is dropped', () => {
+  const cards = normalizePlan({
+    cards: [
+      { template: 'grammar', front: 'you (singular)', back: '你', payload: { intro: true } },
+      { template: 'grammar', front: 'a pattern', back: '吧', payload: { rule: 'a pattern' } },
+    ],
+  })
+  expect(cards.map((c) => `${c.template}:${c.back}`)).toEqual(['vocab:你'])
+})
+
+test('the word card of a point with no blank keeps its explanation', () => {
+  const cards = normalizePlan({
+    cards: [
+      {
+        template: 'grammar',
+        front: 'Topic particle: は',
+        back: 'は',
+        payload: {
+          intro: true,
+          explanation: 'は marks the topic and is read わ.',
+          example: { text: '私は人です。', gloss: 'I am a person.' },
+        },
+      },
+    ],
+  })
+  expect(cards[0]!.template).toBe('vocab')
+  expect(cards[0]!.payload).toEqual({
+    explanation: 'は marks the topic and is read わ.',
+    example: { text: '私は人です。', gloss: 'I am a person.' },
+  })
 })
 
 test('tokensMatchBack ignores case, spacing and punctuation, and passes a non-list', () => {

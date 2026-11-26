@@ -78,7 +78,7 @@ function seedCard(
 }
 
 export function seedStarterDecks(db: Db, userId: UserId): boolean {
-  const created = listDecks(db).length === 0
+  const created = listDecks(db, userId).length === 0
   reconcileStarterDecks(db, userId)
   return created
 }
@@ -86,11 +86,11 @@ export function seedStarterDecks(db: Db, userId: UserId): boolean {
 export function reconcileStarterDecks(db: Db, userId: UserId): void {
   if (getUserSetting(db, userId, SEED_VERSION_KEY) === String(SEED_VERSION)) return
   for (const level of LEGACY_LEVELS) {
-    const deck = listDecks(db).find((d) => d.level === level)
+    const deck = listDecks(db, userId).find((d) => d.level === level)
     if (deck) deleteDeck(db, deck.id)
   }
   for (const d of starterDecks()) {
-    const deck = listDecks(db).find((x) => x.level === d.level)
+    const deck = listDecks(db, userId).find((x) => x.level === d.level)
     if (!deck) {
       seedDeck(db, userId, d)
       continue

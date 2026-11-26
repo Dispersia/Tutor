@@ -4,7 +4,7 @@ import { createApp } from './app'
 import type { App, Deps } from './context'
 import { openDb } from './db/client'
 import type { Db } from './db/client'
-import { upsertSrs } from './db/repo'
+import { addCard, createDeck, upsertSrs } from './db/repo'
 import type { Role } from './env'
 import { EventBus } from './events'
 import { OpenRouter } from './llm/openrouter'
@@ -242,6 +242,37 @@ test('the frequency path introduces one word per step (n+1)', async () => {
     await app.request('/api/practice/next', auth(cookie, json({ lessonId: `${freqDeck.id}:1` })))
   ).json()) as { instance: { cardId: string } }
   expect(cards.cards.find((c) => c.id === next.instance.cardId)?.back).toBe('我')
+  sqlite.close()
+})
+
+test('a deck with readings off shows the definition but no romanization in its path', async () => {
+  const { app, db, sqlite } = makeApp()
+  const { cookie, user } = await signupUser(app, db)
+  const deck = createDeck(db, user.id, {
+    name: 'Korean',
+    sourceLang: 'en',
+    targetLang: 'ko',
+    description: 'test',
+    settings: { showReadings: false },
+  })
+  addCard(db, user.id, {
+    deckId: deck.id,
+    sourceLang: 'en',
+    targetLang: 'ko',
+    front: 'yes',
+    back: '네',
+    readings: { reading: 'ne' },
+  })
+  const body = await getJson<{
+    decks: {
+      deckId: string
+      lessons: { newWord?: string; reading?: string; description: string }[]
+    }[]
+  }>(app, cookie, '/api/curriculum')
+  const korean = body.decks.find((d) => d.deckId === deck.id)!
+  expect(korean.lessons[0]!.newWord).toBe('네')
+  expect(korean.lessons[0]!.reading).toBe('')
+  expect(korean.lessons[0]!.description).toBe('yes')
   sqlite.close()
 })
 

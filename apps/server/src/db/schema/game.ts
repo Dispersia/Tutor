@@ -14,6 +14,7 @@ export const actionProgress = sqliteTable(
     level: integer('level').notNull().default(1),
     completions: integer('completions').notNull().default(0),
     runEndsAt: integer('run_ends_at').notNull().default(0),
+    runStartedAt: integer('run_started_at').notNull().default(0),
     settledAt: integer('settled_at').notNull().default(0),
     crafts: real('crafts').notNull().default(0),
     remainderJson: text('remainder_json').notNull().default('{}'),

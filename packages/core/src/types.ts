@@ -40,6 +40,7 @@ export interface ExerciseInstance {
   exerciseId: string
   cardId: string
   modality: Modality
+  needsSpeech?: boolean
   prompt: string
   data: Record<string, unknown>
 }
@@ -79,6 +80,7 @@ export interface ExerciseContext {
   readings?: Record<string, string>
   known?: string[]
   seen?: string[]
+  utterances?: string[]
   showReadings?: boolean
   judge?: (prompt: string, schema: object) => Promise<unknown>
   assess?: (audio: Uint8Array, expected: string) => Promise<AssessResult>
@@ -89,6 +91,7 @@ export interface ExerciseDef<Answer = unknown> {
   title: string
   modality: Modality
   needsAudio?: boolean
+  needsSpeech?: boolean
   temporarilyDisabled?: boolean
   supports(card: Card, learner: Learner): boolean
   available?(ctx: ExerciseContext): boolean

@@ -1,21 +1,32 @@
 import {
   IDLE,
   rigIntervalSec,
-  rigMaxed,
   rigRateLabel,
-  rigRunProgress,
+  rigRunFill,
+  rigRunFull,
+  rigRunGainSec,
   rigRunSec,
   tierFactor,
 } from '@tutor/core'
 import type { Cost } from './skills'
 
-export { IDLE, rigIntervalSec, rigMaxed, rigRateLabel, rigRunProgress, rigRunSec, tierFactor }
+export {
+  IDLE,
+  rigIntervalSec,
+  rigRateLabel,
+  rigRunFill,
+  rigRunFull,
+  rigRunGainSec,
+  rigRunSec,
+  tierFactor,
+}
 
 const clamp = (n: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, n))
 
 export interface RigState {
   completions: number
   runEndsAt: number
+  runStartedAt: number
   settledAt: number
   crafts: number
   remainder: Record<string, number>
@@ -41,9 +52,14 @@ export interface RigSettle {
   running: boolean
 }
 
+function hasRecipe(recipe: RigRecipe): boolean {
+  return (recipe.consumes?.length ?? 0) > 0 || (recipe.produces?.length ?? 0) > 0
+}
+
 const EMPTY_STATE: RigState = {
   completions: 0,
   runEndsAt: 0,
+  runStartedAt: 0,
   settledAt: 0,
   crafts: 0,
   remainder: {},
@@ -65,19 +81,34 @@ function bankAdd(bank: BankView, item: string, delta: number): void {
   else bank[item] = Math.max(0, (bank[item] ?? 0) + delta)
 }
 
+export interface RigWindow {
+  next: RigState
+  idle: RigSettle
+  sec: number
+  wanted: number
+  active: boolean
+}
+
+export function rigAdvance(state: RigState, tier: number, now: number): RigWindow {
+  const from = Math.max(0, state.settledAt)
+  const { next, idle, runEndsAt } = rigStart(state, now)
+  const end = Math.min(now, runEndsAt)
+  if (runEndsAt <= 0 || now <= from || end <= from) {
+    return { next, idle, sec: 0, wanted: 0, active: false }
+  }
+  const sec = clamp((end - from) / 1000, 0, IDLE.maxCreditSec)
+  const wanted = state.crafts + sec / rigIntervalSec(state.completions, tier || 1)
+  return { next, idle, sec, wanted, active: true }
+}
+
 export function settleRig(
   state: RigState,
   recipe: RigRecipe,
   bank: BankView,
   now: number,
 ): RigSettle {
-  const from = Math.max(0, state.settledAt)
-  const { next, idle, runEndsAt } = rigStart(state, now)
-  if (runEndsAt <= 0 || now <= from) return idle
-  const end = Math.min(now, runEndsAt)
-  if (end <= from) return idle
-  const sec = clamp((end - from) / 1000, 0, IDLE.maxCreditSec)
-  const wanted = state.crafts + sec / rigIntervalSec(state.completions, recipe.tier ?? 1)
+  const { next, idle, sec, wanted, active } = rigAdvance(state, recipe.tier ?? 1, now)
+  if (!hasRecipe(recipe) || !active) return idle
   const args: SettleArgs = { idle, next, recipe, bank, wanted, sec }
   return (recipe.consumes?.length ?? 0) > 0 ? settleArtisan(args) : settlePassive(args)
 }
@@ -195,11 +226,15 @@ export function liveRigCount(rigs: Map<string, RigState>, now: number): number {
 
 export function extendRig(state: RigState, now: number): RigState {
   const completions = state.completions + 1
-  const runEndsAt = now + Math.round(rigRunSec(completions) * 1000)
+  const base = Math.max(state.runEndsAt, now)
+  const live = state.runEndsAt > now && state.runStartedAt > 0
+  const runStartedAt = live ? state.runStartedAt : now
+  const gained = Math.round(rigRunGainSec(completions) * 1000)
   return {
     ...state,
     completions,
-    runEndsAt: Math.min(runEndsAt, now + IDLE.maxRunSec * 1000),
+    runStartedAt,
+    runEndsAt: Math.min(base + gained, now + IDLE.maxRunSec * 1000),
     settledAt: now,
   }
 }

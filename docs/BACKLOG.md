@@ -69,6 +69,26 @@ Everything here passes its tests but has only met fakes.
 - **`equipment.instance_id` is still nullable** in the schema, though nothing
   writes null any more.
 
+### Web
+
+- **The in-app IME (§14.3) has never run in a browser.** No device testing: the
+  composition is unit-tested (`apps/web/src/lib/ime/*.test.ts`) but the keyboard,
+  the candidate bar and the readonly-field handoff are not.
+- **The Japanese engine is romaji-only.** A 12-key flick layout is what a phone
+  expects; the romaji QWERTY is mozc's desktop mode.
+- **Sentence conversion is one shot.** There is no user dictionary, no per-segment
+  editing and no way to re-convert one word inside a sentence — you pick a
+  whole-sentence candidate or edit after committing. Chinese segments by the
+  curated/lexicon rank (tones optional); Japanese takes the longest kana match, so
+  a compound missing from the lexicon can lose to a shorter word.
+- **The zh engine always offers Traditional bopomofo.** A Simplified deck still
+  gets Traditional candidates — the reverse index only holds the MOE readings.
+- **Candidate ranking falls back to dictionary order** for words outside the
+  curated lists and the deck lexicon (`ime/candidates.ts`); a bundled frequency
+  list would order them better.
+- **Haptics are Android-only** (`navigator.vibrate`); iOS Safari ignores them, so
+  the slider does nothing there. The setting was never felt on a device.
+
 ### Speech gateway (`python/speech`)
 
 - **The TTS runaway cap is dead**: `tts_synthesize` accepts `max_tokens`, `voice`,
@@ -118,3 +138,7 @@ Everything here passes its tests but has only met fakes.
    shipped one — archive or delete it. `NOTICE.md` says the bundled fonts are
    under the SIL Open Font License from memory; confirm against each family's
    licence file.
+5. **The custom-deck and Anki-import routes are unreachable from the UI** now that
+   the app is paths only: `routes/decks/import.ts`, the custom/topic branches of
+   `routes/decks/create.ts`, `deck/create.ts` and `anki/` are dead. Delete them
+   and their tests.

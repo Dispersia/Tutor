@@ -2,7 +2,14 @@ import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { readApkg, type AnkiDeck } from './parse'
-import { cleanField, detectLanguage, inspectAnki, wordsFromAnki } from './words'
+import {
+  cleanField,
+  detectLanguage,
+  grammarFromAnki,
+  inspectAnki,
+  looksLikeGrammar,
+  wordsFromAnki,
+} from './words'
 import { unzip } from './zip'
 
 const fixture = () => new Uint8Array(readFileSync(join(import.meta.dir, 'fixtures/sample.apkg')))
@@ -53,6 +60,35 @@ test('inspectAnki previews the fields and suggests indices', async () => {
   expect(info.noteCount).toBe(4)
   expect(info.sample[0]).toEqual(['我', 'ㄨㄛˇ', 'I, me'])
   expect(info.suggested).toEqual({ wordField: 0, readingField: 1, meaningField: 2 })
+  expect(info.suggestedKind).toBe('vocab')
+})
+
+test('looksLikeGrammar reads field names and pattern-like entries', () => {
+  expect(looksLikeGrammar(['Grammar', 'Meaning'], [['topic particle', 'x']], 0)).toBe(true)
+  expect(looksLikeGrammar(['Word', 'Reading', 'Meaning'], [['我', 'ㄨㄛˇ', 'I, me']], 0)).toBe(
+    false,
+  )
+  expect(looksLikeGrammar(['Pattern', 'Meaning'], [['本を読む', 'read a book']], 0)).toBe(true)
+})
+
+test('grammarFromAnki reads a point, its pattern and reading', () => {
+  const deck: AnkiDeck = {
+    models: { '1': { name: 'X', fields: ['Pattern', 'Reading', 'Meaning'] } },
+    notes: [
+      {
+        mid: 1,
+        fields: ['私は学生です', 'わたしはがくせいです', 'I am a student'],
+        tags: [],
+        order: 1,
+      },
+      { mid: 1, fields: ['本を読む', 'ほんをよむ', 'read a book'], tags: [], order: 2 },
+    ],
+  }
+  const entries = grammarFromAnki(deck, 'ja')
+  expect(entries).toEqual([
+    { rule: 'I am a student', pattern: '私は学生です', reading: 'わたしはがくせいです' },
+    { rule: 'read a book', pattern: '本を読む', reading: 'ほんをよむ' },
+  ])
 })
 
 test('wordsFromAnki honours an explicit field choice (no guessing)', () => {

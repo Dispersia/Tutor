@@ -5,12 +5,14 @@ import type { Context } from 'hono'
 import type { App, AppEnv, Deps } from '../../context'
 import { getCard, getDeck, introducedCardIds, listDecks, type PublicUser } from '../../db/repo'
 import { INTRODUCE_ID, registry } from '../../exercises'
+import { fillGrammarTeaching, needsGrammarTeaching } from '../../deck/grammarExamples'
+import { plannerFor } from '../../deck/planner'
 import { bumpDailyExtra, readStudyPrefs, type StudyPrefs } from '../../services/study'
 import { type ActionDef } from '../../game/skills'
 import { selectStudyCardId } from '../../game/srs'
 import { quietState } from '../../services/quiet'
 import {
-  knownWords,
+  knownWordsFor,
   loadLearnerData,
   studyBudget,
   type LoadedCards,
@@ -109,7 +111,7 @@ function resolveDeck(
   const fromAction = deckForAction(deps, user.id, action)
   if (fromAction) return { deckId: fromAction }
   if (body.deckId) return { deckId: body.deckId }
-  if (prefs.activeDeckId && getDeck(deps.db, prefs.activeDeckId)) {
+  if (prefs.activeDeckId && getDeck(deps.db, prefs.activeDeckId, user.id)) {
     return { deckId: prefs.activeDeckId }
   }
   return {}
@@ -128,7 +130,7 @@ function lessonDeck(
 
 function deckForAction(deps: Deps, userId: UserId, action?: ActionDef): DeckId | undefined {
   if (!action?.deckLevel) return undefined
-  return listDecks(deps.db).find((d) => d.level === action.deckLevel)?.id
+  return listDecks(deps.db, userId).find((d) => d.level === action.deckLevel)?.id
 }
 
 function resolveTarget(
@@ -176,7 +178,17 @@ function notFound(message: string): GuardError {
 
 function deckCardIds(data: LoadedCards, deckId: DeckId | undefined): CardId[] {
   const cards = deckId ? data.cards.filter((c) => c.deckId === deckId) : data.cards
-  return cards.map((c) => c.id)
+  const rank = new Map<DeckId | null, number>()
+  const fresh: { id: CardId; rank: number }[] = []
+  const seen: CardId[] = []
+  for (const card of cards) {
+    const at = rank.get(card.deckId) ?? 0
+    rank.set(card.deckId, at + 1)
+    if (data.srs.has(card.id)) seen.push(card.id)
+    else fresh.push({ id: card.id, rank: at })
+  }
+  fresh.sort((a, b) => a.rank - b.rank)
+  return [...fresh.map((f) => f.id), ...seen]
 }
 
 function budgetForDeck(
@@ -216,18 +228,32 @@ interface ServeCardReq {
 }
 
 async function serveCard(c: Context<AppEnv>, req: ServeCardReq) {
+  fillTeaching(req)
+  const card = req.card
   const ctx = await buildCtx(c, {
     deps: req.deps,
     user: req.user,
-    card: req.card,
+    card,
     data: req.data,
     prefs: req.prefs,
   })
-  const instance = await serveDrill(drillRequest(req, ctx))
+  const instance = await serveDrill(drillRequest({ ...req, card }, ctx))
   if (typeof instance === 'string') return c.json({ error: instance }, 409)
   noteIssued(req.user.id, instance)
-  if (instance.exerciseId === 'type_listen') enqueueListen(req.deps, req.user, req.card)
+  if (instance.exerciseId === 'type_listen') enqueueListen(req.deps, req.user, card)
   return c.json({ instance, action: actionSummary(req.action), lessonId: req.lessonId })
+}
+
+function fillTeaching(req: ServeCardReq): void {
+  const { card } = req
+  if (req.body.exerciseId || req.data.srs.has(card.id)) return
+  if (!needsGrammarTeaching(card)) return
+  const known = [...knownWordsFor(req.deps.db, req.user.id, card.targetLang)]
+  void plannerFor(req.deps, req.user.id)
+    .then((planner) => {
+      if (planner) fillGrammarTeaching(req.deps.db, req.user.id, card, planner, known)
+    })
+    .catch(() => {})
 }
 
 function drillRequest(req: ServeCardReq, ctx: ExerciseContext): DrillRequest {
@@ -249,7 +275,7 @@ async function buildCtx(
 ): Promise<ExerciseContext> {
   return {
     ...exerciseCtx(req.deps, req.user, req.card, {
-      known: knownWords(req.deps.db, req.user.id, req.data),
+      known: knownWordsFor(req.deps.db, req.user.id, req.card.targetLang, req.data),
       prefs: req.prefs,
       cardPool: req.data.cards,
       seen: metWords(req.deps, req.user, req.data, req.card),
@@ -261,8 +287,11 @@ async function buildCtx(
 
 function metWords(deps: Deps, user: SessionUser, data: LoadedCards, card: Card): string[] {
   const introduced = introducedCardIds(deps.db, user.id)
-  const met = new Set(knownWords(deps.db, user.id, data))
-  for (const c of data.cards) if (introduced.has(c.id) || data.srs.has(c.id)) met.add(c.back)
+  const met = new Set(knownWordsFor(deps.db, user.id, card.targetLang, data))
+  for (const c of data.cards) {
+    if (c.targetLang !== card.targetLang) continue
+    if (introduced.has(c.id) || data.srs.has(c.id)) met.add(c.back)
+  }
   met.delete(card.back)
   return [...met]
 }
@@ -298,7 +327,7 @@ async function serveDrill(req: DrillRequest): Promise<ExerciseInstance | string>
   const pick = { ctx, quiet: req.quiet, disabled: req.disabled }
   if (needsIntro(req)) {
     const intro = registry.get(INTRODUCE_ID)
-    if (intro) return intro.generate(ctx)
+    if (intro) return withSpeech(intro, ctx)
   }
   const def = req.exerciseId
     ? registry.get(req.exerciseId)
@@ -308,18 +337,29 @@ async function serveDrill(req: DrillRequest): Promise<ExerciseInstance | string>
     ? pickNextExercise(deps.db, user.id, card, ctx.learner, pick)
     : def
   if (!chosen) return noDrillMessage(req.disabled)
-  return chosen.generate(ctx)
+  return withSpeech(chosen, ctx)
+}
+
+async function withSpeech(
+  def: ExerciseDef<unknown>,
+  ctx: ExerciseContext,
+): Promise<ExerciseInstance> {
+  return { ...(await def.generate(ctx)), needsSpeech: Boolean(def.needsSpeech) }
 }
 
 function needsIntro(req: DrillRequest): boolean {
   if (req.exerciseId) return false
-  const teachable = !req.card.payload?.template || req.card.payload.template === 'vocab'
+  const template = req.card.payload?.template
+  const teachable = !template || template === 'vocab' || template === 'grammar'
   if (!teachable || req.data.srs.has(req.card.id)) return false
   return !introducedCardIds(req.deps.db, req.user.id).has(req.card.id)
 }
 
 function isBlocked(def: ExerciseDef<unknown>, req: DrillRequest): boolean {
   return (
-    def.temporarilyDisabled || (req.quiet && def.modality === 'voice') || req.disabled.has(def.id)
+    def.temporarilyDisabled ||
+    !def.supports(req.card, req.ctx.learner) ||
+    (req.quiet && def.modality === 'voice') ||
+    req.disabled.has(def.id)
   )
 }

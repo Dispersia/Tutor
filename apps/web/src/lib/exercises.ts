@@ -6,6 +6,7 @@ export interface Instance {
   exerciseId: string
   cardId: string
   modality: string
+  needsSpeech?: boolean
   prompt: string
   data: Record<string, unknown>
 }
@@ -53,6 +54,9 @@ export interface DeckSettings {
   cursor?: number
   batchSize?: number
   instruction?: string
+  kind?: 'path' | 'custom'
+  autoGrow?: boolean
+  batchWords?: number
   building?: boolean
   buildTotal?: number
   buildError?: string
@@ -97,30 +101,10 @@ export interface Stats {
 
 export const listDecks = () => api<{ decks: Deck[] }>('/api/decks')
 
-export const createDeck = (body: {
-  instruction: string
-  targetLang?: string
-  topic?: string
-  count?: number
-  name?: string
-}) => api<BuiltDeck>('/api/decks', { method: 'POST', body: JSON.stringify(body) })
-
-export interface AnkiInspection {
-  name?: string
-  fields: string[]
-  sample: string[][]
-  noteCount: number
-  suggested: { wordField: number; readingField: number; meaningField: number }
-  suggestedLang?: string
-}
-
-export const inspectDeck = (form: FormData) =>
-  api<AnkiInspection>('/api/decks/inspect', { method: 'POST', body: form })
-
-export const importDeck = (form: FormData) =>
-  api<BuiltDeck & { words: number; fields: string[]; building?: boolean }>('/api/decks/import', {
+export const createPathDeck = (body: { targetLang: string; sourceLang?: string; name?: string }) =>
+  api<BuiltDeck>('/api/decks', {
     method: 'POST',
-    body: form,
+    body: JSON.stringify({ ...body, kind: 'path' }),
   })
 
 export const growDeck = (
@@ -141,6 +125,28 @@ export const backfillPitch = (deckId: string, opts: { force?: boolean } = {}) =>
   api<{ updated: number; total: number }>(`/api/decks/${deckId}/pitch`, {
     method: 'POST',
     ...(opts.force ? { body: JSON.stringify({ force: true }) } : {}),
+  })
+
+export interface CardIssue {
+  cardId: string
+  type: string
+  front: string
+  back: string
+  reasons: string[]
+  prune: string[]
+  strip: string[]
+}
+
+export interface DeckAudit {
+  checked: number
+  issues: CardIssue[]
+  applied?: { dropped: number; pruned: number }
+}
+
+export const auditDeck = (deckId: string, apply = false) =>
+  api<DeckAudit>(`/api/decks/${deckId}/audit`, {
+    method: 'POST',
+    body: JSON.stringify({ apply }),
   })
 
 export const getDeckCards = (deckId: string) =>
@@ -199,6 +205,16 @@ export const setQuiet = (enabled: boolean) =>
     body: JSON.stringify({ enabled }),
   })
 
+const GRADE_TIMEOUT_MS = 15_000
+
+const gradeSignal = () => AbortSignal.timeout(GRADE_TIMEOUT_MS)
+
+export function gradeError(e: unknown): string {
+  if (e instanceof DOMException && e.name === 'TimeoutError')
+    return 'Checking took too long (15s) — try again.'
+  return (e as Error).message
+}
+
 export const gradeExercise = (body: {
   exerciseId: string
   cardId: string
@@ -214,7 +230,7 @@ export const gradeExercise = (body: {
     srs?: SrsOutcome
     lessonCompleted?: boolean
     stats: Stats
-  }>('/api/practice/grade', { method: 'POST', body: JSON.stringify(body) })
+  }>('/api/practice/grade', { method: 'POST', body: JSON.stringify(body), signal: gradeSignal() })
 
 export const gradeSpeak = (form: FormData) =>
   api<{
@@ -223,7 +239,7 @@ export const gradeSpeak = (form: FormData) =>
     srs?: SrsOutcome
     lessonCompleted?: boolean
     stats: Stats
-  }>('/api/practice/speak', { method: 'POST', body: form })
+  }>('/api/practice/speak', { method: 'POST', body: form, signal: gradeSignal() })
 
 export interface WordFeedback {
   text: string

@@ -39,16 +39,6 @@
       {skillMap.get(hit.skill)?.name ?? hit.skill}
     </span>
   {/if}
-  {#if hit.defenceXp > 0}
-    <span class="chip gap-1" style="--accent: {ACCENT.jade}">
-      <Icon name="shield" size={12} /> +{hit.defenceXp} Defence
-    </span>
-  {/if}
-  {#if hit.constitutionXp > 0}
-    <span class="chip gap-1" style="--accent: {ACCENT.ember}">
-      <Icon name="heart" size={12} /> +{hit.constitutionXp} Constitution
-    </span>
-  {/if}
   {#if hit.ate}
     <span class="chip gap-1" style="--accent: {ACCENT.brass}">
       <Icon name="food" size={12} /> auto-ate {name(hit.ate.item)} (+{hit.ate.heal})

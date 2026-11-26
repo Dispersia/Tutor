@@ -29,7 +29,10 @@ export const MONSTERS: MonsterDef[] = [
     damage: 2,
     xp: 8,
     deckLevel: 'hsk1',
-    drops: [{ item: 'bones', chance: 1, min: 1, max: 1 }],
+    drops: [
+      { item: 'bones', chance: 1, min: 1, max: 1 },
+      { item: 'slime_goo', chance: 0.6, min: 1, max: 2 },
+    ],
   },
   {
     id: 'goblin',
@@ -60,6 +63,7 @@ export const MONSTERS: MonsterDef[] = [
     drops: [
       { item: 'hide', chance: 1, min: 1, max: 2 },
       { item: 'bones', chance: 0.7, min: 1, max: 1 },
+      { item: 'wolf_fang', chance: 0.5, min: 1, max: 1 },
     ],
   },
   {
@@ -75,6 +79,7 @@ export const MONSTERS: MonsterDef[] = [
     drops: [
       { item: 'bones', chance: 1, min: 2, max: 4 },
       { item: 'iron_ore', chance: 0.5, min: 1, max: 2 },
+      { item: 'bone_shard', chance: 0.6, min: 1, max: 2 },
       { item: 'coins', chance: 0.6, min: 20, max: 60 },
     ],
   },
@@ -91,6 +96,7 @@ export const MONSTERS: MonsterDef[] = [
     drops: [
       { item: 'air_rune', chance: 0.9, min: 1, max: 3 },
       { item: 'uncut_gem', chance: 0.4, min: 1, max: 1 },
+      { item: 'imp_ember', chance: 0.5, min: 1, max: 1 },
       { item: 'bones', chance: 0.5, min: 1, max: 2 },
     ],
   },
@@ -109,19 +115,15 @@ export const MONSTERS: MonsterDef[] = [
       { item: 'cut_gem', chance: 0.5, min: 1, max: 2 },
       { item: 'nature_rune', chance: 0.4, min: 1, max: 2 },
       { item: 'hide', chance: 0.6, min: 2, max: 4 },
+      { item: 'dragon_scale', chance: 0.5, min: 1, max: 2 },
     ],
   },
 ]
 
 export const MONSTER_BY_ID = new Map(MONSTERS.map((m) => [m.id, m]))
 
-export function playerMaxHp(
-  constitutionLevel: number,
-  hpBonus: number,
-  totalArmour: number,
-  stamina = 0,
-): number {
-  return Math.round(20 + constitutionLevel * 4 + hpBonus * 20 + totalArmour * 2 + stamina * 3)
+export function playerMaxHp(hpBonus: number, totalArmour: number, stamina = 0): number {
+  return Math.round(20 + hpBonus * 20 + totalArmour * 2 + stamina * 3)
 }
 
 export function playerPower(

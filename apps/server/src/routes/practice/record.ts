@@ -3,6 +3,7 @@ import type { ServerCard } from '../../db/repo'
 import type { ExerciseDef, GradeResult } from '@tutor/core'
 import type { Deps } from '../../context'
 import { addReview } from '../../db/repo'
+import { maybeAutoGrow } from '../../deck/autoGrow'
 import { REINFORCE_LAPSES, reinforceLapsedCard } from '../../deck/reinforce'
 import { readStudyPrefs } from '../../services/study'
 import {
@@ -71,6 +72,7 @@ export function finalizeReview(deps: Deps, input: FinalizeInput): ReviewOutcome 
   const skill = settleAction(deps, userId, input.actionId, result, input.choiceId)
   const srs = reviewSchedule(deps, userId, input)
   maybeReinforce(deps, input, srs.lapses)
+  maybeAutoGrow(deps, userId, input.card)
   return {
     result: { ...result, xp: input.xp, leveledUp },
     skill,

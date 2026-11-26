@@ -7,8 +7,7 @@ export function payloadTokens(card: Card): string[] {
 
 export const hasPayloadSentence = (card: Card): boolean => payloadTokens(card).length >= 2
 
-export const isUtterance = (card: Card): boolean =>
-  card.type === 'phrase' || hasPayloadSentence(card)
+export const isUtterance = (card: Card): boolean => card.type === 'phrase'
 
 export const payloadString = (card: Card, key: string): string | undefined => {
   const v = card.payload?.[key]

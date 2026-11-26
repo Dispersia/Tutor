@@ -3,6 +3,7 @@
   import { goto } from '$app/navigation'
   import { page } from '$app/state'
   import {
+    gradeError,
     gradeExercise,
     gradeSpeak,
     nextExercise,
@@ -70,7 +71,7 @@
   const deckParam = $derived(page.url.searchParams.get('deck') ?? undefined)
   let lessonId = $state<string | undefined>(page.url.searchParams.get('lesson') ?? undefined)
   const focused = $derived(Boolean(actionId || lessonId || deckParam))
-  const needsSpeech = $derived(instance?.modality === 'voice' || instance?.modality === 'mixed')
+  const needsSpeech = $derived(Boolean(instance?.needsSpeech))
   const quietActive = $derived(quietUntil > now)
   const quietLeft = $derived(quietClock(quietUntil, now))
   const skillMap = $derived(board.skillMap)
@@ -95,13 +96,13 @@
 
   async function init() {
     try {
-      const [d, s] = await Promise.all([
+      const [, s] = await Promise.all([
         deckList.load(),
         progress.load(),
         board.refresh(),
         srsTotals.refresh(),
       ])
-      await applyLoaded(d, s)
+      await applyLoaded(s)
       if (lessonId) await loadLesson(lessonId)
       await loadNext()
     } catch (e) {
@@ -111,9 +112,9 @@
     }
   }
 
-  async function applyLoaded(d: { decks: Deck[] }, s: Stats) {
+  async function applyLoaded(s: Stats) {
     await loadActiveDeck()
-    deckId = deckParam ?? activeDeck.id ?? d.decks[0]?.id ?? ''
+    deckId = deckParam ?? activeDeck.id ?? ''
     quietUntil = s.quietUntil ?? 0
   }
 
@@ -138,7 +139,7 @@
       instance = r.instance
       followLesson(r)
       startedAt = Date.now()
-      if (r.instance.modality === 'voice' || r.instance.modality === 'mixed') void warmSpeech()
+      if (r.instance.needsSpeech) void warmSpeech()
     } catch (e) {
       error = (e as Error).message
     }
@@ -217,7 +218,7 @@
       if (wasIntro) await finishIntro(r.stats)
       else applyResult(r)
     } catch (e) {
-      error = (e as Error).message
+      error = gradeError(e)
     } finally {
       busy = false
       void refreshSrs()
@@ -256,7 +257,7 @@
       applyResult(r)
       if (!isRetry) recorded = !r.result.detail?.noSpeech
     } catch (e) {
-      error = (e as Error).message
+      error = gradeError(e)
     } finally {
       busy = false
       void refreshSrs()
@@ -272,10 +273,10 @@
     startedAt = Date.now()
   }
 
-  function changeDeck(e: Event) {
+  async function changeDeck(e: Event) {
     deckId = (e.target as HTMLSelectElement).value
-    void setActiveDeck(deckId || null)
-    void loadNext()
+    await setActiveDeck(deckId || null)
+    await loadNext()
   }
 
   function applyLesson(id: string) {
@@ -348,8 +349,9 @@
 
   {#if !focused && decks.length > 1}
     <label class="mb-4 block">
-      <span class="eyebrow mb-1.5 block text-ink-400">Deck</span>
+      <span class="eyebrow mb-1.5 block text-ink-400">Path</span>
       <select bind:value={deckId} onchange={changeDeck} class="field">
+        <option value="">All paths</option>
         {#each decks as d (d.id)}
           <option value={d.id}>{d.name} · {d.cardCount} cards</option>
         {/each}

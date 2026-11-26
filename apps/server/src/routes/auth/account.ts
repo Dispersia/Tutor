@@ -12,7 +12,6 @@ interface RegisterBody {
   password?: string
   handle?: string
   nativeLang?: string
-  targetLang?: string
   level?: string
 }
 
@@ -22,7 +21,6 @@ function readRegister(body: Record<string, unknown>): RegisterBody {
     password: str(body, 'password'),
     handle: str(body, 'handle'),
     nativeLang: str(body, 'nativeLang'),
-    targetLang: str(body, 'targetLang'),
     level: str(body, 'level'),
   }
 }
@@ -74,7 +72,6 @@ function newAccount(body: RegisterBody, username: string, passwordHash: string) 
     passwordHash,
     handle: body.handle?.trim() || username,
     nativeLang: body.nativeLang,
-    targetLang: body.targetLang,
     level: body.level,
   }
 }
@@ -121,7 +118,7 @@ async function updateMe(c: Context<AppEnv>) {
 
 function profilePatch(body: Record<string, unknown>): Record<string, string> {
   const patch: Record<string, string> = {}
-  for (const k of ['handle', 'nativeLang', 'targetLang', 'level']) {
+  for (const k of ['handle', 'nativeLang', 'level']) {
     const v = str(body, k)
     if (v) patch[k] = v
   }

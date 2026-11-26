@@ -56,7 +56,7 @@ const NOT_ISSUED = 'that drill was not the one you were given — load the next 
 
 function fits(def: ExerciseDef, card: Card, user: PublicUser): boolean {
   if (def.id === INTRODUCE_ID) return true
-  return !def.temporarilyDisabled && def.supports(card, learnerOf(user))
+  return !def.temporarilyDisabled && def.supports(card, learnerOf(user, card.targetLang))
 }
 
 interface GradeCall {

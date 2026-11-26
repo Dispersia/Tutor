@@ -24,7 +24,7 @@ async function pitchHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
   const deckId = toDeckId(String(c.req.param('id')))
-  const deck = getDeck(deps.db, deckId)
+  const deck = getDeck(deps.db, deckId, user.id)
   if (!deck) return fail(c, 404, 'not found')
   const force = bool(await jsonBody(c), 'force') === true
   const cards = listCards(deps.db, user.id, deckId)

@@ -120,6 +120,23 @@ test('a Taiwan-accent realisation (sh → s) is not a missing word', () => {
   expect(f.correct).toBe(true)
 })
 
+test('a homophone sentence is heard as the text', () => {
+  const f = computeFeatures({
+    expected: '他很好。',
+    transcript: '她很好。',
+    items: [
+      { text: '他', start: 0.1, end: 0.3 },
+      { text: '很', start: 0.3, end: 0.5 },
+      { text: '好', start: 0.5, end: 0.8 },
+    ],
+    duration: 1.0,
+    lang: 'zh',
+  })
+  expect(f.missing).toEqual([])
+  expect(f.cer).toBe(0)
+  expect(f.correct).toBe(true)
+})
+
 test('accent tolerance is opt-in to Mandarin and still catches other words', () => {
   const literal = computeFeatures({
     expected: '是',

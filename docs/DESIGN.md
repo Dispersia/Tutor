@@ -171,7 +171,7 @@ released** (§8).
 Whisper transcribed the synthesised Mandarin, Japanese, English, Korean and
 German correctly; VoxCPM2 was verified across zh / en / ja / ko / de, including a
 7 s multi-sentence clip with no truncation. Cold start (all three) ≈ **3 s**,
-hidden by pre-warming when the user opens a voice exercise.
+hidden by pre-warming when the user opens an exercise the model serves.
 
 Design policy: models are chosen from one registry in `python/speech/models.py`,
 so a size change (`whisper-…-8bit`, `VoxCPM2-4bit`) is a config change, not a
@@ -275,10 +275,11 @@ server owns its lifecycle.
 
 - Default `TUTOR_SPEECH_AUTOSTART=false`.
 - The gateway process is spawned on the **first** speech request (or when the user
-  opens a voice exercise, which pre-warms it).
+  opens an exercise that needs it, which pre-warms it). Listen cards play
+  pre-recorded clips and never wake it.
 - On spawn, the sidecar binds a localhost port and reports `/health` until models
   are loaded. First-utterance latency includes model load (~2–6 s). We hide this
-  by pre-warming when the user enters a voice mode or clicks record.
+  by pre-warming when the user enters a drill the model serves or clicks record.
 
 ### 8.2 Idle shutdown
 
@@ -531,14 +532,97 @@ Every prompt is built on the server; the shared pieces live in
   anything of that kind before synthesis (`speakable` in `apps/web/src/lib/speech.ts`).
 - **Feedback is in the learner's language**, restated as the last line of every
   grading request, because a small model otherwise drifts into the target language.
+- **An answer to a question is in the learner's language only.** When the
+  learner asks what something means or writes in their native language, the
+  conversation prompt has the tutor explain in that language and add no target
+  sentence, or the model appends "carry on" chatter in the language being learned.
+- **There is no account-level target language.** What is practised comes from
+  the deck in use — grading reads the card's own language, and the conversation
+  takes the active deck's language — while a question about any other language is
+  still answered in the learner's native language. The account keeps only
+  `native_lang` and `level`.
 - **The deck planner shows one worked example** in the deck's own language and
   reading script (`deck/planPrompt.ts`); models copy an example's shape closely.
+- **A path tells the planner what to teach.** The default deck is a *path*
+  (§13.7): its instruction is composed by the app (`pathInstruction`,
+  `deck/path.ts`) — everyday spoken language for reading manga, manhwa and
+  manhua, one sentence per word, grammar as a single-word blank — so the learner
+  picks a language and never writes a prompt. A custom deck still passes the
+  learner's own text.
+- **A generated batch passes a reviewer the deterministic drills cannot
+  replace.** `deck/review.ts` sends the batch to the judge model and keeps, fixes
+  or drops each card on its meaning, grammar and reading; a fix is applied before
+  the card is stored, and a card the reviewer never mentions is left alone.
+- **A grammar card teaches, it does not just name its point.** `payload.rule`
+  names it without the word that fills the blank (the drill shows that line as a
+  hint, so it must not give the answer away), `front` names every form of the
+  point ("Topic particle 는 / 은"), and `payload.explanation` is two to four
+  sentences that say what it means, when each form is used and the mistake
+  learners make — the intro screen and the graded feedback both read it out.
+- **A word that is itself a grammar point is introduced by its grammar card.**
+  A particle, copula, conjunction, auxiliary or classifier is not a vocabulary
+  item, so the planner writes one grammar card for it — `front` names the point
+  and its forms, `back` is the word, `payload.explanation` says how it is used —
+  and no vocab card. The build marks that card `payload.intro` (`acceptPlanned`
+  in `deck/build.ts`, kept only when the point names its own word and no vocab
+  card competes), and it then counts as the word's introduction: it takes the
+  step, joins the known words for the cards after it (`keepDrills`,
+  `persistStep`) and is what growth calls a word already met
+  (`introducesWord` in `deck/growth.ts`). A grammar card that only teaches a
+  pattern keeps the vocab card for the word it blanks. The deck schema makes
+  `explanation` required on the grammar card variant, so the model cannot leave
+  the teaching text out, and an intro card that still arrives without
+  `payload.explanation`, with a bare label instead of one, or past the
+  800-character cap is dropped before it is stored (`sanitizePlannedCard` in
+  `deck/plan.ts`), so the batch is planned again rather than shipping a card
+  that teaches nothing. A point the prompt has no blank for yet (は needs a noun
+  and a copula before it can be blanked) keeps its explanation on the word card
+  instead, so the intro still defines it; the word card shows the explanation
+  the planner wrote. A grammar card is built with its example: after the batch is
+  persisted the build writes one sentence with the example planner and keeps it
+  only if it passes the same word checks and drill grading as any other sentence
+  (`attachGrammarExamples` in `deck/build.ts`). A card that still lacks one is
+  filled in the background the first time it is served, so the drill never waits
+  on the model (`fillGrammarTeaching` in `deck/grammarExamples.ts`); until then
+  the intro falls back to a sentence built from the card's own prompt.
 - **A language's traps are named, not assumed.** For Chinese the planner is told
   that 這/那 are not places and 來/去 need one (`motionRule`), and the build drops
   a sentence that still writes 來這/去那 (`motionWithoutPlace` in
   `deck/context.ts`) — an odd sentence teaches something wrong.
+- **A generated example is graded before it is kept.** When the planner returns a
+  batch, every sentence and grammar card is run through the drills it supports
+  (`exercises/verify.ts`): the drill must offer its own right answer — a choice
+  list that contains it, a token bank that holds every token — and grading that
+  answer must come back correct, or the card is dropped and logged
+  (`keepDrills` in `deck/build.ts`). This is the card-side twin of grading each
+  recorded clip before it is stored.
+- **Every word gets a sentence.** The planner writes one example sentence for
+  every vocab card, not one every few, so a deck inflates but each word arrives
+  with usage. The same checks keep them honest: a sentence is dropped when it
+  leaps ahead of the words met, when it holds a word the learner has not met, or
+  when its drills do not offer and grade the right answer (`skipExample` and
+  `keepDrills` in `deck/build.ts`). Existing decks catch up with
+  `scripts/rebuild-sentences.ts`, which deletes a deck's sentence cards and
+  regenerates one per word through the same build.
+- **n+1 covers grammar, not just sentences.** The build drops any example whose
+  target-language words are not yet met: sentence tokens and distractors, and now
+  a grammar card's answer and the words of its prompt (`targetWords` in
+  `deck/context.ts`). A card that cannot be written from what the learner knows is
+  not written at all.
+- **The same check runs on demand.** A deck's settings carry **Check all cards**
+  (`POST /api/decks/:id/audit`, `deck/audit.ts`): it scans the deck with the
+  generation rules and reports each card that fails, then a second press drops the
+  failures and prunes the choice words the learner has not met. It exists so a
+  prompt change can be tested against the cards already in a deck, not only the
+  next batch.
 - **Grading is repeatable** (temperature 0.2) and never blocks a review: a judge
   that fails or times out falls back to the deterministic grade.
+- **A submission is capped at 15 seconds on the client.** While it runs the whole
+  card is covered by a spinner (`ExerciseStage.svelte`), so a slow voice grade
+  does not read as a frozen drill; when the deadline passes
+  (`gradeSignal` in `apps/web/src/lib/exercises.ts`) the card comes back with an
+  error to retry instead of waiting on a stalled judge. The overlay leaves the
+  drill mounted underneath, so a timed-out typed answer is not lost.
 
 ---
 
@@ -611,7 +695,10 @@ Chinese readings are looked up the same way. `deck/mandarin.ts` resolves a word'
 `scripts/build-mandarin-readings.py` from the Ministry of Education's
 《重編國語辭典修訂本》 (Taiwan; CC BY-ND 3.0 TW, readings used verbatim) and
 **McBopomofo** (https://github.com/openvanilla/McBopomofo, MIT; each character's
-preferred reading and the words the ministry dictionary omits). The deck builder
+preferred reading and the words the ministry dictionary omits). When that
+preferred reading is a 合音 (contraction) the ministry lists as a secondary
+reading — 這 as ㄓㄟˋ rather than ㄓㄜˋ — the ministry's primary reading wins, so
+an isolated character reads the same as it does inside a word. The deck builder
 overrides the generator's reading for a `zh` deck, except where the word came
 with its own reading (an Anki import) — that is the source deck's authority.
 Only Traditional characters have entries: Zhuyin is a Taiwan script, so a
@@ -620,12 +707,15 @@ Simplified or pinyin deck keeps the generator's reading.
 Cards come from: a curated starter deck, LLM generation ("give me 20 HSK-1
 food words"), or manual entry.
 
-**Listening audio is pre-recorded.** A listening card plays files, not a fresh
-TTS call: when a card is created (or on the first play of an older one) its
-target text is recorded in four voices — a teenager and a teacher of each
-gender (§9.2) — and stored content-addressed under `$TUTOR_DATA_DIR/audio/`
-(§12), keyed by voice, **language** and text: Mandarin, Japanese and Cantonese
-share written words (先生, 水), and each is read in its own language. `GET /api/cards/:id/audio` streams one voice (a random one per play, or
+**Listening audio is pre-recorded, sentence-only.** A listening card plays
+files, not a fresh TTS call: when an utterance card is created (or on the first
+play of an older one) its target text is recorded in four voices — a teenager
+and a teacher of each gender (§9.2) — and stored content-addressed under
+`$TUTOR_DATA_DIR/audio/` (§12), keyed by voice, **language** and text: Mandarin,
+Japanese and Cantonese share written words (先生, 水), and each is read in its
+own language. Single-word vocab is never recorded: `enqueueCards` keeps only
+`isUtterance` cards, and the new-word screen no longer plays a lone word.
+`GET /api/cards/:id/audio` streams one voice (a random one per play, or
 `?variant=N`), so playback never wakes the speech model. Recording runs through
 a serial background queue (`apps/server/src/audio/`), and
 `POST /api/audio/backfill` (or `scripts/backfill-audio.ts`) records a whole
@@ -678,6 +768,27 @@ swap lands on the token that shares the longest suffix and closest length with
 the replacement, so a weekday card offers 本日は土曜日です beside 本日は金曜日です
 instead of four unrelated words.
 
+**Listening and speaking are sentence-only.** `type_listen` and `speak_word`
+support a card only when it is an utterance (`isUtterance` in
+`exercises/payload.ts`: the card's type is `phrase`), never a single word — a word
+played or spoken on its own does not tell the learner what it means. The card type
+carries this: a "sentence" the planner segmented as one token is a word, so
+`storedTemplate` (`deck/plan.ts`) stores it as a `vocab` card and migration
+`0025_single_word_cards_are_vocab.sql` relabels the starter decks' short words
+(네, 謝謝). Word cards keep the text drills and `converse`. Free
+production waits for a base: `converse` is offered only once the member has met a
+sentence card in that language or knows enough words there to attempt one
+(`available` in `defs/converse.ts`), so a brand-new word is never answered with
+"write your own sentence." The drill grades the **word, not the sentence**: the
+judge answers `wordCorrect`, true only when the word carries its own meaning in
+the place it was put — a word sitting where a different one belongs is wrong even
+though it is there. When it is correct the rest of the sentence never fails it:
+other mistakes come back as feedback and the score is floored at 75
+(`defs/converse.ts`). The code also requires the word to be in the answer, so a
+generous judge cannot pass a sentence that leaves it out. `speak_word` was switched off product-wide while it ran on words; it is on again
+now that it is sentence-only, and a forced call is swapped for an allowed kind
+when the card does not support it (`isBlocked` in `routes/practice/next.ts`).
+
 ### 11.4 Game systems plug in via an event bus
 
 The engine emits domain events; game systems subscribe, so new mechanics don't
@@ -695,7 +806,7 @@ events.emit('streak.updated', { days })
 
 ```
 users(id, username UNIQUE, password_hash, handle, role /*admin|user*/,
-      native_lang, target_lang, level, settings_json, created_at, updated_at)
+      native_lang, level, settings_json, created_at, updated_at)
 auth_sessions(id /*sha256(token)*/, user_id, created_at, expires_at, user_agent)
 user_settings(user_id, key, value, PRIMARY KEY(user_id,key))
 decks(id, user_id, name, source_lang, target_lang, level, description)
@@ -739,15 +850,15 @@ settings and OpenRouter key**.
   Cookie is `Secure` automatically when served over HTTPS, and its `Path` is the
   app's base path (`/tutor` behind the gateway), so other apps on the same
   tailnet hostname never receive it.
-- **What is personal, and what is shared.** Every request resolves the session
-  to a member. A member's **progress** is theirs alone: the schedule, review
-  history, XP, chats, settings, inventory and gear are all scoped by `user_id`.
-  **Decks and cards are shared** by every member — a household builds one
-  library — so `decks.user_id` only records who created the deck. Any member can
-  study, grow or edit a deck; **deleting** one removes it and everyone's
-  progress on it, so only the admin or its creator may.
-- **Deleting a member** removes everything that is theirs in one transaction.
-  Shared decks stay (losing only their creator) until the last member is gone.
+- **Everything is personal.** Every request resolves the session to a member.
+  A member's **progress** is theirs alone: the schedule, review history, XP,
+  chats, settings, inventory and gear are all scoped by `user_id`. **Decks and
+  cards are theirs too** — each account builds its own path — so `decks.user_id`
+  is the owner and `listDecks`/`listCards`/`getDeck` return only that member's
+  rows. A card can still be private to one member (`cards.private_to`, their
+  reinforcement cards).
+- **Deleting a member** removes everything that is theirs — decks, cards and
+  history — in one transaction.
 - **Sign-in** is throttled per username (8 wrong passwords lock it for ten
   minutes), and an unknown username takes as long to reject as a wrong password.
 - **Per-user keys:** each user stores their own OpenRouter key in `user_settings`
@@ -801,44 +912,40 @@ The trainer picks the eligible drill you have practised *least recently*
 (`pickNextExercise`), so you always get variety instead of the same question type.
 The action — `Mine copper` — is also the unit that **levels up**; see below.
 
-**23 professions** in four groups:
+**19 professions** in four groups:
 
 | Group | Professions |
 | --- | --- |
 | Gathering | Mining, Woodcutting, Fishing, Farming |
-| Artisan | Smithing, Cooking, Herblore, Fletching, Runecrafting, Crafting, Firemaking, Construction, Enchanting |
-| Support | Thieving, Agility |
-| Combat | Attack, Strength, Defence, Constitution, Ranged, Magic, Prayer, Slayer |
+| Artisan | Smithing, Cooking, Herblore, Fletching, Runecrafting, Jewelcrafting, Leatherworking, Tailoring |
+| Support | Enchanting, Thieving, Agility |
+| Combat | Attack, Strength, Ranged, Magic |
 
 **Materials & chains** (59 items) — gathering produces raw goods, artisans refine
 them, combat consumes gear. Enchanting is the second-order artisan: it binds cut gems
-(Crafting) and runes (Runecrafting) into amulets, robes and blessed blades for Magic:
+(Jewelcrafting) and runes (Runecrafting) into amulets, robes and blessed blades for Magic:
 
 ```
 Mining ──ores/essence──► Smithing ──bars──► weapons & armour ──► Attack/Strength
   └────► Runecrafting ──runes──► Magic
-Woodcutting ──logs─┬─► Fletching ──bows + arrows──► Ranged
-                   ├─► Firemaking ──ash──► Herblore
-                   └─► Construction ──planks──► furniture
+Woodcutting ──logs──► Fletching ──bows + arrows──► Ranged
 Fishing ──fish──► Cooking ──food──► combat
 Farming ──herbs──► Herblore ──potions──► combat
-Thieving ──gems──► Crafting ──vials──► Herblore ; ──leather──► armour
-Slayer ──bones──► Prayer ; combat drops ──hides/bones/gems──► Crafting/Prayer
+Thieving ──gems──► Jewelcrafting ──vials──► Herblore ; ──leather──► armour
+combat drops ──hides/bones/gems──► Jewelcrafting
 ```
 
 **Recipes can gate on a second profession.** An action's `requires` is a list, so a
-tier-4 bar needs both the Smithing level *and* the Mining level that fed it, a super
-attack potion needs Herblore *and* Farming, and the enchanter's gear needs
-Enchanting *and* the artisan that made the base item (`enchant-blade` needs
-Enchanting 20 and Smithing 25). The result is a web, not a row: to reach tier 5 you
-train two professions, and each one's output is the other's input.
+tier-4 bar needs both the Smithing level *and* the Mining level that fed it, and a super
+attack potion needs Herblore *and* Farming. The result is a web, not a row: to reach
+tier 5 you train two professions, and each one's output is the other's input.
 
 **The level lives on the action, not the profession.** Every action has its own
 XP pool and its own level, and its own passive that grows with *that* action:
 gathering +1% **of the action's own output**/level (`Mine copper` gives more
 copper, `Mine essence` more essence — not more of everything), artisans +0.5%
 bonus-product chance/level, Agility +0.5% **XP to every profession**/level, combat
-+1% power/level, Slayer +1% rare drops/level, Thieving +2% coins/level.
++1% power/level, Thieving +2% coins/level.
 
 **The curve ramps up.** One action level costs `50 + ⌊(level − 1)² / 4⌋` XP: the
 first levels are minutes of a run, level 60 costs ≈920 XP, and maxing one action is
@@ -869,7 +976,7 @@ is trained. Levels stay comparable as the game grows — `100` always means
 "everything in this profession is maxed".
 
 **The account level is the same idea one rung up.** The **Home level** is the mean
-of all 23 professions, out of 100 — a percent-complete figure, 1 at the start and
+of all 19 professions, out of 100 — a percent-complete figure, 1 at the start and
 100 when every action is maxed. It is *derived*, never stored: drills and the idle
 rigs both feed the professions underneath it, and shipping a new profession (or a
 new action inside one) lowers it until that content is trained. Nothing levels the
@@ -886,7 +993,7 @@ this number. `accountLevel()` in `apps/server/src/services/board.ts` computes it
   talent feeds a bonus into *another* profession, **scaled by the owning
   profession's own derived level**. Mining's *Ore Sense* gives Smithing +0.5% XP
   per Mining level; Smithing's *Deep Veins* gives Mining +0.5% yield per Smithing
-  level; Magic's *Arcane Study* feeds Enchanting, and so on for all 23. `Mod`
+  level; Magic's *Arcane Study* feeds Enchanting, and so on for all 19. `Mod`
   carries the link (`{ kind, value, skill: target, synergy: owner }`) and
   `computeBonuses` resolves it against `skillLevelsFrom(actionLevels)`, so the gift
   grows as you invest — training one profession levels another faster.
@@ -913,7 +1020,7 @@ All effects aggregate through `computeBonuses(actionLevels, talents)`.
 legs, feet, hands, ring 1, ring 2, trinket 1, trinket 2, main hand and off hand.
 Rings and trinkets share a slot family, so any ring fits either finger. Smithing
 forges plate weapons and armour for melee, Leatherworking makes leather for ranged,
-Tailoring weaves cloth for magic, and Crafting/Enchanting make jewellery. A fight
+Tailoring weaves cloth for magic, and Jewelcrafting/Enchanting make jewellery. A fight
 uses **whatever you have equipped** — you never pick a weapon or a skill. The
 equipped main-hand's tag decides the combat profession the fight trains: a melee
 weapon (sword) trains **Strength**, a bow trains **Ranged**, a staff trains
@@ -921,10 +1028,11 @@ weapon (sword) trains **Strength**, a bow trains **Ranged**, a staff trains
 `locked / affordable / equipOk` for every profession-board action (those still gate
 on gear).
 
-**Crafted gear rolls its own stats.** Every craftable piece is an *instance*, not a
-stack: the recipe produces one piece and `game/gear.ts` rolls a quality (common →
-epic) plus 1–3 random affixes from the piece's stat pool. The base stats are scaled
-by quality; affix values are budgeted by the piece's item level. A piece carries
+**Crafted gear always comes out the same.** Every craftable piece is an *instance*,
+not a stack: the recipe produces one piece with the fixed stats in
+`game/skills/items.data.ts`, so two bronze swords are interchangeable. Jewelcrafting
+and Enchanting are what change a piece — cut gems in jewellery and enchantments bound
+to a slot are the only source of variation. A piece carries
 `strength`, `agility`, `intellect`, `stamina`, `haste`, `crit` and `mastery`:
 
 - **Primaries** (Strength/Agility/Intellect) scale the combat style the piece is
@@ -937,10 +1045,10 @@ by quality; affix values are budgeted by the piece's item level. A piece carries
 
 The **Inventory** screen shows the paper doll and saved loadouts; the **Bank**
 screen holds materials and consumables. The Inventory screen shows every crafted
-piece, its rolled stats and its gear score, and lets you save named **gear sets**
+piece, its stats and its gear score, and lets you save named **gear sets**
 (loadouts) for quick swapping between melee, ranged and magic. A set snapshots the
 slot → instance map; applying it swaps the whole loadout in one click. Equipping
-an instance keeps its rolled stats. **Instances are the only record of owned
+an instance keeps its stats. **Instances are the only record of owned
 equipment**: an item's count in the bank is the number of its instances, worn
 ones included, and the `inventory` table holds materials only. A recipe, a rig
 or a drill can spend only *spare* pieces — what you are wearing is never
@@ -951,20 +1059,20 @@ unlocks a set bonus: Vanguard (plate) grants armour, crit and power; Trailblazer
 (leather) grants haste, crit and power; Arcanist (cloth) grants mastery, haste and
 power; Jeweler's (jewellery) grants stamina and crit. The Inventory screen shows
 each set's current pieces, active tiers and the next tier. A piece you do not
-need can be **salvaged** back into its crafting material, scaled by quality
-(common → epic), instead of being discarded. Past a band's gear-unlock point the
-salvage also yields that band's **reagent** (§13.5.3) — the feedstock Enchanting
-spends to improve higher-tier gear.
+need can be **salvaged** back into its material instead of being discarded. Past a
+band's gear-unlock point the salvage also yields that band's **reagent**
+(§13.5.3) — the feedstock Enchanting spends to improve higher-tier gear.
 
 **Equipment requirements.** Gear is gated by combat stats, RuneScape-style:
 weapons need the skill they train (melee → Attack, bow → Ranged, staff → Magic),
-armour and shields need Defence, and quivers/tomes/orbs need their own style.
-Rings, necks and trinkets are not gated. The level scales with the item's tier:
-bronze 1, iron 5, steel 10, mythril 20, adamant 30. Crafting stays a step ahead of
-the combat gate, so a smith can forge adamant long before they can wear it. The
-Inventory screen shows each piece's requirement and greys out its Equip button
-until the player qualifies; applying a saved set skips locked pieces and reports
-them instead of failing the whole swap.
+and quivers/tomes/orbs need their own style. Armour and shields need Strength —
+their defence comes from the piece's own armour stat. Rings, necks and trinkets
+are not gated. The level scales with the item's tier: bronze 1, iron 5,
+steel 10, mythril 20, adamant 30. A crafter stays a step ahead of the combat gate,
+so a smith can forge adamant long before they can wear it. The Inventory screen
+shows each piece's requirement and greys out its Equip button until the player
+qualifies; applying a saved set skips locked pieces and reports them instead of
+failing the whole swap.
 
 **Fights (active, language-driven):** 6 monsters with HP, damage and drop tables.
 Any monster can be fought with any gear — difficulty is its HP and damage, not a
@@ -978,14 +1086,13 @@ introduces a new card, it drills cards that already have a spaced-repetition sta
 Start click, then each drill gets 20 seconds and the next drill's clock starts as
 soon as the previous exchange resolves. A timeout counts as a miss. **The monster
 lands a blow on every exchange** — whether you strike it, miss, or run out of time
-— for `monster.damage − armour` (min 1), and that damage trains **Defence and
-Constitution**. A drill you answer **correctly** also lands your own hit for
+— for `monster.damage − armour` (min 1). A drill you answer **correctly** also lands your own hit for
 `playerPower = (3 + skillLevel*1.5 + weaponPower + primary*0.5) * (1 + damageBonus + mastery)`,
 multiplied by a crit and possibly a haste strike. Your HP is
-`20 + constitution*4 + hpBonus*20 + armour*2 + stamina*3` and **carries between
+`20 + hpBonus*20 + armour*2 + stamina*3` and **carries between
 fights**; **only food and potions heal it** — there is no passive regeneration, and
-a defeat leaves you at 1 HP rather than a free heal. **Win** → drops (with the
-Slayer bonus) + combat XP (credited to the trained profession) + overall XP;
+a defeat leaves you at 1 HP rather than a free heal. **Win** → drops + combat XP
+(credited to the trained profession) + overall XP;
 **lose** → the fight ends with nothing. One active encounter per player
 (`encounters` table). Events: `combat.hit`, `combat.ended`.
 
@@ -1016,10 +1123,10 @@ item; stop, and the run drains out and the rig falls still. This is what makes t
 game reward *taking a break* and *coming back*.
 
 ```
-   complete 1 drill          complete 10 more             come back in 3h
+   complete 1 drill          complete 10 more             come back later
    ─────────────────         ─────────────────            ──────────────
    +1 ore  (the strike)      +1 ore  (the strike)         bank is full
-   run: 1 / 19s for 10 min   run: 1 / 15s for 45 min      pick new drills
+   run: 1 / 19s for 10 min   run: 1 / 15s for 1h 20m      pick new drills
 ```
 
 **Nothing ticks.** There is no scheduler, no worker, no timer. A run is *not* a
@@ -1030,6 +1137,7 @@ Per `(user, action)` the database keeps only what a completion already tells us:
 | --- | --- |
 | `completions` | how many drills this action has ever completed — drives rate & length |
 | `run_ends_at` | when the current run expires (ms; `0` = still) |
+| `run_started_at` | when the current run began (`0` = unknown) — the "gathered this run" origin |
 | `settled_at` | the cursor: accrual has been credited up to here |
 | `crafts` | fractional crafts carried between settles (keeps `consumes` integral) |
 | `remainder_json` | sub-item fractions carried per produced item (no rounding loss) |
@@ -1077,14 +1185,16 @@ yew, blessed blades) stays *rarer* without costing you more real time — the ru
 window is about how long you can be away, and that is the same for everyone. The
 table below is tier 1; multiply the interval by `tierFactor` for deeper rigs.
 
-**A flurry of drills can't buy unlimited time.** A drill does not *stack* onto
-the previous end; it **re-bases** the run to `rigRunSec(completions)` from that
-drill. So a burst of completions makes the next run longer *in step with the
-count* — 10 buy over an hour, the 25th buys the full 3 h, and it never exceeds
-`maxRunSec`. (`extendRig` sets the end outright, and `settleRig` re-clamps on
-every read, so any older row written before this held is trimmed on its next
-settle.) Summing a per-drill slice instead reached the 3-hour ceiling after only
-~10 rapid drills, which is why a handful of cards used to buy a full night.
+**A drill tops the run up, it does not refill it.** Each completion **adds one
+equal step** to the run you already have (`extendRig` adds `rigRunSec / 24` — the
+first drill starts the 10-minute run, every drill after adds the same slice). A
+steady chain therefore climbs `10 min → 3 h` by the 25th completion, but a rig you
+let drain is only topped up by that one step: drilling a long-lived rig with 20
+minutes left buys ~27 minutes, not another night. The end is clamped to `now + maxRunSec`,
+so the run can never exceed the ceiling however fast you drill, and `settleRig`
+re-clamps on every read. (Basing the run on a lifetime count instead — setting the
+end outright to `rigRunSec(completions)` — meant any single drill snapped a
+drained rig all the way back to its ceiling, which is what a "top up" must not do.)
 
 | completions | 1 | 10 | 25 | 50 | 100 | 300 |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -1093,12 +1203,16 @@ settle.) Summing a per-drill slice instead reached the 3-hour ceiling after only
 | items per run | 31 | 295 | 918 | 1,047 | 1,079 | 1,080 |
 | XP per run | 28 | 265 | 826 | 942 | 971 | 972 |
 
-**The climb is visible.** A rig's view carries how far it is toward the cap —
-`runProgress` (0 → 1) and a `maxed` flag the moment a completion buys the full 3
-hours. The practice result draws it as a bar with `N/25 to 3h`, and once the rig is
-maxed it says so outright: the run is as long and fast as it will ever be, so the
-next drills are better spent on a different action. The profession page shows the
-same `N/25` count per action, so the board is where you decide what to power next.
+**The fill is visible.** A rig's view carries how **full** the run is —
+`runProgress` (0 → 1, the run's remaining time against the 3-hour cap) and a
+`maxed` flag once the run has actually reached that cap. So the practice result
+draws a bar that fills as you top the run up and, while it is short of 3 h, names
+the time still to add; only a full run reads "maxed" and points the next drills at
+a different action. `runSec` is the run a steady chain has *climbed* to at that
+completion count (not a promise after a drain), and `secondsLeft` is the run the
+drill actually leaves, so the "left" it reports always matches the home screen.
+The profession page shows the same fill per action, so the board is where you
+decide what to power next.
 
 **Every action is a rig**, including the artisans. A gathering rig makes something
 from nothing; an artisan rig *transforms* — its run consumes the recipe inputs and
@@ -1191,7 +1305,10 @@ notification — "Mine copper is running low — 22 minutes left — drill to ke
 going" — with a tap that opens Home. The alert is a *come back and drill* nudge, not
 a completion receipt. It only fires for runs that have grown **past an hour**, so a
 young rig never nags while you are still drilling it up; shorter runs are ignored,
-because there is little to extend yet.
+because there is little to extend yet. The gate reads the run's **own length**
+(`run_ends_at - run_started_at`), not the lifetime completion curve, so a veteran
+who drains a rig and starts a fresh short run stays quiet as well — `rigRunSec`
+only paces the run, it no longer describes one that was topped up from a drain.
 
 **Two paths, one switch.** The server pushes through the browser's push service, so
 the alert arrives with the app closed. While the app is open, a local timer arms the
@@ -1230,7 +1347,7 @@ Gear runs along a **material axis** — bronze → iron → steel → mythril �
 and each material is a **tier band**, not a skill per item. A band owns **one**
 level track: its recipes unlock at thresholds *inside* the band, so Bronze is a
 single progress bar (bars at 1, boots at 6, plate at 12, …), shown on the actions
-page as a **dropdown** that expands to the whole bronze set. Crafting any bronze
+page as a **dropdown** that expands to the whole bronze set. Making any bronze
 item feeds the same bronze score — you never level a dozen near-identical actions
 to move on.
 
@@ -1291,31 +1408,50 @@ every artisan shares (§13.5.3).
 ### 13.5.3.2 Distillation & enchants (Enchanting)
 
 Enchanting has **one** track: `Distill`. You pick an item from your inventory, burn it,
-and learn from it — XP is a **percentage of the item's coin value**
-(`DISTILL_XP_PER_VALUE`, 9 XP per coin), so an endgame piece levels Enchanting faster
-than a raw ore but never instantly. The rate is priced against the curve: level 100
-costs **84,575 XP**, so capping Enchanting takes ~9,397 coins of burned value — about
-**940 coins a day over 10 days**. Distilling also yields the item's **family essence**
-(metal, cloth, leather, wood or gem), the reagent every enchant is built from. Burning
-is the point: Distill is the sink that eats surplus materials and gear.
+and learn from it — XP tracks the item's **coin value** only loosely
+(`DISTILL_XP_PER_VALUE`, 0.2 XP per coin): a raw ore pays **1 XP** and a bronze sword
+**4**, so better gear is worth more without an endgame piece leveling Enchanting in a
+few clicks. Distilling also yields the item's **family essence** (metal, cloth, leather,
+wood or gem), the reagent every enchant is built from. Burning is the point: Distill is
+the sink that eats surplus materials and gear.
+
+Distill runs as a **rig like every other action**, but its recipe is not fixed in the
+data: you stock it with a **per-member policy**. In the Bank you tap items to mark them
+distillable, and the Distill panel picks the order — **highest value first** or **lowest
+value first**. The rig then transforms marked stock, one item per craft, into that item's
+family essence and the value-scaled XP, clamped by the bank: it stops when the marked
+items run out. Because it only burns what you marked, it can never run away, and the drill
+still pays the action's flat XP on top.
 
 **Enchants** are catalogued **by slot** (`ENCHANTS`) and unlocked at Enchanting levels
-— all chest enchants sit together, so you unlock +stamina at Lv 2 and +strength at Lv
+— all chest enchants sit together, so you unlock +stamina at Lv 3 and +strength at Lv
 5. Every enchantable slot (head, neck, chest, waist, legs, feet, hands, main hand, off
-hand, rings, trinkets) carries a menu of stats running from Lv 2 up to Lv 50, and both
-the essence cost and the stat points scale with the level, so Distill keeps having a
-reason to climb. Applying one fits the piece's slot, needs its level, and costs its own
-essence reagents, and it grants **no XP**: the training is Distill, the enchant is the
-payoff. An enchant adds its stat points straight onto the piece (one per piece,
-replaceable), so it flows through the normal gear maths.
+hand, rings, trinkets) carries a menu of stats running from Lv 2 up to Lv 50, and the
+stat points scale with the level, so Distill keeps having a reason to climb.
+
+Applying an enchant spends three things: the piece's **family essence** (the Distill
+output, scaled by level), a **tier of profession material** and a **tier of combat
+reagent**. The tiers step every ten Enchanting levels — copper ore + slime goo, then
+iron + wolf fang, coal + bone shard, mythril + imp ember, adamant + dragon scale — so
+the deeper your enchants, the more Mining (and the other gatherers) and the tougher
+monsters you must farm. The combat reagents are monster drops (`slime_goo`,
+`wolf_fang`, `bone_shard`, `imp_ember`, `dragon_scale`), which is what gives fighting
+a purpose beyond XP.
+
+Enchanting is **enchant-first**: on the Enchanting page you tap a recipe, and the game
+offers the pieces you already keep in that slot — the ones saved in your loadouts, or
+what you are wearing when you have no loadout. Applying one fits the piece's slot,
+needs its level and its reagents, and grants **no XP**: the training is Distill, the
+enchant is the payoff. An enchant adds its stat points straight onto the piece (one per
+piece, replaceable), so it flows through the normal gear maths.
 
 ## 13.6 Spaced repetition (FSRS-6, Anki-style) & guided curriculum
 
 Scheduling uses **FSRS-6** — the algorithm Anki 25.07+ uses — through the
 reference TypeScript implementation (`ts-fsrs`, FSRS-6 model) with Anki's
 **default 21 weights** (`w20 = 0.1542` trainable decay), configurable
-**learning steps** (default `1, 10, 60, 240` minutes, so a brand-new card repeats
-a handful of times before it graduates) and **relearning steps** (`10m`), and
+**learning steps** (default `1, 10` minutes — Anki's default, so a brand-new card
+is answered, comes back once, then graduates) and **relearning steps** (`10m`), and
 intervals derived from a **desired retention** (default `0.9`, per-user). An
 Anki-style **daily budget** — new cards/day and reviews/day (default 20 / 200),
 with a "study more" override — bounds how much a day *asks* for; practice treats
@@ -1338,8 +1474,9 @@ graduation — is ours (`apps/server/src/game/srs.ts`).
 - **A sitting opens on a few new words.** `selectStudyCardId()` puts the due backlog
   first, which is right in the middle of a sitting but feels like grinding at the
   start. So practice warms up: while fewer than **3 cards have been graded in the
-  last 30 minutes** (i.e. the sitting is young), the next card is a new one in
-  curriculum order; then the due/hardest-overdue card takes over. A pause longer
+  last 30 minutes** (i.e. the sitting is young), the next card is a new one —
+  round-robin across decks when none is focused; then the due/hardest-overdue card
+  takes over. A pause longer
   than 30 minutes starts a new sitting, so it warms up again. The warm-up never
   overrides the daily budget and never invents a card: with no new words left it
   falls straight through to the review queue. Combat is unaffected — it is
@@ -1347,8 +1484,8 @@ graduation — is ours (`apps/server/src/game/srs.ts`).
 - **A lesson picks the path, not a card pool.** Starting the next step of the
   frequency path drills the **whole deck** (due → new → done), not just that
   step's cards. A one-word step has nothing else in it, so a lesson-scoped queue
-  used to re-show the same word four or five times while its `1m → 10m → 60m →
-  240m` learning steps waited. Now the queue moves on to the path's next new word
+  used to re-show the same word four or five times while its learning steps
+  waited. Now the queue moves on to the path's next new word
   and the learned one comes back only when its step is actually due. The practice
   header follows the card on screen (`POST /api/practice/next` returns its
   `lessonId`), and lesson completion fires only on the transition, not every time
@@ -1393,21 +1530,72 @@ graduation — is ours (`apps/server/src/game/srs.ts`).
   order; a lesson completes once every card is *learned* (graduated to `review`
   with a ≥1-day interval). Events: `srs.updated`, `lesson.completed`.
 
-## 13.7 The frequency path & n+1 sentences
+## 13.7 The path deck, n+1 sentences & auto-growth
 
-The flagship path is built **dynamically off a frequency list**, not hand-written
-lessons. `text/lexicon.ts` (Mandarin) and `seed/frequency-ja.ts` (Japanese) hold
-frequency-ordered lists tagged with a part of speech; the deck is seeded in that
-order and the curriculum walks it **one word per step**, so a step can only ever
-introduce a single new thing:
+A **path** is the default way to learn here: the learner picks a language and the
+app builds the deck for them — there is no prompt to write. `POST /api/decks`
+with `kind: "path"` (`srv/routes/decks/create.ts`, `srv/deck/path.ts`) fetches a
+real frequency list, puts the sentence-making words first (the curated
+`text/lexicon.ts` Mandarin and `seed/frequency-ja.ts` Japanese lists are the
+prefix; every other language starts from its frequency list), and asks the
+generator for the first **10** words (`pathInstruction`).
+
+Each batch is a small card set: a **vocab** card per word, a **sentence** card
+that uses it (n+1, below) and, once the known words allow, a **grammar** card —
+a fill-in-the-blank the learner completes with one word (`grammar_cloze`). A word
+that is itself a grammar point takes its grammar card in place of a vocab card
+(§10). The prompt asks for tokens and distractors on every sentence and single-word options
+on every blank, so the batch plays as Duolingo-style tiles and choices, not only
+typing. The full word order is computed once and stored in the deck's settings,
+so the path is deterministic and the register is everyday, spoken, manga/manhwa/
+manhua `pathInstruction` — never exam language.
+
+**It grows itself.** When a member has seen all but **3** of the deck's cards,
+`srv/deck/autoGrow.ts` (`maybeAutoGrow`, fired from the review path) starts a
+background build of the next 10 words with the same instruction and the words
+the member now knows. The deck is therefore *tailored as it is studied*: a learner
+who is quick gets new words sooner, and each batch continues from what they have
+met. `POST /api/decks/:id/grow` with `all: true` still builds every remaining
+word at once for someone who wants the whole path ready.
+
+**A deck fills one batch at a time.** `srv/deck/builds.ts` marks a deck busy from
+the first fill of a creation until that fill ends, and the grow route claims the
+deck before it awaits anything else, so a second growth, a clicked grow or the
+auto-grow check sees the deck busy and waits instead of planning the same words
+again. `persistOne` is the last line of defence: it refuses a second card with
+the same template and text in a deck, so a word the generator repeats can never
+become a duplicate "new" card.
+
+**Every card is reviewed before it is saved.** After the generator returns a
+batch, `srv/deck/review.ts` runs it past the judge model: each card is checked for
+a correct meaning, grammatical and natural target text and a correct reading, and
+is kept, fixed (a wrong reading or meaning) or dropped. It is the card-side twin
+of grading each recorded clip before it is stored (§9.2); the deterministic
+`verifyCard` drills run on top of it.
+
+**The word list lives in a dictionary, not in the deck.** Each language has a
+lexicon at `$TUTOR_DATA_DIR/lexicon/<lang>.json` — `{ "<word>": { rank, reading,
+meaning } }` — built once by `scripts/build-lexicon.ts` (`srv/deck/lexicon.ts`
+reads it, `srv/deck/lexiconBuild.ts` builds it). The rank *is* the path order: the
+curated seed, then the words harvested from the decks we already had, then the
+frequency list. The reading and meaning come from those same decks and the
+curated lists, and the model fills the meanings still missing, in rank order. A
+path deck then stores only its `cursor` into that order, so the words are written
+down once and every lookup is a map access: the planner is handed the correct
+reading and meaning as `hints` (§10.3) and growth reads the order straight from
+the lexicon. A deck imported from Anki, which brings its own words, keeps them in
+its settings.
+
+The path itself walks **one word per step**, so a step can only ever introduce a
+single new thing:
 
 ```
 我 → 你 → 是 → 不 → 好 → 很 → …                (frequency order)
    step 1   step 2  step 3   …                 each step = 1 new word
 ```
 
-The Learn tab is deliberately minimal: pick a course, tap **Next**. The lesson list
-is gone — the path advances one step at a time.
+The Learn tab is deliberately minimal: pick a language, tap **Start my path**.
+The lesson list is gone — the path advances one step at a time and extends itself.
 
 **n+1, enforced by construction.** The `sentence_build` exercise generates a short
 sentence that uses the new word *exactly once* and every other word from the set the
@@ -1456,7 +1644,7 @@ rotation, so it only ever appears as this first-exposure prelude.
 
 ## 13.8 Study preferences (per user)
 
-Decks are shared content; how you *drill* them is personal. `services/study.ts` keeps
+A path belongs to one member; how you *drill* it is personal. `services/study.ts` keeps
 a small bag of per-user knobs in `user_settings` (no migration needed), editable
 in **Settings › Study** and applied everywhere practice is served (the practice
 routes and the combat drill both read them):
@@ -1475,18 +1663,26 @@ routes and the combat drill both read them):
   reports `done` so the UI shows "today's goal reached". A per-day **"study
   more"** override (`study.extraToday`) raises today's allowance without touching
   the standing settings — Anki's custom study.
-- **Learning steps** — `learningSteps` (default `1, 10, 60, 240` minutes). These
-  decide how many times a brand-new card repeats before it graduates, so a session
-  can re-show it instead of dropping it for days.
+- **Learning steps** — `learningSteps` (default `1, 10` minutes, Anki's default).
+  These decide how many times a brand-new card repeats before it graduates: it is
+  answered, comes back once, then graduates, so it is done for that first day.
 - **Auto-reinforce** — `autoReinforce` (default on). When a card reaches
   `REINFORCE_LAPSES` lapses, `deck/reinforce.ts` asks the planner for one extra
   sentence/grammar card that practises the same word using only words already met
   (n+1), and adds it to that word's lesson (`payload.reinforces = <cardId>`).
-  The card is **private to that member** (`cards.private_to`): the shared deck is
-  the same for everyone, and each member's copy grows only where they need it.
+  The card is **private to that member** (`cards.private_to`): the deck is theirs,
+  and it grows only where they need it.
   One reinforcement per card and member; a failed attempt is retried a day later. `POST /api/decks/:id/cards` is the same insertion path for a
   hand-authored card: a `step` places it in that lesson, no `step` appends a new
   one.
+
+- **Studying deck** — `activeDeckId` names one deck to focus: Learn leads with it
+  and a request that names no deck defaults to it. **All decks** (the default,
+  unset) is the opposite: `POST /api/practice/next` then serves every deck. Due
+  reviews still come first (soonest-due across all of them); when it reaches new
+  words it takes them **one deck at a time, round-robin**, so all three advance
+  evenly instead of the first deck draining the day's new budget. Both the sidebar
+  **Studying** picker and the Practice deck picker offer it.
 
 Preferences are per account, so two people on the same server can study the same
 decks with different scripts and exercise sets.
@@ -1567,9 +1763,60 @@ will accept (`apps/web/src/lib/lang.ts`):
 
 Where this does not help, the **word-tile / character-bank** interaction
 (`sentence_build`, `multiple_choice`) sidesteps typing entirely — the reliable
-path on mobile for a beginner who has not enabled a CJK keyboard. A built-in
-romaji→kana / pinyin→hanzi IME would make *free* typing work cross-platform, and
-remains future work.
+path on mobile for a beginner who has not enabled a CJK keyboard. For *free*
+typing there is now a built-in IME (§14.3).
+
+### 14.3 The built-in IME — one keyboard per card language, no OS switching
+
+Since a page still cannot switch the OS keyboard, the app brings its **own**.
+When the exercise's answer language has an engine, the answer field is driven by
+an on-screen keyboard and a candidate bar; the engine is derived from the card
+(`answerLang`), so it *is* the switch the OS refuses to make — Korean card, Korean
+keyboard, automatically.
+
+- **Engines are pure TypeScript** (`apps/web/src/lib/ime/`): `hangul` (2-beolsik
+  jamo composition — what libhangul does), `kana` (romaji→kana, mozc's romaji
+  mode), `bopomofo` (Taiwanese Mandarin Zhuyin) and `latin` (a plain QWERTY for
+  English and the other latin-script languages). `imeFor(lang, { variant })` picks
+  one, so a new language is a new engine file plus a registry line — the same
+  extensibility promise as exercises.
+- **The keyboard is a Gboard-style bottom sheet**: full width, sitting on the
+  bottom edge with a hide button. Keys sit on a fixed column grid so they are the
+  same width in every row; the third row carries shift and backspace, and shift
+  reveals the doubled Korean jamo (ㅃㅉㄸㄲㅆㅒㅖ) instead of a fourth row. While it
+  is open it reserves the same height under the page, so the whole card scrolls
+  above it; hiding it scrolls the page back to the bottom. **Enter commits first,
+  then submits**: while a preedit or candidate bar is open it commits the
+  composition, otherwise it submits the surrounding form — the on-screen key and a
+  hardware Enter do the same thing.
+- **Conversion candidates come from the server** (`POST /api/ime/candidates`,
+  `apps/server/src/ime/candidates.ts`). The gateway already holds the
+  dictionaries, so the Mac does the heavy part: a reverse index of the MOE
+  Zhuyin readings → Traditional words (Taiwanese Mandarin, the rime role) and of
+  the Kanjium kana → kanji (the mozc role). The whole composition is **segmented**
+  against those indexes, so the first candidate is a whole-sentence conversion
+  (ㄨㄛˇ ㄏㄣˇ ㄏㄠˇ → 我很好, わたしは → 私は) and a Japanese particle does not
+  stop the suggestions. **Tones are optional**: a toneless reading is split into
+  syllables by the Zhuyin grammar, so ㄨㄛㄏㄣㄏㄠ converts too. Candidates are
+  ranked by the curated frequency lists (`text/lexicon.ts`,
+  `seed/frequency-ja.ts`) and the deck's own lexicon.
+- **Why not bundle librime/mozc as WASM.** mozc has no browser build, librime's
+  WASM port needs a multi-MB schema the PWA would have to fetch, and libhangul
+  composition is algorithmic anyway. The app's own dictionaries are already
+  Taiwan-standard and already on the server, so the same behaviour costs no new
+  asset and no client bundle.
+- **Not forced.** The keyboard opens by default on a touch device; *Use the
+  system keyboard* hands the field back to the OS (and a small link brings it
+  back). On a fine-pointer device it stays closed until asked for.
+- **A physical keyboard converts too.** Each engine carries a `physical` keymap —
+  2-beolsik for Korean, the standard Zhuyin layout for Chinese, romaji for
+  Japanese — so typing on a hardware keyboard runs through the same engine with
+  the on-screen keyboard hidden (the IME owns the field; the soft keyboard is
+  optional). Keys the map does not know, and OS-IME composing keys, pass through.
+- **Haptics.** Every key press vibrates at the member's chosen intensity
+  (`lib/haptics.svelte.ts`); the Settings → Keyboard slider goes from Off (the
+  lowest position) to Very strong. `navigator.vibrate` is Android-only, so iOS
+  ignores it.
 
 ---
 

@@ -1,9 +1,9 @@
 <script lang="ts">
   import type { Instance } from '#lib/exercises'
-  import { typingAttrs } from '#lib/lang'
   import { ACCENT, accentStyle } from '#lib/theme'
   import Spinner from '../Spinner.svelte'
   import CharCell from '../CharCell.svelte'
+  import ImeInput from '../ime/ImeInput.svelte'
 
   let {
     instance,
@@ -48,12 +48,7 @@
     </div>
   {:else}
     <form onsubmit={submit} class="space-y-4">
-      <input
-        bind:value={answer}
-        {...typingAttrs(answerLang)}
-        class="field text-lg"
-        placeholder="Type the correct form…"
-      />
+      <ImeInput bind:value={answer} lang={answerLang} placeholder="Type the correct form…" />
       <button
         type="submit"
         disabled={busy || !answer.trim()}

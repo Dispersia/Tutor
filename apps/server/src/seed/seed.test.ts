@@ -124,25 +124,31 @@ test('reconcile drops the retired themed decks', () => {
   sqlite.close()
 })
 
-test('decks are shared: a second member reuses the seeded decks', () => {
+test('each member gets their own seeded decks', () => {
   const { db, sqlite } = openDb(':memory:')
   const a = createUser(db, { username: 'a', passwordHash: 'x' })
   const b = createUser(db, { username: 'b', passwordHash: 'x' })
   seedStarterDecks(db, a.id)
-  const before = listCards(db, a.id).length
   seedStarterDecks(db, b.id)
-  expect(listDecks(db).map((d) => d.id)).toEqual(listDecks(db).map((d) => d.id))
-  expect(listCards(db, b.id).length).toBe(before)
+  const aDecks = listDecks(db, a.id).map((d) => d.id)
+  const bDecks = listDecks(db, b.id).map((d) => d.id)
+  expect(aDecks.length).toBe(2)
+  expect(bDecks.length).toBe(2)
+  expect(aDecks.some((id) => bDecks.includes(id))).toBe(false)
+  expect(listCards(db, a.id).length).toBeGreaterThan(200)
+  expect(listCards(db, b.id).length).toBeGreaterThan(200)
   sqlite.close()
 })
 
-test('deleting a member keeps the shared decks, until the last member is gone', () => {
+test('deleting a member removes their decks and leaves the others', () => {
   const { db, sqlite } = openDb(':memory:')
   const a = createUser(db, { username: 'a', passwordHash: 'x' })
   const b = createUser(db, { username: 'b', passwordHash: 'x' })
   seedStarterDecks(db, a.id)
+  seedStarterDecks(db, b.id)
   expect(deleteUser(db, a.id)).toBe(true)
-  expect(listDecks(db).length).toBe(2)
+  expect(listDecks(db, a.id).length).toBe(0)
+  expect(listDecks(db, b.id).length).toBe(2)
   expect(deleteUser(db, toUserId('nobody'))).toBe(false)
   expect(deleteUser(db, b.id)).toBe(true)
   expect(listDecks(db).length).toBe(0)

@@ -88,8 +88,6 @@ export interface HitResult {
   outcome: 'ongoing' | 'won' | 'lost'
   drops: { item: string; count: number }[]
   xp: number
-  defenceXp: number
-  constitutionXp: number
   ate: { item: string; heal: number; playerHp: number } | null
   talentUnlocked: number | null
 }

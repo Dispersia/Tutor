@@ -16,10 +16,8 @@ export const grammarCloze: ExerciseDef<string> = {
     )
   },
   async generate(ctx) {
-    const options = ctx.card.payload?.options
-    const choices = Array.isArray(options)
-      ? options.filter((o): o is string => typeof o === 'string' && o.length > 0)
-      : []
+    const answer = payloadString(ctx.card, 'answer') ?? ctx.card.back
+    const choices = choiceList(ctx.card.payload?.options, answer)
     return {
       exerciseId: this.id,
       cardId: ctx.card.id,
@@ -46,4 +44,12 @@ export const grammarCloze: ExerciseDef<string> = {
     }
   },
   xp: (r) => (r.correct ? 10 + (r.score === 100 ? 3 : 0) : 1),
+}
+
+function choiceList(options: unknown, answer: string): string[] {
+  const distractors = Array.isArray(options)
+    ? options.filter((o): o is string => typeof o === 'string' && o.length > 0)
+    : []
+  if (!distractors.length) return []
+  return [...new Set([answer, ...distractors])]
 }

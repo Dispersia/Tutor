@@ -12,7 +12,7 @@
 
   let { idle, accent, rigsRunning, maxLiveRigs, stoppedName }: Props = $props()
 
-  const remaining = $derived(idle.runFullAtCompletions - idle.completions)
+  const toFull = $derived(Math.max(0, idle.maxRunSec - idle.secondsLeft))
 </script>
 
 <div class="panel panel-accent mb-3 p-3" style="--accent: {accent}">
@@ -23,17 +23,17 @@
         >{fmtInterval(idle.intervalSec)}</span
       >
       ·
-      <span class="display tabular-nums" style="color: {accent}">{fmtClock(idle.runSec)}</span>
-      run · +{idle.xpPerCraft} xp/item
+      <span class="display tabular-nums" style="color: {accent}">{fmtClock(idle.secondsLeft)}</span>
+      left · +{idle.xpPerCraft} xp/item
     </span>
     <span class="display tabular-nums text-ink-300">
-      {idle.maxed ? 'maxed' : `${idle.completions}/${idle.runFullAtCompletions}`}
+      {idle.maxed ? 'maxed' : `${Math.round(idle.runProgress * 100)}%`}
     </span>
   </div>
   <div
     class="bar mt-2 h-1.5"
     role="progressbar"
-    aria-label="Rig progress toward the {fmtClock(idle.maxRunSec)} run cap"
+    aria-label="Rig run filled toward the {fmtClock(idle.maxRunSec)} cap"
     aria-valuenow={Math.round(idle.runProgress * 100)}
     aria-valuemin="0"
     aria-valuemax="100"
@@ -42,14 +42,12 @@
   </div>
   {#if idle.maxed}
     <p class="mt-2 text-xs text-jade-300">
-      Maxed at {fmtClock(idle.maxRunSec)} — this rig runs as long and as fast as it ever will. Switch
-      to another action to power a fresh one.
+      Full at {fmtClock(idle.maxRunSec)} — the run is as long as it gets. Switch to another action to
+      power a fresh one.
     </p>
   {:else}
     <p class="mt-2 text-xs text-ink-400">
-      {remaining}
-      {remaining === 1 ? 'drill' : 'drills'} to the full
-      {fmtClock(idle.maxRunSec)} run.
+      {fmtClock(toFull)} of run left to add before this rig is full at {fmtClock(idle.maxRunSec)}.
     </p>
   {/if}
   <p class="mt-2 text-xs text-ink-400">

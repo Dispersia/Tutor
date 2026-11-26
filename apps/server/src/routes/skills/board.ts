@@ -23,8 +23,10 @@ import {
   accountBandBonuses,
   actionState,
   bandView,
+  distillPerCraft,
   gearSetsView,
   gearView,
+  getDistillConfig,
   idleView,
   inventoryView,
   loadoutSetBonuses,
@@ -113,7 +115,8 @@ function recipeView(a: ActionDef, choiceId: string | undefined) {
 
 function rigView(a: ActionDef, d: BoardData, rig: RigState | undefined) {
   if (!rig) return null
-  return idleView(rig, a, d.now, d.bonuses.yield(a.id) + d.bonuses.double(a.id))
+  const xpPerCraft = a.id === 'distill' ? distillPerCraft(d.db, d.userId) : undefined
+  return idleView(rig, a, d.now, d.bonuses.yield(a.id) + d.bonuses.double(a.id), xpPerCraft)
 }
 
 export function currentEffect(kind: ModKind, b: Bonuses, actionId: string): number {
@@ -141,21 +144,26 @@ export function bonusSummary(b: Bonuses) {
   return { globalXp: b.globalXp, damage: b.damage, drop: b.drop, hp: b.hp }
 }
 
+function equippedView(deps: Deps, userId: UserId) {
+  return listEquipment(deps.db, userId).map((e) => ({
+    slot: e.slot,
+    itemId: e.itemId,
+    instanceId: e.instanceId ?? null,
+  }))
+}
+
 export function gearPayload(deps: Deps, userId: UserId, ctx?: Pick<PlayerCtx, 'levels' | 'bands'>) {
   const levels = ctx?.levels ?? loadProgress(deps.db, userId).levels
   const bands = ctx?.bands ?? bandView(deps.db, userId)
   return {
-    equipment: listEquipment(deps.db, userId).map((e) => ({
-      slot: e.slot,
-      itemId: e.itemId,
-      instanceId: e.instanceId ?? null,
-    })),
+    equipment: equippedView(deps, userId),
     gear: gearView(deps.db, userId, levels),
     sets: gearSetsView(deps.db, userId),
     setBonuses: loadoutSetBonuses(deps.db, userId),
     bands,
     enchants: ENCHANTS,
     enchantingLevel: skillLevelOf(deps.db, userId, 'enchanting', levels),
+    distill: getDistillConfig(deps.db, userId),
     buffs: { band: accountBandBonuses(deps.db, userId) },
     items: ITEMS.map((i) => ({ ...i, value: itemValue(i) })),
     inventory: inventoryView(deps.db, userId),

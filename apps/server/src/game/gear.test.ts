@@ -1,5 +1,6 @@
 import type { UserId } from '../ids'
 import { expect, test } from 'bun:test'
+import { eq } from 'drizzle-orm'
 import { openDb, type Db } from '../db/client'
 import {
   addGearSet,
@@ -10,18 +11,11 @@ import {
   listGearInstances,
   spendableCount,
 } from '../db/repo'
-import { equipment, inventory } from '../db/schema'
+import { equipment, gearInstances, inventory } from '../db/schema'
 import { EventBus } from '../events'
 import { MONSTERS, MONSTER_BY_ID } from './combat'
 import { ITEM_BY_ID } from './skills'
-import {
-  EMPTY_STATS,
-  QUALITY_MULTIPLIER,
-  itemRequirements,
-  meetsRequirements,
-  requiredLevelFor,
-  rollGearStats,
-} from './gear'
+import { itemRequirements, meetsRequirements, requiredLevelFor, statsOf } from './gear'
 import {
   applyGearSet,
   backfillGearInstances,
@@ -36,6 +30,7 @@ import {
   gearSetsView,
   gearView,
   loadPlayerCombat,
+  normalizeGearInstances,
   salvageGear,
   saveGearSet,
   unequipItem,
@@ -47,23 +42,37 @@ function setup() {
   return { db, sqlite, user, bus: new EventBus() }
 }
 
-function seeded(seed = 42) {
-  let s = seed
-  return () => {
-    s = (s * 1664525 + 1013904223) % 2 ** 32
-    return s / 2 ** 32
+test('every craft of the same recipe produces identical gear', () => {
+  const { db, sqlite, user } = setup()
+  const item = ITEM_BY_ID.get('bronze_sword')!
+  addItems(db, user.id, 'bronze_sword', 3)
+  const pieces = listGearInstances(db, user.id)
+  expect(pieces).toHaveLength(3)
+  for (const piece of pieces) {
+    expect(piece.quality).toBe('common')
+    expect(JSON.parse(piece.statsJson)).toEqual(statsOf(item))
+    expect(piece.armour).toBe(item.armour ?? 0)
+    expect(piece.power).toBe(item.power ?? 0)
   }
-}
+  sqlite.close()
+})
 
-test('crafted gear rolls quality and affixes deterministically', () => {
-  const item = ITEM_BY_ID.get('bronze_helm')!
-  const roll = rollGearStats(item, seeded())
-  expect(['common', 'uncommon', 'rare', 'epic']).toContain(roll.quality)
-  expect(roll.stats.stamina).toBeGreaterThanOrEqual(1)
-  expect(roll.stats.stamina).toBeGreaterThanOrEqual(
-    Math.round((item.stats?.stamina ?? 0) * QUALITY_MULTIPLIER[roll.quality]),
-  )
-  expect(roll.stats).not.toEqual(EMPTY_STATS)
+test('existing rolled pieces are reset to their base stats once', () => {
+  const { db, sqlite, user } = setup()
+  const item = ITEM_BY_ID.get('bronze_sword')!
+  addItems(db, user.id, 'bronze_sword', 1)
+  const piece = listGearInstances(db, user.id)[0]!
+  db.update(gearInstances)
+    .set({ quality: 'epic', statsJson: JSON.stringify({ ...statsOf(item), crit: 99 }) })
+    .where(eq(gearInstances.id, piece.id))
+    .run()
+
+  expect(normalizeGearInstances(db)).toBe(1)
+  const reset = listGearInstances(db, user.id)[0]!
+  expect(reset.quality).toBe('common')
+  expect(JSON.parse(reset.statsJson)).toEqual(statsOf(item))
+  expect(normalizeGearInstances(db)).toBe(0)
+  sqlite.close()
 })
 
 test('a craft creates a gear instance and equipping keeps the stack count', () => {
@@ -157,8 +166,8 @@ test('gear requirements follow the slot and combat style', () => {
   expect(itemRequirements(ITEM_BY_ID.get('iron_sword')!)).toEqual({ attack: 5 })
   expect(itemRequirements(ITEM_BY_ID.get('willow_longbow')!)).toEqual({ ranged: 5 })
   expect(itemRequirements(ITEM_BY_ID.get('oak_staff')!)).toEqual({ magic: 1 })
-  expect(itemRequirements(ITEM_BY_ID.get('steel_platebody')!)).toEqual({ defence: 10 })
-  expect(itemRequirements(ITEM_BY_ID.get('bronze_shield')!)).toEqual({ defence: 1 })
+  expect(itemRequirements(ITEM_BY_ID.get('steel_platebody')!)).toEqual({ strength: 10 })
+  expect(itemRequirements(ITEM_BY_ID.get('bronze_shield')!)).toEqual({ strength: 1 })
   expect(itemRequirements(ITEM_BY_ID.get('leather_quiver')!)).toEqual({ ranged: 1 })
   expect(itemRequirements(ITEM_BY_ID.get('cloth_tome')!)).toEqual({ magic: 1 })
   expect(itemRequirements(ITEM_BY_ID.get('ring_ruby1')!)).toEqual({})
@@ -187,17 +196,21 @@ test('equipping gear checks the combat stats it needs', () => {
 
 test('wearing a saved set skips pieces you cannot use yet', () => {
   const { db, sqlite, user, bus } = setup()
-  addItems(db, user.id, 'iron_helm', 1)
+  addItems(db, user.id, 'iron_sword', 1)
   const setId = addGearSet(db, {
     userId: user.id,
     name: 'Locked',
     combatStyle: 'melee',
-    slotsJson: JSON.stringify({ head: { itemId: 'iron_helm', instanceId: null } }),
+    slotsJson: JSON.stringify({ mainHand: { itemId: 'iron_sword', instanceId: null } }),
   })
   const res = applyGearSet(db, bus, user.id, setId)
   expect(res.ok).toBe(true)
   expect(res.skipped).toHaveLength(1)
-  expect(res.skipped[0]).toMatchObject({ slot: 'head', itemId: 'iron_helm', name: 'Iron helm' })
+  expect(res.skipped[0]).toMatchObject({
+    slot: 'mainHand',
+    itemId: 'iron_sword',
+    name: 'Iron sword',
+  })
   expect(listEquipment(db, user.id)).toHaveLength(0)
   sqlite.close()
 })

@@ -60,6 +60,55 @@
     letter-spacing: 0;
     color: var(--color-ink-400);
   }
+  .cell__glyph--split {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+  }
+  .cell__seg {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .cell__seg-text {
+    display: block;
+  }
+  .cell__pitch {
+    display: flex;
+    align-self: stretch;
+    height: 0.6rem;
+    margin-bottom: 0.2rem;
+  }
+  .cell__mora {
+    position: relative;
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .cell__line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 2px;
+    border-radius: 999px;
+    background: var(--color-seal-300);
+  }
+  .cell__line--high {
+    top: 0;
+    bottom: auto;
+  }
+  .cell__riser {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    width: 2px;
+    background: var(--color-seal-300);
+  }
+  .cell--sm .cell__pitch {
+    height: 0.5rem;
+    margin-bottom: 0.15rem;
+  }
   .cell--sm {
     min-width: 3.5rem;
     min-height: 3.5rem;

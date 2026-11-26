@@ -20,6 +20,9 @@ export interface DeckSettings {
   batchSize?: number
   instruction?: string
   wordSource?: 'frequency' | 'anki'
+  kind?: 'path' | 'custom'
+  autoGrow?: boolean
+  batchWords?: number
   words?: string[]
   hints?: Record<string, WordHint>
   building?: boolean

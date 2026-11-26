@@ -208,6 +208,20 @@ export function knownWords(db: Db, userId: UserId, loaded?: LoadedCards): Set<st
   return known
 }
 
+export function knownWordsFor(
+  db: Db,
+  userId: UserId,
+  targetLang: string,
+  loaded?: LoadedCards,
+): Set<string> {
+  const srsMap = loaded?.srs ?? srsStateMap(db, userId)
+  const known = new Set<string>()
+  for (const c of loaded?.cards ?? listCards(db, userId)) {
+    if (c.targetLang === targetLang && isLearned(srsMap.get(c.id))) known.add(c.back)
+  }
+  return known
+}
+
 export interface StudyBudget {
   newPerDay: number
   maxReviewsPerDay: number

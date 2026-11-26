@@ -4,7 +4,7 @@ import { createApp } from './app'
 import type { App, Deps } from './context'
 import { openDb } from './db/client'
 import type { Db } from './db/client'
-import { upsertSrs } from './db/repo'
+import { addCard, createDeck, listUsers, upsertSrs } from './db/repo'
 import type { Role } from './env'
 import { EventBus } from './events'
 import { OpenRouter } from './llm/openrouter'
@@ -161,6 +161,67 @@ test('practice: next -> grade -> xp, and exercise catalog', async () => {
   expect(stats.level).toBeGreaterThanOrEqual(1)
   sqlite.close()
 })
+
+test('listen drills do not warm the speech model', async () => {
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
+  const decks = await getJson<{ decks: { id: string; level: string }[] }>(app, cookie, '/api/decks')
+  const deckId = decks.decks.find((d) => d.level === 'zhfreq')!.id
+  const sentence = await addSentence(app, cookie, deckId)
+
+  const listen = await postJson<{ instance: { exerciseId: string; needsSpeech?: boolean } }>(
+    app,
+    cookie,
+    '/api/practice/next',
+    { deckId, cardId: sentence, exerciseId: 'type_listen' },
+  )
+  expect(listen.instance.exerciseId).toBe('type_listen')
+  expect(listen.instance.needsSpeech).toBe(false)
+  sqlite.close()
+})
+
+test('voice drills are only offered for sentences, never single words', async () => {
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
+  const decks = await getJson<{ decks: { id: string; level: string }[] }>(app, cookie, '/api/decks')
+  const deckId = decks.decks.find((d) => d.level === 'zhfreq')!.id
+  const cards = await getJson<{ cards: { id: string }[] }>(
+    app,
+    cookie,
+    `/api/decks/${deckId}/cards`,
+  )
+  const word = cards.cards[0]!.id
+  const sentence = await addSentence(app, cookie, deckId)
+
+  for (const exerciseId of ['type_listen', 'speak_word']) {
+    const forced = await postJson<{ instance: { exerciseId: string } }>(
+      app,
+      cookie,
+      '/api/practice/next',
+      { deckId, cardId: word, exerciseId },
+    )
+    expect(forced.instance.exerciseId).not.toBe(exerciseId)
+
+    const served = await postJson<{ instance: { exerciseId: string } }>(
+      app,
+      cookie,
+      '/api/practice/next',
+      { deckId, cardId: sentence, exerciseId },
+    )
+    expect(served.instance.exerciseId).toBe(exerciseId)
+  }
+  sqlite.close()
+})
+
+async function addSentence(app: App, cookie: string, deckId: string): Promise<string> {
+  const made = (await (
+    await app.request(
+      `/api/decks/${deckId}/cards`,
+      auth(cookie, json({ front: 'I drink tea.', back: '我喝茶。', type: 'phrase' })),
+    )
+  ).json()) as { card: { id: string } }
+  return made.card.id
+}
 
 test('practice endpoints require a session', async () => {
   const { app, sqlite } = makeApp()
@@ -462,7 +523,7 @@ test('study preferences: disabled exercise kinds are skipped', async () => {
   sqlite.close()
 })
 
-test('the pronunciation card is never served, even when forced', async () => {
+test('the speaking drill is never served for a single word', async () => {
   const { app, db, sqlite } = makeApp()
   const cookie = await signup(app, db)
 
@@ -623,6 +684,76 @@ test('practice keeps giving new words past the daily budget instead of stopping'
   sqlite.close()
 })
 
+test('a grammar card is taught before it is drilled', async () => {
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
+  const { decks } = await getJson<{ decks: { id: string; level: string }[] }>(
+    app,
+    cookie,
+    '/api/decks',
+  )
+  const deckId = decks.find((d) => d.level === 'zhfreq')!.id
+  const created = await postJson<{ card: { id: string } }>(
+    app,
+    cookie,
+    `/api/decks/${deckId}/cards`,
+    {
+      type: 'grammar',
+      front: 'verb before object',
+      back: '喝',
+      payload: { prompt: '我___茶。', answer: '喝', rule: 'verb before object' },
+    },
+  )
+  const served = await postJson<{
+    instance: { exerciseId: string; data: { grammar?: unknown } }
+  }>(app, cookie, '/api/practice/next', { deckId, cardId: created.card.id })
+  expect(served.instance.exerciseId).toBe('introduce')
+  expect(served.instance.data.grammar).toBeDefined()
+  sqlite.close()
+})
+
+test('with no deck chosen, new words come round-robin across decks', async () => {
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
+  const { decks } = await getJson<{ decks: { id: string }[] }>(app, cookie, '/api/decks')
+  const owner = new Map<string, string>()
+  for (const deck of decks) {
+    const { cards } = await getJson<{ cards: { id: string }[] }>(
+      app,
+      cookie,
+      `/api/decks/${deck.id}/cards`,
+    )
+    for (const card of cards) owner.set(card.id, deck.id)
+  }
+  const grade = (exerciseId: string, cardId: string) =>
+    postJson(app, cookie, '/api/practice/grade', { exerciseId, cardId, answer: '~' })
+  const meet = async () => {
+    const intro = await postJson<{ instance: { exerciseId: string; cardId: string } }>(
+      app,
+      cookie,
+      '/api/practice/next',
+      {},
+    )
+    await grade(intro.instance.exerciseId, intro.instance.cardId)
+    const drill = await postJson<{ instance: { exerciseId: string; cardId: string } }>(
+      app,
+      cookie,
+      '/api/practice/next',
+      {},
+    )
+    await grade(drill.instance.exerciseId, drill.instance.cardId)
+    return drill.instance.cardId
+  }
+
+  const served: string[] = []
+  for (let i = 0; i < 4; i++) served.push(owner.get(await meet())!)
+  expect(served[0]).toBe(served[2])
+  expect(served[0]).not.toBe(served[1])
+  expect(served[1]).not.toBe(served[2])
+  expect(served[2]).not.toBe(served[3])
+  sqlite.close()
+})
+
 test('a grade is refused for a drill the server did not hand out', async () => {
   const { app, db, sqlite } = makeApp()
   const cookie = await signup(app, db)
@@ -644,5 +775,62 @@ test('a grade is refused for a drill the server did not hand out', async () => {
   expect((await grade(swapped)).status).toBe(409)
   const real = { exerciseId: 'multiple_choice', cardId: first!.id, answer: first!.back }
   expect((await grade(real)).status).toBe(200)
+  sqlite.close()
+})
+
+test('a multiple-choice answer never mixes in another language', async () => {
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
+  const user = listUsers(db)[0]!
+
+  const zh = createDeck(db, user.id, { name: 'zh', sourceLang: 'en', targetLang: 'zh' })
+  const zhCard = addCard(db, user.id, {
+    deckId: zh.id,
+    sourceLang: 'en',
+    targetLang: 'zh',
+    front: 'I',
+    back: '我',
+    readings: {},
+    tags: [],
+    payload: { template: 'vocab', step: 1 },
+  })
+  upsertSrs(db, user.id, zhCard.id, {
+    state: 'review',
+    step: 0,
+    stability: 5,
+    difficulty: 5,
+    reps: 3,
+    lapses: 0,
+    intervalDays: 7,
+    dueAt: Date.now() + 7 * 86_400_000,
+    lastRating: 3,
+    lastReviewAt: Date.now() - 86_400_000,
+  })
+
+  const ko = createDeck(db, user.id, { name: 'ko', sourceLang: 'en', targetLang: 'ko' })
+  const koCard = addCard(db, user.id, {
+    deckId: ko.id,
+    type: 'phrase',
+    sourceLang: 'en',
+    targetLang: 'ko',
+    front: 'There are people.',
+    back: '사람 있어요.',
+    readings: {},
+    tags: [],
+    payload: {
+      template: 'sentence',
+      step: 1,
+      tokens: ['사람', '있어요.'],
+      gloss: 'There are people.',
+    },
+  })
+
+  const next = await postJson<{ instance: { data: { choices: string[] } } }>(
+    app,
+    cookie,
+    '/api/practice/next',
+    { deckId: ko.id, cardId: koCard.id, exerciseId: 'multiple_choice' },
+  )
+  expect(next.instance.data.choices.some((c) => /[\u3400-\u9fff]/.test(c))).toBe(false)
   sqlite.close()
 })

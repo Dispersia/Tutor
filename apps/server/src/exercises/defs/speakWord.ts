@@ -6,7 +6,8 @@ import type {
   WordFeedback,
 } from '@tutor/core'
 import { computeFeatures, deterministicWords, summarize } from '../../pronunciation/features'
-import { gradeText, similarity } from '../grading'
+import { gradeText, homophoneAnswer, similarity } from '../grading'
+import { isUtterance } from '../payload'
 import { PRON_SCHEMA } from '../schemas'
 import { gradingReading, label, readingsOf, wordView } from '../shared'
 
@@ -31,8 +32,8 @@ export const speakWord: ExerciseDef<string> = {
   title: 'Say it out loud',
   modality: 'voice',
   needsAudio: true,
-  temporarilyDisabled: true,
-  supports: () => true,
+  needsSpeech: true,
+  supports: (card) => isUtterance(card),
   async generate(ctx) {
     return {
       exerciseId: this.id,
@@ -48,23 +49,8 @@ export const speakWord: ExerciseDef<string> = {
   },
   async grade(ctx, _instance, answer) {
     const transcript = String(answer ?? '').trim()
-    if (!transcript) {
-      return {
-        score: 0,
-        correct: false,
-        expected: ctx.card.back,
-        feedback: "Didn't hear anything.",
-      }
-    }
-    const g = gradeText(ctx.card.back, readingsOf(ctx), transcript)
-    const best = Math.max(g.score, Math.round(similarity(ctx.card.back, transcript) * 100))
-    return {
-      score: best,
-      correct: best >= 70,
-      expected: ctx.card.back,
-      feedback: `You said “${transcript}”.`,
-      detail: { transcript },
-    }
+    if (!transcript) return emptyTranscript(ctx.card.back)
+    return transcriptGrade(ctx, ctx.card.back, transcript)
   },
 
   async gradeAudio(ctx, instance, audio) {
@@ -84,6 +70,28 @@ export const speakWord: ExerciseDef<string> = {
   },
 
   xp: (r) => (r.correct ? 15 + (r.score >= 90 ? 5 : 0) : 1),
+}
+
+function emptyTranscript(expected: string): GradeResult {
+  return {
+    score: 0,
+    correct: false,
+    expected,
+    feedback: "Didn't hear anything.",
+  }
+}
+
+function transcriptGrade(ctx: ExerciseContext, expected: string, transcript: string): GradeResult {
+  const g = gradeText(expected, readingsOf(ctx), transcript)
+  const best = Math.max(g.score, Math.round(similarity(expected, transcript) * 100))
+  const heard = homophoneAnswer(expected, transcript, ctx.card.targetLang)
+  return {
+    score: heard ? 100 : best,
+    correct: heard || best >= 70,
+    expected,
+    feedback: `You said “${transcript}”.`,
+    detail: { transcript },
+  }
 }
 
 function noSpeechResult(expected: string): GradeResult {
@@ -106,11 +114,12 @@ async function refine(
   if (!ctx.judge) return base
   const out = await askJudge(ctx, expected, a, f)
   if (!out || typeof out.score !== 'number') return base
+  const heard = homophoneAnswer(expected, a.transcript, ctx.card.targetLang)
   return {
-    score: out.score,
-    correct: out.correct ?? base.correct,
+    score: heard ? Math.max(out.score, 90) : out.score,
+    correct: heard ? true : (out.correct ?? base.correct),
     summary: out.summary ?? base.summary,
-    words: out.words?.length ? out.words : base.words,
+    words: heard ? base.words : out.words?.length ? out.words : base.words,
   }
 }
 
@@ -165,11 +174,11 @@ function judgePrompt(ctx: ExerciseContext, expected: string, a: AssessResult, f:
     `Not heard: ${f.missing.join('、') || 'nothing'}. Character error rate: ${f.cer.toFixed(2)}.`,
     `Timing per word: ${timings}. Long pauses: ${pauses}. Total ${f.duration.toFixed(2)}s.`,
     '',
-    pronGuide(ctx),
+    pronGuide(ctx, homophoneAnswer(expected, a.transcript, ctx.card.targetLang)),
   ].join('\n')
 }
 
-function pronGuide(ctx: ExerciseContext): string {
+function pronGuide(ctx: ExerciseContext, heardHomophones: boolean): string {
   const native = label(ctx.learner.nativeLang)
   return [
     'How to read this evidence:',
@@ -177,6 +186,8 @@ function pronGuide(ctx: ExerciseContext): string {
     '- When nothing in the transcript matches the expected text, you cannot tell what was said. Say you could not hear it clearly and ask for one more try; do not diagnose a sound.',
     ctx.card.targetLang === 'zh' &&
       '- This is Taiwan Mandarin: ㄓ ㄔ ㄕ spoken as ㄗ ㄘ ㄙ (or the reverse) is a correct accent, not an error.',
+    heardHomophones &&
+      '- The recogniser wrote the expected text with a different character for the same sound. That is the same pronunciation: treat the word as correct and never ask the learner to change the character.',
     '',
     'What to return:',
     '- score 0 to 100, and correct = true when a listener would understand the whole text.',

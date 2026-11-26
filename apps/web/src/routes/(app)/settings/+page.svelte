@@ -16,12 +16,15 @@
     StudyPrefs,
   } from '#lib/types'
   import { EMPTY_ROLES } from '#lib/settingsview'
+  import { haptics } from '#lib/haptics.svelte'
+  import { toast } from '#lib/toast.svelte'
   import StudySettings from '#lib/components/settings/StudySettings.svelte'
   import RigAlertsSection from '#lib/components/settings/RigAlertsSection.svelte'
   import OpenRouterKey from '#lib/components/settings/OpenRouterKey.svelte'
   import ModelRoles from '#lib/components/settings/ModelRoles.svelte'
   import SpeechSection from '#lib/components/settings/SpeechSection.svelte'
   import NumberSetting from '#lib/components/settings/NumberSetting.svelte'
+  import KeyboardSetting from '#lib/components/settings/KeyboardSetting.svelte'
   import AccountSection from '#lib/components/settings/AccountSection.svelte'
   import AdminUsers from '#lib/components/settings/AdminUsers.svelte'
   import { cachedResource } from '#lib/resource.svelte'
@@ -37,33 +40,24 @@
   let dailyGoal = $state(50)
   let foodThreshold = $state(50)
   let desiredRetention = $state(90)
+  let hapticsLevel = $state(0)
   let study = $state<StudyPrefs>({
     showZhuyin: true,
     showFurigana: true,
     disabledExercises: [],
     newPerDay: 20,
     maxReviewsPerDay: 200,
-    learningSteps: [1, 10, 60, 240],
+    learningSteps: [1, 10],
     autoReinforce: true,
   })
-  let stepsText = $state('1, 10, 60, 240')
+  let stepsText = $state('1, 10')
   let exercises = $state<ExerciseInfo[]>([])
   let speech = $state<SpeechStatus | null>(null)
   let waking = $state(false)
   let users = $state<PublicUser[]>([])
-  let note = $state('')
   let error = $state('')
 
   const isAdmin = $derived(session.user?.role === 'admin')
-
-  $effect(() => {
-    const msg = note
-    if (!msg) return
-    const timer = setTimeout(() => {
-      if (note === msg) note = ''
-    }, 6000)
-    return () => clearTimeout(timer)
-  })
 
   type SettingsPayload = {
     roles: Roles
@@ -72,6 +66,7 @@
     openrouter: { key: 'user' | 'server' | false }
     foodThreshold?: number
     desiredRetention?: number
+    haptics?: number
   }
 
   function applySettings(s: SettingsPayload) {
@@ -84,6 +79,8 @@
     keyStatus = s.openrouter.key
     foodThreshold = s.foodThreshold ?? 50
     desiredRetention = s.desiredRetention ?? 90
+    hapticsLevel = s.haptics ?? 0
+    haptics.set(hapticsLevel)
   }
 
   const settings = cachedResource<SettingsPayload>('/api/settings', { auto: false })
@@ -137,7 +134,6 @@
   }
 
   async function saveStudy() {
-    note = ''
     try {
       const steps = stepsText
         .split(/[\s,]+/)
@@ -151,38 +147,35 @@
       })
       study = r.study
       stepsText = r.study.learningSteps.join(', ')
-      note = 'Study preferences saved.'
+      toast('Study preferences saved.')
     } catch (e) {
       error = (e as Error).message
     }
   }
 
   async function saveRoles() {
-    note = ''
     try {
       const r = await api<{ roles: Roles }>('/api/settings', {
         method: 'PUT',
         body: JSON.stringify({ roles }),
       })
       roles = r.roles
-      note = 'Model choices saved.'
+      toast('Model choices saved.')
     } catch (e) {
       error = (e as Error).message
     }
   }
 
   async function saveScalar(patch: Record<string, number>, message: string) {
-    note = ''
     try {
       await api('/api/settings', { method: 'PUT', body: JSON.stringify(patch) })
-      note = message
+      toast(message)
     } catch (e) {
       error = (e as Error).message
     }
   }
 
   async function saveKey() {
-    note = ''
     try {
       const r = await api<{ openrouter: { key: 'user' | 'server' | false } }>(
         '/api/settings/openrouter-key',
@@ -190,7 +183,7 @@
       )
       keyStatus = r.openrouter.key
       keyInput = ''
-      note = keyStatus ? 'Key saved.' : 'Key cleared.'
+      toast(keyStatus ? 'Key saved.' : 'Key cleared.')
       void loadModels()
     } catch (e) {
       error = (e as Error).message
@@ -198,10 +191,9 @@
   }
 
   async function saveProfile() {
-    note = ''
     try {
       await updateProfile({ handle })
-      note = 'Profile saved.'
+      toast('Profile saved.')
     } catch (e) {
       error = (e as Error).message
     }
@@ -222,12 +214,10 @@
     if (waking) return
     waking = true
     error = ''
-    note = 'Waking the speech models…'
     try {
       speech = await wakeSpeech()
-      note = 'Speech models ready.'
+      toast('Speech models ready.')
     } catch (e) {
-      note = ''
       error = (e as Error).message
     } finally {
       waking = false
@@ -235,10 +225,9 @@
   }
 
   async function free() {
-    note = ''
     await unloadSpeech().catch(() => {})
     await refreshSpeech()
-    note = 'Speech models unloaded.'
+    toast('Speech models unloaded.')
   }
 </script>
 
@@ -249,9 +238,6 @@
 
 {#if error}
   <p class="banner mb-3" style="--accent: {ACCENT.ember}" role="alert">{error}</p>
-{/if}
-{#if note}
-  <p class="banner mb-3" style="--accent: {ACCENT.jade}">{note}</p>
 {/if}
 
 <div class="lg:columns-2 lg:gap-10 xl:gap-16 [&>section]:break-inside-avoid">
@@ -310,6 +296,14 @@
   />
 
   <RigAlertsSection />
+
+  <KeyboardSetting
+    bind:value={hapticsLevel}
+    onSave={(v) => {
+      haptics.set(v)
+      void saveScalar({ haptics: v }, 'Keyboard feedback saved.')
+    }}
+  />
 
   <AccountSection bind:handle onSave={saveProfile} onLogout={doLogout} />
 

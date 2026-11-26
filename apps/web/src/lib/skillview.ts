@@ -1,4 +1,12 @@
-import type { ActionDTO, BandDTO, ItemDTO, OwnedTalent, SkillDTO, TalentOption } from './skills'
+import type {
+  ActionDTO,
+  BandDTO,
+  DistillConfigDTO,
+  ItemDTO,
+  OwnedTalent,
+  SkillDTO,
+  TalentOption,
+} from './skills'
 import type { ModKind } from './types'
 
 export const EFFECT_LABEL: Record<ModKind, string> = {
@@ -66,21 +74,31 @@ export interface Distillable {
   value: number
 }
 
-export function distillablesOf(
-  skillId: string | undefined,
+function queuedRow(
+  itemId: string,
+  counts: Map<string, number>,
+  itemMap: Map<string, ItemDTO>,
+): Distillable | null {
+  const item = itemMap.get(itemId)
+  if (!item) return null
+  return {
+    itemId,
+    count: counts.get(itemId) ?? 0,
+    name: item.name,
+    icon: item.icon,
+    value: item.value ?? 0,
+  }
+}
+
+export function queuedDistillables(
+  config: DistillConfigDTO,
   inventory: { itemId: string; count: number }[],
   itemMap: Map<string, ItemDTO>,
 ): Distillable[] {
-  if (skillId !== 'enchanting') return []
-  return inventory
-    .filter((r) => r.count > 0 && r.itemId !== 'coins')
-    .map((r) => ({
-      itemId: r.itemId,
-      count: r.count,
-      name: itemMap.get(r.itemId)?.name ?? r.itemId,
-      icon: itemMap.get(r.itemId)?.icon ?? '◆',
-      value: itemMap.get(r.itemId)?.value ?? 0,
-    }))
+  const counts = new Map(inventory.map((row) => [row.itemId, row.count]))
+  return config.allow
+    .map((itemId) => queuedRow(itemId, counts, itemMap))
+    .filter((d): d is Distillable => d !== null)
     .sort((a, b) => b.value - a.value)
 }
 

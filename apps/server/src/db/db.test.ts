@@ -129,7 +129,7 @@ test('otherBacks only offers words the learner has already met', () => {
   sqlite.close()
 })
 
-test('a private card extends the deck for one member and nobody else', async () => {
+test('a member only sees the cards in their own decks', async () => {
   const { openDb } = await import('./client')
   const repo = await import('./repo')
   const { db, sqlite } = openDb(':memory:')
@@ -146,12 +146,13 @@ test('a private card extends the deck for one member and nobody else', async () 
   })
 
   expect(repo.listCards(db, a.id, deck.id).map((c) => c.back)).toEqual(['茶', '我喝茶。'])
-  expect(repo.listCards(db, b.id, deck.id).map((c) => c.back)).toEqual(['茶'])
+  expect(repo.listCards(db, b.id, deck.id).map((c) => c.back)).toEqual([])
   expect(repo.getCard(db, mine.id, a.id)?.back).toBe('我喝茶。')
   expect(repo.getCard(db, mine.id, b.id)).toBeUndefined()
-  expect(repo.listDecks(db)[0]!.cardCount).toBe(1)
+  expect(repo.listDecks(db, a.id)[0]!.cardCount).toBe(1)
+  expect(repo.listDecks(db, b.id).length).toBe(0)
   expect(repo.listCards(db).length).toBe(2)
   repo.deleteUser(db, a.id)
-  expect(repo.listCards(db).map((c) => c.back)).toEqual(['茶'])
+  expect(repo.listCards(db).length).toBe(0)
   sqlite.close()
 })

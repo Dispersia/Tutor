@@ -10,6 +10,7 @@ import { registerCombat } from './routes/combat'
 import { registerCurriculum } from './routes/curriculum'
 import { registerDecks } from './routes/decks'
 import { registerHealth } from './routes/health'
+import { registerIme } from './routes/ime'
 import { registerModels } from './routes/models'
 import { registerPractice } from './routes/practice'
 import { registerPush } from './routes/push'
@@ -62,6 +63,7 @@ function registerRoutes(app: App, staticDir: string): void {
   registerHealth(app)
   registerAuth(app)
   registerModels(app)
+  registerIme(app)
   registerSettings(app)
   registerDecks(app)
   registerPractice(app)

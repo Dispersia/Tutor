@@ -40,11 +40,15 @@ function rigsHandler(c: Context<AppEnv>) {
   return c.json({ leadSec: RIG_ALERT_LEAD_SEC, minRunSec: RIG_ALERT_MIN_RUN_SEC, rigs })
 }
 
-function rigView(r: { actionId: string; runEndsAt: number; completions: number }, now: number) {
+function rigView(
+  r: { actionId: string; runEndsAt: number; runStartedAt: number; completions: number },
+  now: number,
+) {
   return {
     actionId: r.actionId,
     name: ACTION_BY_ID.get(r.actionId)?.name ?? r.actionId,
     runEndsAt: r.runEndsAt,
+    runStartedAt: r.runStartedAt,
     runSec: Math.round(rigRunSec(r.completions)),
     secondsLeft: Math.max(0, Math.round((r.runEndsAt - now) / 1000)),
   }

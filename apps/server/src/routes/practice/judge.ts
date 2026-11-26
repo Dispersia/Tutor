@@ -14,11 +14,12 @@ export async function judgeFor(c: Context<AppEnv>, card?: ServerCard) {
   const key = await resolveUserKey(deps, user.id)
   if (!key) return undefined
   const prefs = card ? scriptPrefsFor(deps, card) : {}
+  const learner = { nativeLang: user.nativeLang, targetLang: card?.targetLang, level: user.level }
   return makeJudge({
     or: new OpenRouter(key, deps.or.baseUrl),
     model: getRoles(deps.db, user.id, deps.defaults).judge,
-    system: judgeSystem(user, prefs),
-    reminder: JUDGE_REMINDER(user.nativeLang, user.targetLang, prefs),
+    system: judgeSystem(learner, prefs),
+    reminder: JUDGE_REMINDER(user.nativeLang, card?.targetLang, prefs),
   })
 }
 

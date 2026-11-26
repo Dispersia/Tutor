@@ -39,8 +39,8 @@
   </div>
   {#if gear.length === 0}
     <p class="mt-3 text-xs text-ink-400">
-      Craft armour and weapons with Smithing, Leatherworking, Tailoring or Crafting. Every craft
-      rolls its own stats.
+      Craft armour and weapons with Smithing, Leatherworking, Tailoring or Jewelcrafting. Every
+      craft rolls its own stats.
     </p>
   {/if}
   <div class="mt-3 space-y-2">

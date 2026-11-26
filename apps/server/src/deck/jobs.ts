@@ -4,16 +4,9 @@ import type { Db } from '../db/client'
 import type { Planner } from './plan'
 import { fillDeck, type FillDeckOptions } from './build'
 import type { DeckContext } from './context'
+import { trackDeckJob } from './builds'
 
-const builds = new Map<DeckId, Promise<void>>()
-
-export function isDeckBuilding(deckId: DeckId): boolean {
-  return builds.has(deckId)
-}
-
-export function awaitDeckBuild(deckId: DeckId): Promise<void> {
-  return builds.get(deckId) ?? Promise.resolve()
-}
+export { awaitDeckBuild, isDeckBuilding, trackDeckJob } from './builds'
 
 export interface StartDeckBuildRequest {
   ctx: DeckContext
@@ -30,11 +23,11 @@ export function startDeckBuild(
 ): void {
   const base = request.base ?? {}
   const range = { start: base.cursorStart ?? 0, total: base.total ?? request.opts.count }
-  const run = runBuild(db, userId, deckId, request, range).finally(() => {
-    builds.delete(deckId)
-    base.onFinish?.()
-  })
-  builds.set(deckId, run)
+  const run = runBuild(db, userId, deckId, request, range)
+  trackDeckJob(
+    deckId,
+    run.finally(() => base.onFinish?.()),
+  )
 }
 
 interface Range {

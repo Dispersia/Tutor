@@ -10,7 +10,6 @@ export const users = sqliteTable(
     handle: text('handle').notNull(),
     role: text('role').notNull().default('user'),
     nativeLang: text('native_lang').notNull().default('en'),
-    targetLang: text('target_lang'),
     level: text('level'),
     settingsJson: text('settings_json').notNull().default('{}'),
     createdAt: integer('created_at').notNull(),

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { charSound, foldZhuyin, soundAlike } from './variants'
+import { charSound, foldedSound, foldZhuyin, sameSounds, soundAlike } from './variants'
 
 test('foldZhuyin collapses the retroflex series to the Taiwan alveolar series', () => {
   expect(foldZhuyin('ㄕˋ')).toBe('ㄙˋ')
@@ -33,4 +33,13 @@ test('charSound folds through the bundled Taiwan dictionary', () => {
   expect(charSound('是')).toBe('ㄙˋ')
   expect(charSound('四')).toBe('ㄙˋ')
   expect(charSound('zzz')).toBeUndefined()
+})
+
+test('sameSounds compares whole sentences by their folded readings', () => {
+  expect(sameSounds('他很好。', '她很好。')).toBe(true)
+  expect(foldedSound('他很好。')).toBe('ㄊㄚㄏㄣˇㄏㄠˇ')
+  expect(sameSounds('他很好', '她很好')).toBe(true)
+  expect(sameSounds('他很好', '她不好')).toBe(false)
+  expect(sameSounds('他很好', '她很好，你呢')).toBe(false)
+  expect(sameSounds('', '')).toBe(false)
 })

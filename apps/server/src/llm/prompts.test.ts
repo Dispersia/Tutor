@@ -62,6 +62,12 @@ test('the conversation prompt names both languages and asks for speakable text',
   expect(prompt).not.toContain('Traditional')
 })
 
+test('a question in the native language is answered in the native language only', () => {
+  const prompt = conversationSystem({ nativeLang: 'en', targetLang: 'ja' })
+  expect(prompt).toContain('that whole reply is in English and nothing else')
+  expect(prompt).toContain('add no Japanese')
+})
+
 test('a Spanish prompt carries no script rule and no stray blank bullet', () => {
   const prompt = conversationSystem({ nativeLang: 'en', targetLang: 'es' })
   expect(prompt.endsWith('romanization after a word.')).toBe(true)

@@ -1,6 +1,7 @@
 import type { UserId, CardId } from '../ids'
 import type { Card } from '@tutor/core'
 import type { Deps } from '../context'
+import type { Db } from '../db/client'
 import {
   addCard,
   getCard,
@@ -31,17 +32,30 @@ export async function reinforceLapsedCard(
 ): Promise<void> {
   const card = getCard(deps.db, cardId, userId)
   if (!card?.deckId || card.payload?.template !== 'vocab') return
-  const step = card.payload?.step
-  if (typeof step !== 'number' || triedRecently(deps, userId, cardId)) return
-  const cards = listCards(deps.db, userId, card.deckId)
-  if (isReinforced(cards, cardId)) return
-  const deck = getDeck(deps.db, card.deckId)
-  if (!deck) return
+  if (typeof card.payload?.step !== 'number' || triedRecently(deps, userId, cardId)) return
   const planner = await plannerFor(deps, userId)
   if (!planner || !claimAttempt(deps, userId, cardId)) return
+  await addExampleForCard(deps.db, userId, cardId, planner)
+}
+
+export async function addExampleForCard(
+  db: Db,
+  userId: UserId,
+  cardId: CardId,
+  planner: Planner,
+): Promise<boolean> {
+  const card = getCard(db, cardId, userId)
+  if (!card?.deckId || card.payload?.template !== 'vocab') return false
+  const step = card.payload?.step
+  if (typeof step !== 'number') return false
+  const deck = getDeck(db, card.deckId)
+  if (!deck) return false
+  const cards = listCards(db, userId, card.deckId)
+  if (isReinforced(cards, cardId)) return false
   const extra = await planExtra(planner, deck, card, step, cards)
-  if (!extra || isReinforced(listCards(deps.db, userId, card.deckId), cardId)) return
-  persistExtra(deps, { deck, card, step, userId }, extra)
+  if (!extra) return false
+  persistExtra(db, { deck, card, step, userId }, extra)
+  return true
 }
 
 function isReinforced(cards: Card[], cardId: CardId): boolean {
@@ -91,7 +105,8 @@ async function planExtra(
 ): Promise<PlannedCard | undefined> {
   const planned = await planner(planReq(deck, card, step, cards))
   const future = new Set(cards.filter((c) => after(c, step)).map((c) => c.back))
-  return planned.find((c) => c.template !== 'vocab' && !leapsAhead(c, future))
+  const usable = planned.filter((c) => c.template !== 'vocab' && !leapsAhead(c, future))
+  return usable.find((c) => c.template === 'sentence') ?? usable[0]
 }
 
 function planReq(deck: Deck, card: Card, step: number, cards: Card[]) {
@@ -117,11 +132,11 @@ interface ReinforceTarget {
   userId: UserId
 }
 
-function persistExtra(deps: Deps, target: ReinforceTarget, extra: PlannedCard): void {
+function persistExtra(db: Db, target: ReinforceTarget, extra: PlannedCard): void {
   const { deck, card, step, userId } = target
   const script = deck.settings?.readingScript
   applyDictionaryReading(deck.targetLang, script, undefined, [extra])
-  addCard(deps.db, userId, {
+  addCard(db, userId, {
     deckId: card.deckId!,
     type: (extra.template === 'grammar' ? 'grammar' : 'phrase') as never,
     sourceLang: deck.sourceLang,

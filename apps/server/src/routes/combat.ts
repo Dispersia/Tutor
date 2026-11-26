@@ -34,7 +34,7 @@ type PlayerCombat = ReturnType<typeof loadPlayerCombat>
 type MonsterRow = NonNullable<ReturnType<typeof getEncounter>>
 
 async function buildDrill(deps: Deps, user: SessionUser, deckLevel: string) {
-  const deck = listDecks(deps.db).find((d) => d.level === deckLevel)
+  const deck = listDecks(deps.db, user.id).find((d) => d.level === deckLevel)
   const card =
     pickReviewCard(deps, user.id, deck?.id) ?? (deck ? pickReviewCard(deps, user.id) : undefined)
   if (!card) return null

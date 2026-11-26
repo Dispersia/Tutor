@@ -117,7 +117,7 @@
   }
 
   function salvage(instanceId: string) {
-    if (!confirm('Salvage this piece into crafting materials?')) return
+    if (!confirm('Salvage this piece into materials?')) return
     void run(() => salvageGear(instanceId))
   }
 </script>

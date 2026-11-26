@@ -8,8 +8,9 @@ import {
   newRig,
   replayRig,
   rigIntervalSec,
-  rigMaxed,
-  rigRunProgress,
+  rigRunFill,
+  rigRunFull,
+  rigRunGainSec,
   rigRunSec,
   settleRig,
   type RigRecipe,
@@ -48,16 +49,16 @@ describe('idle curves', () => {
     expect(rigRunSec(IDLE.runFullAtCompletions + 1)).toBe(IDLE.maxRunSec)
   })
 
-  test('run progress climbs to 1 at the cap and maxed flips exactly there', () => {
-    expect(rigRunProgress(0)).toBe(0)
-    expect(rigRunProgress(IDLE.runFullAtCompletions / 2)).toBeCloseTo(0.5, 6)
-    expect(rigRunProgress(IDLE.runFullAtCompletions)).toBe(1)
-    expect(rigRunProgress(10_000)).toBe(1)
+  test('the run fill climbs to 1 at the ceiling and full flips exactly there', () => {
+    expect(rigRunFill(0)).toBe(0)
+    expect(rigRunFill(IDLE.maxRunSec / 2)).toBeCloseTo(0.5, 6)
+    expect(rigRunFill(IDLE.maxRunSec)).toBe(1)
+    expect(rigRunFill(10 ** 9)).toBe(1)
 
-    expect(rigMaxed(0)).toBe(false)
-    expect(rigMaxed(IDLE.runFullAtCompletions - 1)).toBe(false)
-    expect(rigMaxed(IDLE.runFullAtCompletions)).toBe(true)
-    expect(rigMaxed(10_000)).toBe(true)
+    expect(rigRunFull(0)).toBe(false)
+    expect(rigRunFull(IDLE.maxRunSec - 1)).toBe(false)
+    expect(rigRunFull(IDLE.maxRunSec)).toBe(true)
+    expect(rigRunFull(10 ** 9)).toBe(true)
   })
 
   test('deeper tiers run slower per item', () => {
@@ -118,8 +119,10 @@ describe('settleRig', () => {
     expect(rigIntervalSec(ten.completions)).toBeLessThan(rigIntervalSec(one.completions))
     expect(ten.runEndsAt).toBeGreaterThan(one.runEndsAt)
   })
+})
 
-  test('the run is re-based on the count, never stacked', () => {
+describe('extendRig: the run climb', () => {
+  test('a steady drill chain climbs one equal step to the ceiling', () => {
     let rig = newRig()
     for (let i = 0; i < 50; i++) rig = extendRig(rig, 1_000)
     expect(rig.runEndsAt).toBe(1_000 + IDLE.maxRunSec * 1000)
@@ -130,10 +133,36 @@ describe('settleRig', () => {
     for (let i = 0; i < 10; i++) ten = extendRig(ten, 1_000)
     expect(ten.runEndsAt).toBe(1_000 + Math.round(rigRunSec(10) * 1000))
     expect(ten.runEndsAt).toBeLessThan(1_000 + IDLE.maxRunSec * 1000)
+    expect(ten.runStartedAt).toBe(1_000)
 
     let two = extendRig(newRig(), 1_000)
     two = extendRig(two, 2_000)
-    expect(two.runEndsAt).toBe(2_000 + Math.round(rigRunSec(2) * 1000))
+    expect(two.runEndsAt).toBe(1_000 + Math.round(rigRunSec(2) * 1000))
+  })
+
+  test('topping up a drained run adds one step, never a fresh full run', () => {
+    const step = rigRunGainSec(2)
+    expect(step).toBeCloseTo(
+      (IDLE.maxRunSec - IDLE.firstRunSec) / (IDLE.runFullAtCompletions - 1),
+      6,
+    )
+    const drained = {
+      ...newRig(),
+      completions: IDLE.runFullAtCompletions,
+      runEndsAt: 1_000 + 20 * 60 * 1000,
+    }
+    const topped = extendRig(drained, 1_000)
+    expect(topped.completions).toBe(IDLE.runFullAtCompletions + 1)
+    expect(topped.runEndsAt).toBe(1_000 + Math.round((20 * 60 + step) * 1000))
+    expect(topped.runEndsAt).toBeLessThan(1_000 + IDLE.maxRunSec * 1000)
+    expect(topped.runStartedAt).toBe(1_000)
+  })
+
+  test('a drill keeps the run start while the run is live and resets it when still', () => {
+    const live = { ...newRig(), runEndsAt: 90_000, runStartedAt: 10_000 }
+    expect(extendRig(live, 60_000).runStartedAt).toBe(10_000)
+    const still = { ...newRig(), runEndsAt: 40_000, runStartedAt: 10_000 }
+    expect(extendRig(still, 60_000).runStartedAt).toBe(60_000)
   })
 })
 

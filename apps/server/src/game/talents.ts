@@ -42,7 +42,7 @@ export const SYNERGY: Record<SkillId, SynergyDef> = {
     blurb: 'Woodcutting',
   },
   runecrafting: { target: 'magic', kind: 'xp', value: 0.005, name: 'Resonance', blurb: 'Magic' },
-  crafting: {
+  jewelcrafting: {
     target: 'enchanting',
     kind: 'xp',
     value: 0.005,
@@ -63,14 +63,6 @@ export const SYNERGY: Record<SkillId, SynergyDef> = {
     name: 'Weave',
     blurb: 'Magic',
   },
-  firemaking: { target: 'cooking', kind: 'xp', value: 0.005, name: 'Embers', blurb: 'Cooking' },
-  construction: {
-    target: 'crafting',
-    kind: 'xp',
-    value: 0.005,
-    name: 'Carpentry',
-    blurb: 'Crafting',
-  },
   enchanting: {
     target: 'runecrafting',
     kind: 'yield',
@@ -88,20 +80,6 @@ export const SYNERGY: Record<SkillId, SynergyDef> = {
   agility: { target: 'thieving', kind: 'xp', value: 0.005, name: 'Footwork', blurb: 'Thieving' },
   attack: { target: 'strength', kind: 'xp', value: 0.005, name: 'Bladework', blurb: 'Strength' },
   strength: { target: 'attack', kind: 'xp', value: 0.005, name: 'Momentum', blurb: 'Attack' },
-  defence: {
-    target: 'constitution',
-    kind: 'xp',
-    value: 0.005,
-    name: 'Stalwart',
-    blurb: 'Constitution',
-  },
-  constitution: {
-    target: 'defence',
-    kind: 'xp',
-    value: 0.005,
-    name: 'Toughness',
-    blurb: 'Defence',
-  },
   ranged: { target: 'fletching', kind: 'xp', value: 0.005, name: 'Bowyery', blurb: 'Fletching' },
   magic: {
     target: 'enchanting',
@@ -109,14 +87,6 @@ export const SYNERGY: Record<SkillId, SynergyDef> = {
     value: 0.005,
     name: 'Arcane Study',
     blurb: 'Enchanting',
-  },
-  prayer: { target: 'slayer', kind: 'xp', value: 0.005, name: 'Devotion', blurb: 'Slayer' },
-  slayer: {
-    target: 'attack',
-    kind: 'xp',
-    value: 0.005,
-    name: "Hunter's Instinct",
-    blurb: 'Attack',
   },
 }
 

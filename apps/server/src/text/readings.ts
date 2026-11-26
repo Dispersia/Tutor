@@ -5,6 +5,12 @@ export type ReadingKey = 'kana' | 'zhuyin' | 'pinyin' | 'reading'
 const isChinese = (lang: string): boolean => lang === 'zh' || lang === 'yue'
 const LATIN = /[a-zA-Z]/
 
+const READING_SCRIPTS = new Set(['zh', 'yue', 'ja'])
+
+export function hasReadingScript(targetLang: string): boolean {
+  return READING_SCRIPTS.has(targetLang)
+}
+
 export function readingKey(targetLang: string, reading: string, script?: string): ReadingKey {
   if (targetLang === 'ja') return 'kana'
   if (!isChinese(targetLang)) return 'reading'
@@ -26,8 +32,9 @@ export interface ReadingSource {
 
 export function storedReadings(src: ReadingSource): Record<string, string> {
   const { targetLang, reading } = src
-  if (!reading) return {}
+  if (!reading || !hasReadingScript(targetLang)) return {}
   const key = readingKey(targetLang, reading, src.script)
+  if (key === 'reading') return {}
   if (key !== 'zhuyin' || !LATIN.test(reading)) return { [key]: reading }
   const zhuyin = zhuyinFromPinyin(reading) ?? src.fallbackZhuyin?.()
   return zhuyin ? { zhuyin } : {}
@@ -53,8 +60,10 @@ export function displayReading(card: {
   targetLang: string
   readings: Record<string, string>
 }): string {
-  const r = card.readings
-  if (card.targetLang === 'ja') return r.kana || ''
-  if (card.targetLang === 'zh') return r.zhuyin || (r.pinyin ? pinyinToZhuyin(r.pinyin) : '')
-  return Object.values(r).find(Boolean) ?? ''
+  const { targetLang, readings } = card
+  if (targetLang === 'ja') return readings.kana || ''
+  if (isChinese(targetLang)) {
+    return readings.zhuyin || (readings.pinyin ? pinyinToZhuyin(readings.pinyin) : '')
+  }
+  return ''
 }

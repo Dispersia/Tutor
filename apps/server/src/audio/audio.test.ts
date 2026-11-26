@@ -115,13 +115,13 @@ test('ensure records every voice once, content-addressed and deduped', async () 
   sqlite.close()
 })
 
-test('enqueueUser queues only the cards that still lack clips', async () => {
+test('enqueueUser queues the utterance cards that lack clips and skips single words', async () => {
   const { db, sqlite, audio } = makeApp()
-  const { addCard } = await import('../db/repo')
-  const { createDeck } = await import('../db/repo')
+  const { addCard, createDeck } = await import('../db/repo')
   const deck = createDeck(db, toUserId('u1'), { name: 'd', sourceLang: 'en', targetLang: 'zh' })
   addCard(db, toUserId('u1'), {
     deckId: deck.id,
+    type: 'phrase',
     sourceLang: 'en',
     targetLang: 'zh',
     front: 'a',
@@ -129,10 +129,27 @@ test('enqueueUser queues only the cards that still lack clips', async () => {
   })
   addCard(db, toUserId('u1'), {
     deckId: deck.id,
+    type: 'phrase',
     sourceLang: 'en',
     targetLang: 'zh',
     front: 'b',
     back: '二',
+  })
+  addCard(db, toUserId('u1'), {
+    deckId: deck.id,
+    sourceLang: 'en',
+    targetLang: 'zh',
+    front: 'c',
+    back: '三',
+  })
+  addCard(db, toUserId('u1'), {
+    deckId: deck.id,
+    type: 'vocab',
+    sourceLang: 'en',
+    targetLang: 'zh',
+    front: 'Yes.',
+    back: '四',
+    payload: { tokens: ['四'], gloss: 'Yes.' },
   })
   await audio.ensure({ text: '一', language: 'zh', userId: toUserId('u1') })
   const queued = audio.enqueueUser(toUserId('u1'))
@@ -140,6 +157,8 @@ test('enqueueUser queues only the cards that still lack clips', async () => {
   await drain(audio)
   expect(audio.complete('一', 'zh')).toBe(true)
   expect(audio.complete('二', 'zh')).toBe(true)
+  expect(audio.complete('三', 'zh')).toBe(false)
+  expect(audio.complete('四', 'zh')).toBe(false)
   expect(audio.enqueueUser(toUserId('u1'))).toBe(0)
   sqlite.close()
 })

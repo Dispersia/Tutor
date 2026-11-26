@@ -1,12 +1,12 @@
 import type { ExerciseContext, ExerciseDef, GradeResult } from '@tutor/core'
 import { bareText as bare } from '../../text/normalize'
 import { isUtterance } from '../payload'
-import { JUDGE_SCHEMA } from '../schemas'
 import { label, wordView } from '../shared'
 
 interface JudgeOut {
   score?: number
   correct?: boolean
+  wordCorrect?: boolean
   feedback?: string
 }
 
@@ -14,7 +14,9 @@ export const converse: ExerciseDef<string> = {
   id: 'converse',
   title: 'Use it in conversation',
   modality: 'mixed',
+  needsSpeech: true,
   supports: (card) => !isUtterance(card),
+  available: conversable,
   async generate(ctx) {
     return {
       exerciseId: this.id,
@@ -43,6 +45,20 @@ export const converse: ExerciseDef<string> = {
   xp: (r) => (r.correct ? 5 + (r.score >= 90 ? 5 : 0) : 1),
 }
 
+const MIN_CONVERSE_KNOWN = 5
+
+function conversable(ctx: ExerciseContext): boolean {
+  if (hasMetSentence(ctx)) return true
+  const known = new Set(ctx.known ?? [])
+  const words = Object.keys(ctx.readings ?? {})
+  return words.filter((word) => known.has(word)).length >= MIN_CONVERSE_KNOWN
+}
+
+function hasMetSentence(ctx: ExerciseContext): boolean {
+  const met = new Set([...(ctx.known ?? []), ...(ctx.seen ?? [])])
+  return (ctx.utterances ?? []).some((sentence) => met.has(sentence))
+}
+
 function emptyResult(): GradeResult {
   return { score: 0, correct: false, feedback: 'Write a sentence that uses the word.' }
 }
@@ -56,12 +72,27 @@ function wordAloneResult(back: string): GradeResult {
   }
 }
 
+const CONVERSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    wordCorrect: { type: 'boolean' },
+    score: { type: 'number' },
+    correct: { type: 'boolean' },
+    feedback: { type: 'string' },
+  },
+  required: ['wordCorrect', 'score', 'correct', 'feedback'],
+  additionalProperties: false,
+}
+
 async function judgeResult(ctx: ExerciseContext, text: string): Promise<GradeResult | undefined> {
-  const out = (await ctx.judge!(prompt(ctx, text), JUDGE_SCHEMA)) as JudgeOut | undefined
+  const out = (await ctx.judge!(prompt(ctx, text), CONVERSE_SCHEMA)) as JudgeOut | undefined
   if (!out || typeof out.score !== 'number') return undefined
+  const target = bare(ctx.card.back)
+  const used = out.wordCorrect ?? out.correct ?? out.score >= 70
+  const correct = used && target !== '' && bare(text).includes(target)
   return {
-    score: out.score,
-    correct: out.correct ?? out.score >= 70,
+    score: correct ? Math.max(out.score, 75) : out.score,
+    correct,
     expected: ctx.card.back,
     feedback: out.feedback,
   }
@@ -79,10 +110,12 @@ function fallbackResult(back: string, text: string, target: string): GradeResult
 }
 
 const USE_RUBRIC = [
-  'Judge only whether the word is used with its meaning. Grammar, word order, particles and spelling do not decide the grade.',
-  'correct = true: a real sentence in which the word carries its meaning, even if the sentence has other mistakes.',
-  'correct = false: the word is missing, stands alone, or does not fit what the sentence says.',
-  'score: 90 to 100 when correct and natural, 70 to 89 when correct with mistakes, under 50 when not correct.',
+  'Judge the word, not the sentence — but judge the word in the sentence it was put in.',
+  'wordCorrect = true when the word is there and carries its own meaning, so the sentence says something the word really belongs to.',
+  'wordCorrect = false when the word is missing, stands alone, is only echoed without meaning, or sits where another word is needed — when the sentence only makes sense once the word is swapped for a different one.',
+  'correct: set it to wordCorrect. Mistakes elsewhere in the sentence (grammar, particles, spelling, word order) never make it incorrect.',
+  'score: 90 to 100 when the word is correct and the sentence is natural, 75 to 89 when the word is correct but the sentence has mistakes, under 50 when the word is not correct.',
+  'In the feedback, praise the word briefly when it is correct, and add anything wrong with the rest of the sentence as a note.',
 ].join('\n')
 
 function prompt(ctx: ExerciseContext, text: string): string {

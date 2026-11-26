@@ -16,4 +16,4 @@ export function itemValue(item: ItemDef): number {
   }
 }
 
-export const DISTILL_XP_PER_VALUE = 9
+export const DISTILL_XP_PER_VALUE = 0.2

@@ -7,7 +7,8 @@ import {
   setUserSetting,
   updateDeckSettings,
 } from '../../db/repo'
-import { detectLanguage, inspectAnki, wordsFromAnki } from '../../anki/words'
+import { detectLanguage, grammarFromAnki, inspectAnki, wordsFromAnki } from '../../anki/words'
+import type { GrammarEntry } from '../../anki/words'
 import { readApkg } from '../../anki/parse'
 import {
   MAX_DECK_WORDS,
@@ -15,6 +16,13 @@ import {
   parseInstruction,
   startDeckBuild,
 } from '../../deck/generate'
+import {
+  createGrammarDeck,
+  type GrammarDeckOptions,
+  type GrammarDeckResult,
+} from '../../deck/grammarDeck'
+import { startGrammarExamples } from '../../deck/grammarExamples'
+import { knownWordsFor } from '../../services'
 import { plannerFor } from '../../deck/planner'
 import { DECK_INSTRUCTION_KEY } from '../../deck/settings'
 import { deckView } from './view'
@@ -32,13 +40,12 @@ export function registerDeckImport(app: App) {
 }
 
 async function inspectHandler(c: Context<AppEnv>) {
-  const user = c.get('user')!
   const form = await c.req.formData()
   const file = form.get('file')
   if (!(file instanceof File)) return fail(c, 400, 'an .apkg file is required')
   try {
     const parsed = await readApkg(new Uint8Array(await file.arrayBuffer()))
-    return c.json(inspectAnki(parsed, targetLangOf(form, parsed, user.targetLang)))
+    return c.json(inspectAnki(parsed, targetLangOf(form, parsed)))
   } catch (err) {
     return fail(c, 502, (err as Error).message)
   }
@@ -50,17 +57,77 @@ async function importHandler(c: Context<AppEnv>) {
   const form = await c.req.formData()
   const file = form.get('file')
   if (!(file instanceof File)) return fail(c, 400, 'an .apkg file is required')
-  const planner = await plannerFor(deps, user.id)
-  if (!planner) return needKey(c)
   try {
     const parsed = await readApkg(new Uint8Array(await file.arrayBuffer()))
-    const targetLang = targetLangOf(form, parsed, user.targetLang)
+    const targetLang = targetLangOf(form, parsed)
+    if (kindOf(form) === 'grammar')
+      return await grammarImport(c, { deps, user, form, parsed, targetLang })
+    const planner = await plannerFor(deps, user.id)
+    if (!planner) return needKey(c)
     const list = wordsFromAnki(parsed, targetLang, fieldIndices(form))
     if (list.words.length === 0) return fail(c, 422, 'no words found in that deck')
-    const payload = await startImport({ deps, user, form, parsed, targetLang, list, planner })
-    return c.json(payload, 201)
+    return c.json(await startImport({ deps, user, form, parsed, targetLang, list, planner }), 201)
   } catch (err) {
     return fail(c, 502, (err as Error).message)
+  }
+}
+
+function kindOf(form: FormData): string {
+  return String(form.get('kind') ?? '')
+    .trim()
+    .toLowerCase()
+}
+
+interface GrammarReq {
+  deps: Deps
+  user: { id: UserId; nativeLang: string }
+  form: FormData
+  parsed: Parsed
+  targetLang: string
+}
+
+function grammarImport(c: Context<AppEnv>, req: GrammarReq) {
+  const entries = grammarFromAnki(req.parsed, req.targetLang, fieldIndices(req.form))
+  if (entries.length === 0) return fail(c, 422, 'no grammar points found in that deck')
+  const created = createGrammarDeck(req.deps.db, req.user.id, grammarOpts(req, entries))
+  return startExamples(req, created).then((building) =>
+    c.json(grammarReply(req, created, building), 201),
+  )
+}
+
+async function startExamples(req: GrammarReq, created: GrammarDeckResult): Promise<boolean> {
+  const known = knownWordsFor(req.deps.db, req.user.id, req.targetLang)
+  const planner = await plannerFor(req.deps, req.user.id)
+  if (!planner || known.size < 2) return false
+  updateDeckSettings(req.deps.db, created.deckId, { building: true, cursor: 0 })
+  startGrammarExamples(req.deps.db, req.user.id, created.deckId, planner, [...known])
+  return true
+}
+
+function grammarOpts(req: GrammarReq, entries: GrammarEntry[]): GrammarDeckOptions {
+  const { form, user, targetLang, parsed } = req
+  return {
+    name: String(form.get('name') ?? '').trim() || parsed.name || 'Imported grammar',
+    sourceLang: String(form.get('sourceLang') ?? user.nativeLang ?? 'en'),
+    targetLang,
+    entries,
+    readingScript: parseInstruction(String(form.get('instruction') ?? ''), targetLang)
+      .readingScript,
+    sourceLabel: parsed.name,
+  }
+}
+
+function grammarReply(req: GrammarReq, created: GrammarDeckResult, building: boolean) {
+  return {
+    deck: deckView(getDeck(req.deps.db, created.deckId)!),
+    deckId: created.deckId,
+    name: created.name,
+    cardCount: created.cardCount,
+    source: req.parsed.name ?? 'uploaded deck',
+    newWords: [],
+    words: created.cardCount,
+    fields: [],
+    building,
   }
 }
 
@@ -74,9 +141,9 @@ interface ImportReq {
   planner: Planner
 }
 
-function targetLangOf(form: FormData, parsed: Parsed, userTarget: string | null): string {
+function targetLangOf(form: FormData, parsed: Parsed): string {
   const requested = String(form.get('targetLang') ?? '').trim()
-  return requested || detectLanguage(parsed) || userTarget || 'zh'
+  return requested || detectLanguage(parsed) || 'zh'
 }
 
 interface ImportSetup {

@@ -3,6 +3,7 @@ import { parsePitchContour } from '@tutor/core'
 import type { Context } from 'hono'
 import type { App, AppEnv, Deps } from '../../context'
 import { addCard, getCard, getDeck, listCards, updateCard } from '../../db/repo'
+import { isUtterance } from '../../exercises/payload'
 import { jsonBody, num, obj, str, strRecord } from '../body'
 import { deckView } from './view'
 import { fail } from '../errors'
@@ -45,7 +46,7 @@ export function registerDeckCards(app: App) {
 function listCardsHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
-  const deck = getDeck(deps.db, toDeckId(String(c.req.param('id'))))
+  const deck = getDeck(deps.db, toDeckId(String(c.req.param('id'))), user.id)
   if (!deck) return fail(c, 404, 'not found')
   return c.json({ deck: deckView(deck), cards: listCards(deps.db, user.id, deck.id) })
 }
@@ -53,7 +54,7 @@ function listCardsHandler(c: Context<AppEnv>) {
 async function addCardHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
-  const deck = getDeck(deps.db, toDeckId(String(c.req.param('id'))))
+  const deck = getDeck(deps.db, toDeckId(String(c.req.param('id'))), user.id)
   if (!deck) return fail(c, 404, 'not found')
   const body = readNewCard(await jsonBody(c))
   const front = body.front?.trim()
@@ -61,8 +62,10 @@ async function addCardHandler(c: Context<AppEnv>) {
   if (!front || !back) return fail(c, 400, 'front and back are required')
   const step = stepFor(listCards(deps.db, user.id, deck.id), body.step)
   const card = insertCard({ deps, userId: user.id, deck, step, front, back, body })
-  deps.audio?.enqueue([{ userId: user.id, text: card.back, language: card.targetLang }])
-  return c.json({ card: getCard(deps.db, card.id, user.id), step }, 201)
+  const saved = getCard(deps.db, card.id, user.id)
+  if (saved && isUtterance(saved))
+    deps.audio?.enqueue([{ userId: user.id, text: saved.back, language: saved.targetLang }])
+  return c.json({ card: saved, step }, 201)
 }
 
 interface NewCardCtx {

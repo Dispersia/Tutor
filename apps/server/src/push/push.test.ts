@@ -239,6 +239,42 @@ test('stays quiet until a run has grown past an hour', async () => {
   expect(calls).toHaveLength(0)
 })
 
+test('stays quiet when a well-drilled rig starts a fresh short run', async () => {
+  const { db } = openDb(':memory:')
+  const user = createUser(db, { username: 'alice' })
+  const now = Date.now()
+  rig(db, user.id, now + 7 * 60_000, 50)
+  db.update(actionProgress).set({ runStartedAt: now }).run()
+  upsertPushSubscription(db, {
+    userId: user.id,
+    endpoint: 'https://push.example/a',
+    p256dh: 'p',
+    auth: 'a',
+  })
+  const { calls, send } = stubSend()
+  expect(await runRigAlerts({ db, send, now })).toEqual({ users: 0, rigs: 0 })
+  expect(calls).toHaveLength(0)
+})
+
+test('announces a fresh run that has already grown past an hour', async () => {
+  const { db } = openDb(':memory:')
+  const user = createUser(db, { username: 'alice' })
+  const now = Date.now()
+  rig(db, user.id, now + 20 * 60_000, 50)
+  db.update(actionProgress)
+    .set({ runStartedAt: now - 50 * 60_000 })
+    .run()
+  upsertPushSubscription(db, {
+    userId: user.id,
+    endpoint: 'https://push.example/a',
+    p256dh: 'p',
+    auth: 'a',
+  })
+  const { calls, send } = stubSend()
+  expect(await runRigAlerts({ db, send, now })).toEqual({ users: 1, rigs: 1 })
+  expect(calls).toHaveLength(1)
+})
+
 test('drops a dead subscription and leaves the deadline unannounced', async () => {
   const { db, sqlite } = openDb(':memory:')
   const user = createUser(db, { username: 'alice' })

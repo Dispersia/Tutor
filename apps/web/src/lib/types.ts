@@ -4,7 +4,6 @@ export interface PublicUser {
   handle: string
   role: string
   nativeLang: string
-  targetLang: string | null
   level: string | null
   createdAt: number
 }

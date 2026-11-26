@@ -67,7 +67,7 @@
   </div>
   <label class="mt-3 block text-xs text-ink-400">
     Learning steps (minutes, comma-separated)
-    <input bind:value={stepsText} placeholder="1, 10, 60, 240" class="field mt-1" />
+    <input bind:value={stepsText} placeholder="1, 10" class="field mt-1" />
   </label>
   <p class="mt-1 text-xs text-ink-400">
     A new card repeats once per step before it graduates (Anki’s default is <code>1, 10</code>).

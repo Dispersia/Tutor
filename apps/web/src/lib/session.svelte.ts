@@ -66,14 +66,10 @@ export async function login(username: string, password: string): Promise<PublicU
   return r.user
 }
 
-export async function register(
-  username: string,
-  password: string,
-  opts: { handle?: string; targetLang?: string; level?: string } = {},
-): Promise<PublicUser> {
+export async function register(username: string, password: string): Promise<PublicUser> {
   const r = await api<{ user: PublicUser }>('/api/auth/register', {
     method: 'POST',
-    body: JSON.stringify({ username, password, ...opts }),
+    body: JSON.stringify({ username, password }),
   })
   clearCache()
   session.user = r.user

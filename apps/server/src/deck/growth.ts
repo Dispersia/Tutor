@@ -4,10 +4,12 @@ import type { Db } from '../db/client'
 import { fetchFrequencyWords, frequencySourceFor } from '../frequency/source'
 import type { Fetcher } from '../frequency/source'
 import type { Planner } from './plan'
+import type { Reviewer } from './review'
 import { fillDeck } from './build'
 import { maxStep, type BuiltDeck, type DeckContext, type GrowDeckOptions } from './context'
 import type { DeckSettings } from './settings'
 import { MAX_DECK_WORDS, PLAN_CHUNK, clamp } from './instruction'
+import { lexiconOrder } from './lexicon'
 import { startDeckBuild } from './jobs'
 
 type Deck = NonNullable<ReturnType<typeof getDeck>>
@@ -49,7 +51,8 @@ function planOf(head: PlanHead, source: string[], instruction: string, topic?: s
 
 function introducesWord(c: ReturnType<typeof listCards>[number]): boolean {
   const template = c.payload?.template
-  return template === undefined ? c.type === 'vocab' : template === 'vocab'
+  if (template === undefined) return c.type === 'vocab'
+  return template === 'vocab' || c.payload?.intro === true
 }
 
 interface GrowPlanOpts {
@@ -89,6 +92,8 @@ async function planHead(
 
 async function sourceWordsFor(head: PlanHead, fetcher?: Fetcher): Promise<string[]> {
   if (head.settings.words?.length) return head.settings.words
+  const stored = lexiconOrder(head.deck.targetLang)
+  if (stored?.length) return stored
   const { words } = await fetchFrequencyWords(head.deck.targetLang, {
     variant: head.settings.variant,
     fetcher,
@@ -135,9 +140,19 @@ export async function growDeck(
   const count = clamp(opts.count ?? settings.batchSize ?? 10, 1, MAX_DECK_WORDS)
   const plan = await grownPlan(db, userId, deckId, opts, count)
   if (!plan) throw new Error('deck not found')
-  const filled = await fillGrown(db, { userId, deckId, plan, count, planner: opts.planner })
+  const filled = await fillGrown(db, growFillInput(userId, deckId, plan, opts, count))
   updateDeckSettings(db, deckId, grownSettings(plan, count))
   return grewDeck(deck, settings, deckId, plan.cardCount + filled.cardCount, filled.newWords)
+}
+
+function growFillInput(
+  userId: UserId,
+  deckId: DeckId,
+  plan: GrowthPlan,
+  opts: GrowDeckOptions,
+  count: number,
+): GrowFill {
+  return { userId, deckId, plan, count, planner: opts.planner, reviewer: opts.reviewer }
 }
 
 function grownPlan(db: Db, userId: UserId, deckId: DeckId, opts: GrowDeckOptions, count: number) {
@@ -163,6 +178,7 @@ interface GrowFill {
   plan: GrowthPlan
   count: number
   planner: Planner
+  reviewer?: Reviewer
 }
 
 function fillGrown(db: Db, req: GrowFill) {
@@ -173,6 +189,7 @@ function fillGrown(db: Db, req: GrowFill) {
       count: req.count,
       knownWords: req.plan.knownWords,
       startStep: req.plan.startStep,
+      reviewer: req.reviewer,
     },
     planner: req.planner,
   })
@@ -198,17 +215,26 @@ export async function startDeckGrowth(
   deckId: DeckId,
   opts: GrowStartOpts,
 ): Promise<number | undefined> {
-  const plan = await growthPlan(db, userId, deckId, grownRequest(opts, MAX_DECK_WORDS))
+  const plan = await growthPlan(db, userId, deckId, growthRequest(opts))
   if (!plan) return undefined
-  if (plan.words.length === 0) return stopBuilding(db, deckId)
-  const total = plan.cursor + plan.words.length
-  updateDeckSettings(db, deckId, {
-    building: true,
-    buildTotal: total,
-    buildError: undefined,
-  })
-  startDeckBuild(db, userId, deckId, growthJob(plan, opts, total))
-  return plan.words.length
+  const words = boundedWords(plan, opts.count)
+  if (words.length === 0) return stopBuilding(db, deckId)
+  const total = plan.cursor + words.length
+  updateDeckSettings(db, deckId, buildingPatch(total))
+  startDeckBuild(db, userId, deckId, growthJob(plan, words, opts, total))
+  return words.length
+}
+
+function growthRequest(opts: GrowStartOpts) {
+  return grownRequest(opts, opts.count ?? MAX_DECK_WORDS)
+}
+
+function boundedWords(plan: GrowthPlan, count?: number): string[] {
+  return count ? plan.words.slice(0, count) : plan.words
+}
+
+function buildingPatch(total: number) {
+  return { building: true, buildTotal: total, buildError: undefined }
 }
 
 function grownRequest(opts: GrowStartOpts, want: number) {
@@ -224,17 +250,20 @@ interface GrowStartOpts {
   topic?: string
   fetcher?: Fetcher
   planner: Planner
+  count?: number
+  reviewer?: Reviewer
   onFinish?: () => void
 }
 
-function growthJob(plan: GrowthPlan, opts: GrowStartOpts, total: number) {
+function growthJob(plan: GrowthPlan, words: string[], opts: GrowStartOpts, total: number) {
   return {
     ctx: plan.ctx,
     opts: {
-      words: plan.words,
-      count: plan.words.length,
+      words,
+      count: words.length,
       knownWords: plan.knownWords,
       startStep: plan.startStep,
+      reviewer: opts.reviewer,
     },
     planner: opts.planner,
     base: { cursorStart: plan.cursor, total, onFinish: opts.onFinish },

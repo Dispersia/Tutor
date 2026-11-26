@@ -1,13 +1,20 @@
 import type { ExerciseContext, ExerciseDef, GradeResult } from '@tutor/core'
 import { feedbackFor, gradeText, meaningAlternatives } from '../grading'
 import { JUDGE_SCHEMA } from '../schemas'
-import { displayReading, label, readingsOf, wordView } from '../shared'
+import {
+  displayReading,
+  distinctReading,
+  frontRevealsAnswer,
+  label,
+  readingsOf,
+  wordView,
+} from '../shared'
 
 export const translateFrontToBack: ExerciseDef<string> = {
   id: 'translate.front_to_back',
   title: 'Translate to the target language',
   modality: 'text',
-  supports: () => true,
+  supports: (card) => !frontRevealsAnswer(card),
   async generate(ctx) {
     return {
       exerciseId: this.id,
@@ -19,7 +26,7 @@ export const translateFrontToBack: ExerciseDef<string> = {
   },
   async grade(ctx, _instance, answer) {
     const g = gradeText(ctx.card.back, readingsOf(ctx), String(answer ?? ''))
-    const reading = displayReading(ctx)
+    const reading = distinctReading(ctx.card.back, displayReading(ctx))
     return {
       score: g.score,
       correct: g.correct,
@@ -81,7 +88,7 @@ async function judgeMeaning(ctx: ExerciseContext, typed: string): Promise<GradeR
 }
 
 function meaningPrompt(ctx: ExerciseContext, typed: string): string {
-  const reading = displayReading(ctx)
+  const reading = distinctReading(ctx.card.back, displayReading(ctx))
   const source = label(ctx.card.sourceLang)
   return [
     `Task: decide whether the learner knows what a ${label(ctx.card.targetLang)} word means.`,

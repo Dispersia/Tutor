@@ -13,7 +13,7 @@ import {
   users,
   xpEvents,
 } from '../schema'
-import { deleteAllDecks } from './decks'
+import { deleteAllDecks, deleteDeck } from './decks'
 import { inTransaction, newId, now } from './helpers'
 
 export interface NewUser {
@@ -22,7 +22,6 @@ export interface NewUser {
   handle?: string
   role?: 'admin' | 'user'
   nativeLang?: string
-  targetLang?: string
   level?: string
 }
 
@@ -32,7 +31,6 @@ export interface PublicUser {
   handle: string
   role: string
   nativeLang: string
-  targetLang: string | null
   level: string | null
   createdAt: number
 }
@@ -44,7 +42,6 @@ export function publicUser(u: typeof users.$inferSelect): PublicUser {
     handle: u.handle,
     role: u.role,
     nativeLang: u.nativeLang,
-    targetLang: u.targetLang,
     level: u.level,
     createdAt: u.createdAt,
   }
@@ -58,7 +55,6 @@ export function createUser(db: Db, u: NewUser) {
     handle: u.handle ?? u.username,
     role: u.role ?? 'user',
     nativeLang: u.nativeLang ?? 'en',
-    targetLang: u.targetLang ?? null,
     level: u.level ?? null,
     settingsJson: '{}',
     createdAt: now(),
@@ -102,7 +98,7 @@ export function countUsers(db: Db): number {
 export function updateUser(
   db: Db,
   uid: UserId,
-  patch: Partial<{ handle: string; nativeLang: string; targetLang: string; level: string }>,
+  patch: Partial<{ handle: string; nativeLang: string; level: string }>,
 ): void {
   db.update(users)
     .set({ ...patch, updatedAt: now() })
@@ -114,9 +110,10 @@ export function deleteUser(db: Db, uid: UserId): boolean {
   return inTransaction(db, (tx) => {
     if (!tx.select({ id: users.id }).from(users).where(eq(users.id, uid)).get()) return false
     deleteUserHistory(tx, uid)
-    tx.update(decks).set({ userId: null }).where(eq(decks.userId, uid)).run()
+    for (const d of tx.select({ id: decks.id }).from(decks).where(eq(decks.userId, uid)).all()) {
+      deleteDeck(tx, d.id)
+    }
     tx.delete(cards).where(eq(cards.privateTo, uid)).run()
-    tx.update(cards).set({ userId: null }).where(eq(cards.userId, uid)).run()
     tx.update(audioBlobs).set({ userId: null }).where(eq(audioBlobs.userId, uid)).run()
     tx.delete(users).where(eq(users.id, uid)).run()
     if (countUsers(tx) === 0) deleteAllDecks(tx)

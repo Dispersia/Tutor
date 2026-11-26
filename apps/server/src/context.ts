@@ -2,7 +2,8 @@ import type { Hono } from 'hono'
 import type { Db } from './db/client'
 import type { PublicUser } from './db/repo'
 import type { Role } from './env'
-import type { Planner } from './deck/plan'
+import type { Planner, ChatPlanner } from './deck/plan'
+import type { Reviewer } from './deck/review'
 import type { PitchFetcher } from './deck/pitch'
 import type { EventBus } from './events'
 import type { Fetcher } from './frequency/source'
@@ -25,6 +26,8 @@ export interface Deps {
   assess?: AssessFn
   fetcher?: Fetcher
   planner?: Planner
+  chatPlanner?: ChatPlanner
+  reviewer?: Reviewer
   pitch?: PitchFetcher
 }
 

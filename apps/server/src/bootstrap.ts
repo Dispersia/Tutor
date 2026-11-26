@@ -12,7 +12,7 @@ import { clearDeckBuilds, getSetting, listUsers } from './db/repo'
 import { env } from './env'
 import { EventBus } from './events'
 import { OpenRouter } from './llm/openrouter'
-import { backfillGearInstances } from './services/gearInstances'
+import { backfillGearInstances, normalizeGearInstances } from './services/gearInstances'
 import { SpeechSupervisor } from './speech/supervisor'
 
 export interface Built {
@@ -25,6 +25,8 @@ export function buildDeps(cfg: typeof env): Built {
   clearDeckBuilds(db)
   const pieces = backfillGearInstances(db)
   if (pieces) console.log(`[gear] backfilled ${pieces} gear instances from legacy bank stacks`)
+  const normalized = normalizeGearInstances(db)
+  if (normalized) console.log(`[gear] reset ${normalized} gear instances to their base stats`)
   const or = new OpenRouter(cfg.openrouterKey)
   const supervisor = speechSupervisor(cfg)
   const audio = createAudioService({

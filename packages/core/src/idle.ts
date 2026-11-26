@@ -29,12 +29,17 @@ export function rigRunSec(completions: number): number {
   return IDLE.firstRunSec + (span * c) / steps
 }
 
-export function rigRunProgress(completions: number): number {
-  return clamp(completions, 0, IDLE.runFullAtCompletions) / IDLE.runFullAtCompletions
+export function rigRunGainSec(completions: number): number {
+  if (completions <= 1) return IDLE.firstRunSec
+  return (IDLE.maxRunSec - IDLE.firstRunSec) / (IDLE.runFullAtCompletions - 1)
 }
 
-export function rigMaxed(completions: number): boolean {
-  return completions >= IDLE.runFullAtCompletions
+export function rigRunFill(secondsLeft: number): number {
+  return clamp(secondsLeft, 0, IDLE.maxRunSec) / IDLE.maxRunSec
+}
+
+export function rigRunFull(secondsLeft: number): boolean {
+  return secondsLeft >= IDLE.maxRunSec
 }
 
 export interface RigProduce {

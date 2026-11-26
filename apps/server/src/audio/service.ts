@@ -2,6 +2,7 @@ import { toUserId, type UserId, type DeckId } from '../ids'
 import { voiceInstruct, type Card } from '@tutor/core'
 import type { Db } from '../db/client'
 import { cardLanguages, listCards } from '../db/repo'
+import { isUtterance } from '../exercises/payload'
 import { withGateway } from '../speech/gateway'
 import type { SpeechSupervisor } from '../speech/supervisor'
 import {
@@ -248,7 +249,9 @@ function enqueue(s: AudioStore, jobs: AudioJob[]): number {
 function enqueueCards(s: AudioStore, cards: Card[], userId: UserId): number {
   return enqueue(
     s,
-    cards.map((c) => ({ userId, text: c.back, language: c.targetLang, kana: c.readings.kana })),
+    cards
+      .filter(isUtterance)
+      .map((c) => ({ userId, text: c.back, language: c.targetLang, kana: c.readings.kana })),
   )
 }
 

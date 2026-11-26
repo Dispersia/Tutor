@@ -1,9 +1,9 @@
 <script lang="ts">
   import type { Instance } from '#lib/exercises'
-  import { typingAttrs } from '#lib/lang'
   import type { PitchContour } from '#lib/types'
   import { ACCENT } from '#lib/theme'
   import CharCell from '../CharCell.svelte'
+  import ImeInput from '../ime/ImeInput.svelte'
   import Spinner from '../Spinner.svelte'
 
   let {
@@ -43,12 +43,7 @@
       />
     </div>
   {/if}
-  <input
-    bind:value={answer}
-    {...typingAttrs(answerLang)}
-    class="field text-lg"
-    placeholder="Type your answer…"
-  />
+  <ImeInput bind:value={answer} lang={answerLang} placeholder="Type your answer…" />
   <button
     type="submit"
     disabled={busy || !answer.trim()}

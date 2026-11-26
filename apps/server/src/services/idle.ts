@@ -19,10 +19,11 @@ import {
   liveRigCount,
   newRig,
   rigIntervalSec,
-  rigMaxed,
-  rigRunProgress,
+  rigRunFill,
+  rigRunFull,
   rigRunSec,
   settleRig,
+  type RigSettle,
   type RigState,
 } from '../game/idle'
 import {
@@ -36,6 +37,7 @@ import {
   type Cost,
 } from '../game/skills'
 import { actionProduces, actionSuccessChance } from './board'
+import { distillBurn, distillPerCraft, getDistillConfig } from './distill'
 import { consumeItems, grantItems } from './items'
 import { awardActionXp, loadProgress, type ProgressCtx } from './progress'
 import { atomic, inTransaction } from '../db/repo/helpers'
@@ -57,6 +59,7 @@ export interface IdleRigView {
   completions: number
   active: boolean
   runEndsAt: number
+  runStartedAt: number
   secondsLeft: number
   runSec: number
   maxRunSec: number
@@ -84,13 +87,14 @@ export function idleView(
   action: ActionDef,
   now: number,
   yieldBonus: number,
+  xpPerCraft: number = IDLE.xpPerCraft,
 ): IdleRigView {
   return {
     actionId: action.id,
     completions: rig.completions,
     ...rigClock(rig, action, now),
     yieldBonus,
-    xpPerCraft: IDLE.xpPerCraft,
+    xpPerCraft,
     produces: actionProduces(action, rig.choice || undefined),
     consumes: actionConsumes(action, rig.choice || undefined),
     choice: rig.choice ?? '',
@@ -98,15 +102,17 @@ export function idleView(
 }
 
 function rigClock(rig: RigState, action: ActionDef, now: number) {
+  const secondsLeft = Math.max(0, Math.round((rig.runEndsAt - now) / 1000))
   return {
     active: rig.runEndsAt > now,
     runEndsAt: rig.runEndsAt,
-    secondsLeft: Math.max(0, Math.round((rig.runEndsAt - now) / 1000)),
+    runStartedAt: rig.runStartedAt,
+    secondsLeft,
     runSec: Math.round(rigRunSec(rig.completions)),
     maxRunSec: IDLE.maxRunSec,
     runFullAtCompletions: IDLE.runFullAtCompletions,
-    runProgress: rigRunProgress(rig.completions),
-    maxed: rigMaxed(rig.completions),
+    runProgress: rigRunFill(secondsLeft),
+    maxed: rigRunFull(secondsLeft),
     intervalSec: rigIntervalSec(rig.completions, action.tier),
   }
 }
@@ -164,21 +170,40 @@ function settleEach(ctx: SettleCtx): SettleTotals {
 function settleOne(ctx: SettleCtx, action: ActionDef, totals: SettleTotals): void {
   const rig = ctx.rigs.get(action.id)
   if (!rig) return
-  const choiceId = rig.choice || undefined
-  const res = settleRig(rig, recipeOf(action, choiceId, ctx.progress), ctx.bank, ctx.now)
-  const xp = wholeXp(res.state, res.crafted)
+  const outcome =
+    action.id === 'distill' ? distillOutcome(ctx, rig, action) : recipeOutcome(ctx, rig, action)
+  persistRig(ctx, action.id, rig, outcome.settle)
+  mergeInto(totals.produced, outcome.settle.produced)
+  mergeInto(totals.consumed, outcome.settle.consumed)
+  if (outcome.xp > 0) totals.xp.set(action.id, outcome.xp)
+}
+
+interface Outcome {
+  settle: RigSettle
+  xp: number
+}
+
+function recipeOutcome(ctx: SettleCtx, rig: RigState, action: ActionDef): Outcome {
+  const recipe = recipeOf(action, rig.choice || undefined, ctx.progress)
+  const settle = settleRig(rig, recipe, ctx.bank, ctx.now)
+  return { settle, xp: wholeXp(settle.state, settle.crafted) }
+}
+
+function distillOutcome(ctx: SettleCtx, rig: RigState, action: ActionDef): Outcome {
+  const config = getDistillConfig(ctx.db, ctx.userId)
+  return distillBurn(rig, action.tier, ctx.bank, config, ctx.now)
+}
+
+function persistRig(ctx: SettleCtx, actionId: string, rig: RigState, settle: RigSettle): void {
   const ranInWindow = rig.runEndsAt > rig.settledAt
-  if (ranInWindow || res.creditedSec > 0 || res.state.runEndsAt !== rig.runEndsAt) {
-    setRigState(ctx.db, ctx.userId, action.id, res.state)
-    ctx.rigs.set(action.id, res.state)
+  if (ranInWindow || settle.creditedSec > 0 || settle.state.runEndsAt !== rig.runEndsAt) {
+    setRigState(ctx.db, ctx.userId, actionId, settle.state)
+    ctx.rigs.set(actionId, settle.state)
   }
-  for (const [item, n] of Object.entries(res.produced)) {
-    totals.produced[item] = (totals.produced[item] ?? 0) + n
-  }
-  for (const [item, n] of Object.entries(res.consumed)) {
-    totals.consumed[item] = (totals.consumed[item] ?? 0) + n
-  }
-  if (xp > 0) totals.xp.set(action.id, xp)
+}
+
+function mergeInto(into: Record<string, number>, from: Record<string, number>): void {
+  for (const [item, n] of Object.entries(from)) into[item] = (into[item] ?? 0) + n
 }
 
 const XP_CARRY = '$xp'
@@ -215,7 +240,7 @@ function writeBank(
 ): void {
   for (const [item, count] of bank) {
     const delta = count - (before.get(item) ?? 0)
-    if (delta !== 0) addItems(db, userId, item, delta, Math.random)
+    if (delta !== 0) addItems(db, userId, item, delta)
   }
 }
 
@@ -270,7 +295,7 @@ function drillAction(req: DrillReq): DrillRigResult {
     rand,
     levels: req.report.progress.levels,
   })
-  const powered = powerRig(req, current, choiceId)
+  const powered = machinable(req.action, choiceId) ? powerRig(req, current, choiceId) : null
   const stoppedRig = capAfterDrill(req.db, req.userId, req.report.rigs, req.action.id, req.now)
   return drillResult(req, strike, powered, stoppedRig)
 }
@@ -337,18 +362,24 @@ interface DrillStrike {
   spent: Cost[]
 }
 
+function machinable(action: ActionDef, choiceId?: string): boolean {
+  if (action.id === 'distill') return true
+  return actionConsumes(action, choiceId).length > 0 || actionProduces(action, choiceId).length > 0
+}
+
 function drillResult(
   req: DrillReq,
   strike: DrillStrike,
-  powered: RigState,
+  powered: RigState | null,
   stoppedRig: DrillRigResult['stoppedRig'],
 ): DrillRigResult {
   const bonus = req.report.progress.bonuses
   const yieldBonus = bonus.yield(req.action.id) + bonus.double(req.action.id)
+  const perCraft = req.action.id === 'distill' ? distillPerCraft(req.db, req.userId) : undefined
   return {
     gained: mergeCosts(req.report.gained, strike.gained),
     consumed: mergeCosts(req.report.spent, strike.spent),
-    idle: idleView(powered, req.action, req.now, yieldBonus),
+    idle: powered ? idleView(powered, req.action, req.now, yieldBonus, perCraft) : null,
     xp: req.settledXp,
     rigsRunning: liveRigCount(req.report.rigs, req.now),
     maxLiveRigs: MAX_LIVE_RIGS,

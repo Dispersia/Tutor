@@ -47,6 +47,7 @@ export interface DueRigRow {
   actionId: string
   completions: number
   runEndsAt: number
+  runStartedAt: number
 }
 
 export function dueRigAlerts(db: Db, at: number, leadMs: number): DueRigRow[] {
@@ -56,6 +57,7 @@ export function dueRigAlerts(db: Db, at: number, leadMs: number): DueRigRow[] {
       actionId: actionProgress.actionId,
       completions: actionProgress.completions,
       runEndsAt: actionProgress.runEndsAt,
+      runStartedAt: actionProgress.runStartedAt,
     })
     .from(actionProgress)
     .where(
@@ -87,6 +89,7 @@ export function listActiveRigs(db: Db, userId: UserId, at: number) {
       actionId: actionProgress.actionId,
       completions: actionProgress.completions,
       runEndsAt: actionProgress.runEndsAt,
+      runStartedAt: actionProgress.runStartedAt,
     })
     .from(actionProgress)
     .where(and(eq(actionProgress.userId, userId), gt(actionProgress.runEndsAt, at)))

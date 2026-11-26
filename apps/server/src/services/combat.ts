@@ -74,8 +74,6 @@ export function combatLevel(db: Db, userId: UserId, levels?: Map<string, number>
     skillLevelOf(db, userId, 'strength', levels),
     skillLevelOf(db, userId, 'ranged', levels),
     skillLevelOf(db, userId, 'magic', levels),
-    skillLevelOf(db, userId, 'defence', levels),
-    skillLevelOf(db, userId, 'constitution', levels),
   )
 }
 
@@ -179,7 +177,7 @@ function vitals(
 ) {
   const level = (skill: SkillId) => skillLevelOf(a.db, a.userId, skill, a.levels)
   return {
-    maxHp: playerMaxHp(level('constitution'), a.b.hp, a.boosted.armour, stamina),
+    maxHp: playerMaxHp(a.b.hp, a.boosted.armour, stamina),
     power: playerPower(
       level(a.load.skill),
       a.boosted.power,

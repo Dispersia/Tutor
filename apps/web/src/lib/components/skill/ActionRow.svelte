@@ -167,7 +167,6 @@
       </div>
       {#if a.idle}
         {@const idleLeft = rigSecondsLeft(a.idle, now)}
-        {@const runPct = Math.min(1, Math.max(0, idleLeft / a.idle.runSec))}
         <div
           class="mt-1"
           style={accentStyle(accent)}
@@ -209,10 +208,7 @@
                 >maxed</span
               >
             {:else}
-              <span class="tabular-nums"
-                >{a.idle.completions}/{a.idle.runFullAtCompletions} to
-                {fmtClock(a.idle.maxRunSec)}</span
-              >
+              <span class="tabular-nums">{Math.round(a.idle.runProgress * 100)}% full</span>
             {/if}
             {#if a.idle.active}
               <button
@@ -226,9 +222,9 @@
               </button>
             {/if}
           </div>
-          <div class="bar mt-1 h-1" role="progressbar" aria-label="Rig run remaining">
+          <div class="bar mt-1 h-1" role="progressbar" aria-label="Rig run filled toward the cap">
             {#if a.idle.active}
-              <i style="width: {runPct * 100}%; background: {accent}"></i>
+              <i style="width: {a.idle.runProgress * 100}%; background: {accent}"></i>
             {/if}
           </div>
         </div>

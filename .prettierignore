@@ -3,6 +3,7 @@ docs/
 README.md
 models/
 data/
+tmp/
 python/.venv/
 result
 bun.lock

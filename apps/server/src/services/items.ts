@@ -41,7 +41,7 @@ function grantOne(req: GrantReq): Cost | undefined {
     req.rand,
   )
   if (count <= 0) return undefined
-  addItems(db, userId, cost.item, count, req.rand)
+  addItems(db, userId, cost.item, count)
   bus.emit('item.gained', { userId, itemId: cost.item, count })
   return { item: cost.item, count }
 }
@@ -56,7 +56,7 @@ export function consumeItems(db: Db, bus: EventBus, userId: UserId, costs: Cost[
 export function grantFixedItems(db: Db, bus: EventBus, userId: UserId, costs: Cost[]): void {
   for (const c of costs) {
     if (c.count <= 0) continue
-    addItems(db, userId, c.item, c.count, Math.random)
+    addItems(db, userId, c.item, c.count)
     bus.emit('item.gained', { userId, itemId: c.item, count: c.count })
   }
 }

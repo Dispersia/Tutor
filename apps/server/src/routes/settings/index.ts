@@ -33,6 +33,7 @@ function settingsView(deps: Deps, userId: UserId) {
     deckInstruction: rememberedDeckInstruction(deps.db, userId) ?? '',
     foodThreshold: Number(getUserSetting(deps.db, userId, 'foodThreshold') ?? 50),
     desiredRetention: Number(getUserSetting(deps.db, userId, 'desiredRetention') ?? 90),
+    haptics: Number(getUserSetting(deps.db, userId, 'haptics') ?? 0),
   }
 }
 
@@ -89,7 +90,7 @@ function studyError(
 
 function deckExists(deps: Deps, userId: UserId, wanted: unknown): boolean {
   if (typeof wanted !== 'string' || !wanted) return true
-  return listDecks(deps.db).some((d) => d.id === wanted)
+  return listDecks(deps.db, userId).some((d) => d.id === wanted)
 }
 
 function studyPatch(study: Record<string, unknown>): Partial<StudyPrefs> {
@@ -136,6 +137,10 @@ function applyScalars(deps: Deps, userId: UserId, body: Record<string, unknown>)
   const desiredRetention = num(body, 'desiredRetention')
   if (desiredRetention !== undefined) {
     setUserSetting(deps.db, userId, 'desiredRetention', String(clamp(desiredRetention, 70, 97)))
+  }
+  const haptics = num(body, 'haptics')
+  if (haptics !== undefined) {
+    setUserSetting(deps.db, userId, 'haptics', String(clamp(haptics, 0, 5)))
   }
 }
 

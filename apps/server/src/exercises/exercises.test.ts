@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
-import type { Card, ExerciseContext, Learner } from '@tutor/core'
+import type { Card, ExerciseContext, Learner, PitchContour } from '@tutor/core'
 import { exerciseCatalog, registry } from './index'
+import { wordView } from './shared'
 
 const learner: Learner = { id: 'u1', nativeLang: 'en', targetLang: 'zh', level: 'hsk1' }
 
@@ -41,11 +42,23 @@ test('catalog lists the built-in exercises', () => {
   }
 })
 
-test('the pronunciation card is switched off product-wide for now', () => {
-  expect(registry.get('speak_word')?.temporarilyDisabled).toBe(true)
-  expect(exerciseCatalog().find((e) => e.id === 'speak_word')?.disabled).toBe(true)
-  for (const other of exerciseCatalog()) {
-    if (other.id !== 'speak_word') expect(other.disabled).toBe(false)
+test('voice drills are offered only for sentence cards, never word cards', () => {
+  const sentence = ctx({
+    type: 'phrase',
+    back: '我喝茶。',
+    payload: { tokens: ['我', '喝', '茶'], gloss: 'I drink tea.' },
+  })
+  const word = ctx({
+    type: 'vocab',
+    back: '茶',
+    payload: { tokens: ['茶'], gloss: 'tea' },
+  })
+  for (const id of ['type_listen', 'speak_word']) {
+    const def = registry.get(id)!
+    expect(def.temporarilyDisabled).toBeFalsy()
+    expect(def.supports(sentence.card, learner)).toBe(true)
+    expect(def.supports(word.card, learner)).toBe(false)
+    expect(def.supports(ctx().card, learner)).toBe(false)
   }
 })
 
@@ -141,6 +154,25 @@ test('grammar_cloze free typing defaults the answer to the card back', async () 
   expect((await def.grade(c, inst, '我不喝茶')).correct).toBe(true)
 })
 
+test('grammar_cloze offers the answer even when the payload lists only wrong variants', async () => {
+  const def = registry.get('grammar_cloze')!
+  const c = ctx({
+    type: 'grammar',
+    front: "Let's go.",
+    back: '我們去吧。',
+    readings: {},
+    payload: {
+      answer: '我們去吧。',
+      options: ['我們去嗎。', '我們去呢。', '我們去啊。'],
+      rule: 'The particle 吧 makes a suggestion.',
+    },
+  })
+  const inst = await def.generate(c)
+  const options = inst.data.options as string[]
+  expect(options).toContain('我們去吧。')
+  expect((await def.grade(c, inst, '我們去吧。')).correct).toBe(true)
+})
+
 test('grammar_cloze is never offered for a plain word card', () => {
   const def = registry.get('grammar_cloze')!
   expect(def.supports(ctx().card, learner)).toBe(false)
@@ -176,6 +208,86 @@ test('introduce example is n+1: only words already met plus the new one', async 
   expect((await def.generate(bare)).data.example).toBeUndefined()
 })
 
+test('introduce teaches a grammar point with a worked example', async () => {
+  const def = registry.get('introduce')!
+  const c = ctx({
+    type: 'grammar',
+    targetLang: 'ja',
+    front: 'topic particle',
+    back: 'は',
+    readings: { kana: 'は' },
+    payload: {
+      template: 'grammar',
+      prompt: '私___学生です。',
+      answer: 'は',
+      rule: 'topic particle',
+      explanation: 'は marks the topic of the sentence.',
+    },
+  })
+  const inst = await def.generate(c)
+  const grammar = inst.data.grammar as {
+    rule: string
+    explanation?: string
+    example?: { text: string; target: string }
+  }
+  expect(grammar.rule).toBe('topic particle')
+  expect(grammar.example).toEqual({ text: '私は学生です。', target: 'は' })
+  expect(grammar.explanation).toContain('topic')
+})
+
+test('introduce shows the stored known-words example for a grammar point', async () => {
+  const def = registry.get('introduce')!
+  const c = ctx({
+    type: 'grammar',
+    targetLang: 'ja',
+    front: 'topic particle',
+    back: 'は',
+    readings: { kana: 'は' },
+    payload: {
+      template: 'grammar',
+      rule: 'topic particle',
+      answer: 'は',
+      example: {
+        text: '私は学生です。',
+        reading: 'わたしはがくせいです',
+        gloss: 'I am a student.',
+      },
+    },
+  })
+  const inst = await def.generate(c)
+  const grammar = inst.data.grammar as {
+    example?: { text: string; reading?: string; gloss?: string }
+  }
+  expect(grammar.example).toEqual({
+    text: '私は学生です。',
+    reading: 'わたしはがくせいです',
+    gloss: 'I am a student.',
+  })
+})
+
+test('introduce shows no grammar block for a plain word card', async () => {
+  const inst = await registry.get('introduce')!.generate(ctx())
+  expect(inst.data.grammar).toBeUndefined()
+})
+
+test('introduce keeps the explanation of a word card that named a point', async () => {
+  const inst = await registry.get('introduce')!.generate(
+    ctx({
+      targetLang: 'ja',
+      front: 'Topic particle: は',
+      back: 'は',
+      readings: { kana: 'は' },
+      payload: {
+        explanation: 'は marks the topic and is read わ.',
+        example: { text: '私は人です。', gloss: 'I am a person.' },
+      },
+    }),
+  )
+  expect(inst.data.grammar).toBeUndefined()
+  expect(inst.data.explanation).toBe('は marks the topic and is read わ.')
+  expect(inst.data.example).toMatchObject({ text: '私は人です。', gloss: 'I am a person.' })
+})
+
 test('readings are locale-aware: Zhuyin for Chinese, furigana for Japanese', async () => {
   const def = registry.get('translate.back_to_front')!
 
@@ -195,6 +307,26 @@ test('readings are locale-aware: Zhuyin for Chinese, furigana for Japanese', asy
   const jaInst = await def.generate(ja)
   expect(jaInst.data.reading).toBe('たべる')
   expect(jaInst.data.furigana).toEqual([{ base: '食', ruby: 'た' }, { base: 'べる' }])
+})
+
+test('pitch is shown only for Japanese cards', () => {
+  const pitch: PitchContour = { levels: ['L', 'H'], syllables: ['학', '생'], drop: null }
+  const ko = ctx({
+    targetLang: 'ko',
+    front: 'student',
+    back: '학생',
+    readings: {},
+    metadata: { pitch },
+  })
+  const ja = ctx({
+    targetLang: 'ja',
+    front: 'to eat',
+    back: '食べる',
+    readings: { kana: 'たべる' },
+    metadata: { pitch },
+  })
+  expect(wordView(ko).pitch).toBeUndefined()
+  expect(wordView(ja).pitch).toEqual(pitch)
 })
 
 test('translate.front_to_back: exact and via reading', async () => {
@@ -218,6 +350,24 @@ test('translate.back_to_front', async () => {
   expect(inst.data.word).toBe('你好')
   expect(inst.data.reading).toBe('ㄋㄧˇ ㄏㄠˇ')
   expect((await def.grade(c, inst, 'hello')).correct).toBe(true)
+})
+
+test('translate feedback drops a reading that repeats the word', async () => {
+  const def = registry.get('translate.front_to_back')!
+  const kana = ctx({ targetLang: 'ja', front: 'you', back: 'あなた', readings: { kana: 'あなた' } })
+  const kanaInst = await def.generate(kana)
+  expect((await def.grade(kana, kanaInst, 'わたし')).feedback).toBe(
+    'Not quite. The answer is あなた.',
+  )
+
+  const kanji = ctx({
+    targetLang: 'ja',
+    front: 'student',
+    back: '学生',
+    readings: { kana: 'がくせい' },
+  })
+  const kanjiInst = await def.generate(kanji)
+  expect((await def.grade(kanji, kanjiInst, 'せんせい')).feedback).toContain('学生 (がくせい)')
 })
 
 test('translate.back_to_front accepts any listed sense of a multi-sense gloss', async () => {
@@ -245,6 +395,20 @@ test('translate.back_to_front asks the judge before rejecting a paraphrase', asy
   c.judge = async () => ({ score: 0, correct: false, feedback: 'Not this sense.' })
   const rejected = await def.grade(c, inst, 'water')
   expect(rejected.correct).toBe(false)
+})
+
+test('a drill that shows the meaning never has the answer inside it', () => {
+  const point = ctx({
+    type: 'grammar',
+    front: 'Adverb before an adjective: 很',
+    back: '很',
+    payload: { template: 'grammar', answer: '很', rule: 'Adverb before an adjective' },
+  })
+  const plain = ctx({ front: 'very', back: '很' })
+  for (const id of ['multiple_choice', 'translate.front_to_back']) {
+    expect(registry.get(id)!.supports(point.card, learner)).toBe(false)
+    expect(registry.get(id)!.supports(plain.card, learner)).toBe(true)
+  }
 })
 
 test('multiple_choice generates choices incl. the answer and grades exactly', async () => {
@@ -298,6 +462,17 @@ test('type_listen exposes audio text', async () => {
   expect((await def.grade(c, inst, '你好')).correct).toBe(true)
 })
 
+test('type_listen accepts a homophone the audio cannot distinguish', async () => {
+  const def = registry.get('type_listen')!
+  const c = ctx({ type: 'phrase', back: '她很好。' })
+  const inst = await def.generate(c)
+  const r = await def.grade(c, inst, '他很好。')
+  expect(r.correct).toBe(true)
+  expect(r.score).toBe(100)
+  const wrong = await def.grade(c, inst, '他不好。')
+  expect(wrong.correct).toBe(false)
+})
+
 test('speak_word grades a transcript', async () => {
   const def = registry.get('speak_word')!
   const c = ctx()
@@ -307,6 +482,15 @@ test('speak_word grades a transcript', async () => {
   expect(good.detail?.transcript).toBe('你好')
   const empty = await def.grade(c, inst, '')
   expect(empty.correct).toBe(false)
+})
+
+test('speak_word accepts a homophone for the expected character', async () => {
+  const def = registry.get('speak_word')!
+  const c = ctx({ type: 'phrase', back: '他很好。' })
+  const inst = await def.generate(c)
+  const r = await def.grade(c, inst, '她很好。')
+  expect(r.correct).toBe(true)
+  expect(r.score).toBe(100)
 })
 
 test('converse without a judge falls back to a heuristic', async () => {
@@ -345,6 +529,16 @@ test('converse is not offered for cards that already are a sentence', () => {
   expect(def.supports(ctx().card, learner)).toBe(true)
 })
 
+test('converse waits until the learner has met a sentence or a base of words', () => {
+  const def = registry.get('converse')!
+  expect(def.available!(ctx())).toBe(false)
+  const words = ['一', '二', '三', '四', '五']
+  const readings = Object.fromEntries(words.map((word) => [word, 'x']))
+  expect(def.available!({ ...ctx(), known: words, readings })).toBe(true)
+  const met = { ...ctx(), known: ['你好'], seen: ['你好', '我喝茶。'], utterances: ['我喝茶。'] }
+  expect(def.available!(met)).toBe(true)
+})
+
 test('converse uses the injected judge when present', async () => {
   const def = registry.get('converse')!
   const c = ctx()
@@ -353,6 +547,39 @@ test('converse uses the injected judge when present', async () => {
   const r = await def.grade(c, inst, '我喜歡你好嗎')
   expect(r.score).toBe(91)
   expect(r.feedback).toContain('Great')
+})
+
+test('converse passes a correct use of the word and notes the rest', async () => {
+  const def = registry.get('converse')!
+  const c = ctx()
+  c.judge = async () => ({
+    wordCorrect: true,
+    score: 40,
+    correct: false,
+    feedback: 'Good use of 你好. Note: 學生 is written with a different character here.',
+  })
+  const inst = await def.generate(c)
+  const used = await def.grade(c, inst, '你好，我是學生。')
+  expect(used.correct).toBe(true)
+  expect(used.score).toBe(75)
+  expect(used.feedback).toContain('Note')
+})
+
+test('converse fails a word that is there but used wrongly', async () => {
+  const def = registry.get('converse')!
+  const c = ctx()
+  c.judge = async () => ({
+    wordCorrect: false,
+    score: 30,
+    correct: false,
+    feedback: 'A different word belongs here.',
+  })
+  const inst = await def.generate(c)
+  const misused = await def.grade(c, inst, '你好，我是學生。')
+  expect(misused.correct).toBe(false)
+  expect(misused.score).toBe(30)
+  const missing = await def.grade(c, inst, '我是學生。')
+  expect(missing.correct).toBe(false)
 })
 
 test("converse asks the judge for the tip in the learner's native language", async () => {
@@ -473,6 +700,40 @@ test('speak_word.gradeAudio accepts a Taiwan-accent sh → s realisation', async
   const r = await def.gradeAudio!(c, inst, new Uint8Array())
   expect(r.correct).toBe(true)
   expect(r.detail?.missing).toEqual([])
+})
+
+test('speak_word.gradeAudio keeps a homophone attempt correct even if the judge disagrees', async () => {
+  const def = registry.get('speak_word')!
+  const c = ctx({ type: 'phrase', back: '他很好。' })
+  const inst = await def.generate(c)
+  c.assess = async () => ({
+    transcript: '她很好。',
+    items: [
+      { text: '他', start: 0.1, end: 0.3 },
+      { text: '很', start: 0.3, end: 0.5 },
+      { text: '好', start: 0.5, end: 0.8 },
+    ],
+    duration: 1.0,
+  })
+  let prompt = ''
+  c.judge = async (p) => {
+    prompt = p
+    return {
+      score: 40,
+      correct: false,
+      summary: 'You said 她, not 他.',
+      words: [
+        { text: '他', ok: false, tip: 'say 他' },
+        { text: '很', ok: true, tip: '' },
+        { text: '好', ok: true, tip: '' },
+      ],
+    }
+  }
+  const r = await def.gradeAudio!(c, inst, new Uint8Array())
+  expect(prompt).toContain('same pronunciation')
+  expect(r.correct).toBe(true)
+  expect(r.score).toBeGreaterThanOrEqual(90)
+  expect((r.detail?.words as { ok: boolean }[])[0]!.ok).toBe(true)
 })
 
 test('speak_word.gradeAudio hands the judge the exact reading, not a Latin approximation', async () => {

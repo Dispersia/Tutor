@@ -3,6 +3,7 @@
 @import './components/cells.css';
 @import './components/fields.css';
 @import './components/notices.css';
+@import './components/toasts.css';
 @import './components/actions.css';
 @import './components/indicators.css';
 @import './components/figures.css';

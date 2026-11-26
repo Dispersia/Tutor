@@ -2,7 +2,7 @@ import type { UserId, DeckId, CardId } from '../../ids'
 import type { Card, CardMetadata, CardType } from '@tutor/core'
 import { and, eq, isNull, or, sql } from 'drizzle-orm'
 import type { Db } from '../client'
-import { cards, reviews, srs } from '../schema'
+import { cards, decks, reviews, srs } from '../schema'
 import { newId, now } from './helpers'
 
 export interface NewCard {
@@ -21,7 +21,11 @@ export interface NewCard {
 }
 
 function visibleTo(userId: UserId | undefined) {
-  return userId ? or(isNull(cards.privateTo), eq(cards.privateTo, userId)) : undefined
+  if (!userId) return undefined
+  return and(
+    sql`exists (select 1 from ${decks} where ${decks.id} = ${cards.deckId} and ${decks.userId} = ${userId})`,
+    or(isNull(cards.privateTo), eq(cards.privateTo, userId)),
+  )
 }
 
 export function addCard(db: Db, userId: UserId, c: NewCard) {
@@ -51,6 +55,7 @@ function cardRow(userId: UserId, c: NewCard) {
 }
 
 export interface CardPatch {
+  type?: CardType
   front?: string
   back?: string
   readings?: Record<string, string>
@@ -65,6 +70,7 @@ export function updateCard(db: Db, cardId: CardId, patch: CardPatch): void {
 
 function cardSet(patch: CardPatch): Partial<typeof cards.$inferInsert> {
   const set: Partial<typeof cards.$inferInsert> = {}
+  if (patch.type !== undefined) set.type = patch.type
   if (patch.front !== undefined) set.front = patch.front
   if (patch.back !== undefined) set.back = patch.back
   if (patch.readings !== undefined) set.readingsJson = JSON.stringify(patch.readings)

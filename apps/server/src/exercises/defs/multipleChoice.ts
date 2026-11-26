@@ -1,6 +1,6 @@
 import type { ExerciseContext, ExerciseDef } from '@tutor/core'
 import { hasPayloadSentence, payloadTokens } from '../payload'
-import { displayReading, furiganaFor, readingsShown, shuffle } from '../shared'
+import { displayReading, frontRevealsAnswer, furiganaFor, readingsShown, shuffle } from '../shared'
 
 const PUNCTUATION = /^[\p{P}\p{S}]+$/u
 const SENTENCE_END = /[。！？!?…]/
@@ -11,7 +11,7 @@ export const multipleChoice: ExerciseDef<string> = {
   id: 'multiple_choice',
   title: 'Pick the right answer',
   modality: 'text',
-  supports: (card) => card.back.length <= 12,
+  supports: (card) => card.back.length <= 12 && !frontRevealsAnswer(card),
   available: (ctx) => distractorOptions(ctx).length >= 1,
   async generate(ctx) {
     const choices = shuffle([ctx.card.back, ...distractorOptions(ctx)]).slice(0, MAX_CHOICES)

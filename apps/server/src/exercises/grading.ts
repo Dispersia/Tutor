@@ -1,4 +1,5 @@
 import { answerKey, tonelessKey } from '../text/normalize'
+import { sameSounds } from '../pronunciation/variants'
 
 const NON_LATIN = /(?!\p{Script=Latin})\p{L}/u
 
@@ -41,6 +42,15 @@ export function similarity(a: string, b: string): number {
   if (!na && !nb) return 1
   const max = Math.max(na.length, nb.length, 1)
   return 1 - levenshtein(na, nb) / max
+}
+
+export function homophoneAnswer(
+  expected: string,
+  answer: string,
+  lang: string | undefined,
+): boolean {
+  if (lang !== 'zh') return false
+  return answerKey(expected) !== answerKey(answer) && sameSounds(expected, answer)
 }
 
 export function meaningAlternatives(gloss: string): string[] {

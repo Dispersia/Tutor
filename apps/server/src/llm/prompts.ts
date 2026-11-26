@@ -96,7 +96,7 @@ export function conversationSystem(learner: Learner): string {
     `- Speak ${target}: one to three short sentences, ending with a simple question that keeps the conversation going.`,
     "- Use common, everyday words at the learner's level. Introduce at most one new word per reply.",
     `- When the learner makes a mistake, use the corrected form naturally in your reply. Add one short sentence of explanation in ${native} only if the mistake would otherwise be repeated.`,
-    `- When the learner writes in ${native} or asks what something means, answer in one sentence of ${native}, then carry on in ${target}.`,
+    `- When the learner asks a question or writes in ${native}, that whole reply is in ${native} and nothing else: explain the point in one or two short sentences and add no ${target}, not even a sentence to keep the conversation going.`,
     '',
     'Because the reply is spoken:',
     '- Write plain sentences only: no markdown, lists, emoji, brackets or stage directions.',

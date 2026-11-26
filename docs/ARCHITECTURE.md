@@ -24,8 +24,9 @@ services/   use cases: orchestrate game rules + repo queries; multi-write ones a
 db/         schema/ (drizzle tables by domain), repo/ (every SQL query), migrate, client
 game/       the rules of the world — pure: no database, no HTTP
 exercises/  one file per drill under defs/, plus the registry
-deck/       deck building: the LLM planner, growth, Anki import glue, readings, pitch
+deck/       deck building: the LLM planner, growth, the lexicon, Anki import glue, readings, pitch
 text/       shared text utilities: normalisers, reading keys, Zhuyin, furigana, the lexicon
+ime/        reverse-index lookups for the in-app IME (Zhuyin → hanzi, kana → kanji)
 llm/ audio/ speech/ pronunciation/ push/ anki/ frequency/   integrations
 seed/       the curated starter decks — a test fixture, not runtime code
 ```
@@ -64,10 +65,9 @@ Conventions:
   (skills, items, actions) stay as they are.
 - **Validate at the boundary.** Read request bodies with `jsonBody` and the typed
   readers in `routes/body.ts`; never cast `await c.req.json()`.
-- **A member's progress is scoped by `userId`; decks and cards are shared.** A
-  card can be private to one member (`cards.private_to`, their reinforcement
-  cards): pass the member to `listCards`/`getCard` and they see the shared cards
-  plus their own. Server-wide controls (the shared recording queue, the speech
+- **Everything is scoped by `userId`.** Decks, cards and progress belong to one
+  member: pass the member to `listDecks`/`listCards`/`getDeck` and they see only
+  their own rows. Server-wide controls (the shared recording queue, the speech
   gateway, the member list) go through `adminOnly` (`routes/guards.ts`).
 - **Days come from `services/clock.ts`**, never `toISOString().slice(0, 10)`: a
   day starts at the member's own midnight.
@@ -84,11 +84,13 @@ routes/(app)/<feature>/+page.svelte   thin shells: state + wiring
 lib/components/<feature>/             presentational pieces
 lib/<feature>view.ts                  pure derivations for a page
 lib/skills/                           the skills/gear client (types.ts + client.ts)
+lib/ime/                              in-app input methods: hangul/kana/bopomofo engines
 lib/api.ts, cache.ts, session.svelte.ts, paths.ts   fetch, GET cache, session, base path
 lib/resource.svelte.ts                 cachedResource(path): seed from cache, then refresh()
                                        (never throws) or load() (rejects, for flows that must abort)
 lib/skills/store.svelte.ts             the one shared skills board (useSkills())
 lib/clock.svelte.ts                    the one shared ticker
+lib/haptics.svelte.ts                  key-press vibration intensity (per user)
 styles/                               tokens, base, components/<family>.css, animations
 ```
 

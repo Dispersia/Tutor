@@ -3,8 +3,9 @@ import type { Context } from 'hono'
 import type { App, AppEnv, Deps } from '../../context'
 import { getDeck } from '../../db/repo'
 import { growDeck, isDeckBuilding, startDeckGrowth } from '../../deck/generate'
-import { plannerFor } from '../../deck/planner'
+import { plannerFor, reviewerFor } from '../../deck/planner'
 import type { Planner } from '../../deck/plan'
+import type { Reviewer } from '../../deck/review'
 import { bool, jsonBody, num, str } from '../body'
 import { deckView } from './view'
 import { fail, needKey } from '../errors'
@@ -25,6 +26,7 @@ interface GrowReq {
   deckId: DeckId
   body: GrowBody
   planner: Planner
+  reviewer?: Reviewer
 }
 
 const growing = new Set<DeckId>()
@@ -37,16 +39,17 @@ async function growHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
   const deckId = toDeckId(String(c.req.param('id')))
-  if (!getDeck(deps.db, deckId)) return fail(c, 404, 'not found')
+  if (!getDeck(deps.db, deckId, user.id)) return fail(c, 404, 'not found')
   const body = growBody(await jsonBody(c))
-  const planner = await plannerFor(deps, user.id)
-  if (!planner) return needKey(c)
   if (growing.has(deckId) || isDeckBuilding(deckId)) {
     return fail(c, 409, 'This deck is already being built.')
   }
-  const req = { c, deps, deckId, body, planner }
   growing.add(deckId)
   try {
+    const planner = await plannerFor(deps, user.id)
+    if (!planner) return needKey(c)
+    const reviewer = await reviewerFor(deps, user.id)
+    const req = { c, deps, deckId, body, planner, reviewer }
     return await (body.all ? finishDeck(req) : growOnce(req))
   } finally {
     growing.delete(deckId)
@@ -54,7 +57,7 @@ async function growHandler(c: Context<AppEnv>) {
 }
 
 async function growOnce(req: GrowReq) {
-  const { deps, deckId, body, planner } = req
+  const { deps, deckId, body, planner, reviewer } = req
   const user = req.c.get('user')!
   try {
     const built = await growDeck(deps.db, user.id, deckId, {
@@ -62,6 +65,7 @@ async function growOnce(req: GrowReq) {
       count: body.count,
       fetcher: deps.fetcher,
       planner,
+      reviewer,
     })
     deps.audio?.enqueueDeck(user.id, deckId)
     return req.c.json({ deck: deckView(getDeck(deps.db, deckId)!), ...built })
@@ -78,6 +82,7 @@ async function finishDeck(req: GrowReq) {
       topic: body.topic,
       fetcher: deps.fetcher,
       planner: req.planner,
+      reviewer: req.reviewer,
       onFinish: () => deps.audio?.enqueueDeck(user.id, deckId),
     })
     return req.c.json(finishReply(deps, user.id, deckId, remaining), 202)

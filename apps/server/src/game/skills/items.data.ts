@@ -118,6 +118,11 @@ export const ITEMS: ItemDef[] = [
   item('ash', 'Ash', '🌫️', 'refined'),
   item('plank', 'Plank', '🟧', 'refined'),
   item('bones', 'Bones', '🦴', 'raw'),
+  item('slime_goo', 'Slime goo', '🫧', 'raw', 'A wobbly combat reagent.'),
+  item('wolf_fang', 'Wolf fang', '🦷', 'raw', 'A sharp combat reagent.'),
+  item('bone_shard', 'Bone shard', '🩻', 'raw', 'A splintered combat reagent.'),
+  item('imp_ember', 'Imp ember', '🔥', 'raw', 'A smouldering combat reagent.'),
+  item('dragon_scale', 'Dragon scale', '🐲', 'raw', 'A gleaming combat reagent.'),
   item('grace', 'Grace', '🕊️', 'other'),
   item('coins', 'Coins', '🪙', 'coin'),
   item('bronze_sword', 'Bronze sword', '🗡️', 'equipment', 'A melee weapon.', {

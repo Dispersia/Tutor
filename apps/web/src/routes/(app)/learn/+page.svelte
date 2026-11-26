@@ -1,25 +1,17 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { api } from '#lib/api'
   import { href } from '#lib/paths'
   import type { CurriculumDeck, SrsStats } from '#lib/curriculum'
-  import {
-    createDeck,
-    growDeck,
-    importDeck,
-    inspectDeck,
-    type AnkiInspection,
-  } from '#lib/exercises'
+  import { createPathDeck, growDeck } from '#lib/exercises'
   import { useSkills } from '#lib/skills/store.svelte'
   import { session } from '#lib/session.svelte'
-  import { activeDeck, loadActiveDeck, setActiveDeck } from '#lib/activeDeck.svelte'
+  import { activeDeck, activeDeckOf, loadActiveDeck, setActiveDeck } from '#lib/activeDeck.svelte'
   import { ACCENT } from '#lib/theme'
   import Spinner from '#lib/components/Spinner.svelte'
   import CardEditor from '#lib/components/CardEditor.svelte'
   import DeckSettings from '#lib/components/DeckSettings.svelte'
   import PathDeck from '#lib/components/learn/PathDeck.svelte'
   import DeckBuilder from '#lib/components/learn/DeckBuilder.svelte'
-  import ImportPanel from '#lib/components/learn/ImportPanel.svelte'
   import ProfessionPicker from '#lib/components/learn/ProfessionPicker.svelte'
   import { groupedActions, orderDecks, usableActions } from '#lib/learnview'
   import { cachedResource } from '#lib/resource.svelte'
@@ -33,22 +25,13 @@
   let actionId = $state('')
   let loading = $state(path.loading && totals.loading)
   let error = $state('')
-  let instruction = $state('')
   let building = $state(false)
   let buildError = $state('')
   let growing = $state('')
   let deckError = $state('')
   let settingsDeck = $state<CurriculumDeck | null>(null)
   let editing = $state<CurriculumDeck | null>(null)
-  let importFile = $state<File | null>(null)
-  let inspection = $state<AnkiInspection | null>(null)
-  let wordField = $state(0)
-  let readingField = $state(-1)
-  let meaningField = $state(-1)
-  let importing = $state(false)
-  let importError = $state('')
   let buildLang = $state('')
-  let importLang = $state('')
 
   const storageKey = $derived(`tutor.profession.${session.user?.id ?? 'anon'}`)
 
@@ -70,13 +53,8 @@
 
   async function init() {
     try {
-      const [c, , prefs] = await Promise.all([
-        path.load(),
-        totals.load(),
-        api<{ deckInstruction?: string }>('/api/settings').catch(() => null),
-        board.refresh(),
-      ])
-      await applyLoaded(c, prefs?.deckInstruction)
+      const [c] = await Promise.all([path.load(), totals.load(), board.refresh()])
+      await applyLoaded(c)
     } catch (e) {
       error = (e as Error).message
     } finally {
@@ -84,11 +62,10 @@
     }
   }
 
-  async function applyLoaded(c: { decks: CurriculumDeck[] }, prompt?: string) {
+  async function applyLoaded(c: { decks: CurriculumDeck[] }) {
     await loadActiveDeck()
     decks = orderDecks(c.decks, activeDeck.id)
-    if (prompt) instruction = prompt
-    buildLang = session.user?.targetLang ?? 'zh'
+    buildLang = activeDeckOf()?.targetLang ?? 'zh'
     const saved = localStorage.getItem(storageKey)
     if (saved && usable.some((u) => u.action.id === saved)) actionId = saved
   }
@@ -113,13 +90,12 @@
     void loadActiveDeck()
   }
 
-  async function build() {
-    const text = instruction.trim()
-    if (!text || building) return
+  async function startPath() {
+    if (building) return
     building = true
     buildError = ''
     try {
-      await createDeck({ instruction: text, targetLang: buildLang || undefined })
+      await createPathDeck({ targetLang: buildLang || 'zh' })
       await reload()
     } catch (e) {
       buildError = (e as Error).message
@@ -148,69 +124,6 @@
     } finally {
       growing = ''
     }
-  }
-
-  async function inspectApkg(e: Event) {
-    const file = (e.target as HTMLInputElement).files?.[0]
-    if (!file || importing) return
-    importing = true
-    importError = ''
-    try {
-      const info = await readApkg(file)
-      importFile = file
-      applyInspection(info)
-    } catch (err) {
-      importError = (err as Error).message
-    } finally {
-      importing = false
-    }
-  }
-
-  function readApkg(file: File): Promise<AnkiInspection> {
-    const form = new FormData()
-    form.set('file', file, file.name)
-    return inspectDeck(form)
-  }
-
-  function applyInspection(info: AnkiInspection) {
-    inspection = info
-    wordField = info.suggested.wordField
-    readingField = info.suggested.readingField
-    meaningField = info.suggested.meaningField
-    importLang = info.suggestedLang ?? session.user?.targetLang ?? 'zh'
-  }
-
-  async function confirmImport() {
-    if (!importFile || !inspection || importing) return
-    importing = true
-    importError = ''
-    try {
-      await importDeck(importForm(importFile))
-      importFile = null
-      inspection = null
-      await reload()
-    } catch (err) {
-      importError = (err as Error).message
-    } finally {
-      importing = false
-    }
-  }
-
-  function importForm(file: File): FormData {
-    const form = new FormData()
-    form.set('file', file, file.name)
-    form.set('wordField', String(wordField))
-    form.set('readingField', String(readingField))
-    form.set('meaningField', String(meaningField))
-    if (instruction.trim()) form.set('instruction', instruction.trim())
-    if (importLang) form.set('targetLang', importLang)
-    return form
-  }
-
-  function cancelImport() {
-    importFile = null
-    inspection = null
-    importError = ''
   }
 </script>
 
@@ -254,34 +167,12 @@
 {:else}
   <div class="xl:grid xl:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] xl:items-start xl:gap-24">
     <div>
-      <DeckBuilder
-        bind:instruction
-        bind:buildLang
-        {building}
-        {buildError}
-        {importing}
-        {importError}
-        onBuild={build}
-        onInspect={inspectApkg}
-      />
-
-      {#if inspection}
-        <ImportPanel
-          {inspection}
-          bind:importLang
-          bind:wordField
-          bind:readingField
-          bind:meaningField
-          {importing}
-          onConfirm={confirmImport}
-          onCancel={cancelImport}
-        />
-      {/if}
+      <DeckBuilder bind:buildLang {building} {buildError} onStartPath={startPath} />
     </div>
 
     <div>
       {#if decks.length === 0}
-        <p class="empty">No decks yet. Describe one and build it, or import an Anki deck.</p>
+        <p class="empty">No path yet. Pick a language and start your path.</p>
       {:else}
         <ProfessionPicker {groups} {selected} {actionId} onChoose={chooseProfession} />
 

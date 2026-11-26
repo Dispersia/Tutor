@@ -50,6 +50,7 @@ export interface EnchantDTO {
   stat: string
   value: number
   level: number
+  tier: number
   reagents: Cost[]
 }
 
@@ -69,6 +70,7 @@ export interface IdleRigDTO {
   completions: number
   active: boolean
   runEndsAt: number
+  runStartedAt: number
   secondsLeft: number
   runSec: number
   maxRunSec: number
@@ -198,6 +200,33 @@ export interface ItemDTO {
   value?: number
 }
 
+export interface ItemUse {
+  kind: 'action' | 'enchant'
+  skillId: string
+  skillName: string
+  actionId: string
+  name: string
+  count: number
+}
+
+export interface ItemSource {
+  kind: 'action' | 'monster'
+  name: string
+  icon: string
+  skillId?: string
+  skillName?: string
+  actionId?: string
+  monsterId?: string
+  chance?: number
+}
+
+export interface ItemDetailDTO {
+  item: ItemDTO
+  usedIn: ItemUse[]
+  sources: ItemSource[]
+  essence: { id: string; name: string; icon: string }
+}
+
 export type GearStatId =
   'strength' | 'agility' | 'intellect' | 'stamina' | 'haste' | 'crit' | 'mastery'
 
@@ -265,6 +294,13 @@ export interface ActiveSetBonusDTO {
   next: SetBonusTierDTO | null
 }
 
+export type DistillMode = 'max-value' | 'min-value'
+
+export interface DistillConfigDTO {
+  mode: DistillMode
+  allow: string[]
+}
+
 export interface GearResponse {
   equipment: EquippedDTO[]
   gear: GearInstanceDTO[]
@@ -273,6 +309,7 @@ export interface GearResponse {
   bands: BandDTO[]
   enchants: EnchantDTO[]
   enchantingLevel: number
+  distill: DistillConfigDTO
   buffs: { band: BandBuffs }
   items: ItemDTO[]
   inventory: { itemId: string; count: number }[]

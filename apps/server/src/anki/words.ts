@@ -17,6 +17,13 @@ export interface AnkiInspection {
   noteCount: number
   suggested: { wordField: number; readingField: number; meaningField: number }
   suggestedLang?: string
+  suggestedKind: 'grammar' | 'vocab'
+}
+
+export interface GrammarEntry {
+  rule: string
+  pattern: string
+  reading?: string
 }
 
 export interface WordFieldOptions {
@@ -34,6 +41,10 @@ const MEANING_FIELD =
   /(meaning|definition|english|translation|gloss|sense|back|意思|釋義|释义|翻譯|翻译|中文|英文)/i
 
 const CJK = /[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff\uac00-\ud7af]/
+
+const GRAMMAR_FIELD = /(grammar|pattern|structure|construction|文法|문법|语法|語法|句型|문형|문장)/i
+const PATTERN_SIGNAL = /[。．！!？?〜~]|\s/
+const PARTICLE = /[はがをにでとものへやかねよ]|[은는이가을를에도로와과]/
 
 export function cleanField(s: string): string {
   return s
@@ -163,13 +174,57 @@ export function suggestAnkiFields(
 
 export function inspectAnki(deck: AnkiDeck, targetLang: string): AnkiInspection {
   const notes = dominantNotes(deck)
+  const fields = modelFields(deck, notes)
+  const rows = rowsOf(notes)
+  const suggested = suggestAnkiFields(deck, targetLang)
   return {
     name: deck.name,
-    fields: modelFields(deck, notes),
-    sample: rowsOf(notes.slice(0, 5)),
+    fields,
+    sample: rows.slice(0, 5),
     noteCount: notes.length,
-    suggested: suggestAnkiFields(deck, targetLang),
+    suggested,
     suggestedLang: detectLanguage(deck),
+    suggestedKind: looksLikeGrammar(fields, rows, suggested.wordField) ? 'grammar' : 'vocab',
+  }
+}
+
+export function looksLikeGrammar(fields: string[], rows: string[][], wordField: number): boolean {
+  if (fields.some((f) => GRAMMAR_FIELD.test(f))) return true
+  const values = rows.map((r) => r[wordField] ?? '').filter(Boolean)
+  if (values.length === 0) return false
+  const hits = values.filter((v) => PATTERN_SIGNAL.test(v) || PARTICLE.test(v)).length
+  return hits * 2 >= values.length
+}
+
+export function grammarFromAnki(
+  deck: AnkiDeck,
+  targetLang: string,
+  opts: WordFieldOptions = {},
+): GrammarEntry[] {
+  const notes = dominantNotes(deck)
+  const fields = modelFields(deck, notes)
+  const rows = rowsOf(notes)
+  return collectGrammar(rows, fieldIndices(fields, rows, targetLang, opts), opts.limit ?? 5000)
+}
+
+function collectGrammar(rows: string[][], idx: WordFields, limit: number): GrammarEntry[] {
+  const seen = new Set<string>()
+  const out: GrammarEntry[] = []
+  for (const row of rows) {
+    const pattern = row[idx.wordField] ?? ''
+    if (!pattern || seen.has(pattern)) continue
+    seen.add(pattern)
+    out.push(grammarEntry(row, idx, pattern))
+    if (out.length >= limit) break
+  }
+  return out
+}
+
+function grammarEntry(row: string[], idx: WordFields, pattern: string): GrammarEntry {
+  return {
+    rule: idx.meaningField >= 0 ? (row[idx.meaningField] ?? '') : '',
+    pattern,
+    reading: idx.readingField >= 0 ? row[idx.readingField] : undefined,
   }
 }
 

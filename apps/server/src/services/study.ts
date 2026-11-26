@@ -20,7 +20,7 @@ export const DEFAULT_STUDY_PREFS: StudyPrefs = {
   disabledExercises: [],
   newPerDay: 20,
   maxReviewsPerDay: 200,
-  learningSteps: [1, 10, 60, 240],
+  learningSteps: [1, 10],
   autoReinforce: true,
   activeDeckId: null,
 }

@@ -3,12 +3,13 @@
   import { api, jsonBody } from '#lib/api'
   import { drainSentences, streamChat } from '#lib/chat'
   import { Recorder, micSupported, MIN_CLIP_MS } from '#lib/recorder'
-  import { session } from '#lib/session.svelte'
+  import { activeDeckOf, loadActiveDeck } from '#lib/activeDeck.svelte'
   import { createSpeaker, stopAudio, transcribe, wakeSpeech, type Speaker } from '#lib/speech'
   import { accentStyle } from '#lib/theme'
   import { ACCENT } from '#lib/theme'
   import Icon from '#lib/components/Icon.svelte'
   import Spinner from '#lib/components/Spinner.svelte'
+  import SuggestedCard from '#lib/components/chat/SuggestedCard.svelte'
   import { typingAttrs } from '#lib/lang'
   import { autoGrow } from '#lib/grow'
   import type { ChatSession, Message } from '#lib/types'
@@ -16,6 +17,13 @@
   import { cachedResource } from '#lib/resource.svelte'
 
   const threadPath = (id: string) => `/api/sessions/${id}`
+
+  interface ChatSuggestion {
+    deckId: string
+    deckName: string
+    targetLang: string
+    card: { front: string; back: string; reading?: string }
+  }
 
   const list = cachedResource<{ sessions: ChatSession[] }>('/api/sessions', { auto: false })
   const firstSession = list.data?.sessions[0]
@@ -32,16 +40,20 @@
   let transcribing = $state(false)
   let error = $state('')
   let speaking = $state(false)
+  let suggestion = $state<ChatSuggestion | null>(null)
+  let savingCard = $state(false)
+  let cardNote = $state('')
   let speaker: Speaker | null = null
   let stream: AbortController | null = null
   let touched = false
 
   const recorder = new Recorder()
-  const lang = $derived(session.user?.targetLang ?? undefined)
+  const lang = $derived(activeDeckOf()?.targetLang ?? undefined)
   const canMic = micSupported()
 
   onMount(async () => {
     if (ttsOn) void wakeSpeech().catch(() => {})
+    void loadActiveDeck()
     try {
       await openLatest()
     } catch (e) {
@@ -122,7 +134,45 @@
       failReply(id, sp, e)
     } finally {
       busy = false
-      if (!ctl.signal.aborted) await reloadMessages()
+      if (!ctl.signal.aborted) await afterReply()
+    }
+  }
+
+  async function afterReply() {
+    await reloadMessages()
+    void checkCard()
+  }
+
+  async function checkCard() {
+    if (!sessionId) return
+    suggestion = null
+    cardNote = ''
+    try {
+      const res = await api<{ suggestion: ChatSuggestion | null }>(
+        '/api/chat/card/suggest',
+        jsonBody({ sessionId }),
+      )
+      suggestion = res.suggestion
+    } catch {
+      suggestion = null
+    }
+  }
+
+  async function addSuggestedCard() {
+    if (!suggestion || savingCard) return
+    const s = suggestion
+    savingCard = true
+    try {
+      await api(
+        '/api/chat/card',
+        jsonBody({ deckId: s.deckId, targetLang: s.targetLang, card: s.card }),
+      )
+      cardNote = `Added to ${s.deckName}.`
+      suggestion = null
+    } catch (e) {
+      cardNote = (e as Error).message
+    } finally {
+      savingCard = false
     }
   }
 
@@ -130,6 +180,8 @@
     stopAudio()
     speaker?.cancel()
     speaker = null
+    suggestion = null
+    cardNote = ''
     const reply = localMsg('assistant', '')
     thread.set({ messages: [...messages, localMsg('user', text), reply] })
     scrollDown()
@@ -290,6 +342,20 @@
         <span class="text-xs">{speaking ? 'Speaking…' : 'Thinking…'}</span>
       </div>
     </div>
+  {/if}
+  {#if suggestion}
+    <SuggestedCard
+      deckName={suggestion.deckName}
+      front={suggestion.card.front}
+      back={suggestion.card.back}
+      reading={suggestion.card.reading}
+      saving={savingCard}
+      onAdd={addSuggestedCard}
+      onDismiss={() => (suggestion = null)}
+    />
+  {/if}
+  {#if cardNote}
+    <p class="text-xs text-jade-400">{cardNote}</p>
   {/if}
 </div>
 

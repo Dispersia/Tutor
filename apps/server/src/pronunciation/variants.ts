@@ -1,4 +1,5 @@
 import { mandarinZhuyin } from '../deck/mandarin'
+import { tonelessKey } from '../text/normalize'
 
 const MERGED_INITIALS: Record<string, string> = {
   ㄓ: 'ㄗ',
@@ -52,4 +53,15 @@ export function soundAlike(a: string, b: string): boolean {
   if (a === b) return true
   const key = charSound(a)
   return key !== undefined && key === charSound(b)
+}
+
+export function foldedSound(text: string): string {
+  let out = ''
+  for (const ch of tonelessKey(text)) out += charSound(ch) ?? ch
+  return out
+}
+
+export function sameSounds(a: string, b: string): boolean {
+  const key = foldedSound(a)
+  return key.length > 0 && key === foldedSound(b)
 }

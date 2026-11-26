@@ -56,27 +56,29 @@ const DECK_COLUMNS = {
   cardCount: sql<number>`count(${cards.id})`,
 }
 
-export function listDecks(db: Db) {
+export function listDecks(db: Db, userId?: UserId) {
   return db
     .select(DECK_COLUMNS)
     .from(decks)
     .leftJoin(cards, and(eq(cards.deckId, decks.id), isNull(cards.privateTo)))
+    .where(userId ? eq(decks.userId, userId) : undefined)
     .groupBy(decks.id)
     .orderBy(asc(decks.name))
     .all()
     .map((d) => ({ ...d, settings: parseDeckSettings(d.settingsJson) }))
 }
 
-export function getDeck(db: Db, deckId: DeckId) {
+export function getDeck(db: Db, deckId: DeckId, userId?: UserId) {
   const row = db.select().from(decks).where(eq(decks.id, deckId)).get()
   if (!row) return undefined
+  if (userId && row.userId !== userId) return undefined
   return { ...row, settings: parseDeckSettings(row.settingsJson) }
 }
 
 export function rememberedDeckInstruction(db: Db, userId: UserId): string | undefined {
   const saved = getUserSetting(db, userId, DECK_INSTRUCTION_KEY)
   if (saved) return saved
-  for (const deck of listDecks(db)) {
+  for (const deck of listDecks(db, userId)) {
     const prompt = deck.settings.instruction
     if (prompt && !prompt.startsWith('Build a deck from the imported deck ')) return prompt
   }
@@ -130,6 +132,18 @@ export function deleteDeck(db: Db, deckId: DeckId): void {
 
 export function deleteAllDecks(db: Db): void {
   for (const d of db.select({ id: decks.id }).from(decks).all()) deleteDeck(db, d.id)
+}
+
+export function deleteCards(db: Db, cardIds: CardId[]): void {
+  if (cardIds.length === 0) return
+  inTransaction(db, (tx) => {
+    deleteCardHistory(tx, cardIds)
+    for (let i = 0; i < cardIds.length; i += 500) {
+      tx.delete(cards)
+        .where(inArray(cards.id, cardIds.slice(i, i + 500)))
+        .run()
+    }
+  })
 }
 
 function cardIdsOf(db: Db, deckId: DeckId): CardId[] {

@@ -1,82 +1,29 @@
 import type { UserId, DeckId } from '../ids'
-import { createDeck, updateDeckSettings } from '../db/repo'
+import { listCards, updateCard, updateDeckSettings } from '../db/repo'
 import type { Db } from '../db/client'
-import { fetchFrequencyWords, frequencySourceFor } from '../frequency/source'
+import { verifyCard } from '../exercises/verify'
 import type { PlannedCard, Planner } from './plan'
-import type { DeckSettings } from './settings'
+import { reviewBatch, type ReviewBatch, type Reviewer } from './review'
 import {
   applyDictionaryPitch,
   applyDictionaryReading,
   contextFrom,
   persistCards,
+  persistOne,
+  storedKeys,
   type BuildDeckOptions,
   type BuiltDeck,
   type DeckContext,
+  type PersistOpts,
 } from './context'
-import { DEFAULT_COUNT, MAX_DECK_WORDS, PLAN_CHUNK, clamp } from './instruction'
-import { wordKey } from '../text/normalize'
+import { asCard, exampleField, verifiedSentenceTwice, verifyContext } from './exampleCards'
+import { PLAN_CHUNK, clamp } from './instruction'
+import { createDeckForBuild, type CreateDeckResult } from './create'
+import { lexiconHints } from './lexicon'
+import { acceptPlanned } from './intro'
+import { trackDeckJob } from './builds'
 
-export interface CreateDeckResult {
-  deckId: DeckId
-  name: string
-  candidates: string[]
-  sourceLabel: string
-  count: number
-}
-
-interface WordSource {
-  candidates: string[]
-  label: string
-  kind: 'frequency' | 'anki'
-}
-
-export async function createDeckForBuild(
-  db: Db,
-  userId: UserId,
-  opts: BuildDeckOptions,
-): Promise<CreateDeckResult> {
-  const count = clamp(opts.count ?? DEFAULT_COUNT, 1, MAX_DECK_WORDS)
-  const source = await resolveWords(opts, count)
-  const name = opts.name?.trim() || `${opts.topic ?? opts.targetLang} · generated`
-  const deck = createDeck(db, userId, {
-    name,
-    sourceLang: opts.sourceLang,
-    targetLang: opts.targetLang,
-    description: `Generated from ${source.label}`,
-    settings: deckSettings(opts, count, source),
-  })
-  return { deckId: deck.id, name, candidates: source.candidates, sourceLabel: source.label, count }
-}
-
-async function resolveWords(opts: BuildDeckOptions, count: number): Promise<WordSource> {
-  if (opts.words?.length) {
-    return { candidates: opts.words, label: opts.sourceLabel ?? 'uploaded deck', kind: 'anki' }
-  }
-  const source = frequencySourceFor(opts.targetLang, opts.variant)
-  if (!source) throw new Error(`no frequency list for language "${opts.targetLang}"`)
-  const { words } = await fetchFrequencyWords(opts.targetLang, {
-    variant: opts.variant,
-    fetcher: opts.fetcher,
-    source,
-    limit: clamp(count + 200, 300, MAX_DECK_WORDS),
-  })
-  return { candidates: words.map((w) => w.word), label: source.label, kind: 'frequency' }
-}
-
-function deckSettings(opts: BuildDeckOptions, count: number, source: WordSource): DeckSettings {
-  return {
-    variant: opts.variant,
-    readingScript: opts.readingScript,
-    showReadings: opts.showReadings,
-    disabledExercises: opts.disabledExercises,
-    pitchAccent: opts.pitchAccent,
-    cursor: 0,
-    batchSize: Math.min(count, PLAN_CHUNK),
-    instruction: opts.instruction,
-    wordSource: source.kind,
-    words: source.kind === 'anki' ? source.candidates.slice(0, MAX_DECK_WORDS) : undefined,
-  }
-}
+type PersistResult = ReturnType<typeof persistCards>
 
 export interface FillDeckOptions {
   words: string[]
@@ -84,6 +31,7 @@ export interface FillDeckOptions {
   knownWords?: string[]
   startStep?: number
   onProgress?: (built: number, total: number) => void
+  reviewer?: Reviewer
 }
 
 export interface FillDeckResult {
@@ -106,9 +54,10 @@ interface FillState {
   step: number
   built: number
   chunkSize: number
+  written: Set<string>
 }
 
-function fillState(opts: FillDeckOptions): FillState {
+function fillState(opts: FillDeckOptions, written: Set<string>): FillState {
   const known = [...(opts.knownWords ?? [])]
   const future = new Set(opts.words)
   for (const w of known) future.delete(w)
@@ -120,6 +69,7 @@ function fillState(opts: FillDeckOptions): FillState {
     step: opts.startStep ?? 0,
     built: 0,
     chunkSize: PLAN_CHUNK,
+    written,
   }
 }
 
@@ -131,7 +81,7 @@ export async function fillDeck(
 ): Promise<FillDeckResult> {
   const { ctx, opts, planner } = request
   const total = clamp(opts.count, 0, opts.words.length)
-  const state = fillState(opts)
+  const state = fillState(opts, storedKeys(db, userId, deckId))
   const batchReq: BatchReq = { db, userId, deckId, ctx, opts, planner, state, total }
   while (state.built < total) await oneBatch(batchReq)
   return { newWords: state.newWords, cardCount: state.cardCount, built: state.built }
@@ -157,39 +107,148 @@ async function oneBatch(req: BatchReq) {
     state.chunkSize = Math.max(1, Math.floor(size / 2))
     return
   }
-  const accepted = acceptPlanned(planned, words)
-  if (accepted.introduced === 0) return stalled(state, words)
+  const reviewed = await reviewBatch(batchReview(req, words, planned))
+  const accepted = acceptPlanned(reviewed, words)
+  if (accepted.introduced === 0) return stalled(req, words)
+  const kept = await keepDrills(accepted.cards, req)
   const { db, userId, deckId, ctx } = req
-  const res = persistBatch({ db, userId, deckId, ctx, planned: accepted.cards, state })
+  const res = persistBatch({ db, userId, deckId, ctx, planned: kept, state })
+  persistDropped(req, res.dropped)
+  await retryMissing(req, res)
+  await attachGrammarExamples(req, res)
   accumulate(state, res, accepted.introduced, total, req.opts)
 }
 
-function stalled(state: FillState, words: string[]): void {
+function persistDropped(req: BatchReq, dropped: PersistResult['dropped']): void {
+  for (const drop of dropped) {
+    const card = fallbackVocab(req, drop.word)
+    const opts = persistOpts(req, new Set(req.state.known))
+    persistOne({
+      db: req.db,
+      userId: req.userId,
+      deckId: req.deckId,
+      opts,
+      card,
+      step: drop.step,
+    })
+  }
+}
+
+async function retryMissing(req: BatchReq, res: PersistResult): Promise<void> {
+  for (let i = 0; i < res.newWords.length; i++) {
+    const word = res.newWords[i]!
+    if (res.sentenced.has(word)) continue
+    const known = new Set([...req.state.known, ...res.newWords.slice(0, i), word])
+    const card = await exampleSentence(req, word, known)
+    if (card) persistRetry(req, card, known, i)
+  }
+}
+
+async function attachGrammarExamples(req: BatchReq, res: PersistResult): Promise<void> {
+  const cards = listCards(req.db, req.userId, req.deckId).filter(
+    (c) =>
+      c.payload?.template === 'grammar' && !c.payload?.example && res.newWords.includes(c.back),
+  )
+  for (const card of cards) {
+    const known = new Set([...req.state.known, ...res.newWords, card.back])
+    const sentence = await exampleSentence(req, card.back, known)
+    if (sentence)
+      updateCard(req.db, card.id, { payload: { ...card.payload, example: exampleField(sentence) } })
+  }
+}
+
+function persistRetry(req: BatchReq, card: PlannedCard, known: Set<string>, index: number): void {
+  const { db, userId, deckId, ctx } = req
+  applyDictionaryReading(ctx.targetLang, ctx.readingScript, ctx.hints, [card])
+  const opts = persistOpts(req, known)
+  persistOne({ db, userId, deckId, opts, card, step: req.state.step + index + 1 })
+}
+
+function persistOpts(req: BatchReq, known: Set<string>): PersistOpts {
+  return {
+    targetLang: req.ctx.targetLang,
+    sourceLang: req.ctx.sourceLang,
+    readingScript: req.ctx.readingScript,
+    startStep: req.state.step,
+    futureWords: req.state.future,
+    knownWords: [...known],
+    written: req.state.written,
+  }
+}
+
+async function exampleSentence(
+  req: BatchReq,
+  word: string,
+  known: Set<string>,
+): Promise<PlannedCard | undefined> {
+  return verifiedSentenceTwice({
+    planner: req.planner,
+    request: {
+      ...planArgs(req.ctx, [word], req.state, 1),
+      knownWords: [...known],
+      reinforce: true,
+    },
+    targetLang: req.ctx.targetLang,
+    future: req.state.future,
+    known,
+    deck: req.ctx,
+  })
+}
+
+async function keepDrills(cards: PlannedCard[], req: BatchReq): Promise<PlannedCard[]> {
+  const known = new Set(req.state.known)
+  const out: PlannedCard[] = []
+  for (const card of cards) {
+    if (card.template !== 'vocab' && !(await drillOk(card, req, known))) continue
+    if (card.template === 'vocab' || card.payload?.intro === true) known.add(card.back)
+    out.push(card)
+  }
+  return out
+}
+
+async function drillOk(card: PlannedCard, req: BatchReq, known: Set<string>): Promise<boolean> {
+  const verdict = await verifyCard(verifyContext(asCard(card, req.ctx), req.ctx, known))
+  if (!verdict.ok) {
+    const why = verdict.failures.join('; ')
+    console.warn(`[deck] dropped ${card.template} "${card.back}" — ${why}`)
+  }
+  return verdict.ok
+}
+
+function stalled(req: BatchReq, words: string[]): void {
+  const { state } = req
   if (words.length > 1) {
     state.chunkSize = Math.max(1, Math.floor(words.length / 2))
     return
   }
-  console.warn(`[deck] the generator returned no card for "${words[0]}" — skipped`)
+  const word = words[0]!
+  console.warn(`[deck] the generator returned no card for "${word}" — using a vocab card`)
+  persistFallback(req, word)
   state.built += 1
 }
 
-export function acceptPlanned(
-  planned: PlannedCard[],
-  requested: string[],
-): { cards: PlannedCard[]; introduced: number } {
-  const canonical = new Map(requested.map((w) => [wordKey(w), w]))
-  const wordOf = (c: PlannedCard) => canonical.get(wordKey(c.back))
-  const returned = new Set(planned.filter((c) => c.template === 'vocab').map(wordOf))
-  let introduced = 0
-  while (introduced < requested.length && returned.has(requested[introduced])) introduced++
-  const open = new Set(requested.slice(0, introduced))
-  const cards: PlannedCard[] = []
-  for (const c of planned) {
-    const word = c.template === 'vocab' ? wordOf(c) : undefined
-    if (c.template !== 'vocab') cards.push(c)
-    else if (word !== undefined && open.delete(word)) cards.push({ ...c, back: word })
-  }
-  return { cards, introduced }
+function persistFallback(req: BatchReq, word: string): void {
+  const { state } = req
+  const card = fallbackVocab(req, word)
+  const opts = persistOpts(req, new Set(state.known))
+  persistOne({
+    db: req.db,
+    userId: req.userId,
+    deckId: req.deckId,
+    opts,
+    card,
+    step: state.step + 1,
+  })
+  state.newWords.push(word)
+  state.known.push(word)
+  state.future.delete(word)
+  state.step += 1
+  state.cardCount += 1
+}
+
+function fallbackVocab(req: BatchReq, word: string): PlannedCard {
+  const meaning = planHints(req.ctx, [word])[word]?.meaning
+  return { template: 'vocab', front: meaning ?? word, back: word }
 }
 
 async function planChunk(
@@ -207,6 +266,18 @@ async function planChunk(
   }
 }
 
+function batchReview(req: BatchReq, words: string[], planned: PlannedCard[]): ReviewBatch {
+  return {
+    instruction: req.ctx.instruction,
+    targetLang: req.ctx.targetLang,
+    sourceLang: req.ctx.sourceLang,
+    words,
+    knownWords: req.state.known,
+    cards: planned,
+    reviewer: req.opts.reviewer,
+  }
+}
+
 function planArgs(ctx: DeckContext, words: string[], state: FillState, size: number) {
   return {
     instruction: ctx.instruction,
@@ -219,8 +290,15 @@ function planArgs(ctx: DeckContext, words: string[], state: FillState, size: num
     readingScript: ctx.readingScript,
     count: size,
     pitchAccent: ctx.pitchAccent,
-    hints: ctx.hints,
+    hints: planHints(ctx, words),
   }
+}
+
+function planHints(
+  ctx: DeckContext,
+  words: string[],
+): Record<string, { reading?: string; meaning?: string }> {
+  return { ...lexiconHints(ctx.targetLang, words), ...(ctx.hints ?? {}) }
 }
 
 interface PersistReq {
@@ -274,12 +352,28 @@ export async function buildDeck(
   opts: BuildDeckOptions,
 ): Promise<BuiltDeck> {
   const created = await createDeckForBuild(db, userId, opts)
-  const { newWords, cardCount, built } = await fillDeck(db, userId, created.deckId, {
-    ctx: contextFrom(opts),
-    opts: { words: created.candidates, count: created.count, knownWords: [], startStep: 0 },
-    planner: opts.planner,
-  })
+  const run = fillDeck(db, userId, created.deckId, firstFill(created, opts))
+  trackDeckJob(created.deckId, run)
+  const { newWords, cardCount, built } = await run
   updateDeckSettings(db, created.deckId, { cursor: built })
+  return builtDeck(created, cardCount, newWords)
+}
+
+function firstFill(created: CreateDeckResult, opts: BuildDeckOptions): FillDeckRequest {
+  return {
+    ctx: contextFrom(opts),
+    opts: {
+      words: created.candidates,
+      count: created.count,
+      knownWords: [],
+      startStep: 0,
+      reviewer: opts.reviewer,
+    },
+    planner: opts.planner,
+  }
+}
+
+function builtDeck(created: CreateDeckResult, cardCount: number, newWords: string[]): BuiltDeck {
   return {
     deckId: created.deckId,
     name: created.name,

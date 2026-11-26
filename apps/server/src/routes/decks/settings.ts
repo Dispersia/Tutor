@@ -46,8 +46,9 @@ function deleteDeckHandler(c: Context<AppEnv>) {
 
 async function patchDeckHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
+  const user = c.get('user')!
   const deckId = toDeckId(String(c.req.param('id')))
-  if (!getDeck(deps.db, deckId)) return fail(c, 404, 'not found')
+  if (!getDeck(deps.db, deckId, user.id)) return fail(c, 404, 'not found')
   const patch = readSettings(await jsonBody(c))
   const settings = Object.keys(patch).length
     ? updateDeckSettings(deps.db, deckId, patch)

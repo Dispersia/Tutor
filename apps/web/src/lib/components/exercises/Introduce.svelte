@@ -1,11 +1,8 @@
 <script lang="ts">
   import type { Instance } from '#lib/exercises'
   import type { PitchContour } from '#lib/types'
-  import { speak } from '#lib/speech'
-  import { speechOpts } from '#lib/voices'
   import { ACCENT } from '#lib/theme'
   import CharCell from '../CharCell.svelte'
-  import Icon from '../Icon.svelte'
   import Spinner from '../Spinner.svelte'
 
   let {
@@ -14,18 +11,25 @@
     onsubmit,
   }: { instance: Instance; busy?: boolean; onsubmit: (answer: string) => void } = $props()
 
-  let playing = $state(false)
-  let err = $state('')
-
   const word = $derived((instance.data.word as string) ?? '')
   const reading = $derived((instance.data.reading as string) ?? '')
   const lang = $derived((instance.data.readingLang as string) ?? '')
   const furigana = $derived(instance.data.furigana as { base: string; ruby?: string }[] | undefined)
   const pitch = $derived(instance.data.pitch as PitchContour | undefined)
   const meaning = $derived((instance.data.meaning as string) ?? '')
+  const explanation = $derived((instance.data.explanation as string) ?? '')
   const example = $derived(
     instance.data.example as
       { text: string; reading?: string; gloss?: string; target?: string } | undefined,
+  )
+  const grammar = $derived(
+    instance.data.grammar as
+      | {
+          rule: string
+          explanation?: string
+          example?: { text: string; target?: string; gloss?: string; reading?: string }
+        }
+      | undefined,
   )
 
   const exampleParts = $derived.by(() => {
@@ -39,67 +43,65 @@
       { text: example.text.slice(i + hit.length), hit: false },
     ].filter((p) => p.text)
   })
-
-  async function play() {
-    if (!word) return
-    err = ''
-    playing = true
-    try {
-      await speak(word, speechOpts(lang))
-    } catch (e) {
-      err = (e as Error).message
-    } finally {
-      playing = false
-    }
-  }
 </script>
 
 <div class="space-y-4">
-  <p class="eyebrow">New word</p>
+  {#if grammar}
+    <p class="eyebrow">New pattern</p>
 
-  <div class="flex flex-col items-center gap-3 border-y border-ink-700 py-5 text-center">
-    <CharCell
-      {word}
-      {reading}
-      {lang}
-      {furigana}
-      {pitch}
-      size="lg"
-      wordish={word.length > 1}
-      accent={ACCENT.azure}
-    />
-    {#if meaning}
-      <p class="text-sm text-ink-300">{meaning}</p>
-    {/if}
-    <button
-      type="button"
-      onclick={play}
-      disabled={playing}
-      class="btn btn-ghost gap-1.5 px-3 py-2 text-xs"
-    >
-      {#if playing}<Spinner size={14} label="Playing audio" /> playing…{:else}<Icon
-          name="sound"
-          size={14}
-        /> Hear it{/if}
-    </button>
-    {#if err}<p class="text-xs text-ember-300">{err}</p>{/if}
-  </div>
-
-  {#if example}
-    <div class="panel px-4 py-3">
-      <p class="eyebrow">In a sentence</p>
-      <p class="display mt-1.5 text-2xl text-ink-100">
-        {#each exampleParts as part, i (i)}
-          {#if part.hit}<span class="text-seal-300">{part.text}</span>{:else}{part.text}{/if}
-        {/each}
-      </p>
-      {#if example.reading}
-        <p class="mt-0.5 text-sm text-ink-300">{example.reading}</p>
+    <div class="flex flex-col items-center gap-3 border-y border-ink-700 py-5 text-center">
+      <p class="display text-xl text-ink-100">{grammar.rule}</p>
+      {#if grammar.example}
+        <p class="text-2xl text-ink-100">{grammar.example.text}</p>
+        {#if grammar.example.reading && grammar.example.reading !== grammar.example.text}
+          <p class="text-sm text-ink-300">{grammar.example.reading}</p>
+        {/if}
+        {#if grammar.example.gloss}
+          <p class="text-xs text-ink-400">{grammar.example.gloss}</p>
+        {/if}
       {/if}
-      {#if example.gloss}
-        <p class="mt-1 text-xs text-ink-400">{example.gloss}</p>
+      {#if grammar.explanation}
+        <p class="max-w-prose text-sm leading-relaxed text-ink-300">{grammar.explanation}</p>
       {/if}
     </div>
+  {:else}
+    <p class="eyebrow">New word</p>
+
+    <div class="flex flex-col items-center gap-3 border-y border-ink-700 py-5 text-center">
+      <CharCell
+        {word}
+        {reading}
+        {lang}
+        {furigana}
+        {pitch}
+        size="lg"
+        wordish={word.length > 1}
+        accent={ACCENT.azure}
+      />
+      {#if meaning}
+        <p class="text-sm text-ink-300">{meaning}</p>
+      {/if}
+      {#if explanation}
+        <p class="max-w-prose text-sm leading-relaxed text-ink-300">{explanation}</p>
+      {/if}
+    </div>
+
+    {#if example}
+      <div class="panel px-4 py-3">
+        <p class="eyebrow">In a sentence</p>
+        <p class="display mt-1.5 text-2xl text-ink-100">
+          {#each exampleParts as part, i (i)}
+            {#if part.hit}<span class="text-seal-300">{part.text}</span>{:else}{part.text}{/if}
+          {/each}
+        </p>
+        {#if example.reading && example.reading !== example.text}
+          <p class="mt-0.5 text-sm text-ink-300">{example.reading}</p>
+        {/if}
+        {#if example.gloss}
+          <p class="mt-1 text-xs text-ink-400">{example.gloss}</p>
+        {/if}
+      </div>
+    {/if}
   {/if}
 
   <button

@@ -8,6 +8,7 @@ export interface EnchantDef {
   stat: keyof GearStats
   value: number
   level: number
+  tier: number
   reagents: Cost[]
 }
 
@@ -43,7 +44,7 @@ const ENCHANT_TABLE: [Slot, keyof GearStats, number][] = [
   ['neck', 'mastery', 10],
   ['neck', 'stamina', 18],
   ['neck', 'crit', 26],
-  ['chest', 'stamina', 2],
+  ['chest', 'stamina', 3],
   ['chest', 'strength', 5],
   ['chest', 'agility', 9],
   ['chest', 'intellect', 13],
@@ -90,15 +91,33 @@ const ENCHANT_TABLE: [Slot, keyof GearStats, number][] = [
   ['trinket1', 'agility', 25],
 ]
 
+interface ReagentTier {
+  ore: string
+  combat: string
+}
+
+const REAGENT_TIERS: ReagentTier[] = [
+  { ore: 'copper_ore', combat: 'slime_goo' },
+  { ore: 'iron_ore', combat: 'wolf_fang' },
+  { ore: 'coal', combat: 'bone_shard' },
+  { ore: 'mythril_ore', combat: 'imp_ember' },
+  { ore: 'adamant_ore', combat: 'dragon_scale' },
+]
+
+const ENCHANT_TIER_MAX = REAGENT_TIERS.length
+
+function enchantTier(level: number): number {
+  return Math.min(ENCHANT_TIER_MAX, Math.max(1, Math.ceil(level / 10)))
+}
+
 export const ENCHANTS: EnchantDef[] = ENCHANT_TABLE.map(([slot, stat, level]) => {
-  const family = familyForStat(stat)
-  const reagents: Cost[] = [{ item: essenceId(family), count: Math.max(1, Math.round(level / 4)) }]
-  if (family !== 'gem') {
-    reagents.push({ item: essenceId('gem'), count: Math.max(1, Math.round(level / 10)) })
-  }
-  if (slot === 'mainHand' || slot === 'offHand') {
-    reagents.push({ item: essenceId('wood'), count: Math.max(1, Math.round(level / 8)) })
-  }
+  const tier = enchantTier(level)
+  const reagent = REAGENT_TIERS[tier - 1]!
+  const reagents: Cost[] = [
+    { item: essenceId(familyForStat(stat)), count: Math.max(1, Math.round(level / 4)) },
+    { item: reagent.ore, count: 10 * tier + level },
+    { item: reagent.combat, count: tier },
+  ]
   return {
     id: `${slot}:${stat}`,
     name: `${cap(stat)} ${SLOT_WORD[slot] ?? 'piece'}`,
@@ -106,6 +125,7 @@ export const ENCHANTS: EnchantDef[] = ENCHANT_TABLE.map(([slot, stat, level]) =>
     stat,
     value: 1 + Math.floor(level / 4),
     level,
+    tier,
     reagents,
   }
 })

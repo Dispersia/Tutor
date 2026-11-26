@@ -191,7 +191,7 @@ test('fight a slime: hits land, a kill drops materials', async () => {
   sqlite.close()
 })
 
-test('a missed drill lets the monster hit back and trains Defence + Constitution', async () => {
+test('a missed drill lets the monster hit back', async () => {
   const { app, db, sqlite } = makeApp()
   const cookie = await signup(app, db)
 
@@ -218,8 +218,6 @@ test('a missed drill lets the monster hit back and trains Defence + Constitution
       correct: boolean
       playerDamage: number
       playerHp: number
-      defenceXp: number
-      constitutionXp: number
     }
     encounter: { playerHp: number } | null
   }
@@ -228,8 +226,6 @@ test('a missed drill lets the monster hit back and trains Defence + Constitution
   expect(res.hit.correct).toBe(false)
   expect(res.hit.playerDamage).toBeGreaterThan(0)
   expect(res.hit.playerHp).toBeLessThan(start.encounter.playerHp)
-  expect(res.hit.defenceXp).toBeGreaterThan(0)
-  expect(res.hit.constitutionXp).toBeGreaterThan(0)
   expect(res.encounter?.playerHp).toBe(res.hit.playerHp)
   sqlite.close()
 })
@@ -259,14 +255,13 @@ test('a correct drill still takes the monster’s blow', async () => {
     )
   ).json()) as {
     result: { correct: boolean }
-    hit: { playerDamage: number; playerHp: number; defenceXp: number }
+    hit: { playerDamage: number; playerHp: number }
     encounter: { playerHp: number } | null
   }
 
   expect(res.result.correct).toBe(true)
   expect(res.hit.playerDamage).toBeGreaterThan(0)
   expect(res.hit.playerHp).toBeLessThan(start.encounter.playerHp)
-  expect(res.hit.defenceXp).toBeGreaterThan(0)
   expect(res.encounter?.playerHp).toBe(res.hit.playerHp)
   sqlite.close()
 })
@@ -294,7 +289,7 @@ test('a timed-out drill is a miss even when the answer is empty', async () => {
     )
   ).json()) as {
     result: { correct: boolean; score: number; feedback?: string }
-    hit: { correct: boolean; playerDamage: number; playerHp: number; defenceXp: number }
+    hit: { correct: boolean; playerDamage: number; playerHp: number }
     encounter: { playerHp: number } | null
   }
 
@@ -304,7 +299,6 @@ test('a timed-out drill is a miss even when the answer is empty', async () => {
   expect(res.hit.correct).toBe(false)
   expect(res.hit.playerDamage).toBeGreaterThan(0)
   expect(res.hit.playerHp).toBeLessThan(start.encounter.playerHp)
-  expect(res.hit.defenceXp).toBeGreaterThan(0)
   expect(res.encounter?.playerHp).toBe(res.hit.playerHp)
   sqlite.close()
 })

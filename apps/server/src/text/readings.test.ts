@@ -1,6 +1,12 @@
 import { expect, test } from 'bun:test'
 import { FREQUENCY } from './lexicon'
-import { displayReading, readingKey, storedReadings, withReading } from './readings'
+import {
+  displayReading,
+  hasReadingScript,
+  readingKey,
+  storedReadings,
+  withReading,
+} from './readings'
 import { pinyinToZhuyin } from './zhuyin'
 
 test('readingKey: one key per language and script', () => {
@@ -29,14 +35,22 @@ test('storedReadings: a Mandarin Latin reading becomes Zhuyin or nothing', () =>
   })
 })
 
-test('storedReadings: other languages keep the reading as written', () => {
+test('storedReadings: native scripts only, no romanization for any language', () => {
   expect(storedReadings({ targetLang: 'ja', reading: 'たべる' })).toEqual({ kana: 'たべる' })
-  expect(storedReadings({ targetLang: 'yue', reading: 'nei5 hou2' })).toEqual({
-    reading: 'nei5 hou2',
-  })
-  expect(storedReadings({ targetLang: 'ko', reading: 'annyeong' })).toEqual({ reading: 'annyeong' })
+  expect(storedReadings({ targetLang: 'yue', reading: 'ㄋㄟˇ' })).toEqual({ zhuyin: 'ㄋㄟˇ' })
+  expect(storedReadings({ targetLang: 'yue', reading: 'nei5 hou2' })).toEqual({})
+  expect(storedReadings({ targetLang: 'ko', reading: 'annyeong' })).toEqual({})
+  expect(storedReadings({ targetLang: 'es', reading: 'agua' })).toEqual({})
   expect(storedReadings({ targetLang: 'ja', reading: '' })).toEqual({})
   expect(storedReadings({ targetLang: 'zh', reading: undefined })).toEqual({})
+})
+
+test('hasReadingScript: only the scripts the app renders', () => {
+  expect(hasReadingScript('zh')).toBe(true)
+  expect(hasReadingScript('yue')).toBe(true)
+  expect(hasReadingScript('ja')).toBe(true)
+  expect(hasReadingScript('ko')).toBe(false)
+  expect(hasReadingScript('es')).toBe(false)
 })
 
 test('storedReadings agrees with the plain converter on the whole lexicon', () => {
@@ -62,14 +76,12 @@ test('withReading replaces the reading under the right key', () => {
   })
 })
 
-test('withReading: empty clears, undefined leaves alone', () => {
+test('withReading: empty clears, undefined leaves alone, and Korean never keeps one', () => {
   expect(withReading({ kana: 'た' }, { targetLang: 'ja', reading: '' })).toEqual({})
   expect(withReading({ kana: 'た' }, { targetLang: 'ja', reading: undefined })).toEqual({
     kana: 'た',
   })
-  expect(withReading({ reading: 'x' }, { targetLang: 'ko', reading: 'y' })).toEqual({
-    reading: 'y',
-  })
+  expect(withReading({ reading: 'x' }, { targetLang: 'ko', reading: 'y' })).toEqual({})
 })
 
 test('displayReading: kana, Zhuyin (pinyin converted), else the first reading', () => {
@@ -81,7 +93,8 @@ test('displayReading: kana, Zhuyin (pinyin converted), else the first reading', 
     'ㄋㄧˇ',
   )
   expect(displayReading({ targetLang: 'zh', readings: { pinyin: 'nǐ hǎo' } })).toBe('ㄋㄧˇ ㄏㄠˇ')
-  expect(displayReading({ targetLang: 'yue', readings: { reading: 'nei5' } })).toBe('nei5')
-  expect(displayReading({ targetLang: 'ko', readings: { reading: '', x: 'an' } })).toBe('an')
+  expect(displayReading({ targetLang: 'yue', readings: { zhuyin: 'ㄋㄟˇ' } })).toBe('ㄋㄟˇ')
+  expect(displayReading({ targetLang: 'yue', readings: { reading: 'nei5' } })).toBe('')
+  expect(displayReading({ targetLang: 'ko', readings: { reading: '', x: 'an' } })).toBe('')
   expect(displayReading({ targetLang: 'ko', readings: {} })).toBe('')
 })

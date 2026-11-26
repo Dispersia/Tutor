@@ -64,7 +64,7 @@ test('a fight: hits damage the monster, a kill grants drops + XP', () => {
   const kill = combatResolve(db, bus, user.id, true)!
   expect(kill.outcome).toBe('won')
   expect(kill.monsterHp).toBe(0)
-  expect(kill.drops).toEqual([{ item: 'bones', count: 1 }])
+  expect(kill.drops).toContainEqual({ item: 'bones', count: 1 })
   expect(getItemCount(db, user.id, 'bones')).toBeGreaterThanOrEqual(1)
   expect(getActionXp(db, user.id, 'train-strength')).toBeGreaterThan(0)
   expect(getEncounter(db, user.id)).toBeUndefined()
@@ -84,15 +84,13 @@ test('the weapon decides the skill the fight trains', () => {
   sqlite.close()
 })
 
-test('taking a hit trains Defence and Constitution', () => {
+test('taking a hit costs HP and trains nothing', () => {
   const { db, bus, user, sqlite } = setup()
   startEncounter(db, bus, user.id, 'slime')
   const hit = combatResolve(db, bus, user.id, false)!
   expect(hit.playerDamage).toBe(2)
-  expect(hit.defenceXp).toBe(2)
-  expect(hit.constitutionXp).toBe(2)
-  expect(getActionXp(db, user.id, 'train-defence')).toBeGreaterThan(0)
-  expect(getActionXp(db, user.id, 'train-constitution')).toBeGreaterThan(0)
+  expect(hit.xp).toBe(0)
+  expect(getActionXp(db, user.id, 'train-strength')).toBe(0)
   sqlite.close()
 })
 
@@ -111,8 +109,6 @@ test('the monster hits you even when you strike it', () => {
   expect(hit.monsterHp).toBe(7)
   expect(hit.playerDamage).toBe(2)
   expect(hit.playerHp).toBe(pc.maxHp - 2)
-  expect(hit.defenceXp).toBe(2)
-  expect(hit.constitutionXp).toBe(2)
   sqlite.close()
 })
 
@@ -168,7 +164,7 @@ test('a restore potion raises max HP for the fight', () => {
   const start = startEncounter(db, bus, user.id, 'goblin')
   expect(start.ok).toBe(true)
   if (!start.ok) return
-  expect(start.encounter.playerHp).toBe(30)
+  expect(start.encounter.playerHp).toBe(25)
   sqlite.close()
 })
 

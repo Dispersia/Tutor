@@ -4,22 +4,28 @@
   import { goto } from '$app/navigation'
   import { tick } from 'svelte'
   import {
+    applyEnchant,
     chooseAction,
     chooseTalent,
     distillGear,
+    setDistillMode,
     stopRig,
+    toggleDistill,
     type ActionDTO,
+    type DistillConfigDTO,
     type SkillPageResponse,
   } from '#lib/skills'
   import { CATEGORY, ACCENT, accentStyle, categoryAccent } from '#lib/theme'
   import { cachedResource } from '#lib/resource.svelte'
   import { clock } from '#lib/clock.svelte'
   import { anyRigActive } from '#lib/idle'
-  import { buildBandGroups, buildTalentRail, distillablesOf } from '#lib/skillview'
+  import { buildBandGroups, buildTalentRail, queuedDistillables } from '#lib/skillview'
   import DistillPanel from '#lib/components/skill/DistillPanel.svelte'
+  import EnchantPanel from '#lib/components/skill/EnchantPanel.svelte'
   import SkillLedger from '#lib/components/skill/SkillLedger.svelte'
   import TalentRail from '#lib/components/skill/TalentRail.svelte'
   import ActionList from '#lib/components/skill/ActionList.svelte'
+  import ConfirmDialog from '#lib/components/ConfirmDialog.svelte'
 
   const id = $derived(page.params.id)
   const profession = cachedResource<SkillPageResponse>(() =>
@@ -30,6 +36,7 @@
   let busy = $state(false)
   let changing = $state<string | null>(null)
   let flash = $state<string | null>(null)
+  let pendingRig = $state<ActionDTO | null>(null)
   let highlighted = ''
 
   const skill = $derived(data?.skill ?? null)
@@ -43,7 +50,44 @@
   const firstTrainableId = $derived(skill?.actions.find((a) => a.unlocked && a.affordable)?.id)
 
   let distillNote = $state('')
-  const distillables = $derived(distillablesOf(skill?.id, data?.inventory ?? [], itemMap))
+  const distillConfig = $derived<DistillConfigDTO>(
+    data?.distill ?? { mode: 'max-value', allow: [] },
+  )
+  const queued = $derived.by(() => {
+    const worn = new Map<string, number>()
+    for (const e of data?.equipment ?? []) worn.set(e.itemId, (worn.get(e.itemId) ?? 0) + 1)
+    const spare = (data?.inventory ?? []).map((row) => ({
+      itemId: row.itemId,
+      count: Math.max(0, row.count - (worn.get(row.itemId) ?? 0)),
+    }))
+    return queuedDistillables(distillConfig, spare, itemMap)
+  })
+
+  async function pickDistillMode(mode: string) {
+    busy = true
+    profession.error = ''
+    try {
+      await setDistillMode(mode)
+      await load()
+    } catch (e) {
+      profession.error = (e as Error).message
+    } finally {
+      busy = false
+    }
+  }
+
+  async function toggleDistillItem(itemId: string) {
+    busy = true
+    profession.error = ''
+    try {
+      await toggleDistill(itemId)
+      await load()
+    } catch (e) {
+      profession.error = (e as Error).message
+    } finally {
+      busy = false
+    }
+  }
 
   async function doDistill(itemId: string) {
     busy = true
@@ -51,6 +95,19 @@
     try {
       const res = await distillGear(itemId)
       distillNote = `+${res.xp} Enchanting XP · +1 ${res.essence.replace('_', ' ')}`
+      await load()
+    } catch (e) {
+      profession.error = (e as Error).message
+    } finally {
+      busy = false
+    }
+  }
+
+  async function doEnchant(instanceId: string, enchantId: string) {
+    busy = true
+    profession.error = ''
+    try {
+      await applyEnchant(instanceId, enchantId)
       await load()
     } catch (e) {
       profession.error = (e as Error).message
@@ -122,9 +179,14 @@
     }
   }
 
-  async function cancelRig(a: ActionDTO) {
-    if (!confirm(`Stop the ${a.name} rig? Its run ends now and frees a slot for another action.`))
-      return
+  function cancelRig(a: ActionDTO) {
+    pendingRig = a
+  }
+
+  async function confirmStopRig() {
+    const a = pendingRig
+    if (!a) return
+    pendingRig = null
     busy = true
     profession.error = ''
     try {
@@ -173,7 +235,28 @@
   </header>
 
   {#if skill.id === 'enchanting'}
-    <DistillPanel {accent} {distillables} note={distillNote} {busy} onDistill={doDistill} />
+    <DistillPanel
+      {accent}
+      {queued}
+      config={distillConfig}
+      note={distillNote}
+      {busy}
+      onDistill={doDistill}
+      onToggle={toggleDistillItem}
+      onMode={pickDistillMode}
+    />
+    <EnchantPanel
+      {accent}
+      enchants={data?.enchants ?? []}
+      level={data?.enchantingLevel ?? 1}
+      gear={data?.gear ?? []}
+      sets={data?.sets ?? []}
+      equipment={data?.equipment ?? []}
+      {itemMap}
+      owned={ownedMap}
+      {busy}
+      onEnchant={doEnchant}
+    />
   {/if}
 
   <div
@@ -216,3 +299,13 @@
 {:else}
   <p class="mt-4 text-sm text-ink-400">Profession not found.</p>
 {/if}
+
+<ConfirmDialog
+  open={pendingRig !== null}
+  title="Stop rig"
+  message={`Stop the ${pendingRig?.name ?? 'this'} rig? Its run ends now and frees a slot for another action.`}
+  confirmLabel="Stop rig"
+  {busy}
+  onConfirm={confirmStopRig}
+  onCancel={() => (pendingRig = null)}
+/>

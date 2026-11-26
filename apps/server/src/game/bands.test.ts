@@ -140,11 +140,14 @@ test('an enchant fits the slot, needs its level and reagents, and grants no XP (
   expect(skillLevelOf(db, user.id, 'enchanting')).toBe(5)
   expect(applyEnchant(db, bus, user.id, piece, { enchantId: 'mainHand:strength' }).ok).toBe(false)
   addItems(db, user.id, 'metal_essence', 2)
-  addItems(db, user.id, 'gem_essence', 1)
-  addItems(db, user.id, 'wood_essence', 1)
+  expect(applyEnchant(db, bus, user.id, piece, { enchantId: 'mainHand:strength' }).ok).toBe(false)
+  addItems(db, user.id, 'copper_ore', 20)
+  addItems(db, user.id, 'slime_goo', 2)
   const xpBefore = getActionXp(db, user.id, 'distill')
   expect(applyEnchant(db, bus, user.id, piece, { enchantId: 'mainHand:strength' }).ok).toBe(true)
   expect(getActionXp(db, user.id, 'distill')).toBe(xpBefore)
+  expect(getItemCount(db, user.id, 'copper_ore')).toBe(5)
+  expect(getItemCount(db, user.id, 'slime_goo')).toBe(1)
   const row = listGearInstances(db, user.id).find((g) => g.id === piece)!
   expect(JSON.parse(row.enchantJson)).toEqual(['mainHand:strength'])
   expect(enchantOf(row)?.stat).toBe('strength')
@@ -275,13 +278,15 @@ test('the action ladder costs 84,575 XP to level 100 (§13.5)', () => {
   expect(total).toBe(ACTION_XP_TO_MAX)
 })
 
-test('Distill is priced to cap Enchanting in ~10 days (§13.5.3.2)', () => {
-  const valueToMax = ACTION_XP_TO_MAX / DISTILL_XP_PER_VALUE
-  const perDay = valueToMax / 10
-  expect(perDay).toBeGreaterThan(900)
-  expect(perDay).toBeLessThan(1100)
-  const piece = ENCHANTS.length > 0 ? 100 : 0
-  expect(piece * DISTILL_XP_PER_VALUE).toBeLessThan(ACTION_XP_TO_MAX / 50)
+test('Distill pays a little XP by item value: an ore is 1, a sword 4 (§13.5.3.2)', () => {
+  const { db, bus, user, sqlite } = setup()
+  addItems(db, user.id, 'copper_ore', 1)
+  addItems(db, user.id, 'bronze_sword', 1)
+  expect(distillItem(db, bus, user.id, 'copper_ore').xp).toBe(1)
+  expect(distillItem(db, bus, user.id, 'bronze_sword').xp).toBe(4)
+  const top = itemValue(ITEM_BY_ID.get('adamant_platebody')!)
+  expect(top * DISTILL_XP_PER_VALUE).toBeLessThan(ACTION_XP_TO_MAX / 1000)
+  sqlite.close()
 })
 
 test('the enchant catalog covers every slot across a range of levels (§13.5.3.2)', () => {

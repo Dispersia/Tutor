@@ -33,6 +33,7 @@ export function listRigStates(db: Db, userId: UserId): Map<string, RigState> {
       {
         completions: r.completions,
         runEndsAt: r.runEndsAt,
+        runStartedAt: r.runStartedAt,
         settledAt: r.settledAt,
         crafts: r.crafts,
         remainder: parseRemainder(r.remainderJson),
@@ -68,6 +69,7 @@ export function getRigState(db: Db, userId: UserId, actionId: string): RigState 
   return {
     completions: row.completions,
     runEndsAt: row.runEndsAt,
+    runStartedAt: row.runStartedAt,
     settledAt: row.settledAt,
     crafts: row.crafts,
     remainder: parseRemainder(row.remainderJson),
@@ -79,6 +81,7 @@ export function setRigState(db: Db, userId: UserId, actionId: string, rig: RigSt
   const cols = {
     completions: rig.completions,
     runEndsAt: rig.runEndsAt,
+    runStartedAt: rig.runStartedAt,
     settledAt: rig.settledAt,
     crafts: rig.crafts,
     remainderJson: JSON.stringify(rig.remainder),
@@ -151,27 +154,15 @@ function gearStacks(db: Db, userId: UserId): InventoryRow[] {
   return [...byItem.values()]
 }
 
-export function addItems(
-  db: Db,
-  userId: UserId,
-  itemId: string,
-  delta: number,
-  rand?: () => number,
-): void {
+export function addItems(db: Db, userId: UserId, itemId: string, delta: number): void {
   const gear = gearItem(itemId)
-  if (gear) return addGearPieces(db, userId, gear, delta, rand)
+  if (gear) return addGearPieces(db, userId, gear, delta)
   addToStack(db, userId, itemId, delta)
 }
 
-function addGearPieces(
-  db: Db,
-  userId: UserId,
-  item: ItemDef,
-  delta: number,
-  rand?: () => number,
-): void {
+function addGearPieces(db: Db, userId: UserId, item: ItemDef, delta: number): void {
   if (delta < 0) return removeGearPieces(db, userId, item.id, -delta)
-  for (let i = 0; i < delta; i++) addGearPiece(db, userId, item, rand)
+  for (let i = 0; i < delta; i++) addGearPiece(db, userId, item)
 }
 
 const GEAR_ITEM_IDS = ITEMS.filter((i) => i.slot).map((i) => i.id)

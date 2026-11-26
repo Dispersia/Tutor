@@ -97,7 +97,7 @@ test('GET /api/skills returns the profession board', async () => {
     inventory: { itemId: string; count: number }[]
     equipment: unknown[]
   }
-  expect(body.skills.length).toBeGreaterThanOrEqual(20)
+  expect(body.skills.length).toBeGreaterThanOrEqual(19)
   const mining = body.skills.find((s) => s.id === 'mining')
   expect(mining?.level).toBe(1)
   expect(mining?.actions.filter((a) => (a as { level: number }).level === 1).length).toBe(7)
@@ -180,7 +180,7 @@ function expectTrainingAwarded(g: Graded) {
   expect(g.skill.idle?.intervalSec).toBeGreaterThan(2)
   expect(g.skill.idle?.maxRunSec).toBe(3 * 60 * 60)
   expect(g.skill.idle?.runFullAtCompletions).toBe(25)
-  expect(g.skill.idle?.runProgress).toBeCloseTo(1 / 25, 6)
+  expect(g.skill.idle?.runProgress).toBeCloseTo(600 / (3 * 60 * 60), 6)
   expect(g.skill.idle?.maxed).toBe(false)
 }
 
@@ -299,6 +299,29 @@ test('GET /api/skills/:id returns one profession with its talent roadmap', async
   ])
 
   const missing = await app.request('/api/skills/nope', auth(cookie))
+  expect(missing.status).toBe(404)
+  sqlite.close()
+})
+
+test('GET /api/skills/items/:id lists recipes and acquisition sources', async () => {
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
+  const res = await app.request('/api/skills/items/copper_ore', auth(cookie))
+  expect(res.status).toBe(200)
+  const body = (await res.json()) as {
+    item: { id: string; name: string; value: number; description: string }
+    usedIn: { actionId: string; skillName: string; count: number }[]
+    sources: { kind: string; actionId?: string; skillName?: string }[]
+    essence: { id: string; name: string }
+  }
+  expect(body.item.id).toBe('copper_ore')
+  expect(body.item.value).toBeGreaterThan(0)
+  expect(body.item.description.length).toBeGreaterThan(0)
+  expect(body.usedIn.some((use) => use.actionId === 'smelt-bronze')).toBe(true)
+  expect(body.sources.some((source) => source.actionId === 'mine-copper')).toBe(true)
+  expect(body.essence.id).toBe('metal')
+
+  const missing = await app.request('/api/skills/items/nope', auth(cookie))
   expect(missing.status).toBe(404)
   sqlite.close()
 })

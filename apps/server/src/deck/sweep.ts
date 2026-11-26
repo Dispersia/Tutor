@@ -348,8 +348,11 @@ function mergedPayload(
 }
 
 const CJK = /[\u3040-\u30ff\u3400-\u9fff\uff66-\uff9f]/
+const HANGUL = /[\u1100-\u11ff\u3130-\u318f\uac00-\ud7a3]/
 const looksTarget = (text: string, lang: string): boolean =>
-  (lang === 'zh' || lang === 'yue' || lang === 'ja') && CJK.test(text)
+  lang === 'ko'
+    ? HANGUL.test(text)
+    : (lang === 'zh' || lang === 'yue' || lang === 'ja') && CJK.test(text)
 
 function tokenize(text: string, sortedWords: string[]): string[] {
   const out: string[] = []

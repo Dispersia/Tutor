@@ -20,6 +20,13 @@ test('kana-only words have no ruby', () => {
   expect(furiganaSegments('あなた', 'あなた')).toEqual([{ base: 'あなた' }])
 })
 
+test('splits sentences, keeping ruby on the kanji only', () => {
+  expect(render('これは人ですか。', 'これはひとですか')).toBe('これは人[ひと]ですか。')
+  expect(render('私は学生です', 'わたしはがくせいです')).toBe('私[わたし]は学生[がくせい]です')
+  expect(render('今日は', 'きょうは')).toBe('今日[きょう]は')
+  expect(render('食べ物', 'たべもの')).toBe('食[た]べ物[もの]')
+})
+
 test('every Japanese frequency word produces furigana that covers the word', () => {
   for (const w of FREQUENCY_JA) {
     const segments = furiganaSegments(w.word, w.kana)

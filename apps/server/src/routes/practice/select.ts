@@ -19,15 +19,14 @@ import { srsStateMap } from '../../services/srs'
 export interface SessionUser {
   id: UserId
   nativeLang: string
-  targetLang: string | null
   level: string | null
 }
 
-export function learnerOf(user: SessionUser): Learner {
+export function learnerOf(user: SessionUser, targetLang: string): Learner {
   return {
     id: user.id,
     nativeLang: user.nativeLang,
-    targetLang: user.targetLang ?? 'zh',
+    targetLang,
     level: user.level ?? 'hsk1',
   }
 }
@@ -114,7 +113,7 @@ export function resolveLesson(
   const key = lessonId.slice(0, sep)
   const index = Number(lessonId.slice(sep + 1)) - 1
   if (!key || !Number.isFinite(index) || index < 0) return undefined
-  const deck = listDecks(deps.db).find((d) => d.id === key)
+  const deck = listDecks(deps.db, userId).find((d) => d.id === key)
   if (!deck) return undefined
   const cards = listCards(deps.db, userId, deck.id)
   const lesson = buildLessons(key, stepCardsOf(cards))[index]
