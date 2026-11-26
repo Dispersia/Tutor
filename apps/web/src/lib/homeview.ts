@@ -1,7 +1,7 @@
 import type { ActivityDay, Stats } from './exercises'
 import type { IdleRigDTO, SkillsResponse } from './skills'
 import { CATEGORY, type CategoryStyle } from './theme'
-import { fmtInterval, rigGainedSince, rigSecondsLeft } from './idle'
+import { fmtInterval, rigGatheredTotal, rigSecondsLeft } from './idle'
 
 type SkillView = SkillsResponse['skills'][number]
 type ActionView = SkillView['actions'][number]
@@ -199,16 +199,16 @@ export interface RigRow {
   category: CategoryStyle
   left: number
   runPct: number
-  made: number
+  total: number
   rate: string
   xpPerCraft: number
   yields: string
+  choice: string
 }
 
-export function rigRows(skills: SkillsResponse | null, fetchedAt: number, now: number): RigRow[] {
+export function rigRows(skills: SkillsResponse | null, now: number): RigRow[] {
   const ctx: RigCtx = {
     items: new Map((skills?.items ?? []).map((i) => [i.id, i])),
-    fetchedAt,
     now,
   }
   const out: RigRow[] = []
@@ -217,20 +217,17 @@ export function rigRows(skills: SkillsResponse | null, fetchedAt: number, now: n
       if (a.idle?.active) out.push(rigRow(s, a, a.idle, ctx))
     }
   }
-  return out.sort((x, y) => y.made - x.made)
+  return out.sort((x, y) => y.total - x.total)
 }
 
 interface RigCtx {
   items: Map<string, ItemView>
-  fetchedAt: number
   now: number
 }
 
 function rigRow(s: SkillView, a: ActionView, idle: IdleRigDTO, ctx: RigCtx): RigRow {
   const left = rigSecondsLeft(idle, ctx.now)
-  const made = ctx.fetchedAt
-    ? Object.values(rigGainedSince(idle, ctx.fetchedAt, ctx.now)).reduce((n, v) => n + v, 0)
-    : 0
+  const total = Object.values(rigGatheredTotal(idle, ctx.now)).reduce((n, v) => n + v, 0)
   return {
     actionId: a.id,
     skillId: s.id,
@@ -239,9 +236,10 @@ function rigRow(s: SkillView, a: ActionView, idle: IdleRigDTO, ctx: RigCtx): Rig
     category: CATEGORY[s.category],
     left,
     runPct: Math.min(1, Math.max(0, left / idle.runSec)),
-    made,
+    total,
     rate: fmtInterval(idle.intervalSec),
     xpPerCraft: idle.xpPerCraft,
     yields: (a.produces ?? []).map((p) => ctx.items.get(p.item)?.name ?? p.item).join(' · '),
+    choice: a.choice,
   }
 }

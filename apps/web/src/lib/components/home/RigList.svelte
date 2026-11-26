@@ -6,9 +6,16 @@
 
   interface Props {
     rigs: RigRow[]
+    busy: boolean
+    onCancel: (r: RigRow) => void
   }
 
-  let { rigs }: Props = $props()
+  let { rigs, busy, onCancel }: Props = $props()
+
+  const drillHref = (r: RigRow) => {
+    const choice = r.choice ? `&choice=${encodeURIComponent(r.choice)}` : ''
+    return href(`/practice?action=${encodeURIComponent(r.actionId)}${choice}`)
+  }
 </script>
 
 <section
@@ -34,10 +41,7 @@
           <span class="w-5 shrink-0 text-center text-base" aria-hidden="true">{r.icon}</span>
           <div class="min-w-0 flex-1">
             <div class="flex items-baseline justify-between gap-2">
-              <a
-                href={href(`/skills/${r.skillId}#action-${r.actionId}`)}
-                class="truncate text-sm text-ink-200 hover:underline">{r.actionName}</a
-              >
+              <span class="truncate text-sm text-ink-200">{r.actionName}</span>
               <span class="flex shrink-0 items-baseline gap-2">
                 <span
                   class="display text-xs font-bold text-gold-200 tabular-nums"
@@ -57,10 +61,30 @@
               <i style="width: {r.runPct * 100}%; background: {r.category.accent}"></i>
             </div>
           </div>
-          <span
-            class="display shrink-0 text-sm font-bold text-gold-200 tabular-nums"
-            title="Gathered since you opened this page">+{r.made}</span
-          >
+          <div class="flex shrink-0 flex-col items-end gap-1">
+            <span
+              class="display text-sm font-bold text-gold-200 tabular-nums"
+              title="Gathered since this rig started">+{r.total}</span
+            >
+            <span class="flex items-center gap-1">
+              <a
+                href={drillHref(r)}
+                class="btn btn-primary min-h-6 px-2 py-0 text-[11px]"
+                title="Drill this action to top up the rig"
+              >
+                Extend
+              </a>
+              <button
+                type="button"
+                class="btn btn-ghost min-h-6 px-2 py-0 text-[11px] text-ink-400 hover:text-ember-300"
+                disabled={busy}
+                onclick={() => onCancel(r)}
+                title="Stop this rig now and free its slot"
+              >
+                Stop
+              </button>
+            </span>
+          </div>
         </li>
       {/each}
     </ul>

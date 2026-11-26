@@ -2,13 +2,14 @@
   import { onMount } from 'svelte'
   import type { Stats } from '#lib/exercises'
   import { useSkills } from '#lib/skills/store.svelte'
+  import { stopRig, type StopRigResponse } from '#lib/skills'
   import { session } from '#lib/session.svelte'
   import { activeDeckOf, loadActiveDeck } from '#lib/activeDeck.svelte'
   import { ACCENT, accentStyle } from '#lib/theme'
   import { LANG_NAMES } from '#lib/voices'
   import { htmlLang } from '#lib/lang'
   import { cachedResource } from '#lib/resource.svelte'
-  import { bankSummary, levelLabelFor, rigRows, xpToGoal } from '#lib/homeview'
+  import { bankSummary, levelLabelFor, rigRows, xpToGoal, type RigRow } from '#lib/homeview'
   import ActivityPanel from '#lib/components/home/ActivityPanel.svelte'
   import ProgressList from '#lib/components/home/ProgressList.svelte'
   import RigList from '#lib/components/home/RigList.svelte'
@@ -22,12 +23,32 @@
   const board = useSkills()
   const skills = $derived(board.data ?? null)
 
+  let busy = $state(false)
+  let rigError = $state('')
+
+  async function cancelRig(r: RigRow) {
+    if (!confirm(`Stop the ${r.actionName} rig? Its run ends now and frees a slot.`)) return
+    busy = true
+    rigError = ''
+    try {
+      applyRig(await stopRig(r.actionId))
+    } catch (e) {
+      rigError = (e as Error).message
+    } finally {
+      busy = false
+    }
+  }
+
+  function applyRig(res: StopRigResponse) {
+    board.patch({ skills: res.skills, rigs: res.rigs, items: res.items, inventory: res.inventory })
+  }
+
   const lang = $derived(session.user?.targetLang ?? 'zh')
   const deckName = $derived(activeDeckOf()?.name)
   const levelLabel = $derived(levelLabelFor(lang, session.user?.level))
   const toGoal = $derived(xpToGoal(stats))
   const days = $derived(stats?.activity?.days ?? [])
-  const rigs = $derived(rigRows(skills, board.fetchedAt, board.now))
+  const rigs = $derived(rigRows(skills, board.now))
   const bank = $derived(bankSummary(skills))
 
   onMount(() => {
@@ -72,7 +93,11 @@
     <div class="min-w-0">
       <ProgressList {stats} {toGoal} />
 
-      <RigList {rigs} />
+      {#if rigError}
+        <p class="banner mt-4" style={accentStyle(ACCENT.ember)} role="alert">{rigError}</p>
+      {/if}
+
+      <RigList {rigs} {busy} onCancel={cancelRig} />
 
       <BankStrip coins={bank.coins} kinds={bank.kinds} worn={bank.worn} />
     </div>
