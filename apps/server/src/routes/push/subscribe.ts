@@ -37,7 +37,7 @@ async function subscribeHandler(c: Context<AppEnv>) {
   const auth = body.keys?.auth
   if (!endpoint || !p256dh || !auth) return fail(c, 400, 'invalid subscription')
   if (!isPushServiceEndpoint(endpoint)) {
-    return fail(c, 400, 'endpoint is not a known push service')
+    return fail(c, 422, 'unsupported push service')
   }
   const sub = { userId: user.id, endpoint, p256dh, auth, userAgent: c.req.header('user-agent') }
   upsertPushSubscription(c.get('deps').db, sub)

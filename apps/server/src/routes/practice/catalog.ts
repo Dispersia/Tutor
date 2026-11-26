@@ -1,4 +1,3 @@
-import { CARD_TEMPLATES } from '@tutor/core'
 import type { App } from '../../context'
 import { exerciseCatalog } from '../../exercises'
 import { setQuiet } from '../../services/quiet'
@@ -6,8 +5,6 @@ import { bool, jsonBody } from '../body'
 
 export function registerCatalog(app: App) {
   app.get('/api/exercises', (c) => c.json({ exercises: exerciseCatalog() }))
-
-  app.get('/api/templates', (c) => c.json({ templates: CARD_TEMPLATES }))
 
   app.post('/api/practice/quiet', async (c) => {
     const deps = c.get('deps')

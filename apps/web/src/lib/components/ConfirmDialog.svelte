@@ -1,5 +1,6 @@
 <script lang="ts">
   import { ACCENT } from '#lib/theme'
+  import { focusTrap } from '#lib/focusTrap'
 
   interface Props {
     open: boolean
@@ -14,8 +15,6 @@
   let { open, title, message, confirmLabel, busy = false, onConfirm, onCancel }: Props = $props()
 </script>
 
-<svelte:window onkeydown={(e) => e.key === 'Escape' && !busy && onCancel()} />
-
 {#if open}
   <div class="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-3 sm:items-center">
     <button class="absolute inset-0" aria-label="Cancel" onclick={onCancel}></button>
@@ -24,6 +23,13 @@
       role="dialog"
       aria-modal="true"
       aria-label={title}
+      tabindex="-1"
+      use:focusTrap
+      onkeydown={(e) => {
+        if (e.key !== 'Escape') return
+        e.stopPropagation()
+        if (!busy) onCancel()
+      }}
     >
       <h2 class="eyebrow" style="color: {ACCENT.ember}">{title}</h2>
       <p class="mt-2 text-sm text-ink-200">{message}</p>

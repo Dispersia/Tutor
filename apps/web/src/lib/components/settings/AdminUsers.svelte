@@ -5,7 +5,7 @@
 
   interface Props {
     users: PublicUser[]
-    onRemove: (id: string) => void
+    onRemove: (user: PublicUser) => void
   }
 
   let { users, onRemove }: Props = $props()
@@ -21,7 +21,7 @@
           <div class="text-xs text-ink-400">@{u.username} · {u.role}</div>
         </div>
         {#if u.id !== session.user?.id}
-          <button onclick={() => onRemove(u.id)} class="btn btn-danger px-3 py-2 text-xs"
+          <button onclick={() => onRemove(u)} class="btn btn-danger px-3 py-2 text-xs"
             >Delete</button
           >
         {/if}

@@ -7,7 +7,7 @@ import type { Db } from './db/client'
 import type { Role } from './env'
 import { EventBus } from './events'
 import { OpenRouter } from './llm/openrouter'
-import { seedStarterDecks } from './seed/service'
+import { createFixtureDecks } from './deckFixture'
 import { SpeechSupervisor } from './speech/supervisor'
 
 const defaults: Record<Role, string> = {
@@ -55,7 +55,7 @@ async function signup(app: App, db: Db, username = 'alice') {
   const res = await app.request('/api/auth/register', json({ username, password: 'password123' }))
   const cookie = res.headers.getSetCookie()[0]!.split(';')[0]!
   const { user } = (await res.json()) as { user: { id: UserId } }
-  seedStarterDecks(db, user.id)
+  createFixtureDecks(db, user.id)
   return cookie
 }
 
@@ -202,13 +202,9 @@ test('training an action awards skill XP and materials', async () => {
   })
   await clearTeachStep(app, cookie, first.instance, 'mine-copper')
 
-  const next = await postJson<{ instance: Instance; action: { skillId: string } }>(
-    app,
-    cookie,
-    '/api/practice/next',
-    { actionId: 'mine-copper' },
-  )
-  expect(next.action.skillId).toBe('mining')
+  const next = await postJson<{ instance: Instance }>(app, cookie, '/api/practice/next', {
+    actionId: 'mine-copper',
+  })
   const card = (await cardIndex(app, cookie)).get(next.instance.cardId)!
   const graded = await gradeDrill(
     app,

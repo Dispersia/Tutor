@@ -65,7 +65,6 @@ export const talents = sqliteTable(
     skillId: text('skill_id').notNull(),
     tier: text('tier').notNull(),
     milestone: integer('milestone').notNull(),
-    grantedAt: integer('granted_at').notNull(),
   },
   (t) => [primaryKey({ columns: [t.userId, t.talentId] })],
 )

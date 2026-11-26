@@ -76,7 +76,7 @@ The agent runs `deploy/tutor-serve.sh` (sets `TUTOR_DATA_DIR`, `TUTOR_MODELS_DIR
 ## One-time setup
 
 ```bash
-# model weights (~11 GB). The service uses <dataDir>/models; this Mac symlinks
+# model weights (~6 GB). The service uses <dataDir>/models; this Mac symlinks
 # ~/.local/share/tutor/models at the checkout's ./models, so nothing to do.
 TUTOR_MODELS_DIR=~/.local/share/tutor/models nix run .#fetch-models   # otherwise
 

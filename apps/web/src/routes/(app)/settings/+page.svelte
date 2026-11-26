@@ -17,7 +17,8 @@
   } from '#lib/types'
   import { EMPTY_ROLES } from '#lib/settingsview'
   import { haptics } from '#lib/haptics.svelte'
-  import { toast } from '#lib/toast.svelte'
+  import Spinner from '#lib/components/Spinner.svelte'
+  import ConfirmDialog from '#lib/components/ConfirmDialog.svelte'
   import StudySettings from '#lib/components/settings/StudySettings.svelte'
   import RigAlertsSection from '#lib/components/settings/RigAlertsSection.svelte'
   import OpenRouterKey from '#lib/components/settings/OpenRouterKey.svelte'
@@ -56,6 +57,11 @@
   let waking = $state(false)
   let users = $state<PublicUser[]>([])
   let error = $state('')
+  let note = $state('')
+  let speechError = $state('')
+  let settingsReady = $state(false)
+  let goalReady = $state(false)
+  let pendingUser = $state<PublicUser | null>(null)
 
   const isAdmin = $derived(session.user?.role === 'admin')
 
@@ -81,6 +87,7 @@
     desiredRetention = s.desiredRetention ?? 90
     hapticsLevel = s.haptics ?? 0
     haptics.set(hapticsLevel)
+    settingsReady = true
   }
 
   const settings = cachedResource<SettingsPayload>('/api/settings', { auto: false })
@@ -94,8 +101,11 @@
     void loadExercises()
     void refreshSpeech()
     void getStats()
-      .then((s) => (dailyGoal = s.dailyGoal))
-      .catch(() => {})
+      .then((s) => {
+        dailyGoal = s.dailyGoal
+        goalReady = true
+      })
+      .catch((e) => (error = (e as Error).message))
     if (isAdmin) void loadUsers()
   })
 
@@ -107,38 +117,51 @@
           `/api/models?limit=1000&q=${encodeURIComponent(modelFilter)}`,
         )
       ).models
-    } catch {
+    } catch (e) {
+      error = (e as Error).message
     } finally {
       modelsLoading = false
     }
   }
 
   async function refreshSpeech() {
+    speechError = ''
     try {
       speech = await speechStatus()
-    } catch {
+    } catch (e) {
       speech = null
+      speechError = (e as Error).message
     }
   }
 
   async function loadUsers() {
     try {
       users = (await api<{ users: PublicUser[] }>('/api/users')).users
-    } catch {}
+    } catch (e) {
+      error = (e as Error).message
+    }
   }
 
   async function loadExercises() {
     try {
       exercises = (await listExercises()).exercises
-    } catch {}
+    } catch (e) {
+      error = (e as Error).message
+    }
+  }
+
+  function parseSteps(text: string): number[] {
+    return text
+      .split(/[\s,]+/)
+      .map((s) => Number(s))
+      .filter((n) => Number.isFinite(n) && n > 0)
   }
 
   async function saveStudy() {
+    error = ''
+    note = ''
     try {
-      const steps = stepsText
-        .split(/[\s,]+/)
-        .map((s) => Number(s))
-        .filter((n) => Number.isFinite(n) && n > 0)
+      const steps = parseSteps(stepsText)
       const r = await api<{ study: StudyPrefs }>('/api/settings', {
         method: 'PUT',
         body: JSON.stringify({
@@ -147,35 +170,41 @@
       })
       study = r.study
       stepsText = r.study.learningSteps.join(', ')
-      toast('Study preferences saved.')
+      note = 'Study preferences saved.'
     } catch (e) {
       error = (e as Error).message
     }
   }
 
   async function saveRoles() {
+    error = ''
+    note = ''
     try {
       const r = await api<{ roles: Roles }>('/api/settings', {
         method: 'PUT',
         body: JSON.stringify({ roles }),
       })
       roles = r.roles
-      toast('Model choices saved.')
+      note = 'Model choices saved.'
     } catch (e) {
       error = (e as Error).message
     }
   }
 
   async function saveScalar(patch: Record<string, number>, message: string) {
+    error = ''
+    note = ''
     try {
       await api('/api/settings', { method: 'PUT', body: JSON.stringify(patch) })
-      toast(message)
+      note = message
     } catch (e) {
       error = (e as Error).message
     }
   }
 
   async function saveKey() {
+    error = ''
+    note = ''
     try {
       const r = await api<{ openrouter: { key: 'user' | 'server' | false } }>(
         '/api/settings/openrouter-key',
@@ -183,7 +212,7 @@
       )
       keyStatus = r.openrouter.key
       keyInput = ''
-      toast(keyStatus ? 'Key saved.' : 'Key cleared.')
+      note = keyStatus ? 'Key saved.' : 'Key cleared.'
       void loadModels()
     } catch (e) {
       error = (e as Error).message
@@ -191,9 +220,11 @@
   }
 
   async function saveProfile() {
+    error = ''
+    note = ''
     try {
       await updateProfile({ handle })
-      toast('Profile saved.')
+      note = 'Profile saved.'
     } catch (e) {
       error = (e as Error).message
     }
@@ -204,19 +235,34 @@
     void goto(href('/login'))
   }
 
-  async function removeUser(id: string) {
-    if (!confirm('Delete this user and all their history?')) return
-    await api(`/api/users/${id}`, { method: 'DELETE' }).catch(() => {})
-    void loadUsers()
+  function removeUser(u: PublicUser) {
+    pendingUser = u
+  }
+
+  async function confirmRemoveUser() {
+    const u = pendingUser
+    pendingUser = null
+    if (!u) return
+    error = ''
+    note = ''
+    try {
+      await api(`/api/users/${u.id}`, { method: 'DELETE' })
+      note = `Deleted ${u.handle}.`
+      await loadUsers()
+    } catch (e) {
+      error = (e as Error).message
+    }
   }
 
   async function wake() {
     if (waking) return
     waking = true
     error = ''
+    note = ''
     try {
       speech = await wakeSpeech()
-      toast('Speech models ready.')
+      speechError = ''
+      note = 'Speech models ready.'
     } catch (e) {
       error = (e as Error).message
     } finally {
@@ -225,9 +271,15 @@
   }
 
   async function free() {
-    await unloadSpeech().catch(() => {})
-    await refreshSpeech()
-    toast('Speech models unloaded.')
+    error = ''
+    note = ''
+    try {
+      await unloadSpeech()
+      await refreshSpeech()
+      note = 'Speech models unloaded.'
+    } catch (e) {
+      error = (e as Error).message
+    }
   }
 </script>
 
@@ -238,6 +290,10 @@
 
 {#if error}
   <p class="banner mb-3" style="--accent: {ACCENT.ember}" role="alert">{error}</p>
+{/if}
+
+{#if note}
+  <p class="banner mb-3" style="--accent: {ACCENT.jade}" role="status">{note}</p>
 {/if}
 
 <div class="lg:columns-2 lg:gap-10 xl:gap-16 [&>section]:break-inside-avoid">
@@ -253,47 +309,71 @@
     onSave={saveRoles}
   />
 
-  <SpeechSection {speech} {waking} onWake={wake} onFree={isAdmin ? free : undefined} />
-
-  <NumberSetting
-    title="Daily goal"
-    help="XP to earn each day to keep your streak."
-    min={10}
-    max={1000}
-    step={10}
-    inputWidth="w-28"
-    accent={ACCENT.gold}
-    bind:value={dailyGoal}
-    onSave={() => saveScalar({ dailyGoal: Number(dailyGoal) }, 'Daily goal saved.')}
+  <SpeechSection
+    {speech}
+    {waking}
+    error={speechError}
+    onWake={wake}
+    onFree={isAdmin ? free : undefined}
   />
 
-  <NumberSetting
-    title="Spaced repetition"
-    help="Anki-style FSRS-6 scheduling. Desired retention is the chance you want to recall a card when it comes up — higher means shorter intervals and more reviews."
-    min={70}
-    max={97}
-    step={1}
-    suffix="%"
-    accent={ACCENT.azure}
-    bind:value={desiredRetention}
-    onSave={() =>
-      saveScalar({ desiredRetention: Number(desiredRetention) }, 'Desired retention saved.')}
-  />
+  {#if goalReady}
+    <NumberSetting
+      title="Daily goal"
+      help="XP to earn each day to keep your streak."
+      min={10}
+      max={1000}
+      step={10}
+      inputWidth="w-28"
+      accent={ACCENT.gold}
+      bind:value={dailyGoal}
+      onSave={() => saveScalar({ dailyGoal: Number(dailyGoal) }, 'Daily goal saved.')}
+    />
+  {:else}
+    <p class="mb-5 panel flex items-center gap-2 p-4 text-xs text-ink-400">
+      <Spinner size={14} label="Loading your daily goal" /> Loading…
+    </p>
+  {/if}
+
+  {#if settingsReady}
+    <NumberSetting
+      title="Spaced repetition"
+      help="Anki-style FSRS-6 scheduling. Desired retention is the chance you want to recall a card when it comes up — higher means shorter intervals and more reviews."
+      min={70}
+      max={97}
+      step={1}
+      suffix="%"
+      accent={ACCENT.azure}
+      bind:value={desiredRetention}
+      onSave={() =>
+        saveScalar({ desiredRetention: Number(desiredRetention) }, 'Desired retention saved.')}
+    />
+  {:else}
+    <p class="mb-5 panel flex items-center gap-2 p-4 text-xs text-ink-400">
+      <Spinner size={14} label="Loading spaced repetition" /> Loading…
+    </p>
+  {/if}
 
   <StudySettings bind:study bind:stepsText {exercises} onsave={saveStudy} />
 
-  <NumberSetting
-    title="Combat"
-    help="Food is auto-eaten when your HP drops below this percentage. Potions are auto-drunk at the start of a fight."
-    min={10}
-    max={90}
-    step={5}
-    suffix="%"
-    accent={ACCENT.ember}
-    bind:value={foodThreshold}
-    onSave={() =>
-      saveScalar({ foodThreshold: Number(foodThreshold) }, 'Combat auto-eat threshold saved.')}
-  />
+  {#if settingsReady}
+    <NumberSetting
+      title="Combat"
+      help="Food is auto-eaten when your HP drops below this percentage. Potions are auto-drunk at the start of a fight."
+      min={10}
+      max={90}
+      step={5}
+      suffix="%"
+      accent={ACCENT.ember}
+      bind:value={foodThreshold}
+      onSave={() =>
+        saveScalar({ foodThreshold: Number(foodThreshold) }, 'Combat auto-eat threshold saved.')}
+    />
+  {:else}
+    <p class="mb-5 panel flex items-center gap-2 p-4 text-xs text-ink-400">
+      <Spinner size={14} label="Loading combat settings" /> Loading…
+    </p>
+  {/if}
 
   <RigAlertsSection />
 
@@ -311,3 +391,12 @@
     <AdminUsers {users} onRemove={removeUser} />
   {/if}
 </div>
+
+<ConfirmDialog
+  open={pendingUser !== null}
+  title="Delete user"
+  message={`Delete ${pendingUser?.handle ?? 'this user'} and all their history? This cannot be undone.`}
+  confirmLabel="Delete user"
+  onConfirm={confirmRemoveUser}
+  onCancel={() => (pendingUser = null)}
+/>

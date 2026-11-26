@@ -2,7 +2,7 @@ import { api } from './api'
 
 const KEY = 'tutor.timezone.'
 
-export function browserTimezone(): string {
+function browserTimezone(): string {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone ?? ''
   } catch {

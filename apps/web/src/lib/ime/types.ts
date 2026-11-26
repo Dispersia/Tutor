@@ -14,8 +14,10 @@ export interface ImeEngine {
   id: string
   language: string
   label: string
+  letters?: string
   columns: number
   rows: string[][]
+  symbols?: string[][]
   shift?: Record<string, string>
   physical?: Record<string, string>
   initial(): ImeState

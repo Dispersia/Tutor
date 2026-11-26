@@ -10,8 +10,9 @@ import { actionGate, type ActionRequest } from './action'
 import { exerciseCtx, learnerOf } from './exerciseCtx'
 import { wasIssued } from './issued'
 import { judgeFor } from './judge'
-import { finalizeReview, recordAttempt, uncountedOutcome } from './record'
+import { addReviewRow, finalizeReview, uncountedOutcome } from './record'
 import { idField, jsonBody, num, str } from '../body'
+import { NOT_ISSUED_MESSAGE } from '../errors'
 
 interface GradeBody extends ActionRequest {
   exerciseId?: string
@@ -46,15 +47,13 @@ async function gradeHandler(c: Context<AppEnv>) {
   const def = body.exerciseId ? registry.get(body.exerciseId) : undefined
   if (!def) return c.json({ error: 'exercise not found' }, 404)
   if (!fits(def, card, user)) return c.json({ error: 'that exercise does not fit this card' }, 400)
-  if (!wasIssued(user.id, card.id, def.id)) return c.json({ error: NOT_ISSUED }, 409)
+  if (!wasIssued(user.id, card.id, def.id)) return c.json({ error: NOT_ISSUED_MESSAGE }, 409)
   const gate = actionGate(deps, user.id, body)
   if (gate.error) return c.json(gate.error.body, gate.error.status)
   return gradeAttempt({ c, deps, user, card, def, body })
 }
 
-const NOT_ISSUED = 'that drill was not the one you were given — load the next card'
-
-function fits(def: ExerciseDef, card: Card, user: PublicUser): boolean {
+export function fits(def: ExerciseDef, card: Card, user: PublicUser): boolean {
   if (def.id === INTRODUCE_ID) return true
   return !def.temporarilyDisabled && def.supports(card, learnerOf(user, card.targetLang))
 }
@@ -76,7 +75,7 @@ async function gradeAttempt(call: GradeCall) {
   const answer = answerText(body.answer)
   if (answer) result.answer = answer
   const xp = def.id === INTRODUCE_ID ? 0 : def.xp(result, instance)
-  recordAttempt(deps, {
+  addReviewRow(deps, {
     userId: user.id,
     card,
     exerciseId: def.id,

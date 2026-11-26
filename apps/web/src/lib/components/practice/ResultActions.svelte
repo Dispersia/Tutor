@@ -42,7 +42,10 @@
       <Icon name="mic" size={15} /> Try again
     </button>
     <button onclick={onNext} disabled={advancing} class="btn btn-ghost w-full py-3">
-      {#if advancing}<Spinner size={15} label="Loading the next card" />{:else}Next →{/if}
+      {#if advancing}<Spinner size={15} label="Loading the next step" />
+      {:else if lessonCompleted && nextLessonId}Next lesson →
+        {nextLessonTitle ? ` ${nextLessonTitle}` : ''}
+      {:else}Next →{/if}
     </button>
   </div>
 {:else if lessonCompleted && nextLessonId}

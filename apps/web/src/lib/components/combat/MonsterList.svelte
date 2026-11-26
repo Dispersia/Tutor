@@ -2,20 +2,20 @@
   import { href } from '#lib/paths'
   import { goto } from '$app/navigation'
   import { ACCENT, accentStyle, tierAccent } from '#lib/theme'
+  import { itemIcon, itemName } from './itemName'
   import type { CombatResponse, MonsterDTO } from '#lib/combat'
-  import type { ItemDTO, SkillsResponse } from '#lib/skills'
+  import type { ItemDTO } from '#lib/skills'
 
   interface Props {
     data: CombatResponse
-    skillMap: Map<string, SkillsResponse['skills'][number]>
     itemMap: Map<string, ItemDTO>
     onFight: (m: MonsterDTO) => void
   }
 
-  let { data, skillMap, itemMap, onFight }: Props = $props()
+  let { data, itemMap, onFight }: Props = $props()
 
-  const name = (id: string) => itemMap.get(id)?.name ?? id
-  const icon = (id: string) => itemMap.get(id)?.icon ?? ''
+  const name = (id: string) => itemName(itemMap, id)
+  const icon = (id: string) => itemIcon(itemMap, id)
 </script>
 
 {#if data.reviewCount === 0}
@@ -48,21 +48,13 @@
         </div>
         <button
           onclick={() => onFight(m)}
-          disabled={!m.unlocked || data.reviewCount === 0}
-          class="btn btn-ghost min-h-11 shrink-0 px-3 py-2 text-xs"
+          disabled={data.reviewCount === 0}
+          class="btn btn-primary min-h-11 shrink-0 px-3 py-2 text-xs"
           style={accentStyle(ACCENT.ember)}
         >
           Fight
         </button>
       </div>
-      {#if !m.unlocked}
-        <p class="mt-1 text-xs text-brass-300">
-          locked — {m.missing
-            .map((r) => `${skillMap.get(r.skill)?.name ?? r.skill} ${r.level}`)
-            .join(', ')}
-          {m.equipMissing ? ` · equip a ${m.equipMissing.tag} ${m.equipMissing.slot}` : ''}
-        </p>
-      {/if}
     </div>
   {/each}
 </div>

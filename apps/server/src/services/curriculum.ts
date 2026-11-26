@@ -10,14 +10,14 @@ import { displayReading } from '../text/readings'
 import { srsStateMap } from './srs'
 import { readStudyPrefs, showsReadings, type StudyPrefs } from './study'
 
-export function curriculumView(db: Db, userId: UserId) {
+export function curriculumView(db: Db, userId: UserId, now: number = Date.now()) {
   const decks = listDecks(db, userId)
   const srsMap = srsStateMap(db, userId)
   const completed = new Set(listLessonProgress(db, userId).map((r) => r.lessonId))
   const ctx: CurriculumCtx = {
     srsMap,
     completed,
-    now: Date.now(),
+    now,
     prefs: readStudyPrefs(db, userId),
   }
   return decks.map((d) => deckView(db, userId, d, ctx))
@@ -71,7 +71,7 @@ function remainingWords(d: DeckRow): number | undefined {
   return Math.max(0, words.length - (d.settings.cursor ?? 0))
 }
 
-function lessonCardsOf(cards: ReturnType<typeof listCards>, showReadings = true) {
+export function lessonCardsOf(cards: ReturnType<typeof listCards>, showReadings = true) {
   return cards.map((c) => ({
     id: c.id,
     front: c.front,
@@ -105,7 +105,7 @@ export function checkLessonCompletion(
   return true
 }
 
-function parseLessonId(lessonId: string): { key: string; index: number } | undefined {
+export function parseLessonId(lessonId: string): { key: string; index: number } | undefined {
   const sep = lessonId.lastIndexOf(':')
   if (sep <= 0) return undefined
   const key = lessonId.slice(0, sep)

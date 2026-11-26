@@ -7,17 +7,16 @@ import {
   ITEM_BY_ID,
   SKILLS,
   actionConsumes,
-  actionExpected,
   actionLevelInfo,
-  actionOdds,
   actionsForSkill,
+  bandLevelRequired,
   missingUnlocks,
   type ActionDef,
   type Cost,
   type UnlockReq,
 } from '../game/skills'
 import { bandLevelMap } from './bands'
-import { actionLevelOf, skillLevelOf } from './progress'
+import { skillLevelOf } from './progress'
 
 export interface ActionProgress {
   actionId: string
@@ -39,12 +38,11 @@ export function actionProgressView(db: Db, userId: UserId): Map<string, ActionPr
 
 export function skillSummaries(db: Db, userId: UserId, byAction?: Map<string, ActionProgress>) {
   const actions = byAction ?? actionProgressView(db, userId)
+  const levels = new Map([...actions].map(([id, p]) => [id, p.level]))
   return SKILLS.map((s) => {
     const acts = actionsForSkill(s.id)
     const rows = acts.map((a) => actions.get(a.id))
-    const level = acts.length
-      ? Math.round(rows.reduce((n, r) => n + (r?.level ?? 1), 0) / acts.length)
-      : 1
+    const level = skillLevelOf(db, userId, s.id, levels)
     const xp = rows.reduce((n, r) => n + (r?.xp ?? 0), 0)
     const progress = acts.length
       ? rows.reduce((n, r) => n + (r?.progress ?? 0), 0) / acts.length
@@ -66,7 +64,7 @@ export function inventoryView(db: Db, userId: UserId) {
   return ITEMS.map((i) => ({ itemId: i.id, count: counts.get(i.id) ?? 0 }))
 }
 
-export interface BandGate {
+interface BandGate {
   id: BandId
   name: string
   level: number
@@ -137,7 +135,7 @@ function bandGate(
   const band: BandGate = {
     id: action.band,
     name: def.name ?? action.band,
-    level: action.bandLevel ?? 1,
+    level: bandLevelRequired(action),
     current: bandLevels.get(action.band) ?? 1,
   }
   return { band, missingBands: def.after ? afterGate(def.after, bandLevels) : [] }
@@ -159,19 +157,4 @@ function equipGate(db: Db, userId: UserId, action: ActionDef) {
   const item = eq ? ITEM_BY_ID.get(eq.itemId) : undefined
   const ok = Boolean(item?.tags?.includes(action.equip.tag))
   return { equipOk: ok, equipMissing: ok ? null : action.equip }
-}
-
-export function actionSuccessChance(
-  db: Db,
-  userId: UserId,
-  action: ActionDef,
-  choiceId?: string,
-  levels?: Map<string, number>,
-): number {
-  const level = actionLevelOf(db, userId, action.id, levels)
-  return actionOdds(action, choiceId, level)
-}
-
-export function actionProduces(action: ActionDef, choiceId?: string): Cost[] {
-  return actionExpected(action, choiceId)
 }

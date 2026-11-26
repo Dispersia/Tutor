@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, statSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve, sep } from 'node:path'
 import type { App } from './context'
 
 const PLACEHOLDER = `<!doctype html>
@@ -80,15 +80,16 @@ function cacheHeaders(path: string): Record<string, string> {
 }
 
 export function registerStatic(app: App, staticDir: string) {
+  const root = resolve(staticDir)
   app.get('*', (c) => {
     const path = c.req.path
     if (path.startsWith('/api/')) return c.notFound()
 
-    const direct = join(staticDir, path === '/' ? 'index.html' : path)
-    if (existsSync(direct) && statSync(direct).isFile()) {
+    const direct = underRoot(root, path === '/' ? 'index.html' : path)
+    if (direct && existsSync(direct) && statSync(direct).isFile()) {
       return new Response(Bun.file(direct), { headers: cacheHeaders(path) })
     }
-    const index = join(staticDir, 'index.html')
+    const index = join(root, 'index.html')
     if (existsSync(index)) {
       return new Response(Bun.file(index), {
         headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache' },
@@ -96,6 +97,11 @@ export function registerStatic(app: App, staticDir: string) {
     }
     return c.html(PLACEHOLDER)
   })
+}
+
+function underRoot(root: string, path: string): string | undefined {
+  const target = resolve(root, path.replace(/^\/+/, ''))
+  return target === root || target.startsWith(root + sep) ? target : undefined
 }
 
 export function readTls(cert?: string, key?: string): { cert: string; key: string } | undefined {

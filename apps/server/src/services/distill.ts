@@ -80,7 +80,7 @@ export function distillPerCraft(db: Db, userId: UserId): number {
   return target ? distillXp(target) : 0
 }
 
-export function distillTarget(
+function distillTarget(
   config: DistillConfig,
   stock: (itemId: string) => number,
 ): ItemDef | undefined {

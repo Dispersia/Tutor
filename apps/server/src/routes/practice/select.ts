@@ -14,6 +14,8 @@ import { INTRODUCE_ID, registry } from '../../exercises'
 import { buildLessons } from '../../game/curriculum'
 import { selectCardId, selectStudyCardId, type FsrsState } from '../../game/srs'
 import { displayReading } from '../../text/readings'
+import { lessonCardsOf, parseLessonId } from '../../services/curriculum'
+import { readStudyPrefs, type StudyPrefs } from '../../services/study'
 import { srsStateMap } from '../../services/srs'
 
 export interface SessionUser {
@@ -29,6 +31,13 @@ export function learnerOf(user: SessionUser, targetLang: string): Learner {
     targetLang,
     level: user.level ?? 'hsk1',
   }
+}
+
+export function studyDeckId(deps: Deps, userId: UserId, prefs?: StudyPrefs): DeckId | undefined {
+  const decks = listDecks(deps.db, userId)
+  const activeId = (prefs ?? readStudyPrefs(deps.db, userId)).activeDeckId
+  const active = activeId ? decks.find((d) => d.id === activeId) : undefined
+  return (active ?? decks[0])?.id
 }
 
 const SITTING_GAP_MS = 30 * 60_000
@@ -57,7 +66,7 @@ export function lessonOfCard(deps: Deps, userId: UserId, card: ServerCard): stri
   const deck = getDeck(deps.db, card.deckId)
   if (!deck) return undefined
   const key = deck.id
-  const lessons = buildLessons(key, stepCardsOf(listCards(deps.db, userId, deck.id)))
+  const lessons = buildLessons(key, lessonCardsOf(listCards(deps.db, userId, deck.id)))
   return lessons.find((l) => l.cardIds.includes(card.id))?.id
 }
 
@@ -75,20 +84,6 @@ export function pickReviewCard(
   return id ? getCard(deps.db, id, userId) : undefined
 }
 
-export function stepCardsOf<I extends string>(cards: (Card & { id: I })[]) {
-  return cards.map((c) => ({
-    id: c.id,
-    front: c.front,
-    back: c.back,
-    reading: displayReadingOf(c),
-    step: typeof c.payload?.step === 'number' ? c.payload.step : undefined,
-  }))
-}
-
-export function displayReadingOf(c: Card): string {
-  return displayReading(c)
-}
-
 export function readingMap(
   db: Deps['db'],
   userId: UserId,
@@ -98,7 +93,7 @@ export function readingMap(
   const map: Record<string, string> = {}
   for (const c of cards ?? listCards(db, userId)) {
     if (c.targetLang !== targetLang) continue
-    map[c.back] = displayReadingOf(c)
+    map[c.back] = displayReading(c)
   }
   return map
 }
@@ -108,17 +103,14 @@ export function resolveLesson(
   userId: UserId,
   lessonId: string,
 ): { deckId: DeckId; cardIds: CardId[]; key: string } | undefined {
-  const sep = lessonId.lastIndexOf(':')
-  if (sep <= 0) return undefined
-  const key = lessonId.slice(0, sep)
-  const index = Number(lessonId.slice(sep + 1)) - 1
-  if (!key || !Number.isFinite(index) || index < 0) return undefined
-  const deck = listDecks(deps.db, userId).find((d) => d.id === key)
+  const parts = parseLessonId(lessonId)
+  if (!parts) return undefined
+  const deck = listDecks(deps.db, userId).find((d) => d.id === parts.key)
   if (!deck) return undefined
   const cards = listCards(deps.db, userId, deck.id)
-  const lesson = buildLessons(key, stepCardsOf(cards))[index]
+  const lesson = buildLessons(parts.key, lessonCardsOf(cards))[parts.index]
   if (!lesson) return undefined
-  return { deckId: deck.id, cardIds: lesson.cardIds, key }
+  return { deckId: deck.id, cardIds: lesson.cardIds, key: parts.key }
 }
 
 export interface DrillPickOpts {

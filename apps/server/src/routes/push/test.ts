@@ -2,8 +2,7 @@ import type { Context } from 'hono'
 import type { App, AppEnv } from '../../context'
 import { deletePushSubscription, listActiveRigs, listPushSubscriptions } from '../../db/repo'
 import { ACTION_BY_ID } from '../../game/skills'
-import { rigRunSec } from '../../game/idle'
-import { RIG_ALERT_LEAD_SEC, RIG_ALERT_MIN_RUN_SEC } from '../../push/notify'
+import { RIG_ALERT_LEAD_SEC, RIG_ALERT_MIN_RUN_SEC, rigRunLengthSec } from '../../push/notify'
 import { sendPush } from '../../push/webpush'
 import { fail } from '../errors'
 
@@ -16,7 +15,7 @@ async function testHandler(c: Context<AppEnv>) {
   const user = c.get('user')!
   const db = c.get('deps').db
   const subs = listPushSubscriptions(db, user.id)
-  if (!subs.length) return fail(c, 400, 'no subscription on this device')
+  if (!subs.length) return fail(c, 404, 'no subscription on this device')
   let sent = 0
   for (const sub of subs) {
     const res = await sendPush(db, sub, {
@@ -29,7 +28,7 @@ async function testHandler(c: Context<AppEnv>) {
     if (res.ok) sent++
     else if (res.gone) deletePushSubscription(db, sub.userId, sub.endpoint)
   }
-  if (!sent) return fail(c, 502, 'the push service rejected the notification')
+  if (!sent) return fail(c, 502, 'no notification was accepted by the push service')
   return c.json({ ok: true, sent })
 }
 
@@ -49,7 +48,7 @@ function rigView(
     name: ACTION_BY_ID.get(r.actionId)?.name ?? r.actionId,
     runEndsAt: r.runEndsAt,
     runStartedAt: r.runStartedAt,
-    runSec: Math.round(rigRunSec(r.completions)),
+    runSec: Math.round(rigRunLengthSec(r)),
     secondsLeft: Math.max(0, Math.round((r.runEndsAt - now) / 1000)),
   }
 }

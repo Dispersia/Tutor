@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ACCENT, accentStyle, tierAccent } from '#lib/theme'
   import Icon from '#lib/components/Icon.svelte'
+  import { itemIcon, itemName } from './itemName'
   import type { HitResult } from '#lib/combat'
   import type { ItemDTO } from '#lib/skills'
 
@@ -12,8 +13,8 @@
 
   let { hit, itemMap, onLeave }: Props = $props()
 
-  const name = (id: string) => itemMap.get(id)?.name ?? id
-  const icon = (id: string) => itemMap.get(id)?.icon ?? ''
+  const name = (id: string) => itemName(itemMap, id)
+  const icon = (id: string) => itemIcon(itemMap, id)
 </script>
 
 <div

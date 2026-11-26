@@ -12,14 +12,11 @@ export function rigGainedSince(
   const end = Math.min(now, rig.runEndsAt)
   const dt = (end - since) / 1000
   if (dt <= 0 || rig.intervalSec <= 0) return {}
-  return craftsToItems(dt / rig.intervalSec, rig.produces, 1 + rig.yieldBonus)
+  const multiplier = rig.produceMultiplier
+  return craftsToItems(dt / rig.intervalSec, rig.produces, multiplier)
 }
 
-export function rigRunStartMs(rig: {
-  runEndsAt: number
-  runStartedAt: number
-  runSec: number
-}): number {
+function rigRunStartMs(rig: { runEndsAt: number; runStartedAt: number; runSec: number }): number {
   return rig.runStartedAt > 0 ? rig.runStartedAt : rig.runEndsAt - rig.runSec * 1000
 }
 

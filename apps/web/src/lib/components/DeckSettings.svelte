@@ -9,6 +9,7 @@
     type DeckSettings as DeckSettingsPatch,
   } from '#lib/exercises'
   import Spinner from './Spinner.svelte'
+  import ConfirmDialog from './ConfirmDialog.svelte'
   import { focusTrap } from '#lib/focusTrap'
 
   let {
@@ -32,6 +33,7 @@
   let audit = $state<DeckAudit | null>(null)
   let note = $state('')
   let error = $state('')
+  let confirming = $state(false)
 
   const isJapanese = $derived(deck.targetLang === 'ja')
   const drops = $derived(audit ? audit.issues.filter((i) => i.reasons.length > 0).length : 0)
@@ -88,12 +90,14 @@
     }
   }
 
-  async function remove() {
+  function remove() {
     if (deleting) return
-    const ok = confirm(
-      `Delete “${deck.name}” and all its cards, reviews and history? This cannot be undone.`,
-    )
-    if (!ok) return
+    confirming = true
+  }
+
+  async function doRemove() {
+    confirming = false
+    if (deleting) return
     deleting = true
     error = ''
     try {
@@ -109,7 +113,7 @@
 
 <svelte:window
   onkeydown={(e) => {
-    if (e.key === 'Escape') onclose()
+    if (e.key === 'Escape' && !confirming) onclose()
   }}
 />
 
@@ -268,3 +272,13 @@
     </div>
   </div>
 </div>
+
+<ConfirmDialog
+  open={confirming}
+  title="Delete deck"
+  message={`Delete “${deck.name}” and all its cards, reviews and history? This cannot be undone.`}
+  confirmLabel="Delete deck"
+  busy={deleting}
+  onConfirm={doRemove}
+  onCancel={() => (confirming = false)}
+/>

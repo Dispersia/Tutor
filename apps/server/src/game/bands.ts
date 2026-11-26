@@ -1,6 +1,6 @@
 import { curveLevelInfo, curveXpForLevel, type LevelCurve } from './curve'
 
-export type BandLine = 'plate' | 'leather' | 'cloth' | 'wood' | 'jewelry'
+type BandLine = 'plate' | 'leather' | 'cloth' | 'wood' | 'jewelry'
 
 export type BandId =
   | 'bronze'
@@ -205,15 +205,9 @@ export function bandXpForLevel(level: number): number {
   return curveXpForLevel(BAND_CURVE, Math.max(1, Math.round(level)))
 }
 
-export const BAND_MAX_LEVEL = 100
+const BAND_MAX_LEVEL = 100
 
 const BAND_CURVE: LevelCurve = { base: 50, step: 0.25, power: 2, max: BAND_MAX_LEVEL }
-
-export function bandXpToLevel(level: number): number {
-  let total = 0
-  for (let i = 1; i < level; i++) total += bandXpForLevel(i)
-  return total
-}
 
 export interface BandLevelInfo {
   level: number

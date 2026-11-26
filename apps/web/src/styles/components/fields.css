@@ -25,10 +25,4 @@
     border-color: var(--color-ink-700);
     color: var(--color-ink-400);
   }
-  .field-error {
-    margin-top: 0.35rem;
-    font-size: 0.82rem;
-    line-height: 1.4;
-    color: var(--color-ember-300);
-  }
 }

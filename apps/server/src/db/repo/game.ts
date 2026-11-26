@@ -1,5 +1,5 @@
 import type { UserId } from '../../ids'
-import { and, asc, eq, inArray, sql } from 'drizzle-orm'
+import { and, eq, inArray, sql } from 'drizzle-orm'
 import type { RigState } from '../../game/idle'
 import { ITEM_BY_ID, ITEMS, type ItemDef } from '../../game/skills'
 import type { Db } from '../client'
@@ -107,16 +107,13 @@ export function addGatherLog(db: Db, userId: UserId, actionId: string, completio
   db.insert(gatherLog).values({ id: id(), userId, actionId, completions, createdAt: now() }).run()
 }
 
-export function listGatherLog(db: Db, userId: UserId, actionId: string) {
-  return db
-    .select()
-    .from(gatherLog)
-    .where(and(eq(gatherLog.userId, userId), eq(gatherLog.actionId, actionId)))
-    .orderBy(asc(gatherLog.createdAt))
-    .all()
-}
-
 type InventoryRow = typeof inventory.$inferSelect
+
+export interface InventoryStack {
+  userId: UserId
+  itemId: string
+  count: number
+}
 
 function gearItem(itemId: string): ItemDef | undefined {
   const item = ITEM_BY_ID.get(itemId)
@@ -138,17 +135,20 @@ export function spendableCount(db: Db, userId: UserId, itemId: string): number {
   return getItemCount(db, userId, itemId)
 }
 
-export function listInventory(db: Db, userId: UserId): InventoryRow[] {
+export function listInventory(db: Db, userId: UserId): InventoryStack[] {
   const stacks = db.select().from(inventory).where(eq(inventory.userId, userId)).all()
-  return [...stacks.filter((r) => !gearItem(r.itemId)), ...gearStacks(db, userId)]
+  return [...stacks.filter((r) => !gearItem(r.itemId)).map(toStack), ...gearStacks(db, userId)]
 }
 
-function gearStacks(db: Db, userId: UserId): InventoryRow[] {
-  const byItem = new Map<string, InventoryRow>()
+function toStack(row: InventoryRow): InventoryStack {
+  return { userId: row.userId, itemId: row.itemId, count: row.count }
+}
+
+function gearStacks(db: Db, userId: UserId): InventoryStack[] {
+  const byItem = new Map<string, InventoryStack>()
   for (const g of listGearInstances(db, userId)) {
-    const row = byItem.get(g.itemId) ?? { userId, itemId: g.itemId, count: 0, updatedAt: 0 }
+    const row = byItem.get(g.itemId) ?? { userId, itemId: g.itemId, count: 0 }
     row.count += 1
-    row.updatedAt = Math.max(row.updatedAt, g.createdAt)
     byItem.set(g.itemId, row)
   }
   return [...byItem.values()]

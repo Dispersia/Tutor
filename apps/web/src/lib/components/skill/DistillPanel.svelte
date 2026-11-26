@@ -1,6 +1,7 @@
 <script lang="ts">
   import { accentStyle } from '#lib/theme'
   import { href } from '#lib/paths'
+  import { focusTrap } from '#lib/focusTrap'
   import type { Distillable } from '#lib/skillview'
   import type { DistillConfigDTO } from '#lib/skills'
 
@@ -20,8 +21,6 @@
   let open = $state(false)
   const stocked = $derived(queued.filter((d) => d.count > 0).length)
 </script>
-
-<svelte:window onkeydown={(e) => e.key === 'Escape' && (open = false)} />
 
 <section class="panel mt-4 p-3" style={accentStyle(accent)}>
   <div class="flex items-start justify-between gap-3">
@@ -67,6 +66,9 @@
       role="dialog"
       aria-modal="true"
       aria-label="Distill queue"
+      tabindex="-1"
+      use:focusTrap
+      onkeydown={(e) => e.key === 'Escape' && (open = false)}
     >
       <div class="flex items-start justify-between gap-3">
         <div>

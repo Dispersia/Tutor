@@ -16,7 +16,6 @@ export const srs = sqliteTable(
     difficulty: real('difficulty').notNull().default(0),
     reps: integer('reps').notNull().default(0),
     lapses: integer('lapses').notNull().default(0),
-    ease: real('ease').notNull().default(2.5),
     intervalDays: real('interval_days').notNull().default(0),
     dueAt: integer('due_at').notNull().default(0),
     lastRating: integer('last_rating'),

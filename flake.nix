@@ -34,7 +34,6 @@
           ];
 
           shellHook = ''
-            export TUTOR_ROOT="${self}"
             export TUTOR_DATA_DIR="''${TUTOR_DATA_DIR:-$PWD/data}"
             export TUTOR_MODELS_DIR="''${TUTOR_MODELS_DIR:-$PWD/models}"
             export HF_HOME="$TUTOR_MODELS_DIR"

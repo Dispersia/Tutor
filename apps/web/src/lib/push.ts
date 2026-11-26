@@ -25,7 +25,7 @@ function decodeKey(key: string): Uint8Array<ArrayBuffer> {
   return out
 }
 
-export async function currentSubscription(): Promise<PushSubscription | null> {
+async function currentSubscription(): Promise<PushSubscription | null> {
   if (!pushSupported()) return null
   const reg = await navigator.serviceWorker.ready.catch(() => null)
   return reg ? reg.pushManager.getSubscription() : null

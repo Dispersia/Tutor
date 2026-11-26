@@ -16,6 +16,7 @@ import { hasUserKey, saveUserKey } from '../../llm/userkey'
 import type { App, AppEnv, Deps } from '../../context'
 import { idField, bool, jsonBody, num, obj, str, strArray } from '../body'
 import { fail } from '../errors'
+import { clampFoodThreshold, FOOD_THRESHOLD_DEFAULT } from '../../game/combat'
 
 export function registerSettings(app: App) {
   app.get('/api/settings', (c) => c.json(settingsView(c.get('deps'), c.get('user')!.id)))
@@ -31,7 +32,9 @@ function settingsView(deps: Deps, userId: UserId) {
     study: readStudyPrefs(deps.db, userId),
     openrouter: { key: hasUserKey(deps, userId) },
     deckInstruction: rememberedDeckInstruction(deps.db, userId) ?? '',
-    foodThreshold: Number(getUserSetting(deps.db, userId, 'foodThreshold') ?? 50),
+    foodThreshold: Number(
+      getUserSetting(deps.db, userId, 'foodThreshold') ?? FOOD_THRESHOLD_DEFAULT,
+    ),
     desiredRetention: Number(getUserSetting(deps.db, userId, 'desiredRetention') ?? 90),
     haptics: Number(getUserSetting(deps.db, userId, 'haptics') ?? 0),
   }
@@ -132,7 +135,7 @@ function applyScalars(deps: Deps, userId: UserId, body: Record<string, unknown>)
   if (dailyGoal !== undefined) setDailyGoal(deps.db, userId, dailyGoal)
   const foodThreshold = num(body, 'foodThreshold')
   if (foodThreshold !== undefined) {
-    setUserSetting(deps.db, userId, 'foodThreshold', String(clamp(foodThreshold, 10, 90)))
+    setUserSetting(deps.db, userId, 'foodThreshold', String(clampFoodThreshold(foodThreshold)))
   }
   const desiredRetention = num(body, 'desiredRetention')
   if (desiredRetention !== undefined) {

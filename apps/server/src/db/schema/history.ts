@@ -18,22 +18,6 @@ export const reviews = sqliteTable(
   (t) => [index('idx_reviews_user').on(t.userId), index('idx_reviews_card').on(t.cardId)],
 )
 
-export const attempts = sqliteTable(
-  'attempts',
-  {
-    id: text('id').primaryKey(),
-    sessionId: text('session_id'),
-    cardId: text('card_id').$type<CardId>(),
-    userId: text('user_id').$type<UserId>(),
-    exerciseId: text('exercise_id'),
-    answerJson: text('answer_json').notNull().default('{}'),
-    gradeJson: text('grade_json').notNull().default('{}'),
-    score: real('score'),
-    createdAt: integer('created_at').notNull(),
-  },
-  (t) => [index('idx_attempts_user').on(t.userId)],
-)
-
 export const xpEvents = sqliteTable(
   'xp_events',
   {

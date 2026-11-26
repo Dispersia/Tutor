@@ -2,13 +2,14 @@ import { api } from './api'
 import { base } from './paths'
 import { disablePush, enablePush, pushPermission, syncPush } from './push'
 import { rigRunLengthSec } from './idle'
+import { toast } from './toast.svelte'
 
 const ENABLED_KEY = 'tutor.rigAlerts'
 const SEEN_KEY = 'tutor.rigAlerts.seen'
 const EVENT = 'tutor:rig-alerts'
 const ICON = `${base}/icons/icon-192.png`
 
-export interface RigClock {
+interface RigClock {
   actionId: string
   name: string
   runEndsAt: number
@@ -60,11 +61,7 @@ function markSeen(key: string): void {
   } catch {}
 }
 
-export function scheduleRigAlerts(
-  rigs: RigClock[],
-  leadSec: number,
-  minRunSec: number,
-): () => void {
+function scheduleRigAlerts(rigs: RigClock[], leadSec: number, minRunSec: number): () => void {
   const timers: ReturnType<typeof setTimeout>[] = []
   const now = Date.now()
   for (const rig of rigs) {
@@ -97,26 +94,28 @@ async function announce(rig: RigClock, key: string): Promise<void> {
   if (document.visibilityState !== 'visible' || !document.hasFocus()) return
   markSeen(key)
   const minutes = Math.max(1, Math.round((rig.runEndsAt - Date.now()) / 60_000))
-  await show({
-    title: `${rig.name} is running low`,
-    body: `${minutes} minutes left — drill to keep it going.`,
-    tag: `rigs-${rig.actionId}`,
-    url: '/home',
-  })
+  try {
+    await show({
+      title: `${rig.name} is running low`,
+      body: `${minutes} minutes left — drill to keep it going.`,
+      tag: `rigs-${rig.actionId}`,
+      url: '/home',
+    })
+  } catch {
+    toast('Could not show the rig reminder', 'error')
+  }
 }
 
 async function show(n: { title: string; body: string; tag: string; url: string }): Promise<void> {
   const reg = await navigator.serviceWorker?.ready.catch(() => null)
   if (reg) {
-    await reg
-      .showNotification(n.title, {
-        body: n.body,
-        tag: n.tag,
-        icon: ICON,
-        badge: ICON,
-        data: { url: n.url },
-      })
-      .catch(() => {})
+    await reg.showNotification(n.title, {
+      body: n.body,
+      tag: n.tag,
+      icon: ICON,
+      badge: ICON,
+      data: { url: n.url },
+    })
     return
   }
   try {
@@ -125,7 +124,7 @@ async function show(n: { title: string; body: string; tag: string; url: string }
 }
 
 export function startRigAlerts(): () => void {
-  const state: RigAlertState = { stopped: false, cancel: null, timer: null }
+  const state: RigAlertState = { stopped: false, cancel: null, timer: null, reported: false }
   const refresh = () => void refreshRigs(state)
   void syncPush()
   refresh()
@@ -142,6 +141,13 @@ interface RigAlertState {
   stopped: boolean
   cancel: (() => void) | null
   timer: ReturnType<typeof setInterval> | null
+  reported: boolean
+}
+
+interface RigsReply {
+  leadSec: number
+  minRunSec: number
+  rigs: RigClock[]
 }
 
 async function refreshRigs(state: RigAlertState): Promise<void> {
@@ -152,15 +158,20 @@ async function refreshRigs(state: RigAlertState): Promise<void> {
     return
   }
   try {
-    const { leadSec, minRunSec, rigs } = await api<{
-      leadSec: number
-      minRunSec: number
-      rigs: RigClock[]
-    }>('/api/rigs')
+    const reply = await api<RigsReply>('/api/rigs')
     if (state.stopped) return
     state.cancel?.()
-    state.cancel = scheduleRigAlerts(rigs, leadSec, minRunSec)
-  } catch {}
+    state.cancel = scheduleRigAlerts(reply.rigs, reply.leadSec, reply.minRunSec)
+    state.reported = false
+  } catch {
+    reportPaused(state)
+  }
+}
+
+function reportPaused(state: RigAlertState): void {
+  if (state.reported) return
+  state.reported = true
+  toast('Rig reminders paused — could not reach the server', 'error')
 }
 
 function stopRigAlerts(state: RigAlertState, onVisible: () => void, refresh: () => void): void {

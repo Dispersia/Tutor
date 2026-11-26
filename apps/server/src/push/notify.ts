@@ -46,7 +46,7 @@ export async function runRigAlerts(deps: RigAlertDeps): Promise<RigAlertResult> 
 function dueByUser(db: Db, now: number): Map<UserId, DueRigRow[]> {
   const byUser = new Map<UserId, DueRigRow[]>()
   for (const row of dueRigAlerts(db, now, RIG_ALERT_LEAD_SEC * 1000)) {
-    if (runLengthSec(row) <= RIG_ALERT_MIN_RUN_SEC) continue
+    if (rigRunLengthSec(row) <= RIG_ALERT_MIN_RUN_SEC) continue
     const list = byUser.get(row.userId)
     if (list) list.push(row)
     else byUser.set(row.userId, [row])
@@ -54,7 +54,11 @@ function dueByUser(db: Db, now: number): Map<UserId, DueRigRow[]> {
   return byUser
 }
 
-function runLengthSec(row: DueRigRow): number {
+export function rigRunLengthSec(row: {
+  completions: number
+  runEndsAt: number
+  runStartedAt: number
+}): number {
   const startedAt =
     row.runStartedAt > 0 ? row.runStartedAt : row.runEndsAt - rigRunSec(row.completions) * 1000
   return (row.runEndsAt - startedAt) / 1000

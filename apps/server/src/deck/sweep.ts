@@ -1,7 +1,7 @@
-import type { UserId, DeckId } from '../ids'
+import type { UserId, DeckId, CardId } from '../ids'
 import type { Card } from '@tutor/core'
 import type { Db } from '../db/client'
-import { listCards } from '../db/repo'
+import { deleteCards, listCards, updateCard } from '../db/repo'
 import type { ChatMessage, OpenRouter } from '../llm/openrouter'
 import { langName, scriptRule } from '../llm/prompts'
 import { roleReasoning } from '../env'
@@ -241,7 +241,7 @@ function keepOne(tally: DeckSweep): void {
 function dropCard(ctx: SweepCtx, card: Card, reason: string | undefined, tally: DeckSweep): void {
   tally.dropped++
   console.log(`  drop: ${describe(card)}  — ${short(reason)}`)
-  if (!ctx.dry) removeCard(ctx.run, card.id)
+  if (!ctx.dry) deleteCards(ctx.db, [card.id as CardId])
 }
 
 function keepBecause(card: Card, reason: string, tally: DeckSweep): void {
@@ -253,7 +253,7 @@ function writeRewrite(ctx: SweepCtx, card: Card, next: Rewrite, tally: DeckSweep
   tally.fixed++
   const prompt = typeof next.payload.prompt === 'string' ? `  |  ${next.payload.prompt}` : ''
   console.log(`  fix:  ${describe(card)}\n     →  ${next.back}  |  ${next.front}${prompt}`)
-  if (!ctx.dry) updateCard(ctx.run, card.id, next)
+  if (!ctx.dry) updateCard(ctx.db, card.id as CardId, next)
 }
 
 function rejection(ctx: SweepCtx, card: Card, next: Rewrite): string | undefined {
@@ -387,24 +387,6 @@ function describe(c: Card): string {
 function short(text: string | undefined): string {
   const t = (text ?? 'invalid').replace(/\s+/g, ' ').trim()
   return t.length > 140 ? `${t.slice(0, 137)}…` : t
-}
-
-function updateCard(run: SweepRun, id: string, next: Rewrite): void {
-  run('update cards set front = ?, back = ?, readings_json = ?, payload_json = ? where id = ?', [
-    next.front,
-    next.back,
-    JSON.stringify(next.readings),
-    JSON.stringify(next.payload),
-    id,
-  ])
-}
-
-function removeCard(run: SweepRun, id: string): void {
-  run('delete from srs where card_id = ?', [id])
-  run('delete from srs_reviews where card_id = ?', [id])
-  run('delete from reviews where card_id = ?', [id])
-  run('delete from attempts where card_id = ?', [id])
-  run('delete from cards where id = ?', [id])
 }
 
 function chunk<T>(items: T[], size: number): T[][] {

@@ -1,14 +1,14 @@
 # nix-darwin module for tutor.
 #
 #   # flake.nix
-#   inputs.tutor.url = "path:/Users/dispersias/development/tutor";   # or github:...
+#   inputs.tutor.url = "path:/Users/<you>/development/tutor";   # or github:...
 #   # darwinConfiguration
 #   imports = [ inputs.tutor.darwinModules.default ];
 #   services.tutor = {
 #     enable = true;
 #     tailscaleServe.enable = true;      # HTTPS on your tailnet, no extra software
 #     # caddy.enable = true; caddy.hostname = "aarons-mac-mini.tail7c1ddb.ts.net";
-#     environmentFile = "/Users/dispersias/.config/tutor/env";  # OPENROUTER_API_KEY, TUTOR_SECRET
+#     environmentFile = "/Users/<you>/.config/tutor/env";  # OPENROUTER_API_KEY, TUTOR_SECRET
 #   };
 #
 # Runs tutor as a per-user launchd agent (so it has your $HOME, where the MLX venv

@@ -1,7 +1,7 @@
 import accentsTxt from '../deck/kanjium-accents.txt'
 import readingsTxt from '../deck/mandarin-readings.txt'
 import { loadLexicon } from '../deck/lexicon'
-import { FREQUENCY_JA } from '../seed/frequency-ja'
+import { FREQUENCY_JA } from '../text/frequency-ja'
 import { FREQUENCY } from '../text/lexicon'
 
 interface ImeIndex {
@@ -13,6 +13,7 @@ const MAX_WORD = 6
 const MAX_SEGMENT = 6
 const LIMIT = 9
 const PER_KEY = 60
+const SINGLE_SYLLABLE = 2_000_000
 const TONES = /[ˊˇˋ˙ˉ]/g
 const INITIALS = 'ㄅㄆㄇㄈㄉㄊㄋㄌㄍㄎㄏㄐㄑㄒㄓㄔㄕㄖㄗㄘㄙ'
 const MEDIALS = 'ㄧㄨㄩ'
@@ -156,8 +157,9 @@ function bestZh(
     const words = lookupWords(index, syllables.slice(at, at + span).join(' '))
     if (!words?.length) continue
     const found = bestOf(words, lang)
-    if (!pick || found.score < pick.score || (found.score === pick.score && span > pick.span)) {
-      pick = { word: found.word, span, score: found.score }
+    const score = found.score + (span === 1 ? SINGLE_SYLLABLE : 0)
+    if (!pick || score < pick.score || (score === pick.score && span > pick.span)) {
+      pick = { word: found.word, span, score }
     }
   }
   return pick ?? { word: syllables[at]!, span: 1 }

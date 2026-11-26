@@ -43,7 +43,7 @@
       />
     </div>
   {/if}
-  <ImeInput bind:value={answer} lang={answerLang} placeholder="Type your answer…" />
+  <ImeInput bind:value={answer} lang={answerLang} disabled={busy} placeholder="Type your answer…" />
   <button
     type="submit"
     disabled={busy || !answer.trim()}

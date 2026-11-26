@@ -10,31 +10,29 @@ import {
 } from '../db/repo'
 import type { Db } from '../db/client'
 import type { EventBus } from '../events'
-import { levelInfo } from '../game/levels'
+import { DEFAULT_DAILY_GOAL, levelInfo } from '../game/levels'
 import { accountLevel } from './board'
 import { dayOf, userDay, userOffsetMin } from './clock'
 import { aggregateBonuses } from './progress'
 
-export function todayDay(ts: number = Date.now()): string {
-  return dayOf(ts)
+export function todayDay(offsetMin = 0, ts: number = Date.now()): string {
+  return dayOf(ts, offsetMin)
 }
 
-export function activeDays(db: Db, userId: UserId): string[] {
+function activeDays(db: Db, userId: UserId): string[] {
   return xpByDay(db, userId, userOffsetMin(db, userId))
     .map((r) => r.day)
     .sort()
     .reverse()
 }
 
-export function dailyXp(db: Db, userId: UserId, day: string): number {
+function dailyXp(db: Db, userId: UserId, day: string): number {
   return xpForDay(db, userId, day, userOffsetMin(db, userId))
 }
 
 export function shiftDay(day: string, delta: number): string {
   const [y, m, d] = day.split('-').map(Number)
-  const dt = new Date(Date.UTC(y!, m! - 1, d!))
-  dt.setUTCDate(dt.getUTCDate() + delta)
-  return dt.toISOString().slice(0, 10)
+  return dayOf(Date.UTC(y!, m! - 1, d! + delta), 0)
 }
 
 export function weekStart(day: string): string {
@@ -67,7 +65,7 @@ export function activitySeries(
   return { today, days }
 }
 
-export function streakFromDays(days: string[], today: string = todayDay()): number {
+export function streakFromDays(days: string[], today: string): number {
   if (days.length === 0) return 0
   const set = new Set(days)
   let start = today
@@ -132,7 +130,7 @@ export function summary(db: Db, userId: UserId): GameSummary {
   const s = getStats(db, userId)
   const today = userDay(db, userId)
   const daily = dailyXp(db, userId, today)
-  const goal = s.dailyGoal || 50
+  const goal = s.dailyGoal || DEFAULT_DAILY_GOAL
   const account = accountLevel(db, userId)
   return {
     xp: s.xpTotal,

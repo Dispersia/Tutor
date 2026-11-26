@@ -24,12 +24,6 @@ export function noteIssued(userId: UserId, drill: { cardId: string; exerciseId: 
 }
 
 export function wasIssued(userId: UserId, cardId: CardId, exerciseId: string): boolean {
-  const open = live(userId, Date.now())
-  if (open.length === 0) return true
-  return open.some((d) => d.cardId === cardId && d.exerciseId === exerciseId)
-}
-
-export function issuedAt(userId: UserId, cardId: CardId, exerciseId: string): number | undefined {
-  return live(userId, Date.now()).find((d) => d.cardId === cardId && d.exerciseId === exerciseId)
-    ?.at
+  if (!byUser.has(userId)) return true
+  return live(userId, Date.now()).some((d) => d.cardId === cardId && d.exerciseId === exerciseId)
 }

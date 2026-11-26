@@ -18,6 +18,7 @@
   let detail = $state<ItemDetailDTO | null>(null)
   let detailLoading = $state(false)
   let detailError = $state('')
+  let queueError = $state('')
 
   const GROUPS = [
     { key: 'raw', label: 'Raw' },
@@ -30,12 +31,12 @@
 
   async function markDistill(itemId: string) {
     busy = true
-    detailError = ''
+    queueError = ''
     try {
       const next = await toggleDistill(itemId)
       board.patch({ distill: next.distill })
     } catch (e) {
-      detailError = e instanceof Error ? e.message : 'Could not update the distill queue.'
+      queueError = e instanceof Error ? e.message : 'Could not update the distill queue.'
     } finally {
       busy = false
     }
@@ -46,6 +47,7 @@
     selectedCount = count
     detail = null
     detailError = ''
+    queueError = ''
     detailLoading = true
     try {
       detail = await getItem(item.id)
@@ -60,6 +62,7 @@
     selected = null
     detail = null
     detailError = ''
+    queueError = ''
   }
 
   const groups = $derived.by(() =>
@@ -150,6 +153,7 @@
     {detail}
     loading={detailLoading}
     error={detailError}
+    {queueError}
     queued={allowed.has(selected.id)}
     {busy}
     onToggle={() => selected && markDistill(selected.id)}

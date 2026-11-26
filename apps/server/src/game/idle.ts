@@ -1,25 +1,7 @@
-import {
-  IDLE,
-  rigIntervalSec,
-  rigRateLabel,
-  rigRunFill,
-  rigRunFull,
-  rigRunGainSec,
-  rigRunSec,
-  tierFactor,
-} from '@tutor/core'
+import { IDLE, rigIntervalSec, rigRunFill, rigRunFull, rigRunGainSec, rigRunSec } from '@tutor/core'
 import type { Cost } from './skills'
 
-export {
-  IDLE,
-  rigIntervalSec,
-  rigRateLabel,
-  rigRunFill,
-  rigRunFull,
-  rigRunGainSec,
-  rigRunSec,
-  tierFactor,
-}
+export { IDLE, rigIntervalSec, rigRunFill, rigRunFull, rigRunGainSec, rigRunSec }
 
 const clamp = (n: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, n))
 
@@ -38,7 +20,6 @@ export interface RigRecipe {
   consumes?: Cost[]
   tier?: number
   yieldBonus?: number
-  doubleBonus?: number
   itemBonus?: Record<string, number>
   successChance?: number
 }
@@ -187,8 +168,7 @@ function emitProduced(
   bank: BankView,
   next: RigState,
 ): void {
-  const bonus =
-    (recipe.successChance ?? 1) * (1 + (recipe.yieldBonus ?? 0) + (recipe.doubleBonus ?? 0))
+  const bonus = (recipe.successChance ?? 1) * (1 + (recipe.yieldBonus ?? 0))
   for (const p of recipe.produces ?? []) {
     const carried = next.remainder[p.item] ?? 0
     const raw = done * p.count * (bonus + (recipe.itemBonus?.[p.item] ?? 0)) + carried
@@ -237,38 +217,4 @@ export function extendRig(state: RigState, now: number): RigState {
     runEndsAt: Math.min(base + gained, now + IDLE.maxRunSec * 1000),
     settledAt: now,
   }
-}
-
-export function replayRig(
-  completionTimes: readonly number[],
-  recipe: RigRecipe,
-  now: number,
-  bank: BankView = new Map(),
-): RigSettle {
-  let state = newRig()
-  const totals: Totals = { produced: {}, consumed: {}, crafted: 0 }
-  for (const at of [...completionTimes].sort((a, b) => a - b)) {
-    const settled = settleRig(state, recipe, bank, at)
-    fold(settled, totals)
-    state = extendRig(settled.state, at)
-  }
-  const last = settleRig(state, recipe, bank, now)
-  fold(last, totals)
-  return { ...last, ...totals }
-}
-
-interface Totals {
-  produced: Record<string, number>
-  consumed: Record<string, number>
-  crafted: number
-}
-
-function fold(settled: RigSettle, totals: Totals): void {
-  merge(totals.produced, settled.produced)
-  merge(totals.consumed, settled.consumed)
-  totals.crafted += settled.crafted
-}
-
-function merge(into: Record<string, number>, from: Record<string, number>): void {
-  for (const [k, v] of Object.entries(from)) into[k] = (into[k] ?? 0) + v
 }

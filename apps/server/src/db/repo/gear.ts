@@ -147,9 +147,24 @@ export function removeGearPieces(db: Db, userId: UserId, itemId: string, n: numb
   for (const g of spare.slice(0, Math.max(0, n))) deleteGearInstance(db, userId, g.id)
 }
 
+export function wornGearIds(db: Db, userId: UserId): Set<GearInstanceId> {
+  const ids = listEquipment(db, userId)
+    .map((e) => e.instanceId)
+    .filter((id): id is GearInstanceId => Boolean(id))
+  return new Set(ids)
+}
+
 export function spareGearPieces(db: Db, userId: UserId, itemId: string) {
-  const worn = new Set(listEquipment(db, userId).map((e) => e.instanceId))
+  const worn = wornGearIds(db, userId)
   return listGearInstances(db, userId).filter((g) => g.itemId === itemId && !worn.has(g.id))
+}
+
+export function spareGearPieceId(
+  db: Db,
+  userId: UserId,
+  itemId: string,
+): GearInstanceId | undefined {
+  return spareGearPieces(db, userId, itemId)[0]?.id
 }
 
 export function listUnlinkedEquipment(db: Db) {

@@ -2,7 +2,6 @@ import type { UserId } from '../../ids'
 import { eq, sql } from 'drizzle-orm'
 import type { Db } from '../client'
 import {
-  attempts,
   audioBlobs,
   cards,
   decks,
@@ -126,7 +125,6 @@ function deleteUserHistory(db: Db, uid: UserId): void {
   for (const c of chats) db.delete(messages).where(eq(messages.sessionId, c.id)).run()
   db.delete(sessions).where(eq(sessions.userId, uid)).run()
   db.delete(reviews).where(eq(reviews.userId, uid)).run()
-  db.delete(attempts).where(eq(attempts.userId, uid)).run()
   db.delete(xpEvents).where(eq(xpEvents.userId, uid)).run()
   db.delete(stats).where(eq(stats.userId, uid)).run()
 }

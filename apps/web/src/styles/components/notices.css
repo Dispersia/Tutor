@@ -11,10 +11,6 @@
     font-size: 0.92rem;
     line-height: 1.45;
   }
-  .banner__title {
-    font-weight: 600;
-    color: color-mix(in oklab, var(--accent) 75%, var(--color-ink-100));
-  }
   .banner__text {
     color: var(--color-ink-300);
   }

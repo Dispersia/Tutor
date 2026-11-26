@@ -42,7 +42,7 @@ function foldForCompare(text: string, lang: string | undefined): string {
   return accentAware(lang) ? foldedSound(text) : tonelessKey(text)
 }
 
-export interface WordTiming {
+interface WordTiming {
   text: string
   start: number
   end: number
@@ -52,7 +52,7 @@ export interface WordTiming {
   flagged: boolean
 }
 
-export interface Pause {
+interface Pause {
   after: string
   seconds: number
 }

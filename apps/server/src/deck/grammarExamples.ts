@@ -4,7 +4,7 @@ import { getDeck, listCards, updateCard, updateDeckSettings, type ServerCard } f
 import type { PlannedCard, Planner } from './plan'
 import { MIN_EXPLANATION } from './plan'
 import type { DeckContext } from './context'
-import { exampleField, verifiedSentence } from './exampleCards'
+import { exampleField, verifiedSentence, type GrammarExample } from './exampleCards'
 import { trackDeckJob } from './jobs'
 
 const MIN_KNOWN = 2
@@ -12,12 +12,6 @@ const MIN_KNOWN = 2
 const filling = new Set<CardId>()
 
 type Deck = NonNullable<ReturnType<typeof getDeck>>
-
-export interface GrammarExample {
-  text: string
-  gloss?: string
-  reading?: string
-}
 
 export function startGrammarExamples(
   db: Db,

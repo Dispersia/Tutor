@@ -27,7 +27,7 @@ export async function reviewBatch(req: ReviewBatch): Promise<PlannedCard[]> {
   }
 }
 
-export const REVIEW_SYSTEM = `You check one batch of a language-learning deck before it is saved. You are a strict native-speaker editor: only correct cards are kept.
+const REVIEW_SYSTEM = `You check one batch of a language-learning deck before it is saved. You are a strict native-speaker editor: only correct cards are kept.
 
 For every card, judge:
 - The meaning (front) matches the word or sentence (back) exactly, with no wrong sense.

@@ -170,7 +170,7 @@ function systemFor(targetLang: string): string {
   return targetLang === 'ja' ? JAPANESE_SYSTEM : TONE_SYSTEM
 }
 
-export function pitchPrompt(words: PitchWord[]): string {
+function pitchPrompt(words: PitchWord[]): string {
   const list = words
     .map((w) => (w.reading ? `- ${w.word} [${w.reading}]` : `- ${w.word}`))
     .join('\n')

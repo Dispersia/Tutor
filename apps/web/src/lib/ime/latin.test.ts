@@ -19,4 +19,13 @@ describe('latin', () => {
   test('finish returns the typed text', () => {
     expect(latin.finish(type(latin, 'cat'))).toBe('cat')
   })
+
+  test('punctuation appends to the value', () => {
+    expect(type(latin, 'hi!').value).toBe('hi!')
+  })
+
+  test('the symbols page leads with the number row', () => {
+    expect(latin.symbols?.[0]).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'])
+    expect(latin.letters).toBe('ABC')
+  })
 })

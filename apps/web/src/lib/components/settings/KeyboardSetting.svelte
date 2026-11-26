@@ -27,7 +27,16 @@
     ignores it.
   </p>
   <div class="mt-3 flex items-center gap-3">
-    <input type="range" min="0" max="5" step="1" bind:value class="flex-1" />
+    <label class="sr-only" for="keyboard-vibration">Vibration strength</label>
+    <input
+      id="keyboard-vibration"
+      type="range"
+      min="0"
+      max="5"
+      step="1"
+      bind:value
+      class="flex-1"
+    />
     <span class="w-20 text-xs text-ink-300">{LEVELS[value] ?? 'Off'}</span>
     <button
       type="button"

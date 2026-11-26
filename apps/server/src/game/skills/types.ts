@@ -21,7 +21,7 @@ export type SkillId =
   | 'ranged'
   | 'magic'
 
-export type SkillCategory = 'gathering' | 'artisan' | 'support' | 'combat'
+type SkillCategory = 'gathering' | 'artisan' | 'support' | 'combat'
 
 export type ModKind = 'yield' | 'double' | 'xp' | 'global_xp' | 'damage' | 'drop' | 'hp' | 'coins'
 
@@ -43,8 +43,6 @@ export interface SkillDef {
 }
 
 export type PrimaryStat = 'strength' | 'agility' | 'intellect'
-export type SecondaryStat = 'haste' | 'crit' | 'mastery'
-export type GearStatId = PrimaryStat | SecondaryStat | 'stamina'
 
 export interface GearStats {
   strength: number

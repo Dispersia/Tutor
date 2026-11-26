@@ -1,4 +1,5 @@
 import { api } from './api'
+import { toast } from './toast.svelte'
 
 const MAX = 5
 const DURATIONS = [0, 6, 10, 16, 24, 35]
@@ -19,6 +20,7 @@ function vibrate(ms: number): boolean {
 class HapticsState {
   value = $state(0)
   private loading: Promise<void> | null = null
+  private reported = false
 
   async ensure(): Promise<void> {
     if (!this.loading) this.loading = this.load()
@@ -29,8 +31,13 @@ class HapticsState {
     try {
       const reply = await api<{ haptics?: number }>('/api/settings')
       this.value = clamp(reply.haptics ?? 0)
+      this.reported = false
     } catch {
       this.loading = null
+      if (!this.reported) {
+        this.reported = true
+        toast('Could not load your vibration setting', 'error')
+      }
     }
   }
 

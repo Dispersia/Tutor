@@ -16,6 +16,10 @@ describe('ime candidates', () => {
     expect(imeCandidates('zh', 'ㄨㄛˇ ㄕˋ ㄒㄩㄝˊ ㄕㄥ')[0]).toBe('我是學生')
   })
 
+  test('a repeated syllable prefers the word over single characters', () => {
+    expect(imeCandidates('zh', 'ㄇㄚ ㄇㄚ')[0]).toBe('媽媽')
+  })
+
   test('a toneless reading still segments and converts', () => {
     expect(imeCandidates('zh', 'ㄨㄛㄏㄣㄏㄠ')[0]).toBe('我很好')
     expect(imeCandidates('zh', 'ㄋㄧㄏㄠ')[0]).toBe('你好')

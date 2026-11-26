@@ -3,21 +3,12 @@ import type {
   GearResponse,
   GearSetApplyResponse,
   ItemDetailDTO,
-  SkillsResponse,
-  SkillPageResponse,
   StopRigResponse,
   GearSetDTO,
 } from './types'
 
-export const getSkills = () => api<SkillsResponse>('/api/skills')
-
-export const getGear = () => api<GearResponse>('/api/skills/gear')
-
 export const getItem = (id: string) =>
   api<ItemDetailDTO>(`/api/skills/items/${encodeURIComponent(id)}`)
-
-export const getSkill = (id: string) =>
-  api<SkillPageResponse>(`/api/skills/${encodeURIComponent(id)}`)
 
 export const chooseTalent = (talentId: string) =>
   api('/api/skills/talents', { method: 'POST', body: JSON.stringify({ talentId }) })

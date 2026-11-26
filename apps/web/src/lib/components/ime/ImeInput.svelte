@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
+  import { onMount, untrack } from 'svelte'
   import { typingAttrs } from '#lib/lang'
   import { haptics } from '#lib/haptics.svelte'
+  import { tapGuard } from '#lib/tapGuard.svelte'
   import { BACKSPACE, ENTER, SPACE, display, imeFor, type ImeState } from '#lib/ime'
   import ImeKeyboard from './ImeKeyboard.svelte'
 
@@ -41,7 +42,13 @@
   )
   const on = $derived(Boolean(engine) && enabled)
   const driven = $derived(Boolean(engine && enabled && (showKeys || Boolean(engine.physical))))
-  const room = $derived(height > 0 ? height : engine ? engine.rows.length * 48 + 120 : 0)
+  const room = $derived(
+    height > 0
+      ? height
+      : engine
+        ? Math.max(engine.rows.length, engine.symbols?.length ?? 0) * 48 + 120
+        : 0,
+  )
 
   onMount(() => {
     touch = window.matchMedia('(pointer: coarse)').matches
@@ -73,6 +80,19 @@
     }
   })
 
+  $effect(() => {
+    const busy = disabled
+    untrack(() => {
+      if (busy) close()
+    })
+  })
+
+  function close() {
+    if (!showKeys) return
+    showKeys = false
+    tapGuard.arm()
+  }
+
   function press(key: string) {
     const current = engine
     if (!current || disabled) return
@@ -90,7 +110,7 @@
   }
 
   function hide() {
-    showKeys = false
+    close()
     if (touch) enabled = false
   }
 
@@ -103,7 +123,8 @@
     if (e.key.length !== 1) return
     let symbol = engine.physical?.[e.key.toLowerCase()]
     if (symbol && e.shiftKey && engine.shift?.[symbol]) symbol = engine.shift[symbol]
-    if (symbol) consume(e, symbol)
+    if (symbol) return consume(e, symbol)
+    if (engine.symbols?.flat().includes(e.key)) consume(e, e.key)
   }
 
   function enterAction(e?: Event) {
@@ -117,6 +138,8 @@
         : (field?.closest('form') ?? null)
     if (!form) return
     e?.preventDefault()
+    haptics.pulse()
+    close()
     form.requestSubmit()
   }
 
@@ -145,13 +168,30 @@
     bind:this={field}
     onkeydown={onPhysical}
     class="field text-lg"
+    aria-label={placeholder}
     {placeholder}
   />
 {:else if rows}
-  <textarea bind:value {...attrs} {placeholder} {rows} {disabled} {onkeydown} class="field"
+  <textarea
+    bind:value
+    {...attrs}
+    {placeholder}
+    {rows}
+    {disabled}
+    {onkeydown}
+    aria-label={placeholder}
+    class="field"
   ></textarea>
 {:else}
-  <input bind:value {...attrs} {placeholder} {disabled} {onkeydown} class="field text-lg" />
+  <input
+    bind:value
+    {...attrs}
+    {placeholder}
+    {disabled}
+    {onkeydown}
+    aria-label={placeholder}
+    class="field text-lg"
+  />
 {/if}
 
 {#if engine && on && showKeys}

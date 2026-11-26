@@ -31,7 +31,9 @@
     Pick any model your OpenRouter key can use. The list comes from the API and follows your
     account's provider preferences, privacy settings and guardrails.
   </p>
+  <label class="sr-only" for="model-filter">Filter models</label>
   <input
+    id="model-filter"
     bind:value={modelFilter}
     onchange={onFilter}
     placeholder="filter models (e.g. qwen, deepseek)"

@@ -14,10 +14,10 @@ const LEVEL_LABELS: Record<string, string> = {
 }
 
 export function levelLabelFor(lang: string, level: string | null | undefined): string {
-  const raw = LEVEL_LABELS[level ?? '']
-  if (lang === 'ja') return raw === 'JLPT N5' ? raw : 'JLPT N5'
-  if (lang === 'zh') return raw === 'HSK 1' || raw === 'Frequency 1k' ? raw : 'HSK 1'
-  return raw ?? 'Frequency 1k'
+  if (lang === 'ja') return 'JLPT N5'
+  const label = LEVEL_LABELS[level ?? '']
+  if (lang === 'zh') return label && label !== 'JLPT N5' ? label : 'HSK 1'
+  return label ?? 'Frequency 1k'
 }
 
 export function xpToGoal(stats: Stats | null): number {
@@ -69,7 +69,7 @@ export function daySummary(day: ActivityDay, today: string | undefined): string 
   return `${when} · ${day.xp} XP · ${cards}`
 }
 
-export function heatLevel(xp: number, maxXp: number): number {
+function heatLevel(xp: number, maxXp: number): number {
   return xp <= 0 ? 0 : Math.max(1, Math.min(4, Math.ceil((xp / maxXp) * 4)))
 }
 

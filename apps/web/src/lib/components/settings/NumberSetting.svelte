@@ -26,13 +26,16 @@
     value = $bindable(),
     onSave,
   }: Props = $props()
+
+  const fieldId = $derived(`setting-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`)
 </script>
 
 <section class="mb-5 panel panel-accent p-4" style={accentStyle(accent)}>
   <h2 class="display text-sm text-ink-100">{title}</h2>
   <p class="mt-1 text-xs text-ink-400">{help}</p>
   <div class="mt-3 flex items-center gap-2">
-    <input type="number" {min} {max} {step} bind:value class="field {inputWidth}" />
+    <label class="sr-only" for={fieldId}>{title}</label>
+    <input id={fieldId} type="number" {min} {max} {step} bind:value class="field {inputWidth}" />
     {#if suffix}<span class="text-sm text-ink-400">{suffix}</span>{/if}
     <button onclick={onSave} class="btn btn-ghost px-3 py-2 text-xs">Save</button>
   </div>

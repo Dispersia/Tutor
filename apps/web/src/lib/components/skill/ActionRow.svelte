@@ -2,7 +2,7 @@
   import { href } from '#lib/paths'
   import { fmtClock, fmtInterval, rigSecondsLeft } from '#lib/idle'
   import { ACCENT, accentStyle } from '#lib/theme'
-  import { EFFECT_LABEL, actionGate, lockedReason } from '#lib/skillview'
+  import { EFFECT_LABEL, actionGate, lockedReason, pct } from '#lib/skillview'
   import type { ActionDTO, ItemDTO } from '#lib/skills'
 
   interface Props {
@@ -35,7 +35,6 @@
     onCancelRig,
   }: Props = $props()
 
-  const pct = (v: number) => `${Math.round(v * 100)}%`
   const nameOf = (itemId: string) => itemMap.get(itemId)?.name ?? itemId
 
   const trainable = $derived(a.unlocked && a.affordable)
@@ -43,6 +42,7 @@
   const made = $derived(a.produces?.[0])
   const gate = $derived(actionGate(a))
   const showGate = $derived(!!gate && !a.description.toLowerCase().includes(gate.toLowerCase()))
+  const blocked = $derived(trainable ? '' : lockedReason(a, nameOf))
 </script>
 
 <li
@@ -71,6 +71,9 @@
         >
         {#if showGate}
           <span class="text-[11px] text-brass-300">needs {gate}</span>
+        {/if}
+        {#if blocked && !showGate}
+          <span class="text-[11px] text-brass-300">{blocked}</span>
         {/if}
         <span class="display ml-auto shrink-0 text-sm font-bold" style="color: {accent}"
           >Lv {a.level}</span
@@ -170,6 +173,7 @@
         <div
           class="mt-1"
           style={accentStyle(accent)}
+          role="group"
           aria-label={a.idle.active
             ? `Rig running: ${fmtInterval(a.idle.intervalSec)} per item, ${fmtClock(idleLeft)} left`
             : 'Rig still'}
@@ -233,7 +237,8 @@
     <button
       onclick={() => onTrain(a)}
       disabled={!trainable}
-      title={!trainable ? lockedReason(a, nameOf) : undefined}
+      title={!trainable ? blocked : undefined}
+      aria-label={trainable ? `Train ${a.name}` : `Train ${a.name} — ${blocked}`}
       class="btn {isPrimary ? 'btn-primary' : 'btn-ghost'} min-h-8 shrink-0 px-2.5 py-1 text-xs"
     >
       Train

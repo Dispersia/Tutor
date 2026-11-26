@@ -59,7 +59,12 @@
       /> Play again{/if}
   </button>
   {#if err}<p class="text-xs text-ember-300">{err}</p>{/if}
-  <ImeInput bind:value={answer} lang={answerLang} placeholder="Type what you hear…" />
+  <ImeInput
+    bind:value={answer}
+    lang={answerLang}
+    disabled={busy}
+    placeholder="Type what you hear…"
+  />
   <button
     type="submit"
     disabled={busy || !answer.trim()}

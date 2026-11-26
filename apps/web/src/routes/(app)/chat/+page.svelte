@@ -10,6 +10,7 @@
   import Icon from '#lib/components/Icon.svelte'
   import Spinner from '#lib/components/Spinner.svelte'
   import SuggestedCard from '#lib/components/chat/SuggestedCard.svelte'
+  import { MIC_NO_SPEECH, MIC_TOO_QUICK, micUnavailable } from '#lib/components/micCopy'
   import { typingAttrs } from '#lib/lang'
   import { autoGrow } from '#lib/grow'
   import type { ChatSession, Message } from '#lib/types'
@@ -43,6 +44,7 @@
   let suggestion = $state<ChatSuggestion | null>(null)
   let savingCard = $state(false)
   let cardNote = $state('')
+  let speechNote = $state('')
   let speaker: Speaker | null = null
   let stream: AbortController | null = null
   let touched = false
@@ -52,8 +54,10 @@
   const canMic = micSupported()
 
   onMount(async () => {
-    if (ttsOn) void wakeSpeech().catch(() => {})
-    void loadActiveDeck()
+    if (ttsOn) {
+      void wakeSpeech().catch((e) => (speechNote = `Speech model didn’t start — ${e.message}`))
+    }
+    await loadActiveDeck()
     try {
       await openLatest()
     } catch (e) {
@@ -255,11 +259,11 @@
     recording = false
     const take = await recorder.stop()
     if (take.durationMs < MIN_CLIP_MS) {
-      error = 'That was too quick — hold the mic and speak.'
+      error = MIC_TOO_QUICK
       return
     }
     if (!take.blob) {
-      error = "Didn't catch that — try again."
+      error = MIC_NO_SPEECH
       return
     }
     transcribing = true
@@ -274,7 +278,7 @@
     try {
       const text = await transcribe(blob, lang)
       if (!text.trim()) {
-        error = "Didn't catch that — try again."
+        error = MIC_NO_SPEECH
         return
       }
       input = text.trim()
@@ -293,7 +297,7 @@
       await recorder.start()
       recording = true
     } catch (e) {
-      error = `Microphone unavailable (needs HTTPS on the phone). ${(e as Error).message}`
+      error = micUnavailable(e)
     }
   }
 
@@ -311,14 +315,23 @@
     {lang ? lang.toUpperCase() : 'EN'} · replies are spoken
     {#if speaking}<span class="text-jade-400">· speaking…</span>{/if}
   </p>
+  {#if speechNote}
+    <p class="mt-1 text-xs text-ember-300">{speechNote}</p>
+  {/if}
 </div>
 
 <div class="space-y-3 pt-4 pb-20 lg:mx-auto lg:max-w-3xl">
   {#if messages.length === 0}
-    <p class="panel panel-accent p-4 text-sm text-ink-300" style={accentStyle(ACCENT.azure)}>
-      Say or type something in your target language to begin. Your Tutor answers out loud and keeps
-      the whole history.
-    </p>
+    {#if list.loading || thread.loading}
+      <p class="banner flex items-center gap-2" style={accentStyle(ACCENT.azure)}>
+        <Spinner size={14} label="Loading your conversation" /> Loading…
+      </p>
+    {:else}
+      <p class="panel panel-accent p-4 text-sm text-ink-300" style={accentStyle(ACCENT.azure)}>
+        Say or type something in your target language to begin. Your Tutor answers out loud and
+        keeps the whole history.
+      </p>
+    {/if}
   {/if}
   {#each messages as m (m.id)}
     <div class={m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>

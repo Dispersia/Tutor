@@ -182,7 +182,7 @@ function removeSentences(cards: Cards): number {
   let removed = 0
   for (const c of cards) {
     if (c.payload?.template !== 'sentence') continue
-    for (const table of ['srs', 'srs_reviews', 'reviews', 'attempts']) {
+    for (const table of ['srs', 'srs_reviews', 'reviews']) {
       sqlite.run(`delete from ${table} where card_id = ?`, [c.id])
     }
     sqlite.run('delete from cards where id = ?', [c.id])

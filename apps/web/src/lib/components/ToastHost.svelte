@@ -12,10 +12,13 @@
 {#if toasts.items.length}
   <div
     class="pointer-events-none fixed inset-x-0 bottom-24 z-50 flex flex-col items-center gap-2 px-4 lg:bottom-8"
-    aria-live="polite"
   >
     {#each toasts.items as t (t.id)}
-      <div class="toast rise" style="--accent: {TONE[t.tone]}">
+      <div
+        class="toast rise"
+        style="--accent: {TONE[t.tone]}"
+        role={t.tone === 'error' ? 'alert' : 'status'}
+      >
         <span class="toast__text">{t.message}</span>
         <button
           type="button"

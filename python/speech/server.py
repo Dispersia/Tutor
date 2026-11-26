@@ -276,19 +276,6 @@ def asr(
         return {"text": out["text"], "segments": out["segments"], "lang": language, "ms": ms}
 
 
-@app.post("/v1/align")
-def align(
-    file: UploadFile = File(...),
-    text: str = Form(...),
-    language: str | None = Form(None),
-) -> dict:
-    with _upload_as_wav(file) as wav:
-        with manager.inference():
-            model = manager.get("align")
-            items = models.align_text(model, str(wav), text, language)
-        return {"items": items}
-
-
 @app.post("/v1/assess")
 def assess(
     file: UploadFile = File(...),

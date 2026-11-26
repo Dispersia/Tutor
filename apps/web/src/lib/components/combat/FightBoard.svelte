@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ACCENT } from '#lib/theme'
   import Icon from '#lib/components/Icon.svelte'
+  import { itemName } from './itemName'
   import type { EncounterDTO, HitResult } from '#lib/combat'
   import type { ItemDTO } from '#lib/skills'
 
@@ -17,7 +18,7 @@
 
   let { encounter, hit, justHit, hitSeq, drank, itemMap, busy, onFlee }: Props = $props()
 
-  const name = (id: string) => itemMap.get(id)?.name ?? id
+  const name = (id: string) => itemName(itemMap, id)
 </script>
 
 <div class="panel panel-accent mb-3 p-4" style="--accent: {ACCENT.ember}">

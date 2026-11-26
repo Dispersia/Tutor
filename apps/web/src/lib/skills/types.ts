@@ -1,13 +1,13 @@
 import type { ModKind } from '../types'
 
-export interface Cost {
+interface Cost {
   item: string
   count: number
 }
 
-export type BandId = 'bronze' | 'iron' | 'steel' | 'mythril' | 'adamant'
+type BandId = 'bronze' | 'iron' | 'steel' | 'mythril' | 'adamant'
 
-export interface BandGate {
+interface BandGate {
   id: BandId
   name: string
   level: number
@@ -78,7 +78,7 @@ export interface IdleRigDTO {
   runProgress: number
   maxed: boolean
   intervalSec: number
-  yieldBonus: number
+  produceMultiplier: number
   xpPerCraft: number
   produces: Cost[]
   consumes: Cost[]
@@ -115,7 +115,7 @@ export interface ActionDTO {
   equipMissing: { slot: string; tag: string } | null
 }
 
-export interface TalentRequirement {
+interface TalentRequirement {
   skill: string
   level: number
   met?: boolean
@@ -140,12 +140,12 @@ export interface OwnedTalent {
   options: TalentOption[]
 }
 
-export interface MasteryPending {
+interface MasteryPending {
   milestone: number
   options: TalentOption[]
 }
 
-export interface SkillTalentDTO {
+interface SkillTalentDTO {
   pendingChoice: boolean
   milestone: number | null
   options: TalentOption[]
@@ -200,7 +200,7 @@ export interface ItemDTO {
   value?: number
 }
 
-export interface ItemUse {
+interface ItemUse {
   kind: 'action' | 'enchant'
   skillId: string
   skillName: string
@@ -209,7 +209,7 @@ export interface ItemUse {
   count: number
 }
 
-export interface ItemSource {
+interface ItemSource {
   kind: 'action' | 'monster'
   name: string
   icon: string
@@ -255,7 +255,7 @@ export interface GearInstanceDTO {
   missing: GearRequirementDTO[]
 }
 
-export interface GearRequirementDTO {
+interface GearRequirementDTO {
   skill: string
   name: string
   level: number
@@ -277,7 +277,7 @@ export interface GearSetDTO {
   updatedAt: number
 }
 
-export interface SetBonusTierDTO {
+interface SetBonusTierDTO {
   pieces: number
   label: string
   stats?: Partial<GearStats>
@@ -294,7 +294,7 @@ export interface ActiveSetBonusDTO {
   next: SetBonusTierDTO | null
 }
 
-export type DistillMode = 'max-value' | 'min-value'
+type DistillMode = 'max-value' | 'min-value'
 
 export interface DistillConfigDTO {
   mode: DistillMode
@@ -315,7 +315,7 @@ export interface GearResponse {
   inventory: { itemId: string; count: number }[]
 }
 
-export interface GearSetSkipDTO {
+interface GearSetSkipDTO {
   slot: string
   itemId: string
   name: string
@@ -339,7 +339,7 @@ export interface SkillsResponse extends GearResponse {
   rigs: RigsSummary
 }
 
-export interface FedBy {
+interface FedBy {
   skillId: string
   name: string
   label: string

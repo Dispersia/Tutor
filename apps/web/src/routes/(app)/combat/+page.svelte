@@ -21,6 +21,10 @@
   import HitReport from '#lib/components/combat/HitReport.svelte'
   import MonsterList from '#lib/components/combat/MonsterList.svelte'
   import OutcomePanel from '#lib/components/combat/OutcomePanel.svelte'
+  import ConfirmDialog from '#lib/components/ConfirmDialog.svelte'
+  import { primaryActionButton } from '#lib/components/enterSubmit'
+  import { haptics } from '#lib/haptics.svelte'
+  import { peekCached } from '#lib/cache'
   import { countConsumables } from '#lib/combatview'
   import { cachedResource } from '#lib/resource.svelte'
 
@@ -32,6 +36,7 @@
   let hit = $state<HitResult | null>(null)
   let drank = $state<{ item: string; buff: { kind: string; value: number } } | null>(null)
   let foodThreshold = $state(50)
+  let pendingFlee = $state(false)
   let busy = $state(false)
   let timerStarted = $state(false)
   let deadline = $state(0)
@@ -53,7 +58,21 @@
   const foodCount = $derived(consumables.food)
   const potionCount = $derived(consumables.potions)
 
-  onMount(refresh)
+  onMount(() => {
+    void haptics.ensure()
+    void loadFoodThreshold()
+    void refresh()
+  })
+
+  async function loadFoodThreshold() {
+    const cached = peekCached<{ foodThreshold?: number }>('/api/settings')
+    const threshold =
+      cached?.foodThreshold ??
+      (await api<{ foodThreshold?: number }>('/api/settings')
+        .then((s) => s.foodThreshold)
+        .catch(() => undefined))
+    if (threshold !== undefined) foodThreshold = threshold
+  }
 
   $effect(() => {
     if (!timerStarted) return
@@ -83,20 +102,17 @@
   }
 
   async function refresh() {
-    const [ok, , set] = await Promise.all([combat.refresh(), board.refresh(), prefs()])
-    if (ok && combat.data) applyCombat(combat.data, set?.foodThreshold)
+    const [ok] = await Promise.all([combat.refresh(), board.refresh()])
+    if (ok && combat.data) applyCombat(combat.data)
   }
 
-  const prefs = () => api<{ foodThreshold?: number }>('/api/settings').catch(() => null)
-
-  function applyCombat(c: CombatResponse, food?: number) {
+  function applyCombat(c: CombatResponse) {
     if (!hit || hit.outcome === 'ongoing') encounter = c.encounter
     if (c.encounter) {
       instance = c.instance
       stopTimer()
     }
     justHit = false
-    if (food) foodThreshold = food
   }
 
   async function fight(m: MonsterDTO) {
@@ -116,6 +132,7 @@
 
   async function submit(answer: unknown, timedOut = false) {
     if (!instance || busy) return
+    if (!timedOut) haptics.pulse()
     busy = true
     combat.error = ''
     try {
@@ -167,9 +184,13 @@
     void refresh()
   }
 
-  async function flee() {
+  function flee() {
     if (busy) return
-    if (!confirm('Leave the fight? Your progress in this battle is lost.')) return
+    pendingFlee = true
+  }
+
+  async function confirmFlee() {
+    pendingFlee = false
     busy = true
     combat.error = ''
     try {
@@ -183,14 +204,11 @@
   }
 
   function onKeydown(e: KeyboardEvent) {
-    if (e.key !== 'Enter' || e.repeat || busy) return
-    const t = e.target instanceof HTMLElement ? e.target : null
-    if (t?.closest('input, textarea, select, a') || t?.isContentEditable) return
-    const primary = document.querySelector<HTMLButtonElement>('[data-enter-action]:not(:disabled)')
-    if (primary) {
-      e.preventDefault()
-      primary.click()
-    }
+    if (busy) return
+    const primary = primaryActionButton(e)
+    if (!primary) return
+    e.preventDefault()
+    primary.click()
   }
 </script>
 
@@ -212,6 +230,7 @@
           <div
             class="seal h-14 w-14"
             style="--seal-accent: {ACCENT.ember}"
+            role="img"
             aria-label="Your hit points"
           >
             <span class="display text-lg leading-none font-bold"
@@ -316,6 +335,16 @@
       <p class="text-sm text-ink-400">No drill available — try again.</p>
     {/if}
   {:else if data}
-    <MonsterList {data} {skillMap} {itemMap} onFight={fight} />
+    <MonsterList {data} {itemMap} onFight={fight} />
   {/if}
 </div>
+
+<ConfirmDialog
+  open={pendingFlee}
+  title="Leave fight"
+  message="Leave the fight? Your progress in this battle is lost."
+  confirmLabel="Leave fight"
+  {busy}
+  onConfirm={confirmFlee}
+  onCancel={() => (pendingFlee = false)}
+/>

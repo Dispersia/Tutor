@@ -1,10 +1,9 @@
 <script lang="ts">
   import { href } from '#lib/paths'
   import { onMount } from 'svelte'
-  import type { ActionDTO, SkillDTO } from '#lib/skills'
   import { useSkills } from '#lib/skills/store.svelte'
-  import { fmtInterval, rigGainedSince, rigSecondsLeft } from '#lib/idle'
   import { ACCENT, CATEGORY, accentStyle, type SkillCategory } from '#lib/theme'
+  import { EMBLEM, compact, pct, runningRigs } from '#lib/skillview'
   import Icon from '#lib/components/Icon.svelte'
   import Spinner from '#lib/components/Spinner.svelte'
   import SkillCard from '#lib/components/skill/SkillCard.svelte'
@@ -12,16 +11,7 @@
   const board = useSkills()
   const data = $derived(board.data ?? null)
 
-  const pct = (v: number) => `${Math.round(v * 100)}%`
-  const compact = (n: number) =>
-    n >= 10_000 ? `${(n / 1000).toFixed(n >= 100_000 ? 0 : 1)}k` : n.toLocaleString()
   const totalXp = $derived(board.skills.reduce((n, s) => n + s.xp, 0))
-  const EMBLEM: Record<SkillCategory, string> = {
-    gathering: '⛏️',
-    artisan: '🔨',
-    support: '🧭',
-    combat: '⚔️',
-  }
   const totalLevel = $derived.by(() => {
     const skills = board.skills
     if (!skills.length) return 1
@@ -41,52 +31,6 @@
       }))
       .map((g) => ({ ...g, levels: g.skills.reduce((n, s) => n + s.level, 0) })),
   )
-
-  interface RunningRig {
-    id: string
-    name: string
-    accent: string
-    gained: number
-    actionId: string
-    left: number
-    rate: string
-    count: number
-  }
-
-  function runningRigs(skills: SkillDTO[], fetchedAt: number, now: number): RunningRig[] {
-    const out: RunningRig[] = []
-    for (const s of skills) {
-      const rig = runningIn(s, fetchedAt, now)
-      if (rig) out.push(rig)
-    }
-    return out.sort((a, b) => a.left - b.left)
-  }
-
-  function runningIn(s: SkillDTO, fetchedAt: number, now: number): RunningRig | undefined {
-    const active = s.actions.filter((a) => a.idle?.active)
-    if (!active.length) return undefined
-    const soonest = active.reduce((min, a) =>
-      rigSecondsLeft(a.idle!, now) < rigSecondsLeft(min.idle!, now) ? a : min,
-    )
-    return {
-      id: s.id,
-      name: s.name,
-      accent: CATEGORY[s.category].accent,
-      gained: fetchedAt ? gainedSince(active, fetchedAt, now) : 0,
-      actionId: soonest.id,
-      left: rigSecondsLeft(soonest.idle!, now),
-      rate: fmtInterval(soonest.idle!.intervalSec),
-      count: active.length,
-    }
-  }
-
-  function gainedSince(actions: ActionDTO[], fetchedAt: number, now: number): number {
-    let gained = 0
-    for (const a of actions) {
-      for (const n of Object.values(rigGainedSince(a.idle!, fetchedAt, now))) gained += n
-    }
-    return gained
-  }
 
   const running = $derived(runningRigs(board.skills, board.fetchedAt, board.now))
 

@@ -8,7 +8,7 @@ import { addCard, createDeck, upsertSrs } from './db/repo'
 import type { Role } from './env'
 import { EventBus } from './events'
 import { OpenRouter } from './llm/openrouter'
-import { seedStarterDecks } from './seed/service'
+import { createFixtureDecks } from './deckFixture'
 import { SpeechSupervisor } from './speech/supervisor'
 
 const defaults: Record<Role, string> = {
@@ -70,7 +70,7 @@ async function signupUser(app: App, db: Db, username = 'alice') {
   const res = await app.request('/api/auth/register', json({ username, password: 'password123' }))
   const cookie = res.headers.getSetCookie()[0]!.split(';')[0]!
   const { user } = (await res.json()) as { user: { id: UserId } }
-  seedStarterDecks(db, user.id)
+  createFixtureDecks(db, user.id)
   return { cookie, user }
 }
 

@@ -14,6 +14,7 @@ import {
 } from '../../services'
 import type { App, AppEnv } from '../../context'
 import { idField, jsonBody, num, str } from '../body'
+import { fail } from '../errors'
 import { gearPayload } from './board'
 
 interface EquipPiece {
@@ -62,12 +63,12 @@ async function equipPiece(c: Context<AppEnv>, piece: EquipPiece) {
     ? gearView(deps.db, user.id).find((g) => g.id === piece.instanceId)
     : undefined
   const itemId = piece.itemId ?? instance?.itemId
-  if (!itemId) return c.json({ error: 'itemId or instanceId required' }, 400)
+  if (!itemId) return fail(c, 400, 'itemId or instanceId required')
   const res = equipItem(deps.db, deps.events, user.id, itemId, {
     instanceId: instance?.id,
     targetSlot: piece.slot,
   })
-  if (!res.ok) return c.json({ error: res.error, missing: res.missing }, 400)
+  if (!res.ok) return fail(c, 400, res.error!, { missing: res.missing })
   return c.json(gearPayload(deps, user.id))
 }
 
@@ -75,9 +76,9 @@ async function discardHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
   const instanceId = idField(await jsonBody(c), 'instanceId', toGearInstanceId)
-  if (!instanceId) return c.json({ error: 'instanceId required' }, 400)
+  if (!instanceId) return fail(c, 400, 'instanceId required')
   const res = discardGear(deps.db, user.id, instanceId)
-  if (!res.ok) return c.json({ error: res.error }, 400)
+  if (!res.ok) return fail(c, 400, res.error!)
   return c.json(gearPayload(deps, user.id))
 }
 
@@ -85,9 +86,9 @@ async function salvageHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
   const instanceId = idField(await jsonBody(c), 'instanceId', toGearInstanceId)
-  if (!instanceId) return c.json({ error: 'instanceId required' }, 400)
+  if (!instanceId) return fail(c, 400, 'instanceId required')
   const res = salvageGear(deps.db, deps.events, user.id, instanceId)
-  if (!res.ok) return c.json({ error: res.error }, 400)
+  if (!res.ok) return fail(c, 400, res.error!)
   return c.json({ materials: res.materials, ...gearPayload(deps, user.id) })
 }
 
@@ -98,10 +99,10 @@ async function enchantHandler(c: Context<AppEnv>) {
   const instanceId = idField(body, 'instanceId', toGearInstanceId)
   const enchantId = str(body, 'enchantId')
   if (!instanceId || !enchantId) {
-    return c.json({ error: 'instanceId and enchantId required' }, 400)
+    return fail(c, 400, 'instanceId and enchantId required')
   }
   const res = applyEnchant(deps.db, deps.events, user.id, instanceId, { enchantId })
-  if (!res.ok) return c.json({ error: res.error }, 400)
+  if (!res.ok) return fail(c, 400, res.error!)
   return c.json(gearPayload(deps, user.id))
 }
 
@@ -110,9 +111,9 @@ async function distillHandler(c: Context<AppEnv>) {
   const user = c.get('user')!
   const body = await jsonBody(c)
   const itemId = str(body, 'itemId')
-  if (!itemId) return c.json({ error: 'itemId required' }, 400)
+  if (!itemId) return fail(c, 400, 'itemId required')
   const res = distillItem(deps.db, deps.events, user.id, itemId, num(body, 'count') ?? 1)
-  if (!res.ok) return c.json({ error: res.error }, 400)
+  if (!res.ok) return fail(c, 400, res.error!)
   return c.json({ xp: res.xp, essence: res.essence, ...gearPayload(deps, user.id) })
 }
 
@@ -120,7 +121,7 @@ async function distillModeHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
   const mode = distillMode(str(await jsonBody(c), 'mode') ?? '')
-  if (!mode) return c.json({ error: 'unknown mode' }, 400)
+  if (!mode) return fail(c, 400, 'unknown mode')
   setDistillMode(deps.db, user.id, mode)
   return c.json(gearPayload(deps, user.id))
 }
@@ -129,7 +130,7 @@ async function distillToggleHandler(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
   const itemId = str(await jsonBody(c), 'itemId')
-  if (!itemId) return c.json({ error: 'itemId required' }, 400)
+  if (!itemId) return fail(c, 400, 'itemId required')
   toggleDistillItem(deps.db, user.id, itemId)
   return c.json(gearPayload(deps, user.id))
 }

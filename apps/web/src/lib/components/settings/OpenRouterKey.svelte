@@ -20,7 +20,9 @@
     {:else}<span class="text-ember-400">not set — chat is disabled</span>{/if}
   </p>
   <div class="mt-3 flex gap-2">
+    <label class="sr-only" for="openrouter-key">OpenRouter API key</label>
     <input
+      id="openrouter-key"
       type="password"
       bind:value={keyInput}
       placeholder={keyStatus === 'user' ? 'Replace key…' : 'sk-or-…'}

@@ -13,7 +13,7 @@ import { ROLES, roleReasoning, type Role } from '../../env'
 import { OpenRouter, type ChatMessage, type Usage } from '../../llm/openrouter'
 import { systemPrompt } from '../../llm/prompts'
 import { readStudyPrefs } from '../../services/study'
-import { needKey } from '../errors'
+import { fail, needKey } from '../errors'
 import { resolveKey, type ResolvedKey } from '../../llm/userkey'
 import type { App, AppEnv, Deps } from '../../context'
 import type { PublicUser } from '../../db/repo'
@@ -227,7 +227,7 @@ async function jsonHandler(c: Context<AppEnv>) {
   const user = c.get('user')!
   const resolved = await resolveKey(deps, user.id)
   if (!resolved) return needKey(c)
-  if (resolved.source !== 'user') return c.json({ error: OWN_KEY_ONLY }, 403)
+  if (resolved.source !== 'user') return fail(c, 403, OWN_KEY_ONLY)
   const body = readJsonBody(await jsonBody(c))
   const role = body.role ?? 'judge'
   const model = body.model ?? getRoles(deps.db, user.id, deps.defaults)[role]
@@ -236,7 +236,7 @@ async function jsonHandler(c: Context<AppEnv>) {
     const { json, usage } = await runJson(or, model, role, body)
     return c.json({ result: json, usage, model })
   } catch (err) {
-    return c.json({ error: (err as Error).message }, 502)
+    return fail(c, 502, (err as Error).message)
   }
 }
 

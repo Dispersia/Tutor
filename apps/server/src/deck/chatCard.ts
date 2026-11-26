@@ -28,7 +28,7 @@ import { asCard, verifyContext } from './exampleCards'
 import { sanitizePlannedCard, storedTemplate, type ChatCardPlan, type PlannedCard } from './plan'
 import { chatPlannerFor } from './planner'
 
-export const CHAT_CARD_TAG = 'chat'
+const CHAT_CARD_TAG = 'chat'
 export const CHAT_CARD_FAILED = 'That card could not be saved.'
 
 export interface ChatCardInput {

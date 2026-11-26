@@ -35,9 +35,10 @@ const reference = FSRS6Model.create({
 const DAY = DAY_MS
 const now = 1_000_000_000_000
 
-test('ratingFromScore is two-way: Again when wrong, Good when right', () => {
+test('ratingFromScore: Again when wrong, Hard when marginal, Good when right', () => {
   expect(ratingFromScore(100, true)).toBe(GOOD)
   expect(ratingFromScore(65, true)).toBe(GOOD)
+  expect(ratingFromScore(64, true)).toBe(HARD)
   expect(ratingFromScore(0, false)).toBe(AGAIN)
   expect(ratingFromScore(65, false)).toBe(AGAIN)
 })

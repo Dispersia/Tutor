@@ -1,5 +1,7 @@
 <script lang="ts">
   import { accentStyle } from '#lib/theme'
+  import { focusTrap } from '#lib/focusTrap'
+  import { itemName as itemNameOf } from '#lib/components/combat/itemName'
   import type { EnchantDTO, EquippedDTO, GearInstanceDTO, GearSetDTO, ItemDTO } from '#lib/skills'
 
   interface Props {
@@ -69,9 +71,7 @@
     return e.reagents.every((r) => ownedCount(r.item) >= r.count)
   }
 
-  function itemName(id: string): string {
-    return itemMap.get(id)?.name ?? id
-  }
+  const itemName = (id: string) => itemNameOf(itemMap, id)
 
   function candidateIds(e: EnchantDTO): string[] {
     const family = SLOT_FAMILY[e.slot] ?? [e.slot]
@@ -136,8 +136,6 @@
     open = e
   }
 </script>
-
-<svelte:window onkeydown={(e) => e.key === 'Escape' && (open = null)} />
 
 <section class="panel mt-4 p-3" style={accentStyle(accent)}>
   <div class="flex items-start justify-between gap-3">
@@ -219,6 +217,9 @@
       role="dialog"
       aria-modal="true"
       aria-label="Choose a piece to enchant"
+      tabindex="-1"
+      use:focusTrap
+      onkeydown={(e) => e.key === 'Escape' && (open = null)}
     >
       <div class="flex items-start justify-between gap-3">
         <div class="min-w-0">

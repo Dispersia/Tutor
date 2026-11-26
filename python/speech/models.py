@@ -39,10 +39,9 @@ ALIGN_MODEL = os.environ.get("TUTOR_ALIGN", "mlx-community/Qwen3-ForcedAligner-0
 # VoxCPM2 ships bf16 (5.0 GB) / 8-bit (3.2 GB) / 4-bit (2.3 GB). 8-bit keeps the
 # quality while leaving room for ASR + aligner + browser in 16 GB.
 TTS_PRESET_MODEL = os.environ.get("TUTOR_TTS_PRESET", "mlx-community/VoxCPM2-8bit")
-VAD_MODEL = os.environ.get("TUTOR_VAD", "mlx-community/silero-vad")
 
 # Roles that map to a fixed checkpoint.
-SINGLE = {"asr": ASR_MODEL, "asr_lite": ASR_LITE_MODEL, "align": ALIGN_MODEL, "vad": VAD_MODEL}
+SINGLE = {"asr": ASR_MODEL, "asr_lite": ASR_LITE_MODEL, "align": ALIGN_MODEL}
 # One TTS checkpoint, loaded lazily like the rest.
 TTS = {"tts_preset": TTS_PRESET_MODEL}
 # Roles that share a checkpoint, so the same weights are never loaded twice.
@@ -106,7 +105,7 @@ def model_id(kind: str) -> str:
 def _load_model(kind: str, repo: str) -> Any:
     log.info("loading %s (%s)", kind, repo)
     t0 = time.time()
-    if kind in ("asr", "asr_lite", "align", "vad"):
+    if kind in ("asr", "asr_lite", "align"):
         from mlx_audio.stt import load  # type: ignore
 
         model = load(repo)

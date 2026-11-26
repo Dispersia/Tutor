@@ -14,7 +14,7 @@ export interface StudyPrefs {
   activeDeckId: DeckId | null
 }
 
-export const DEFAULT_STUDY_PREFS: StudyPrefs = {
+const DEFAULT_STUDY_PREFS: StudyPrefs = {
   showZhuyin: true,
   showFurigana: true,
   disabledExercises: [],

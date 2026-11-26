@@ -10,7 +10,6 @@ import {
   actionLevelInfo,
   actionRequiredLevel,
   actionsForSkill,
-  missingMaterials,
   missingUnlocks,
   skillLevelInfo,
   skillXpForLevel,
@@ -94,13 +93,7 @@ test('unlock + material helpers', () => {
   expect(missingUnlocks(mine, () => 1).length).toBe(1)
   expect(missingUnlocks(mine, () => 5).length).toBe(0)
   const brew = ACTIONS.find((a) => a.id === 'brew-attack')!
-  expect(
-    missingMaterials(brew, () => 0)
-      .map((c) => c.item)
-      .sort(),
-  ).toEqual(['guam', 'vial'])
-  expect(missingMaterials(brew, () => 0).length).toBe(2)
-  expect(missingMaterials(brew, () => 99).length).toBe(0)
+  expect((brew.consumes ?? []).map((c) => c.item).sort()).toEqual(['guam', 'vial'])
 })
 
 test('starter bronze chain is playable from Mining 1 (tin has a source)', () => {

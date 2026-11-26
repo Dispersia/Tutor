@@ -25,17 +25,22 @@
     'flex h-11 items-center justify-center rounded-[6px] border border-white/20 text-sm text-ink-300 active:bg-ink-700 disabled:opacity-40'
 
   let shift = $state(false)
+  let page = $state<'letters' | 'symbols'>('letters')
 
   const units = $derived(engine.columns * 2)
   const grid = $derived(`display:grid;grid-template-columns:repeat(${units},minmax(0,1fr));gap:4px`)
+  const plain = $derived(page === 'symbols')
   const rows = $derived(
-    engine.rows.map((row) =>
-      row.map((key) => (shift && engine.shift ? (engine.shift[key] ?? key) : key)),
-    ),
+    plain
+      ? (engine.symbols ?? [])
+      : engine.rows.map((row) =>
+          row.map((key) => (shift && engine.shift ? (engine.shift[key] ?? key) : key)),
+        ),
   )
+  const space = $derived(units - (plain || !engine.shift ? 12 : 9))
 
   function padOf(row: string[], last: boolean): number {
-    const specials = last && engine.shift ? 6 : 0
+    const specials = !plain && last && engine.shift ? 6 : 0
     return Math.max(0, (units - row.length * 2 - specials) / 2)
   }
 </script>
@@ -62,7 +67,7 @@
       {@const pad = padOf(row, last)}
       <div style={grid}>
         {#if pad > 0}<span style="grid-column: span {pad}"></span>{/if}
-        {#if last && engine.shift}
+        {#if !plain && last && engine.shift}
           <button
             type="button"
             class="{SPECIAL} {shift ? 'bg-ink-700' : 'bg-ink-800'}"
@@ -85,7 +90,7 @@
             {key}
           </button>
         {/each}
-        {#if last && engine.shift}
+        {#if !plain && last && engine.shift}
           <button
             type="button"
             class="{SPECIAL} bg-ink-800"
@@ -111,36 +116,25 @@
       >
         ⌄
       </button>
-      {#if engine.shift}
-        <button
-          type="button"
-          class={KEY}
-          style="grid-column: span 14"
-          {disabled}
-          onclick={() => onkey(SPACE)}
-        >
-          space
-        </button>
-        <button
-          type="button"
-          class="{SPECIAL} bg-ink-800"
-          style="grid-column: span 3"
-          aria-label="Enter"
-          {disabled}
-          onclick={onenter}
-        >
-          ↵
-        </button>
-      {:else}
-        <button
-          type="button"
-          class={KEY}
-          style="grid-column: span 10"
-          {disabled}
-          onclick={() => onkey(SPACE)}
-        >
-          space
-        </button>
+      <button
+        type="button"
+        class="{SPECIAL} bg-ink-800"
+        style="grid-column: span 3"
+        {disabled}
+        onclick={() => (page = plain ? 'letters' : 'symbols')}
+      >
+        {plain ? (engine.letters ?? 'ABC') : '?123'}
+      </button>
+      <button
+        type="button"
+        class={KEY}
+        style="grid-column: span {space}"
+        {disabled}
+        onclick={() => onkey(SPACE)}
+      >
+        space
+      </button>
+      {#if plain || !engine.shift}
         <button
           type="button"
           class="{SPECIAL} bg-ink-800"
@@ -151,17 +145,17 @@
         >
           ⌫
         </button>
-        <button
-          type="button"
-          class="{SPECIAL} bg-ink-800"
-          style="grid-column: span 6"
-          aria-label="Enter"
-          {disabled}
-          onclick={onenter}
-        >
-          ↵
-        </button>
       {/if}
+      <button
+        type="button"
+        class="{SPECIAL} bg-ink-800"
+        style="grid-column: span 3"
+        aria-label="Enter"
+        {disabled}
+        onclick={onenter}
+      >
+        ↵
+      </button>
     </div>
   </div>
 </div>

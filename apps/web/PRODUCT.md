@@ -47,8 +47,9 @@ history — is the claim a neighboring language app could not truthfully copy.
   judge, generator, translator) can use different models.
 - Daily loop: streak, XP, daily goal, then a next exercise chosen by the
   curriculum; longer sessions go to chat/voice conversation.
-- Practice spans Mandarin (HSK 1) and Japanese (JLPT N5) with furigana/zhuyin
-  reading aids; more languages are content, not architecture.
+- Practice spans the language the member is learning (Mandarin, Japanese and
+  Korean paths today) with furigana/zhuyin reading aids; more languages are
+  content, not architecture.
 - History is permanent and replayable; audio may be retained indefinitely
   (retention policy undecided).
 
@@ -57,8 +58,10 @@ history — is the claim a neighboring language app could not truthfully copy.
 Confirmed capabilities: chat and voice conversation with streamed replies and
 per-sentence TTS; six exercise types rendered by a registry keyed on `id`;
 pronunciation scoring (ASR + forced aligner, optional LLM judge); cards and
-decks (frequency, HSK 1, JLPT N5, AI-generated); spaced repetition and an n+1
-frequency path with sentence building; XP/levels/UTC streaks/daily goal;
+decks (a per-member frequency path, grown on a topic or built from an
+instruction); spaced repetition and an n+1
+frequency path with sentence building; XP/levels/streaks/daily goal (a day starts
+at the member's own midnight);
 professions, talents, materials, gear and combat; per-member history and
 settings; admin account management.
 
@@ -90,8 +93,9 @@ preserved.
 
 ## Evidence on Hand
 
-Real content in the repo, usable in the product: frequency, HSK 1 and JLPT N5
-seed decks (`apps/server/src/seed/`), the exercise registry, and the
+Real content in the repo, usable in the product: the Mandarin and Japanese
+frequency lists (`apps/server/src/text/lexicon.ts`,
+`apps/server/src/text/frequency-ja.ts`), the exercise registry, and the
 pronunciation/speech pipeline. No testimonials, customer logos, benchmarks,
 pricing or press exist — future work must not fabricate any.
 

@@ -31,12 +31,12 @@ import {
   ACTIONS,
   SKILL_BY_ID,
   actionConsumes,
+  actionExpected,
   actionOdds,
   actionRoll,
   type ActionDef,
   type Cost,
 } from '../game/skills'
-import { actionProduces, actionSuccessChance } from './board'
 import { distillBurn, distillPerCraft, getDistillConfig } from './distill'
 import { consumeItems, grantItems } from './items'
 import { awardActionXp, loadProgress, type ProgressCtx } from './progress'
@@ -67,7 +67,7 @@ export interface IdleRigView {
   runProgress: number
   maxed: boolean
   intervalSec: number
-  yieldBonus: number
+  produceMultiplier: number
   xpPerCraft: number
   produces: Cost[]
   consumes: Cost[]
@@ -93,9 +93,9 @@ export function idleView(
     actionId: action.id,
     completions: rig.completions,
     ...rigClock(rig, action, now),
-    yieldBonus,
+    produceMultiplier: 1 + yieldBonus,
     xpPerCraft,
-    produces: actionProduces(action, rig.choice || undefined),
+    produces: actionExpected(action, rig.choice || undefined),
     consumes: actionConsumes(action, rig.choice || undefined),
     choice: rig.choice ?? '',
   }
@@ -219,7 +219,7 @@ function wholeXp(state: RigState, crafted: number): number {
 function recipeOf(action: ActionDef, choiceId: string | undefined, progress: ProgressCtx) {
   const { bonuses, levels } = progress
   return {
-    produces: actionProduces(action, choiceId),
+    produces: actionExpected(action, choiceId),
     consumes: actionConsumes(action, choiceId),
     tier: action.tier,
     yieldBonus: bonuses.yield(action.id) + bonuses.double(action.id),
@@ -324,7 +324,7 @@ interface StrikeReq {
 function drillStrike(db: Db, bus: EventBus, userId: UserId, req: StrikeReq): DrillStrike {
   const spent = actionConsumes(req.action, req.choiceId)
   if (spent.some((c) => spendableCount(db, userId, c.item) < c.count)) return NO_STRIKE
-  const chance = actionSuccessChance(db, userId, req.action, req.choiceId, req.levels)
+  const chance = actionOdds(req.action, req.choiceId, req.levels.get(req.action.id) ?? 1)
   const hit = chance >= 1 || req.rand() < chance
   const gained = hit
     ? grantItems(db, bus, userId, {
@@ -364,7 +364,7 @@ interface DrillStrike {
 
 function machinable(action: ActionDef, choiceId?: string): boolean {
   if (action.id === 'distill') return true
-  return actionConsumes(action, choiceId).length > 0 || actionProduces(action, choiceId).length > 0
+  return actionConsumes(action, choiceId).length > 0 || actionExpected(action, choiceId).length > 0
 }
 
 function drillResult(

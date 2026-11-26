@@ -38,7 +38,7 @@ export async function reinforceLapsedCard(
   await addExampleForCard(deps.db, userId, cardId, planner)
 }
 
-export async function addExampleForCard(
+async function addExampleForCard(
   db: Db,
   userId: UserId,
   cardId: CardId,

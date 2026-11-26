@@ -10,6 +10,7 @@ import { clipHash, findClip, legacyClipHash, writeClip } from './store'
 import type { App, Deps } from '../context'
 import { openDb } from '../db/client'
 import type { Db } from '../db/client'
+import { createDeck } from '../db/repo'
 import type { Role } from '../env'
 import { EventBus } from '../events'
 import { OpenRouter } from '../llm/openrouter'
@@ -165,11 +166,13 @@ test('enqueueUser queues the utterance cards that lack clips and skips single wo
 
 test('GET /api/cards/:id/audio streams a recorded voice', async () => {
   const { app, db, sqlite, audio } = makeApp()
-  const { cookie } = await signup(app, db)
+  const { cookie, userId } = await signup(app, db)
 
-  const deckRes = await app.request('/api/decks', auth(cookie, json({ name: 'Demo' })))
-  expect(deckRes.status).toBe(201)
-  const { deck } = (await deckRes.json()) as { deck: { id: string } }
+  const deck = createDeck(db, toUserId(userId), {
+    name: 'Demo',
+    sourceLang: 'en',
+    targetLang: 'zh',
+  })
 
   const cardRes = await app.request(
     `/api/decks/${deck.id}/cards`,
@@ -202,9 +205,12 @@ test('GET /api/cards/:id/audio is unauthorized without a session', async () => {
 
 test('POST /api/audio/backfill queues the user cards and reports the queue', async () => {
   const { app, db, sqlite, audio } = makeApp()
-  const { cookie } = await signup(app, db)
-  const deckRes = await app.request('/api/decks', auth(cookie, json({ name: 'Demo' })))
-  const { deck } = (await deckRes.json()) as { deck: { id: string } }
+  const { cookie, userId } = await signup(app, db)
+  const deck = createDeck(db, toUserId(userId), {
+    name: 'Demo',
+    sourceLang: 'en',
+    targetLang: 'zh',
+  })
   await app.request(`/api/decks/${deck.id}/cards`, auth(cookie, json({ front: 'cat', back: '猫' })))
   await drain(audio)
 

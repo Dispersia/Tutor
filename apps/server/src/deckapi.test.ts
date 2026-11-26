@@ -1,11 +1,9 @@
 import type { DeckId } from './ids'
 import { expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { createApp } from './app'
 import type { App, Deps } from './context'
 import { openDb } from './db/client'
-import { awaitDeckBuild, parseInstruction, PLAN_CHUNK } from './deck/generate'
+import { parseInstruction, PLAN_CHUNK } from './deck/generate'
 import type { PlannedCard, Planner, PlanRequest } from './deck/plan'
 import type { PitchFetcher, PitchWord } from './deck/pitch'
 import type { Role } from './env'
@@ -246,36 +244,6 @@ test('growing a deck keeps its original prompt and adds the topic', async () => 
   sqlite.close()
 })
 
-test('a new deck reuses the prompt from the previous one', async () => {
-  const { app, sqlite } = makeApp()
-  const cookie = await signup(app)
-  await app.request(
-    '/api/decks',
-    auth(
-      cookie,
-      json({ instruction: 'traditional Chinese, zhuyin only', targetLang: 'zh', count: 2 }),
-    ),
-  )
-
-  const settings = (await (await app.request('/api/settings', auth(cookie))).json()) as {
-    deckInstruction: string
-  }
-  expect(settings.deckInstruction).toBe('traditional Chinese, zhuyin only')
-
-  const apkg = readFileSync(join(import.meta.dir, 'anki/fixtures/sample.apkg'))
-  const form = new FormData()
-  form.set('file', new File([apkg], 'sample.apkg'))
-  form.set('targetLang', 'zh')
-  form.set('count', '4')
-  form.set('wordField', '0')
-  const res = await app.request('/api/decks/import', auth(cookie, { method: 'POST', body: form }))
-  expect(res.status).toBe(201)
-  const body = (await res.json()) as DeckBody
-  expect(body.deck.settings.instruction).toBe('traditional Chinese, zhuyin only')
-  await awaitDeckBuild(body.deck.id)
-  sqlite.close()
-})
-
 test('DELETE /api/decks/:id removes the deck and its cards', async () => {
   const { app, sqlite } = makeApp()
   const cookie = await signup(app)
@@ -494,152 +462,6 @@ test('PATCH a card metadata merges annotations and null removes one', async () =
   sqlite.close()
 })
 
-test('POST /api/decks/inspect previews the deck fields before import', async () => {
-  const { app, sqlite } = makeApp()
-  const cookie = await signup(app)
-  const apkg = readFileSync(join(import.meta.dir, 'anki/fixtures/sample.apkg'))
-  const form = new FormData()
-  form.set('file', new File([apkg], 'sample.apkg'))
-  form.set('targetLang', 'zh')
-  const res = await app.request('/api/decks/inspect', auth(cookie, { method: 'POST', body: form }))
-  expect(res.status).toBe(200)
-  const body = (await res.json()) as {
-    fields: string[]
-    noteCount: number
-    sample: string[][]
-    suggested: { wordField: number }
-  }
-  expect(body.fields).toEqual(['Word', 'Reading', 'Meaning'])
-  expect(body.noteCount).toBe(4)
-  expect(body.sample[0]).toEqual(['我', 'ㄨㄛˇ', 'I, me'])
-  expect(body.suggested.wordField).toBe(0)
-  sqlite.close()
-})
-
-test('POST /api/decks/import with kind=grammar makes taught grammar cards', async () => {
-  const { app, sqlite } = makeApp()
-  const cookie = await signup(app)
-  const apkg = readFileSync(join(import.meta.dir, 'anki/fixtures/sample.apkg'))
-  const form = new FormData()
-  form.set('file', new File([apkg], 'sample.apkg'))
-  form.set('targetLang', 'zh')
-  form.set('wordField', '0')
-  form.set('readingField', '1')
-  form.set('meaningField', '2')
-  form.set('kind', 'grammar')
-  const res = await app.request('/api/decks/import', auth(cookie, { method: 'POST', body: form }))
-  expect(res.status).toBe(201)
-  const body = (await res.json()) as DeckBody & { words: number; building: boolean }
-  expect(body.building).toBe(false)
-  expect(body.words).toBe(4)
-  const after = (await (
-    await app.request(`/api/decks/${body.deck.id}/cards`, auth(cookie))
-  ).json()) as {
-    cards: { type: string; front: string; back: string; payload: Record<string, unknown> }[]
-  }
-  expect(after.cards.length).toBe(4)
-  expect(after.cards.every((c) => c.type === 'grammar')).toBe(true)
-  expect(after.cards[0]!.back).toBe('我')
-  expect(after.cards[0]!.front).toBe('I, me')
-  expect(after.cards[0]!.payload.rule).toBe('I, me')
-  expect(after.cards[0]!.payload.answer).toBe('我')
-  sqlite.close()
-})
-
-test('POST /api/decks/import builds a whole deck from an uploaded Anki package', async () => {
-  const { app, sqlite } = makeApp()
-  const cookie = await signup(app)
-  const apkg = readFileSync(join(import.meta.dir, 'anki/fixtures/sample.apkg'))
-  const form = new FormData()
-  form.set('file', new File([apkg], 'sample.apkg'))
-  form.set('targetLang', 'zh')
-  form.set('wordField', '0')
-  form.set('readingField', '1')
-  form.set('meaningField', '2')
-  const res = await app.request('/api/decks/import', auth(cookie, { method: 'POST', body: form }))
-  expect(res.status).toBe(201)
-  const body = (await res.json()) as DeckBody & {
-    words: number
-    fields: string[]
-    building: boolean
-  }
-  expect(body.source).toBe('Imported Chinese')
-  expect(body.words).toBe(4)
-  expect(body.fields).toEqual(['Word', 'Reading', 'Meaning'])
-  expect(body.building).toBe(true)
-  expect(body.deck.settings.building).toBe(true)
-
-  await awaitDeckBuild(body.deck.id)
-  const after = (await (
-    await app.request(`/api/decks/${body.deck.id}/cards`, auth(cookie))
-  ).json()) as {
-    deck: { settings: Record<string, unknown> }
-    cards: { back: string; payload: Record<string, unknown> }[]
-  }
-  const vocab = after.cards.filter((c) => c.payload.template === 'vocab')
-  expect(vocab.map((c) => c.back)).toEqual(['我', '你', '喝', '茶'])
-  expect(after.cards.some((c) => c.payload.template === 'grammar')).toBe(true)
-  expect(after.deck.settings.building).toBe(false)
-
-  const grown = (await (
-    await app.request(
-      `/api/decks/${body.deck.id}/grow`,
-      auth(cookie, json({ count: 2, topic: 'restaurant' })),
-    )
-  ).json()) as DeckBody
-  expect(grown.source).toBe('uploaded deck')
-  sqlite.close()
-})
-
-test('POST /api/decks/import handles a modern schema-18 package', async () => {
-  const { app, sqlite } = makeApp()
-  const cookie = await signup(app)
-  const apkg = readFileSync(join(import.meta.dir, 'anki/fixtures/modern-schema18.apkg'))
-  const form = new FormData()
-  form.set('file', new File([apkg], 'modern.apkg'))
-  form.set('targetLang', 'zh')
-  form.set('wordField', '0')
-  form.set('readingField', '1')
-  form.set('meaningField', '2')
-  const res = await app.request('/api/decks/import', auth(cookie, { method: 'POST', body: form }))
-  expect(res.status).toBe(201)
-  const body = (await res.json()) as DeckBody
-  expect(body.source).toBe('Imported Modern')
-
-  await awaitDeckBuild(body.deck.id)
-  const after = (await (
-    await app.request(`/api/decks/${body.deck.id}/cards`, auth(cookie))
-  ).json()) as { cards: { back: string; payload: Record<string, unknown> }[] }
-  const vocab = after.cards.filter((c) => c.payload.template === 'vocab')
-  expect(vocab.map((c) => c.back)).toEqual(['我', '你', '喝', '茶'])
-  sqlite.close()
-})
-
-test('POST /api/decks/import detects the deck language when none is given', async () => {
-  const { app, sqlite } = makeApp()
-  const cookie = await signup(app)
-  const apkg = readFileSync(join(import.meta.dir, 'anki/fixtures/modern-schema18.apkg'))
-  const form = new FormData()
-  form.set('file', new File([apkg], 'modern.apkg'))
-  form.set('wordField', '0')
-  const res = await app.request('/api/decks/import', auth(cookie, { method: 'POST', body: form }))
-  expect(res.status).toBe(201)
-  const body = (await res.json()) as DeckBody
-  expect(body.deck.targetLang).toBe('zh')
-  await awaitDeckBuild(body.deck.id)
-  sqlite.close()
-})
-
-test('POST /api/decks/import rejects a non-package', async () => {
-  const { app, sqlite } = makeApp()
-  const cookie = await signup(app)
-  const form = new FormData()
-  form.set('file', new File([new Uint8Array([1, 2, 3, 4])], 'nope.apkg'))
-  const res = await app.request('/api/decks/import', auth(cookie, { method: 'POST', body: form }))
-  expect(res.status).toBe(502)
-  sqlite.close()
-})
-
 test('GET /api/decks exposes each deck settings', async () => {
   const { app, sqlite } = makeApp()
   const cookie = await signup(app)
@@ -769,38 +591,6 @@ test('a batch that overflows the model is retried smaller, not abandoned', async
   sqlite.close()
 })
 
-test('grow { all: true } finishes a partly-imported deck in the background', async () => {
-  const { app, sqlite } = makeApp()
-  const cookie = await signup(app)
-  const apkg = readFileSync(join(import.meta.dir, 'anki/fixtures/sample.apkg'))
-  const form = new FormData()
-  form.set('file', new File([apkg], 'sample.apkg'))
-  form.set('targetLang', 'zh')
-  form.set('count', '2')
-  form.set('wordField', '0')
-  const res = await app.request('/api/decks/import', auth(cookie, { method: 'POST', body: form }))
-  const body = (await res.json()) as DeckBody
-  await awaitDeckBuild(body.deck.id)
-
-  const grown = (await (
-    await app.request(`/api/decks/${body.deck.id}/grow`, auth(cookie, json({ all: true })))
-  ).json()) as { remaining: number; building: boolean }
-  expect(grown.remaining).toBe(2)
-  expect(grown.building).toBe(true)
-  await awaitDeckBuild(body.deck.id)
-
-  const after = (await (
-    await app.request(`/api/decks/${body.deck.id}/cards`, auth(cookie))
-  ).json()) as {
-    deck: { settings: Record<string, unknown> }
-    cards: { back: string; payload: Record<string, unknown> }[]
-  }
-  const vocab = after.cards.filter((c) => c.payload.template === 'vocab').map((c) => c.back)
-  expect(vocab).toEqual(['我', '你', '喝', '茶'])
-  expect(after.deck.settings.building).toBe(false)
-  sqlite.close()
-})
-
 test('parseInstruction honours a ruled-out variant and only whole pitch words', () => {
   const variant = (s: string) => parseInstruction(s, 'zh').variant
   expect(variant('Simplified characters please, not traditional')).toBe('simplified')
@@ -819,41 +609,4 @@ test('parseInstruction honours a ruled-out variant and only whole pitch words', 
   expect(pitch('show the tones')).toBe(true)
   expect(pitch('add tone contours')).toBe(true)
   expect(pitch('アクセント付き')).toBe(true)
-})
-
-test('an import resumed later still builds under the rules it was imported with', async () => {
-  const seen: PlanRequest[] = []
-  const recording: Planner = async (req) => {
-    seen.push(req)
-    return planner(req)
-  }
-  const { app, sqlite } = makeApp({ planner: recording })
-  const cookie = await signup(app)
-  const apkg = readFileSync(join(import.meta.dir, 'anki/fixtures/sample.apkg'))
-  const form = new FormData()
-  form.set('file', new File([apkg], 'sample.apkg'))
-  form.set('targetLang', 'zh')
-  form.set('instruction', 'Simplified characters with pinyin, not traditional. Show the tones.')
-  form.set('count', '2')
-  form.set('wordField', '0')
-  form.set('readingField', '1')
-  form.set('meaningField', '2')
-  const res = await app.request('/api/decks/import', auth(cookie, { method: 'POST', body: form }))
-  const body = (await res.json()) as DeckBody
-  await awaitDeckBuild(body.deck.id)
-  expect(body.deck.settings).toMatchObject({ variant: 'simplified', readingScript: 'pinyin' })
-  expect(body.deck.settings.hints).toBeUndefined()
-
-  seen.length = 0
-  await app.request(`/api/decks/${body.deck.id}/grow`, auth(cookie, json({ all: true })))
-  await awaitDeckBuild(body.deck.id)
-  expect(seen[0]!.words).toEqual(['喝', '茶'])
-  expect(seen[0]).toMatchObject({
-    variant: 'simplified',
-    readingScript: 'pinyin',
-    pitchAccent: true,
-  })
-  expect(Object.keys(seen[0]!.hints ?? {})).toEqual(expect.arrayContaining(['喝', '茶']))
-  expect(seen[0]!.hints!['茶']!.meaning).toBeTruthy()
-  sqlite.close()
 })

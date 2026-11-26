@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 
-export const repoRoot = resolve(import.meta.dir, '../../..')
+const repoRoot = resolve(import.meta.dir, '../../..')
 
 function loadEnvFile(path: string): void {
   if (!existsSync(path)) return

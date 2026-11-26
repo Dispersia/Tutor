@@ -31,7 +31,7 @@ export interface AttemptInput {
   latencyMs?: number
 }
 
-export function recordAttempt(deps: Deps, input: AttemptInput): void {
+export function addReviewRow(deps: Deps, input: AttemptInput): void {
   addReview(deps.db, {
     cardId: input.card.id,
     userId: input.userId,

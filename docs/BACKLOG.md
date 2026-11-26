@@ -8,8 +8,9 @@
 Everything here passes its tests but has only met fakes.
 
 1. **Back up `tutor.db`**, then start the new build. It applies migrations 0021
-   (lessons keyed by deck id) and 0022 (private cards), and a one-time startup
-   step that turns legacy equipment counts into gear pieces.
+   (lessons keyed by deck id), 0022 (private cards) and 0027 (drops the dead
+   `attempts` table and five write-only columns), plus a one-time startup step
+   that turns legacy equipment counts into gear pieces.
 2. **Update the Nix dependency hash.** `packages/speech` and `packages/ui` were
    removed, which changes what the dependency derivation produces. If
    `just package` reports a hash mismatch, paste the hash it prints into
@@ -17,7 +18,9 @@ Everything here passes its tests but has only met fakes.
 3. **The speech gateway (`python/speech/server.py`)**: temp-file cleanup, sync
    upload handlers, the upload and text size caps, the `reference` field on
    `/v1/asr`, and the new `/admin/shutdown`. No Python or MLX ran on the review
-   machine. Exercise `/v1/asr`, `/v1/assess` and `/v1/tts` once.
+   machine. Exercise `/v1/asr`, `/v1/assess` and `/v1/tts` once. (The dead
+   `/v1/align` route and the never-loaded VAD checkpoint are gone; the aligner
+   itself is still used by `/v1/assess`.)
 4. **Clip grading** against the real recogniser: watch `rejected` in
    `GET /api/audio/status` and the `[audio] take n/3 … said …` log lines after the
    next backfill — they are the per-language pass rate.
@@ -31,7 +34,7 @@ Everything here passes its tests but has only met fakes.
    - the mic is released when leaving Chat mid-recording;
    - an expired session redirects to login;
    - the service worker: offline open, notification click, the reload after a deploy;
-   - the two dialogs trap focus.
+   - the four dialogs now trap focus and restore it — confirm on a phone.
 8. **CI**: `.github/workflows/ci.yml` runs `bun run verify` on push. It has not
    run yet; it needs Git LFS available to the runner.
 
@@ -63,11 +66,18 @@ Everything here passes its tests but has only met fakes.
   playback (chat replies, "hear it" on a card) is not graded. If a language
   rejects often, record the word three times in one take and cut out the middle
   one with the aligner (not built).
-- **An Anki collection with no declared size** is still decompressed without a
-  cap (the frame header check only helps when the size is declared).
-  `srv/anki/parse.ts`
 - **`equipment.instance_id` is still nullable** in the schema, though nothing
   writes null any more.
+- **Chat sessions are never closed.** `sessions.ended_at` was write-only and was
+  dropped with migration 0027, so a conversation stays open forever and History
+  has no notion of a finished session.
+- **`POST /api/decks` now always builds a path deck** (so it needs a key); only
+  the `instruction` branch still creates a deck from a prompt, and there is no
+  way to create an empty deck through the API any more.
+- **FSRS `EASY` is unreachable in production**: `ratingFromScore` answers
+  AGAIN/HARD/GOOD, and the `EASY` branches in `schedule()` are only exercised by
+  tests. Every drill scores at most 100, and a perfect score is deliberately
+  `GOOD` so a new card still graduates on its second answer.
 
 ### Web
 
@@ -87,7 +97,11 @@ Everything here passes its tests but has only met fakes.
   curated lists and the deck lexicon (`ime/candidates.ts`); a bundled frequency
   list would order them better.
 - **Haptics are Android-only** (`navigator.vibrate`); iOS Safari ignores them, so
-  the slider does nothing there. The setting was never felt on a device.
+  the slider does nothing there. The setting was never felt on a device. They fire
+  on answer, retry and next taps in practice and combat, and on the in-app IME
+  keypad.
+- **The IME field is `readonly` with `inputmode="none"`** (`ime/ImeInput.svelte`),
+  so paste, caret movement and text selection are lost inside it.
 
 ### Speech gateway (`python/speech`)
 
@@ -121,24 +135,19 @@ Everything here passes its tests but has only met fakes.
 - `checkLessonCompletion` reloads the deck and the SRS map on every review.
   `srv/services/curriculum.ts`
 - `loadPlayerCtx` still reads `action_progress` in the settle, the progress view
-  and the band view; `loadPlayerCombat` reads equipment three times.
-- Anki import still parses the archive twice (inspect, then import).
+  and the band view.
 
 ## 5. Refactors worth scheduling
 
 1. **Over-fragmentation** (see §2.3): `combatResolve.ts` moves one exchange
-   through nine single-use interfaces; `practice/next.ts` re-packs one request
-   through four types.
+   through nine single-use interfaces.
 2. **A few direct reading-key reads remain** outside `text/readings.ts`:
    `srv/deck/pitch.ts`, `srv/audio/service.ts`, `srv/routes/audio.ts`.
 3. **Quality gates**: knip never fails (unused exports are advisory); nothing
    lints or tests the Python; ESLint is not type-aware (no
    `no-floating-promises`); there is no pre-commit hook.
 4. **Docs**: `design/tutor/` is a static prototype with an older palette than the
-   shipped one — archive or delete it. `NOTICE.md` says the bundled fonts are
-   under the SIL Open Font License from memory; confirm against each family's
-   licence file.
-5. **The custom-deck and Anki-import routes are unreachable from the UI** now that
-   the app is paths only: `routes/decks/import.ts`, the custom/topic branches of
-   `routes/decks/create.ts`, `deck/create.ts` and `anki/` are dead. Delete them
-   and their tests.
+   shipped one — archive or delete it. `.impeccable/design.json` (design-tool
+   state) is tracked while `.impeccable/review/` is ignored. `NOTICE.md` says the
+   bundled fonts are under the SIL Open Font License from memory; confirm against
+   each family's licence file.

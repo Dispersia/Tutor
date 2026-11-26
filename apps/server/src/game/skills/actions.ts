@@ -3,16 +3,14 @@ import type { ActionChoice, ActionDef, Cost, LootEntry, SkillId, UnlockReq } fro
 import { ACTIONS } from './actions.data'
 import { SKILLS } from './skills.data'
 
-export function weaponSkill(tags: string[] | undefined): SkillId {
-  if (tags?.includes('bow')) return 'ranged'
-  if (tags?.includes('staff')) return 'magic'
-  return 'strength'
+export function bandLevelRequired(action: ActionDef): number {
+  return action.bandLevel ?? 1
 }
 
 export function actionRequiredLevel(action: ActionDef): number {
   if (action.band) {
     const band = BAND_BY_ID.get(action.band)
-    if (band) return band.tier * 1000 + (action.bandLevel ?? 1)
+    if (band) return band.tier * 1000 + bandLevelRequired(action)
   }
   return (action.requires ?? []).reduce((n, r) => Math.max(n, r.level), 1)
 }
@@ -31,17 +29,16 @@ function sortedActions(skillId: SkillId): ActionDef[] {
   )
 }
 
+export function skillLevelOf(skillId: SkillId, levels: Map<string, number>): number {
+  const acts = actionsForSkill(skillId)
+  if (!acts.length) return 1
+  const total = acts.reduce((n, a) => n + Math.max(1, levels.get(a.id) ?? 1), 0)
+  return Math.round(total / acts.length)
+}
+
 export function skillLevelsFrom(levels: Map<string, number>): Map<SkillId, number> {
   const out = new Map<SkillId, number>()
-  for (const s of SKILLS) {
-    const acts = actionsForSkill(s.id)
-    if (!acts.length) {
-      out.set(s.id, 1)
-      continue
-    }
-    const total = acts.reduce((n, a) => n + Math.max(1, levels.get(a.id) ?? 1), 0)
-    out.set(s.id, Math.round(total / acts.length))
-  }
+  for (const s of SKILLS) out.set(s.id, skillLevelOf(s.id, levels))
   return out
 }
 
@@ -49,11 +46,7 @@ export function missingUnlocks(action: ActionDef, levelOf: (s: SkillId) => numbe
   return (action.requires ?? []).filter((r) => levelOf(r.skill) < r.level)
 }
 
-export function missingMaterials(action: ActionDef, countOf: (i: string) => number): Cost[] {
-  return (action.consumes ?? []).filter((c) => countOf(c.item) < c.count)
-}
-
-export function rollTable(table: LootEntry[], rand: () => number = Math.random): Cost {
+function rollTable(table: LootEntry[], rand: () => number = Math.random): Cost {
   const total = table.reduce((n, e) => n + Math.max(0, e.weight), 0)
   let r = rand() * total
   for (const e of table) {
@@ -64,7 +57,7 @@ export function rollTable(table: LootEntry[], rand: () => number = Math.random):
   return { item: last.item, count: last.count ?? 1 }
 }
 
-export function tableExpected(table: LootEntry[]): Cost[] {
+function tableExpected(table: LootEntry[]): Cost[] {
   const total = table.reduce((n, e) => n + Math.max(0, e.weight), 0) || 1
   const out = new Map<string, number>()
   for (const e of table) {

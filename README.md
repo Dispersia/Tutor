@@ -21,7 +21,7 @@ Requires [Nix](https://nixos.org/download) with flakes enabled.
 **Run it (packaged):**
 
 ```bash
-nix run .#fetch-models   # one-time: cache the MLX weights (~11 GB) in ~/.local/share/tutor/models
+nix run .#fetch-models   # one-time: cache the MLX weights (~6 GB) in ~/.local/share/tutor/models
 nix run .                # build + run; first run creates the speech venv (uv sync)
 ```
 
@@ -61,7 +61,6 @@ those keys at rest.
 | `GET/POST /api/decks`, `GET /api/decks/:id/cards` | decks, built on demand from an instruction + a pulled frequency list |
 | `POST /api/decks/:id/grow` · `PATCH /api/decks/:id` | grow a deck organically (optionally on a topic) · set its reading rules |
 | `POST /api/decks/:id/pitch` | backfill pitch-accent metadata for the deck's existing cards |
-| `POST /api/decks/import` | build a deck from an uploaded Anki `.apkg` (its words are the source) |
 | `GET /api/exercises` | the exercise registry |
 | `POST /api/practice/next` · `/api/practice/grade` · `/api/practice/speak` | next drill · grade it (+XP) · pronunciation |
 | `POST /api/practice/quiet` | "can't speak or listen right now": hide listen/speak cards for 15 min |
@@ -69,7 +68,7 @@ those keys at rest.
 | `POST /api/skills/talents` · `/api/skills/equip` | choose a talent · equip/unequip gear |
 | `GET /api/combat` · `POST /api/combat/{start,hit}` | monsters, player HP · start a fight · land a hit |
 | `GET /api/stats` | XP, level, streak |
-| `GET /api/speech/health` · `POST /api/speech/{tts,asr,align,assess,wake,unload}` | speech, lazily started/stopped |
+| `GET /api/speech/health` · `POST /api/speech/{tts,asr,wake,unload}` | speech, lazily started/stopped |
 
 Decks are **not pre-seeded**. Describe one in the Learn tab (e.g. "a traditional
 Chinese frequency list, with grammar, using only traditional characters and
@@ -78,15 +77,6 @@ zhuyin") and the server pulls a real frequency list
 then writes cards with the card templates — strictly one new word at a time
 (n+1), following the deck's own reading rules. Decks grow organically: ask for a
 topic ("ordering at a restaurant") and it appends another n+1 batch.
-
-You can also **import an Anki deck** (`.apkg`) — its words become the source
-instead of a frequency list, and the templates write the cards from them. The
-**whole deck** is imported: its ordered words are the starter and the generator
-weaves sentence and grammar cards through them, filling the deck in the
-background so the request returns at once. The importer reads the collection
-straight from the zip (no dependency), shows the deck's fields with a preview,
-and lets you **pick which field is the real word** (plus optional
-reading/meaning fields) before it builds anything. No guessing.
 
 Adding an exercise type takes a backend `ExerciseDef` + a Svelte component keyed by
 the same `id` — no core changes (see `docs/DESIGN.md` §11.2). Adding a profession
@@ -104,12 +94,15 @@ imports = [ inputs.tutor.darwinModules.default ];
 services.tutor = {
   enable = true;
   tailscaleServe.enable = true;                                   # HTTPS on your tailnet
-  environmentFile = "/Users/dispersias/.config/tutor/env";
+  environmentFile = "/Users/<you>/.config/tutor/env";
   # caddy.enable = true; caddy.hostname = "aarons-mac-mini.tail7c1ddb.ts.net";
 };
 ```
 
-Or ad-hoc: `just service-install && just tailscale-serve`. Full details in
+Or ad-hoc: `just deploy` for the `/tutor` gateway setup described in `AGENTS.md`,
+or `just service-install` plus `just tailscale-serve` only when you serve the app
+at the tailnet root (that path needs the `just package-root` build; the `/tutor`
+build loads a blank page there). Full details in
 [`deploy/README.md`](deploy/README.md).
 
 ## Layout

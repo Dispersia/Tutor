@@ -28,17 +28,16 @@ function visibleTo(userId: UserId | undefined) {
   )
 }
 
-export function addCard(db: Db, userId: UserId, c: NewCard) {
-  const row = cardRow(userId, c)
+export function addCard(db: Db, _userId: UserId, c: NewCard) {
+  const row = cardRow(c)
   db.insert(cards).values(row).run()
   return row
 }
 
-function cardRow(userId: UserId, c: NewCard) {
+function cardRow(c: NewCard) {
   return {
     id: newId<CardId>(),
     deckId: c.deckId,
-    userId,
     privateTo: c.privateTo ?? null,
     type: c.type ?? 'vocab',
     sourceLang: c.sourceLang,
@@ -63,9 +62,13 @@ export interface CardPatch {
   metadata?: CardMetadata
 }
 
-export function updateCard(db: Db, cardId: CardId, patch: CardPatch): void {
+export function updateCard(db: Db, cardId: CardId, patch: CardPatch, userId?: UserId): void {
   const set = cardSet(patch)
-  if (Object.keys(set).length > 0) db.update(cards).set(set).where(eq(cards.id, cardId)).run()
+  if (Object.keys(set).length === 0) return
+  db.update(cards)
+    .set(set)
+    .where(and(eq(cards.id, cardId), visibleTo(userId)))
+    .run()
 }
 
 function cardSet(patch: CardPatch): Partial<typeof cards.$inferInsert> {

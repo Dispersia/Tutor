@@ -1,6 +1,6 @@
 const DEFAULT_BASE = 'https://openrouter.ai/api/v1'
 
-export const JSON_TIMEOUT_MS = 120_000
+const JSON_TIMEOUT_MS = 120_000
 
 export interface Usage {
   promptTokens: number

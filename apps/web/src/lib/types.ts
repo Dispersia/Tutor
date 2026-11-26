@@ -1,3 +1,7 @@
+import type { Card, PitchContour, PitchLevel, TemplateKind } from '@tutor/core'
+
+export type { Card, PitchContour, PitchLevel }
+
 export interface PublicUser {
   id: string
   username: string | null
@@ -14,7 +18,6 @@ export interface ChatSession {
   lang: string | null
   title: string | null
   startedAt: number
-  endedAt: number | null
 }
 
 export interface Message {
@@ -60,54 +63,6 @@ export interface ExerciseInfo {
   needsAudio?: boolean
   disabled?: boolean
   template?: TemplateKind
-}
-
-export type TemplateKind = 'vocab' | 'spoken' | 'listening' | 'grammar' | 'sentence'
-
-export interface TemplateField {
-  path: string
-  label: string
-  kind: string
-  required: boolean
-  description: string
-}
-
-export interface CardTemplate {
-  kind: TemplateKind
-  title: string
-  summary: string
-  modality: string
-  fields: TemplateField[]
-  exercises: string[]
-}
-
-export type PitchLevel = 'H' | 'L'
-
-export interface PitchContour {
-  levels: PitchLevel[]
-  drop?: number | null
-  syllables?: string[]
-}
-
-export interface CardMetadata {
-  pitch?: PitchContour
-  [key: string]: unknown
-}
-
-export interface Card {
-  id: string
-  deckId: string | null
-  type: string
-  sourceLang: string
-  targetLang: string
-  front: string
-  back: string
-  readings: Record<string, string>
-  tags: string[]
-  payload: Record<string, unknown>
-  metadata: CardMetadata
-  origin: string
-  createdAt: number
 }
 
 export type ModKind = 'yield' | 'double' | 'xp' | 'global_xp' | 'damage' | 'drop' | 'hp' | 'coins'

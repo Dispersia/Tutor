@@ -27,13 +27,6 @@ export interface Learner {
   level: string
 }
 
-export interface TutorConfig {
-  roles: Record<LlmRole, string>
-  voiceMode: 'preset' | 'design'
-  voices: Record<Lang, string>
-  idleTimeoutMs: number
-}
-
 export type LlmRole = 'conversation' | 'judge' | 'generator' | 'translator'
 
 export interface ExerciseInstance {

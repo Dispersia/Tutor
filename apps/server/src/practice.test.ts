@@ -8,7 +8,7 @@ import { addCard, createDeck, listUsers, upsertSrs } from './db/repo'
 import type { Role } from './env'
 import { EventBus } from './events'
 import { OpenRouter } from './llm/openrouter'
-import { seedStarterDecks } from './seed/service'
+import { createFixtureDecks } from './deckFixture'
 import { SpeechSupervisor } from './speech/supervisor'
 
 const defaults: Record<Role, string> = {
@@ -53,7 +53,7 @@ async function signup(app: App, db: Db, username = 'alice') {
   const res = await app.request('/api/auth/register', json({ username, password: 'password123' }))
   const cookie = res.headers.getSetCookie()[0]!.split(';')[0]!
   const { user } = (await res.json()) as { user: { id: UserId } }
-  seedStarterDecks(db, user.id)
+  createFixtureDecks(db, user.id)
   return cookie
 }
 
@@ -84,25 +84,6 @@ test('decks are seeded per user and list their cards', async () => {
     cards: { back: string; front: string }[]
   }
   expect(cards.cards.length).toBeGreaterThan(40)
-  sqlite.close()
-})
-
-test('templates: the reusable card templates are exposed', async () => {
-  const { app, db, sqlite } = makeApp()
-  const cookie = await signup(app, db)
-  const res = await app.request('/api/templates', auth(cookie))
-  expect(res.status).toBe(200)
-  const body = (await res.json()) as {
-    templates: { kind: string; exercises: string[]; fields: unknown[] }[]
-  }
-  expect(body.templates.map((t) => t.kind)).toEqual([
-    'vocab',
-    'listening',
-    'spoken',
-    'sentence',
-    'grammar',
-  ])
-  expect(body.templates.every((t) => t.exercises.length > 0 && t.fields.length > 0)).toBe(true)
   sqlite.close()
 })
 
@@ -610,7 +591,7 @@ test('practice: nothing due and no new words means done, never the same card aga
   )
   const cookie = res.headers.getSetCookie()[0]!.split(';')[0]!
   const { user } = (await res.json()) as { user: { id: UserId } }
-  seedStarterDecks(db, user.id)
+  createFixtureDecks(db, user.id)
 
   const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
     decks: { id: string; level: string }[]

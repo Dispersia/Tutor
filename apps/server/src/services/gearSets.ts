@@ -1,21 +1,11 @@
 import type { UserId, GearInstanceId, GearSetId } from '../ids'
-import {
-  addGearSet,
-  deleteGearSet,
-  getGearInstance,
-  listEquipment,
-  listGearSets,
-  setEquipment,
-} from '../db/repo'
+import { addGearSet, deleteGearSet, listEquipment, listGearSets, setEquipment } from '../db/repo'
 import type { Db } from '../db/client'
 import { atomic } from '../db/repo/helpers'
 import type { EventBus } from '../events'
-import { meetsRequirements } from '../game/gear'
 import { ITEM_BY_ID, SLOTS, type CombatStyle } from '../game/skills'
 import { loadPlayerCombat } from './combat'
-import { requirementView, type GearRequirementView } from './gear'
-import { spareGearPiece } from './gearInstances'
-import { skillLevelOf } from './progress'
+import { equipItem, requirementView, type GearRequirementView } from './gear'
 
 export interface GearSetView {
   id: GearSetId
@@ -106,42 +96,22 @@ interface SetSlotReq {
 }
 
 function equipFromSet(db: Db, bus: EventBus, req: SetSlotReq): GearSetSkip | undefined {
-  const { userId, slotId, entry } = req
-  const item = ITEM_BY_ID.get(entry.itemId)
-  if (item) {
-    const gate = meetsRequirements(item, (skill) => skillLevelOf(db, userId, skill, req.levels))
-    if (!gate.ok) return skipView(slotId, entry.itemId, item, gate.missing)
-  }
-  return equipInstance(db, bus, userId, slotId, entry)
+  const res = equipItem(db, bus, req.userId, req.entry.itemId, {
+    instanceId: req.entry.instanceId ?? undefined,
+    targetSlot: req.slotId,
+    levels: req.levels,
+  })
+  if (res.ok || !res.missing) return undefined
+  return skipView(req.slotId, req.entry.itemId, res.missing)
 }
 
 function skipView(
   slot: string,
   itemId: string,
-  item: NonNullable<ReturnType<typeof ITEM_BY_ID.get>>,
   missing: Parameters<typeof requirementView>[0],
 ): GearSetSkip {
-  return { slot, itemId, name: item.name, missing: requirementView(missing) }
-}
-
-function equipInstance(
-  db: Db,
-  bus: EventBus,
-  userId: UserId,
-  slotId: string,
-  entry: SetEntry,
-): undefined {
-  const saved = entry.instanceId ? getGearInstance(db, userId, entry.instanceId) : undefined
-  const instance = saved ?? spareOf(db, userId, entry.itemId)
-  if (!instance) return undefined
-  setEquipment(db, userId, slotId, instance.itemId, instance.id)
-  bus.emit('item.equipped', { userId, itemId: instance.itemId, slot: slotId })
-  return undefined
-}
-
-function spareOf(db: Db, userId: UserId, itemId: string) {
-  const spare = spareGearPiece(db, userId, itemId)
-  return spare ? getGearInstance(db, userId, spare) : undefined
+  const name = ITEM_BY_ID.get(itemId)?.name ?? itemId
+  return { slot, itemId, name, missing: requirementView(missing) }
 }
 
 export function removeGearSet(db: Db, userId: UserId, setId: GearSetId): void {

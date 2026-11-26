@@ -1,6 +1,7 @@
+import { combatStyleForSkill } from './skills'
 import type { ArmourType, CombatStyle, GearStats, ItemDef, PrimaryStat, SkillId } from './skills'
 
-export const EMPTY_STATS: GearStats = {
+const EMPTY_STATS: GearStats = {
   strength: 0,
   agility: 0,
   intellect: 0,
@@ -10,7 +11,7 @@ export const EMPTY_STATS: GearStats = {
   mastery: 0,
 }
 
-export const STAT_IDS = [
+const STAT_IDS = [
   'strength',
   'agility',
   'intellect',
@@ -32,7 +33,7 @@ export function addStats(a: GearStats, b: Partial<GearStats>): GearStats {
   }
 }
 
-export function sumStats(stats: GearStats): number {
+function sumStats(stats: GearStats): number {
   return STAT_IDS.reduce((sum, id) => sum + stats[id], 0)
 }
 
@@ -40,7 +41,7 @@ export function gearScore(stats: GearStats, armour: number, power: number): numb
   return Math.round(sumStats(stats) + armour * 2 + power * 2)
 }
 
-export interface SetBonusTier {
+interface SetBonusTier {
   pieces: number
   label: string
   stats?: Partial<GearStats>
@@ -48,14 +49,14 @@ export interface SetBonusTier {
   powerPct?: number
 }
 
-export interface GearSetDef {
+interface GearSetDef {
   id: string
   name: string
   armourType: ArmourType
   tiers: SetBonusTier[]
 }
 
-export const GEAR_SETS: GearSetDef[] = [
+const GEAR_SETS: GearSetDef[] = [
   {
     id: 'vanguard',
     name: 'Vanguard',
@@ -143,32 +144,26 @@ function applyTier(
   }
 }
 
-export function combatStyleForSkill(skill: SkillId): CombatStyle {
-  if (skill === 'ranged') return 'ranged'
-  if (skill === 'magic') return 'magic'
-  return 'melee'
-}
-
-export function primaryForCombatStyle(style: CombatStyle): PrimaryStat {
+function primaryForCombatStyle(style: CombatStyle): PrimaryStat {
   if (style === 'ranged') return 'agility'
   if (style === 'magic') return 'intellect'
   return 'strength'
 }
 
-export function ratingToPercent(rating: number, scale = 250): number {
+function ratingToPercent(rating: number, scale = 250): number {
   if (rating <= 0) return 0
   return (100 * rating) / (rating + scale)
 }
 
-export function critPercent(crit: number): number {
+function critPercent(crit: number): number {
   return ratingToPercent(crit, 220)
 }
 
-export function hastePercent(haste: number): number {
+function hastePercent(haste: number): number {
   return ratingToPercent(haste, 300)
 }
 
-export function masteryPercent(mastery: number): number {
+function masteryPercent(mastery: number): number {
   return ratingToPercent(mastery, 260)
 }
 
@@ -220,7 +215,7 @@ export function requiredLevelFor(itemLevel: number): number {
   return REQUIREMENT_BY_ITEM_LEVEL[level] ?? level * 5
 }
 
-export function requirementSkill(item: ItemDef): SkillId | null {
+function requirementSkill(item: ItemDef): SkillId | null {
   if (!item.slot) return null
   if (item.slot === 'mainHand') {
     const style = item.combatStyle ?? 'melee'

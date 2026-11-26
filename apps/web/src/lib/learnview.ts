@@ -14,12 +14,6 @@ export const LANGUAGES = [
   { code: 'ru', label: 'Russian' },
 ] as const
 
-export function langLabel(code: string): string {
-  return LANGUAGES.find((l) => l.code === code)?.label ?? code
-}
-
-export const cell = (value: string | undefined): string => (value ?? '').slice(0, 40) || '—'
-
 const rank = (level: string | null): number => (level === 'zhfreq' ? 0 : level === 'jafreq' ? 1 : 2)
 
 export function orderDecks(list: CurriculumDeck[], activeDeckId: string | null): CurriculumDeck[] {

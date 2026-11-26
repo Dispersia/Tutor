@@ -20,6 +20,7 @@
   import StatChips from '#lib/components/inventory/StatChips.svelte'
   import SetBonusList from '#lib/components/inventory/SetBonusList.svelte'
   import SavedSets from '#lib/components/inventory/SavedSets.svelte'
+  import ConfirmDialog from '#lib/components/ConfirmDialog.svelte'
   import {
     baseEquipmentOf,
     candidatesIn,
@@ -35,6 +36,8 @@
   let pickedSlot = $state<string | null>(null)
   let setName = $state('')
   let enchantPick = $state<Record<string, string>>({})
+  let notice = $state('')
+  let pending = $state<{ message: string; label: string; run: () => void } | null>(null)
 
   const itemMap = $derived(new Map((data?.items ?? []).map((i) => [i.id, i])))
   const gear = $derived(data?.gear ?? [])
@@ -56,6 +59,7 @@
     if (busy) return
     busy = true
     loadout.error = ''
+    notice = ''
     try {
       await action()
       await loadout.refresh()
@@ -64,6 +68,16 @@
     } finally {
       busy = false
     }
+  }
+
+  function ask(message: string, label: string, run: () => void) {
+    pending = { message, label, run }
+  }
+
+  function confirmPending() {
+    const p = pending
+    pending = null
+    p?.run()
   }
 
   function enchant(g: GearInstanceDTO, enchantId: string) {
@@ -97,7 +111,7 @@
       const res = await applyGearSet(setId)
       const skipped = res.skipped ?? []
       if (skipped.length > 0) {
-        loadout.error = `Some pieces are locked: ${skipped
+        notice = `Some pieces are locked: ${skipped
           .map(
             (s) => `${s.name} (needs ${s.missing.map((m) => `${m.name} ${m.level}`).join(', ')})`,
           )
@@ -107,18 +121,21 @@
   }
 
   function removeSet(setId: string) {
-    if (!confirm('Delete this saved set?')) return
-    void run(() => deleteGearSet(setId))
+    ask('Delete this saved set?', 'Delete set', () => {
+      void run(() => deleteGearSet(setId))
+    })
   }
 
   function discard(instanceId: string) {
-    if (!confirm('Discard this piece? This cannot be undone.')) return
-    void run(() => discardGear(instanceId))
+    ask('Discard this piece? This cannot be undone.', 'Discard', () => {
+      void run(() => discardGear(instanceId))
+    })
   }
 
   function salvage(instanceId: string) {
-    if (!confirm('Salvage this piece into materials?')) return
-    void run(() => salvageGear(instanceId))
+    ask('Salvage this piece into materials?', 'Salvage', () => {
+      void run(() => salvageGear(instanceId))
+    })
   }
 </script>
 
@@ -129,7 +146,7 @@
       <p class="sub mt-2">Equip your paper doll and save loadouts for each combat style.</p>
     </div>
     <div class="shrink-0 text-center">
-      <div class="seal h-14 w-14" aria-label="Gear score {totals.score}">
+      <div class="seal h-14 w-14" role="img" aria-label="Gear score {totals.score}">
         <span class="display text-lg leading-none font-bold">{totals.score}</span>
       </div>
       <p class="seal__label" aria-hidden="true">Score</p>
@@ -139,6 +156,10 @@
 
 {#if loadout.error}
   <p class="banner mt-3" style={accentStyle(ACCENT.ember)} role="alert">{loadout.error}</p>
+{/if}
+
+{#if notice}
+  <p class="banner mt-3" style={accentStyle(ACCENT.brass)} role="status">{notice}</p>
 {/if}
 
 {#if loadout.loading}
@@ -211,3 +232,13 @@
     </div>
   </div>
 {/if}
+
+<ConfirmDialog
+  open={pending !== null}
+  title="Are you sure?"
+  message={pending?.message ?? ''}
+  confirmLabel={pending?.label ?? 'Confirm'}
+  {busy}
+  onConfirm={confirmPending}
+  onCancel={() => (pending = null)}
+/>

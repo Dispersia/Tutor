@@ -1,4 +1,5 @@
 import { api } from './api'
+import { toast } from './toast.svelte'
 import type { Deck } from './exercises'
 
 class ActiveDeckState {
@@ -23,17 +24,22 @@ export async function loadActiveDeck(): Promise<void> {
     const saved = settings.study?.activeDeckId ?? null
     activeDeck.id = saved && decks.some((d) => d.id === saved) ? saved : null
   } catch {
+    toast('Could not load your decks', 'error')
   } finally {
     activeDeck.loaded = true
   }
 }
 
 export async function setActiveDeck(id: string | null): Promise<void> {
+  const previous = activeDeck.id
   activeDeck.id = id
   try {
     await api('/api/settings', {
       method: 'PUT',
       body: JSON.stringify({ study: { activeDeckId: id ?? '' } }),
     })
-  } catch {}
+  } catch {
+    activeDeck.id = previous
+    toast('Could not save the active deck', 'error')
+  }
 }

@@ -8,7 +8,7 @@ import { BLANK, distinctReading, readingsShown, wordView } from '../shared'
 
 export const INTRODUCE_ID = 'introduce'
 
-export function exampleFor(
+function exampleFor(
   ctx: ExerciseContext,
 ): { text: string; reading: string; gloss: string; target: string } | undefined {
   if (ctx.card.targetLang !== 'zh') return undefined
@@ -26,13 +26,13 @@ export function exampleFor(
   }
 }
 
-export interface GrammarIntro {
+interface GrammarIntro {
   rule: string
   explanation?: string
   example?: { text: string; target?: string; gloss?: string; reading?: string }
 }
 
-export function grammarFor(ctx: ExerciseContext): GrammarIntro | undefined {
+function grammarFor(ctx: ExerciseContext): GrammarIntro | undefined {
   if (!isGrammar(ctx)) return undefined
   return {
     rule: ctx.card.front,

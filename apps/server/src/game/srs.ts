@@ -50,11 +50,11 @@ const core = FSRS6Model.create({
   },
 })
 
-export const S_MIN = core.bounds.sMin
-export const S_MAX = core.bounds.sMax
-export const D_MIN = core.bounds.dMin
-export const D_MAX = core.bounds.dMax
-export const MAX_INTERVAL_DAYS = 36500
+const S_MIN = core.bounds.sMin
+const S_MAX = core.bounds.sMax
+const D_MIN = core.bounds.dMin
+const D_MAX = core.bounds.dMax
+const MAX_INTERVAL_DAYS = 36500
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 
@@ -64,23 +64,23 @@ export function retrievability(s: number, elapsedDays: number): number {
   return clamp(core.algorithm.forgetting_curve(elapsedDays, s), 0, 1)
 }
 
-export function initialStability(rating: Rating): number {
+function initialStability(rating: Rating): number {
   return clamp(core.algorithm.init_stability(rating), S_MIN, S_MAX)
 }
 
-export function initialDifficulty(rating: Rating): number {
+function initialDifficulty(rating: Rating): number {
   return clamp(core.algorithm.init_difficulty(rating), D_MIN, D_MAX)
 }
 
-export function nextDifficulty(d: number, rating: Rating): number {
+function nextDifficulty(d: number, rating: Rating): number {
   return clamp(core.algorithm.next_difficulty(d, rating), D_MIN, D_MAX)
 }
 
-export function stabilityAfterRecall(s: number, d: number, r: number, rating: Rating): number {
+function stabilityAfterRecall(s: number, d: number, r: number, rating: Rating): number {
   return clamp(core.algorithm.next_recall_stability(d, s, r, rating), S_MIN, S_MAX)
 }
 
-export function stabilityAfterForget(s: number, d: number, r: number): number {
+function stabilityAfterForget(s: number, d: number, r: number): number {
   return clamp(core.algorithm.next_forget_stability(d, s, r), S_MIN, S_MAX)
 }
 
@@ -93,8 +93,10 @@ export function nextInterval(s: number, desiredRetention: number): number {
   return Math.max(0, Math.round(core.algorithm.next_interval(s, desiredRetention)))
 }
 
-export function ratingFromScore(_score: number, correct: boolean): Rating {
-  return correct ? GOOD : AGAIN
+export function ratingFromScore(score: number, correct: boolean): Rating {
+  if (!correct) return AGAIN
+  if (score >= 65) return GOOD
+  return HARD
 }
 
 export interface ScheduleOptions {
@@ -268,7 +270,7 @@ function stayStep(base: FsrsState, steps: number[], step: number, ctx: SchedCtx)
   }
 }
 
-export function isDue(state: FsrsState, now: number): boolean {
+function isDue(state: FsrsState, now: number): boolean {
   return state.dueAt <= now
 }
 

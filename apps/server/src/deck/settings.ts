@@ -1,11 +1,12 @@
-export type CharacterVariant = 'traditional' | 'simplified'
+import type { CharacterVariant } from '../frequency/source'
+
+export type { CharacterVariant }
 
 export const DECK_INSTRUCTION_KEY = 'deckInstruction'
 
-export type ReadingScript =
-  'zhuyin' | 'pinyin' | 'kana' | 'romaji' | 'latin' | 'none' | (string & {})
+type ReadingScript = 'zhuyin' | 'pinyin' | 'kana' | 'romaji' | 'latin' | 'none' | (string & {})
 
-export interface WordHint {
+interface WordHint {
   reading?: string
   meaning?: string
 }

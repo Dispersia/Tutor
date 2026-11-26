@@ -6,11 +6,12 @@
   interface Props {
     speech: SpeechStatus | null
     waking: boolean
+    error?: string
     onWake: () => void
     onFree?: () => void
   }
 
-  let { speech, waking, onWake, onFree }: Props = $props()
+  let { speech, waking, error = '', onWake, onFree }: Props = $props()
 </script>
 
 <section class="mb-5 panel panel-accent p-4" style={accentStyle(ACCENT.jade)}>
@@ -44,4 +45,9 @@
   <p class="mt-2 text-xs text-ink-400">
     Voice cards start the models on demand; they unload when idle.
   </p>
+  {#if error}
+    <p class="mt-2 text-xs text-ember-300" role="status">
+      Couldn’t read the speech status — {error}
+    </p>
+  {/if}
 </section>

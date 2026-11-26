@@ -46,4 +46,13 @@ describe('kana', () => {
     expect(type(kana, 'kan' + BACKSPACE).buffer).toBe('')
     expect(type(kana, 'ka' + BACKSPACE).preedit).toBe('')
   })
+
+  test('punctuation commits the kana and appends', () => {
+    expect(type(kana, 'ka。').value).toBe('か。')
+  })
+
+  test('the symbols page leads with the number row', () => {
+    expect(kana.symbols?.[0]).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'])
+    expect(kana.letters).toBe('かな')
+  })
 })

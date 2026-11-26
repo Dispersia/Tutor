@@ -21,6 +21,7 @@
   import { activeDeck, loadActiveDeck, setActiveDeck } from '#lib/activeDeck.svelte'
   import type { CurriculumDeck, LessonDTO, SrsStats } from '#lib/curriculum'
   import { href } from '#lib/paths'
+  import { haptics } from '#lib/haptics.svelte'
   import { wakeSpeech } from '#lib/speech'
   import { ACCENT } from '#lib/theme'
   import Spinner from '#lib/components/Spinner.svelte'
@@ -31,6 +32,7 @@
   import ExerciseStage from '#lib/components/practice/ExerciseStage.svelte'
   import { nextLessonAfter, nextLessonTitleOf, quietClock } from '#lib/practiceview'
   import { answerBody, nextDrillBody, practiceLessonHref, speakForm } from '#lib/practiceview'
+  import { isTypingTarget, primaryActionButton } from '#lib/components/enterSubmit'
   import { cachedResource } from '#lib/resource.svelte'
 
   type GradeReply = Awaited<ReturnType<typeof gradeExercise>>
@@ -91,6 +93,7 @@
   const canRetry = $derived(Boolean(instance && spoke && result && !result.correct))
 
   onMount(() => {
+    void haptics.ensure()
     void init()
   })
 
@@ -208,6 +211,7 @@
   async function submit(answer: unknown) {
     if (!instance) return
     const wasIntro = instance.exerciseId === 'introduce'
+    haptics.pulse()
     busy = true
     error = ''
     spoke = false
@@ -266,6 +270,7 @@
 
   function retry() {
     if (!instance) return
+    haptics.pulse()
     result = null
     skill = null
     srs = null
@@ -287,6 +292,7 @@
 
   async function nextStep() {
     if (advancing) return
+    haptics.pulse()
     advancing = true
     try {
       if (!lessonCompleted) {
@@ -313,20 +319,17 @@
   }
 
   function onKeydown(e: KeyboardEvent) {
-    if (e.key !== 'Enter' || e.repeat) return
     if (loading || busy || advancing) return
-    const t = e.target instanceof HTMLElement ? e.target : null
-    if (t?.closest('input, textarea, select, a') || t?.isContentEditable) return
     if (result) {
+      if (e.key !== 'Enter' || e.repeat || isTypingTarget(e.target)) return
       e.preventDefault()
       void nextStep()
       return
     }
-    const primary = document.querySelector<HTMLButtonElement>('[data-enter-action]:not(:disabled)')
-    if (primary) {
-      e.preventDefault()
-      primary.click()
-    }
+    const primary = primaryActionButton(e)
+    if (!primary) return
+    e.preventDefault()
+    primary.click()
   }
 </script>
 
@@ -356,6 +359,7 @@
           <option value={d.id}>{d.name} · {d.cardCount} cards</option>
         {/each}
       </select>
+      <span class="mt-1 block text-xs text-ink-500">This sets your active path on every page.</span>
     </label>
   {:else if !focused && decks.length === 1}
     <p class="eyebrow mb-4 text-ink-400">{decks[0].name} · {decks[0].cardCount} cards</p>
@@ -367,7 +371,16 @@
     </p>
   {:else}
     {#if error}
-      <p class="banner mb-3" style="--accent: {ACCENT.ember}" role="alert">{error}</p>
+      <div
+        class="banner mb-3 flex flex-wrap items-center gap-2"
+        style="--accent: {ACCENT.ember}"
+        role="alert"
+      >
+        <p class="flex-1">{error}</p>
+        {#if !result && !instance && !doneToday}
+          <button onclick={loadNext} class="btn btn-ghost px-3 py-2 text-xs">Try again</button>
+        {/if}
+      </div>
     {/if}
     {#if doneToday}
       <DoneTodayPanel {srsStats} onStudyMore={doStudyMore} />
@@ -410,8 +423,6 @@
         onspeak={submitAudio}
         onQuiet={applyQuiet}
       />
-    {:else if error}
-      <button onclick={loadNext} class="btn btn-ghost px-3 py-2 text-xs">Try again</button>
     {/if}
   {/if}
 </div>

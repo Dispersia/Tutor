@@ -7,8 +7,6 @@ const tables = (Object.values(schema) as unknown[]).filter(
   (t): t is SQLiteTable => typeof t === 'object' && t !== null && Symbol.for('drizzle:Name') in t,
 )
 
-const RETIRED: Record<string, string[]> = { srs: ['ease'] }
-
 function database() {
   const { sqlite } = openDb(':memory:')
   const columns = (table: string) =>
@@ -61,7 +59,7 @@ test('the database has no column the schema does not know about', () => {
   const { sqlite, columns } = database()
   for (const table of tables) {
     const cfg = getTableConfig(table)
-    const known = new Set([...cfg.columns.map((c) => c.name), ...(RETIRED[cfg.name] ?? [])])
+    const known = new Set(cfg.columns.map((c) => c.name))
     const extra = columns(cfg.name)
       .map((c) => c.name)
       .filter((name) => !known.has(name))

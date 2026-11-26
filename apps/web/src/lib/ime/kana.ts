@@ -142,6 +142,14 @@ const ROWS = [
   ['z', 'x', 'c', 'v', 'b', 'n', 'm'],
 ]
 
+const SYMBOL_ROWS = [
+  ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
+  ['、', '。', '？', '！', '「', '」', '（', '）', 'ー', '・'],
+  ['〜', '…', '『', '』', '【', '】', '＋', '＝', '／', '＼'],
+]
+
+const SYMBOLS = SYMBOL_ROWS.flat()
+
 function matchKey(buffer: string, i: number): string | undefined {
   return KEYS.find((key) => buffer.startsWith(key, i))
 }
@@ -203,12 +211,18 @@ function commit(state: ImeState, space: boolean): ImeState {
   }
 }
 
+function insert(state: ImeState, ch: string): ImeState {
+  const done = commit(state, false)
+  return { ...done, value: done.value + ch }
+}
+
 function press(state: ImeState, key: string): ImeState {
   const ch = key.length === 1 ? key.toLowerCase() : key
   if (ch === BACKSPACE) return back(state)
   if (ch === CLEAR) return { ...state, preedit: '', buffer: '', candidates: [] }
   if (ch === SPACE) return commit(state, true)
   if (ch === ENTER) return commit(state, false)
+  if (SYMBOLS.includes(ch)) return insert(state, ch)
   const letter = ch.length === 1 && (CONSONANTS.includes(ch) || VOWELS.includes(ch))
   return letter ? push(state, ch) : state
 }
@@ -217,8 +231,10 @@ export const kana: ImeEngine = {
   id: 'kana',
   language: 'ja',
   label: 'かな',
+  letters: 'かな',
   columns: 10,
   rows: ROWS,
+  symbols: SYMBOL_ROWS,
   shift: SHIFT,
   physical: PHYSICAL,
   initial: emptyState,

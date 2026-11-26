@@ -1,9 +1,14 @@
 export type ToastTone = 'success' | 'error' | 'info'
 
-export interface ToastItem {
+type ToastLive = 'assertive' | 'polite'
+
+const toastLive = (tone: ToastTone): ToastLive => (tone === 'error' ? 'assertive' : 'polite')
+
+interface ToastItem {
   id: number
   message: string
   tone: ToastTone
+  live: ToastLive
 }
 
 const LIFETIME = 3200
@@ -15,7 +20,7 @@ class Toasts {
 
   show(message: string, tone: ToastTone = 'success'): number {
     const id = ++this.#next
-    const next = [...this.items, { id, message, tone }]
+    const next = [...this.items, { id, message, tone, live: toastLive(tone) }]
     this.items = next.slice(-MAX)
     setTimeout(() => this.dismiss(id), LIFETIME)
     return id

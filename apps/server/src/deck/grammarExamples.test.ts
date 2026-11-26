@@ -1,8 +1,7 @@
 import { expect, test } from 'bun:test'
 import { openDb, type Db } from '../db/client'
-import { createUser, listCards, updateCard } from '../db/repo'
+import { addCard, createDeck, createUser, listCards, updateCard } from '../db/repo'
 import type { DeckId, UserId } from '../ids'
-import { createGrammarDeck } from './grammarDeck'
 import {
   ensureGrammarExample,
   ensureGrammarExplanation,
@@ -43,13 +42,18 @@ const explainer: Planner = async () => explainerCards
 function grammarDeck() {
   const { db, sqlite } = openDb(':memory:')
   const user = createUser(db, { username: 'a', passwordHash: 'x' })
-  const { deckId } = createGrammarDeck(db, user.id, {
-    name: 'g',
+  const deck = createDeck(db, user.id, { name: 'g', sourceLang: 'en', targetLang: 'ja' })
+  addCard(db, user.id, {
+    deckId: deck.id,
+    type: 'grammar',
     sourceLang: 'en',
     targetLang: 'ja',
-    entries: [{ rule: 'topic particle', pattern: 'は', reading: 'は' }],
+    front: 'topic particle',
+    back: 'は',
+    readings: { kana: 'は' },
+    payload: { template: 'grammar', rule: 'topic particle', answer: 'は', step: 1 },
   })
-  return { db, sqlite, userId: user.id, deckId }
+  return { db, sqlite, userId: user.id, deckId: deck.id }
 }
 
 function exampleOf(db: Db, userId: UserId, deckId: DeckId) {

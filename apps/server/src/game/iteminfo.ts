@@ -6,7 +6,7 @@ import { ITEM_BY_ID, SKILL_BY_ID } from './skills/lookups'
 import { itemValue } from './skills/value'
 import type { ActionDef, Cost, ItemDef, SkillId } from './skills/types'
 
-export interface ItemUse {
+interface ItemUse {
   kind: 'action' | 'enchant'
   skillId: SkillId
   skillName: string
@@ -15,7 +15,7 @@ export interface ItemUse {
   count: number
 }
 
-export interface ItemSource {
+interface ItemSource {
   kind: 'action' | 'monster'
   name: string
   icon: string

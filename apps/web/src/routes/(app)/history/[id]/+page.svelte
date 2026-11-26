@@ -4,6 +4,7 @@
   import { goto } from '$app/navigation'
   import { ACCENT } from '#lib/theme'
   import type { Message } from '#lib/types'
+  import Spinner from '#lib/components/Spinner.svelte'
   import { cachedResource } from '#lib/resource.svelte'
 
   const id = $derived(page.params.id)
@@ -20,10 +21,19 @@
   <h1 class="display truncate text-lg text-ink-100">Conversation</h1>
 </div>
 
-{#if conversation.error}
-  <p class="banner lg:mx-auto lg:max-w-3xl" style="--accent: {ACCENT.ember}" role="alert">
+{#if conversation.loading}
+  <p
+    class="banner mt-3 flex items-center gap-2 lg:mx-auto lg:max-w-3xl"
+    style="--accent: {ACCENT.azure}"
+  >
+    <Spinner size={14} label="Loading the conversation" /> Loading…
+  </p>
+{:else if conversation.error}
+  <p class="banner mt-3 lg:mx-auto lg:max-w-3xl" style="--accent: {ACCENT.ember}" role="alert">
     {conversation.error}
   </p>
+{:else if messages.length === 0}
+  <p class="empty mt-3 lg:mx-auto lg:max-w-3xl">This conversation has no messages yet.</p>
 {:else}
   <div class="space-y-3 pb-10 lg:mx-auto lg:max-w-3xl">
     {#each messages as m (m.id)}

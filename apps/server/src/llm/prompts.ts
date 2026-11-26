@@ -38,10 +38,7 @@ export function scriptRule(targetLang: string | null | undefined, prefs: ScriptP
   return [characterRule(targetLang, prefs), reading].filter(Boolean).join(' ')
 }
 
-export function characterRule(
-  targetLang: string | null | undefined,
-  prefs: ScriptPrefs = {},
-): string {
+function characterRule(targetLang: string | null | undefined, prefs: ScriptPrefs = {}): string {
   if (targetLang !== 'zh' && targetLang !== 'yue') return ''
   const chars =
     prefs.variant === 'simplified'
@@ -115,7 +112,6 @@ export function judgeSystem(learner: Learner, prefs: ScriptPrefs = {}): string {
   )
 }
 
-/** The last line of a grading request: the language rule and the deck's script rule, restated. */
 export const JUDGE_REMINDER = (
   nativeLang: string | null | undefined,
   targetLang: string | null | undefined,

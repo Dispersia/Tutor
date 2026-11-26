@@ -9,6 +9,7 @@ and shows the RAM that came back. This is the Phase 1 acceptance test for this M
 
 from __future__ import annotations
 
+import os
 import tempfile
 import time
 from pathlib import Path
@@ -41,11 +42,13 @@ def main() -> None:
         print(f"[load] {kind:<11} {time.time() - t0:5.2f}s   {mem(models.mlx_memory())}")
 
     # --- warm-up calls (first inference pays compile/graph cost) ---
+    warm_fd, warm = tempfile.mkstemp(suffix=".wav")
+    os.close(warm_fd)
     with mgr.inference():
-        models.tts_synthesize(mgr.get("tts_preset"), "预热。", language=LANG, instruct=INSTRUCT)
-    fd0, warm = tempfile.mkstemp(suffix=".wav")
-    models.write_wav(warm, *models.tts_synthesize(mgr.get("tts_preset"), "预热。", language=LANG, instruct=INSTRUCT))
-    with mgr.inference():
+        models.write_wav(
+            warm,
+            *models.tts_synthesize(mgr.get("tts_preset"), "预热。", language=LANG, instruct=INSTRUCT),
+        )
         models.asr_transcribe(mgr.get("asr"), warm, LANG)
         models.align_text(mgr.get("align"), warm, "预热", LANG)
     Path(warm).unlink(missing_ok=True)
@@ -62,6 +65,7 @@ def main() -> None:
     print(f"[TTS]   {t_tts:5.2f}s  audio {dur:.2f}s @ {sr}Hz  RTF {t_tts / max(dur, 1e-6):.2f}")
 
     fd, name = tempfile.mkstemp(suffix=".wav")
+    os.close(fd)
     models.write_wav(name, arr, sr)
 
     # --- ASR (Chinese) ---

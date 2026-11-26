@@ -1,4 +1,4 @@
-import type { Card, Modality } from './types'
+import type { Modality } from './types'
 
 export type TemplateKind = 'vocab' | 'spoken' | 'listening' | 'grammar' | 'sentence'
 
@@ -148,23 +148,6 @@ export const CARD_TEMPLATES: readonly CardTemplate[] = [
   },
 ] as const
 
-export const TEMPLATE_BY_KIND: Record<TemplateKind, CardTemplate> = Object.fromEntries(
-  CARD_TEMPLATES.map((t) => [t.kind, t]),
-) as Record<TemplateKind, CardTemplate>
-
 export function templateForExercise(exerciseId: string): CardTemplate | undefined {
   return CARD_TEMPLATES.find((t) => t.exercises.includes(exerciseId))
-}
-
-export function templatesForCard(card: Pick<Card, 'payload'>): CardTemplate[] {
-  const payload = card.payload ?? {}
-  const has = (key: string) => {
-    const v = payload[key]
-    return Array.isArray(v) ? v.length > 0 : v !== undefined && v !== null && v !== ''
-  }
-  return CARD_TEMPLATES.filter((t) => {
-    if (t.kind === 'sentence') return has('tokens')
-    if (t.kind === 'grammar') return has('answer') || has('options') || has('rule')
-    return true
-  })
 }

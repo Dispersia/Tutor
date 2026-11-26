@@ -6,7 +6,6 @@ import {
   getCard,
   countScheduledCards,
   getEncounter,
-  listDecks,
   setPlayerHp,
   type PublicUser,
 } from '../db/repo'
@@ -16,27 +15,32 @@ import {
   combatLevel,
   combatResolve,
   currentHp,
+  DEFEAT_HP,
   loadPlayerCombat,
   loadProgress,
   knownWords,
-  monsterState,
-  recordReview,
   startEncounter,
   summary,
 } from '../services'
 import { readStudyPrefs } from '../services/study'
-import { exerciseCtx, pickNextExercise, pickReviewCard, type SessionUser } from './practice'
+import {
+  exerciseCtx,
+  pickNextExercise,
+  pickReviewCard,
+  studyDeckId,
+  type SessionUser,
+} from './practice'
+import { fits } from './practice/grade'
 import { noteIssued, wasIssued } from './practice/issued'
+import { fail, NOT_ISSUED_MESSAGE } from './errors'
 import type { App, AppEnv, Deps } from '../context'
 import { idField, bool, jsonBody, str } from './body'
 
 type PlayerCombat = ReturnType<typeof loadPlayerCombat>
 type MonsterRow = NonNullable<ReturnType<typeof getEncounter>>
 
-async function buildDrill(deps: Deps, user: SessionUser, deckLevel: string) {
-  const deck = listDecks(deps.db, user.id).find((d) => d.level === deckLevel)
-  const card =
-    pickReviewCard(deps, user.id, deck?.id) ?? (deck ? pickReviewCard(deps, user.id) : undefined)
+async function buildDrill(deps: Deps, user: SessionUser) {
+  const card = pickReviewCard(deps, user.id, studyDeckId(deps, user.id))
   if (!card) return null
   const prefs = readStudyPrefs(deps.db, user.id)
   const ctx = exerciseCtx(deps, user, card, {
@@ -80,6 +84,7 @@ function encounterCore(enc: MonsterRow, monster: MonsterDef | undefined) {
     potionId: enc.potionId,
     foodEaten: enc.foodEaten,
     totalDamage: enc.totalDamage,
+    xpEarned: enc.xpEarned,
   }
 }
 
@@ -105,10 +110,6 @@ function playerView(deps: Deps, userId: UserId, player: PlayerCombat, level: num
   }
 }
 
-function monstersView(deps: Deps, userId: UserId) {
-  return MONSTERS.map((m: MonsterDef) => ({ ...m, ...monsterState(deps.db, userId, m) }))
-}
-
 export function registerCombat(app: App) {
   app.get('/api/combat', (c) => combatBoard(c))
   app.post('/api/combat/start', (c) => startCombat(c))
@@ -123,9 +124,9 @@ async function combatBoard(c: Context<AppEnv>) {
   const player = loadPlayerCombat(deps.db, user.id, progress.levels)
   const level = combatLevel(deps.db, user.id, progress.levels)
   const view = encounterView(deps, user.id, progress.levels)
-  const drill = view ? await buildDrill(deps, user, deckLevelOf(view)) : null
+  const drill = view ? await buildDrill(deps, user) : null
   return c.json({
-    monsters: monstersView(deps, user.id),
+    monsters: MONSTERS,
     player: playerView(deps, user.id, player, level),
     reviewCount: countReviewCards(deps, user.id),
     encounter: view,
@@ -133,23 +134,21 @@ async function combatBoard(c: Context<AppEnv>) {
   })
 }
 
-function deckLevelOf(view: NonNullable<EncounterView>): string {
-  return MONSTER_BY_ID.get(view.monsterId)?.deckLevel ?? ''
-}
-
 async function startCombat(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
   const monsterId = str(await jsonBody(c), 'monsterId')
-  if (!monsterId) return c.json({ error: 'monsterId required' }, 400)
+  if (!monsterId) return fail(c, 400, 'monsterId required')
   if (countReviewCards(deps, user.id) === 0) {
-    return c.json({ error: 'Review some cards in Practice before you fight.' }, 409)
+    return fail(c, 409, 'Review some cards in Practice before you fight.')
   }
   const res = startEncounter(deps.db, deps.events, user.id, monsterId)
-  if (!res.ok) {
-    return c.json({ error: res.error, missing: res.missing, equipMissing: res.equipMissing }, 403)
-  }
+  if (!res.ok) return fail(c, startStatus(res.error), res.error)
   return beginFight(c, deps, user, res)
+}
+
+function startStatus(error: string): 404 | 409 {
+  return error === 'unknown monster' ? 404 : 409
 }
 
 async function beginFight(
@@ -158,10 +157,10 @@ async function beginFight(
   user: PublicUser,
   res: NonNullable<ReturnType<typeof startEncounter>> & { ok: true },
 ) {
-  const drill = await buildDrill(deps, user, res.monster.deckLevel)
+  const drill = await buildDrill(deps, user)
   if (!drill) {
     clearEncounter(deps.db, user.id)
-    return c.json({ error: 'No review cards available for this fight.' }, 409)
+    return fail(c, 409, 'No review cards available for this fight.')
   }
   return c.json({
     monster: res.monster,
@@ -175,7 +174,7 @@ function leaveCombat(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
   const enc = getEncounter(deps.db, user.id)
-  if (enc) setPlayerHp(deps.db, user.id, Math.max(1, enc.playerHp))
+  if (enc) setPlayerHp(deps.db, user.id, Math.max(DEFEAT_HP, enc.playerHp))
   clearEncounter(deps.db, user.id)
   return c.json({ encounter: null })
 }
@@ -196,33 +195,25 @@ function readHit(body: Record<string, unknown>): HitBody {
   }
 }
 
-const NOT_ISSUED = 'not the drill you were given'
-
 async function hitCombat(c: Context<AppEnv>) {
   const deps = c.get('deps')
   const user = c.get('user')!
   const body = readHit(await jsonBody(c))
   const card = body.cardId ? getCard(deps.db, body.cardId, user.id) : undefined
-  if (!card) return c.json({ error: 'card not found' }, 404)
+  if (!card) return fail(c, 404, 'card not found')
   const def = body.exerciseId ? registry.get(body.exerciseId) : undefined
-  if (!def) return c.json({ error: 'exercise not found' }, 404)
-  if (!wasIssued(user.id, card.id, def.id)) return c.json({ error: NOT_ISSUED }, 409)
+  if (!def) return fail(c, 404, 'exercise not found')
+  if (!fits(def, card, user)) return fail(c, 400, 'that exercise does not fit this card')
+  if (!wasIssued(user.id, card.id, def.id)) return fail(c, 409, NOT_ISSUED_MESSAGE)
   const result = await gradeHit(deps, user, card, def, body)
   const hit = combatResolve(deps.db, deps.events, user.id, result.correct)
-  if (!hit) return c.json({ error: 'no active encounter' }, 409)
-  const srs = recordReview(deps.db, deps.events, user.id, {
-    cardId: card.id,
-    score: result.score,
-    correct: result.correct,
-    source: 'combat',
-  })
-  return finishHit(c, deps, user, { result, hit, srs })
+  if (!hit) return fail(c, 409, 'no active encounter')
+  return finishHit(c, deps, user, { result, hit })
 }
 
 interface HitSettled {
   result: GradeResult & { xp?: number }
   hit: NonNullable<ReturnType<typeof combatResolve>>
-  srs: ReturnType<typeof recordReview>
 }
 
 async function finishHit(c: Context<AppEnv>, deps: Deps, user: PublicUser, settled: HitSettled) {
@@ -261,7 +252,5 @@ async function nextHitDrill(
   view: EncounterView,
 ) {
   if (hit.outcome !== 'ongoing' || !view) return null
-  const monster = MONSTER_BY_ID.get(view.monsterId)
-  if (!monster) return null
-  return (await buildDrill(deps, user, monster.deckLevel))?.instance ?? null
+  return (await buildDrill(deps, user))?.instance ?? null
 }

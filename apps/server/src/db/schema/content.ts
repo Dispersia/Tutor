@@ -19,7 +19,6 @@ export const cards = sqliteTable(
     deckId: text('deck_id')
       .$type<DeckId>()
       .references(() => decks.id),
-    userId: text('user_id').$type<UserId>(),
     privateTo: text('private_to').$type<UserId>(),
     type: text('type').notNull(),
     sourceLang: text('source_lang').notNull(),
@@ -33,7 +32,7 @@ export const cards = sqliteTable(
     origin: text('origin').notNull().default('manual'),
     createdAt: integer('created_at').notNull(),
   },
-  (t) => [index('idx_cards_deck').on(t.deckId), index('idx_cards_user').on(t.userId)],
+  (t) => [index('idx_cards_deck').on(t.deckId)],
 )
 
 export const sessions = sqliteTable(
@@ -46,7 +45,6 @@ export const sessions = sqliteTable(
     lang: text('lang'),
     title: text('title'),
     startedAt: integer('started_at').notNull(),
-    endedAt: integer('ended_at'),
   },
   (t) => [index('idx_sessions_user').on(t.userId)],
 )
@@ -77,6 +75,5 @@ export const audioBlobs = sqliteTable('audio_blobs', {
   path: text('path').notNull(),
   bytes: integer('bytes'),
   mime: text('mime'),
-  seconds: real('seconds'),
   createdAt: integer('created_at').notNull(),
 })

@@ -1,4 +1,3 @@
-import { api } from './api'
 import type { StudyBudget } from './exercises'
 
 export interface LessonDTO {
@@ -29,10 +28,6 @@ export interface CurriculumDeck {
   lessons: LessonDTO[]
 }
 
-export interface CurriculumResponse {
-  decks: CurriculumDeck[]
-}
-
 export interface SrsStats {
   total: number
   learned: number
@@ -40,6 +35,3 @@ export interface SrsStats {
   new: number
   budget: StudyBudget
 }
-
-export const getCurriculum = () => api<CurriculumResponse>('/api/curriculum')
-export const getSrsStats = () => api<SrsStats>('/api/srs/stats')

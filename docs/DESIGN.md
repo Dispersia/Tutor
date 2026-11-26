@@ -230,9 +230,7 @@ tutor/
     web/           # SvelteKit PWA (adapter-static, SPA) — mobile-first UI
     server/        # Bun + Hono API, SSE/WS, SQLite, serves PWA, speech supervisor
   packages/
-    core/          # shared types, zod schemas, card/exercise registry contracts
-    speech/        # TS client for the speech gateway + provider interface
-    ui/            # shared Svelte components (cards, recorder, HUD)
+    core/          # shared types, card templates, card/exercise registry contracts
   python/
     pyproject.toml # uv-managed deps: mlx-audio, mlx, soundfile, fastapi
     uv.lock
@@ -256,8 +254,8 @@ tutor/
 | DB            | **SQLite** (`bun:sqlite`) + **Drizzle**                             | Zero-ops local DB; Drizzle gives typed queries + migrations; easy future swap to Postgres                                         |
 | Frontend      | **SvelteKit** (adapter-static, SPA mode) + Tailwind + shadcn-svelte | Most performant UI framework at runtime (compiled, no VDOM), tiny bundles, first-class PWA support — the mobile-first requirement |
 | Client        | **PWA** (installable, offline shell)                                | Primary target is Android; installs from the browser, no app store, no native build                                               |
-| Data fetching | SvelteKit `load` + stores, `@tanstack/svelte-query` where useful    | Streaming-friendly; optimistic XP updates                                                                                         |
-| Validation    | **zod**                                                             | Shared contracts in `packages/core`; validates LLM JSON                                                                           |
+| Data fetching | `cachedResource` + `lib/api.ts`                                     | Cache-first paint, one in-flight request per path, revalidate in the background                                                    |
+| Validation    | **JSON Schema**                                                     | Hand-written schemas sent to OpenRouter (`chatJSON`); answers re-checked in `exercises/verify.ts`                                  |
 | Speech        | **mlx-audio** (Python)                                              | Runs Whisper / VoxCPM2 / the Qwen3 forced aligner on MLX, OpenAI-compatible API                                                    |
 | Brain         | **OpenRouter** REST/SSE                                             | Model-agnostic roles; one key; structured outputs                                                                                 |
 | Packaging     | **Nix flake** + `bun build --compile`                               | Single binary + assets, wraps cleanly into a derivation                                                                           |
@@ -325,17 +323,19 @@ Wraps `mlx-audio`. Everything is localhost-only.
 ```
 GET  /health                         → { ready, models:[...], rss, lastActivity }
 POST /admin/unload                   → drop models, clear cache, exit
+POST /admin/shutdown                 → stop a gateway the server did not spawn
+POST /v1/warm                        → load the speech models ahead of the first use
 POST /v1/asr                         → { audio: base64|multipart, language?, hint? }
-                                        → { text, segments[], lang, conf? }
-POST /v1/align                       → { audio, text, language } → word timings
+                                        → { text, segments[], lang, ms }
+POST /v1/assess                      → { audio, text, language? } → transcript + word
+                                        timings for pronunciation scoring
 POST /v1/tts                         → { text, voice, language?, instruct?, stream }
                                         → audio/wav  (or chunked stream)
-WS   /v1/tts/stream                  → send text, receive PCM/WAV chunks
-WS   /v1/asr/stream                  → send audio frames, receive partial text
 ```
 
 The gateway **defaults to the OpenAI-compatible shape** from `mlx-audio` where
-possible, and adds `/v1/align` + admin/lifecycle routes.
+possible, and adds `/v1/assess` + the admin/lifecycle routes. Browser VAD (§9.3)
+trims the silence, so the gateway never loads a VAD model of its own.
 
 ### 9.2 TTS flow (fed by the OpenRouter response)
 
@@ -490,10 +490,10 @@ role → OpenRouter model id, **editable by the user in the app**.
 
 **User picks the model, the app ships defaults.** The Settings screen lets the user
 choose a model per role from OpenRouter's live catalogue, using whatever key they
-have set: `GET /api/v1/models/user` (filtered by that key's provider
-preferences, privacy settings and guardrails) when a key is present, falling back
-to the public `GET /api/v1/models` otherwise. Defaults on first run (all OpenRouter
-ids, so swapping is one click):
+have set: `GET /api/models` (filtered by that key's provider preferences, privacy
+settings and guardrails) when a key is present, falling back to the public
+catalogue otherwise. Defaults on first run (all OpenRouter ids, so swapping is one
+click):
 
 - `conversation` + `judge` → a strong general model (e.g. a Qwen3 flagship).
 - `generator` + `translator` → a cheap/fast model.
@@ -506,9 +506,10 @@ per-role "test" button and show cost/latency so switching is informed.
 
 ### 10.2 Integration
 
-- `POST /api/v1/chat/completions` with `stream: true` → SSE relayed to the UI.
+- `POST /api/chat` with `stream: true` → SSE relayed to the UI; `/api/chat/json`
+  returns a single structured reply for flows that must not stream.
 - **Structured outputs** (`response_format: json_schema`) for grading and card
-  generation; validate with zod, retry once on schema failure.
+  generation; validate against the same schema, retry once on failure.
 - **Tool calling** for "the tutor decides to present a card / start a drill".
 - Record token usage + cost per message; surface in a dev panel.
 
@@ -643,7 +644,7 @@ type Card = {
   back: string // target side
   readings?: Record<string, string> // pinyin / romaji / kana
   tags: string[]
-  payload: Record<string, unknown> // type-specific extras (zod-validated)
+  payload: Record<string, unknown> // type-specific extras (schema-validated)
   metadata: Record<string, unknown> // language-specific annotations (see below)
   origin: 'curated' | 'llm' | 'manual'
   createdAt: number
@@ -1536,7 +1537,7 @@ A **path** is the default way to learn here: the learner picks a language and th
 app builds the deck for them — there is no prompt to write. `POST /api/decks`
 with `kind: "path"` (`srv/routes/decks/create.ts`, `srv/deck/path.ts`) fetches a
 real frequency list, puts the sentence-making words first (the curated
-`text/lexicon.ts` Mandarin and `seed/frequency-ja.ts` Japanese lists are the
+`text/lexicon.ts` Mandarin and `text/frequency-ja.ts` Japanese lists are the
 prefix; every other language starts from its frequency list), and asks the
 generator for the first **10** words (`pathInstruction`).
 
@@ -1788,7 +1789,20 @@ keyboard, automatically.
   above it; hiding it scrolls the page back to the bottom. **Enter commits first,
   then submits**: while a preedit or candidate bar is open it commits the
   composition, otherwise it submits the surrounding form — the on-screen key and a
-  hardware Enter do the same thing.
+  hardware Enter do the same thing. The enter key vibrates like the rest, and
+  submitting closes the sheet at once instead of waiting for the grade reply, so
+  the next screen is seen whole; after it closes a one-second tap guard
+  (`lib/tapGuard.svelte.ts`) swallows stray taps while the bottom tab bar is
+  uncovered.
+- **The space bar is the first tone.** On the Chinese keyboard space enters the
+  **first tone** (一聲, `ˉ`) instead of a space — Mandarin has none — so Enter is
+  the commit key there. The other engines keep space as a space.
+- **Numbers and punctuation live on a second page.** A `?123` key swaps the
+  letter rows for a symbols page — numbers across the top, then that language's
+  marks (Chinese `，。、？！`, Japanese `、。？！`, Korean and the latin scripts
+  `.,?!¿¡`) — and a key labelled with the script (`ㄅㄆ`, `かな`, `한글`, `ABC`)
+  swaps back. Tapping a mark commits the open composition and appends it, and a
+  mark typed on a hardware keyboard does the same.
 - **Conversion candidates come from the server** (`POST /api/ime/candidates`,
   `apps/server/src/ime/candidates.ts`). The gateway already holds the
   dictionaries, so the Mac does the heavy part: a reverse index of the MOE
@@ -1799,7 +1813,7 @@ keyboard, automatically.
   stop the suggestions. **Tones are optional**: a toneless reading is split into
   syllables by the Zhuyin grammar, so ㄨㄛㄏㄣㄏㄠ converts too. Candidates are
   ranked by the curated frequency lists (`text/lexicon.ts`,
-  `seed/frequency-ja.ts`) and the deck's own lexicon.
+  `text/frequency-ja.ts`) and the deck's own lexicon.
 - **Why not bundle librime/mozc as WASM.** mozc has no browser build, librime's
   WASM port needs a multi-MB schema the PWA would have to fetch, and libhangul
   composition is algorithmic anyway. The app's own dictionaries are already
@@ -1854,10 +1868,12 @@ just, sqlite, mkcert), `packages.default` (the `/tutor` build), `packages.root`
   - a `tutor-fetch-models` script (uses `hf` CLI + `uv`) that downloads the pinned
     MLX models into `$TUTOR_MODELS_DIR`, and
   - a wrapper that runs `uv sync` in `python/` on first use then launches the sidecar.
-    Alternatively ship a prebuilt venv under `$TUTOR_DATA_DIR/.venv` created by
-    `just setup`.
-- **`justfile` targets**: `setup`, `dev`, `dev-web`, `models`, `gen`, `build`,
-  `package`, `run`, `certs`, `bench`, `test`, `check`.
+    Alternatively ship a prebuilt venv under `$TUTOR_DATA_DIR/python/.venv` created
+    by `just setup`.
+- **`justfile` targets**: `setup`, `dev`, `dev-web`, `models`, `speech`, `bench`,
+  `gen`, `build`, `vad`, `test`, `check`, `lint`, `fmt`, `ci`, `knip`, `package`,
+  `package-root`, `run`, `serve`, `certs`, `tailscale-{serve,unserve,cert}`,
+  `caddy`, `service-{install,uninstall}`, `deploy`.
 
 **Verified:** `nix build .#default` produces the binary + assets, and running it
 serves the PWA, applies the embedded migrations, registers a user, and spawns the
@@ -1947,4 +1963,3 @@ Known defects and refactors are tracked in [`BACKLOG.md`](BACKLOG.md).
   - https://huggingface.co/mlx-community/whisper-large-v3-turbo-asr-fp16
   - https://huggingface.co/mlx-community/VoxCPM2-8bit
   - https://huggingface.co/mlx-community/Qwen3-ForcedAligner-0.6B-8bit
-  - https://huggingface.co/mlx-community/silero-vad

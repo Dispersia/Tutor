@@ -1,5 +1,5 @@
 import { api } from './api'
-import { apiPath } from './paths'
+import { href } from './paths'
 import type { SpeechStatus } from './types'
 
 let currentAudio: HTMLAudioElement | null = null
@@ -50,7 +50,7 @@ export interface SpeakOptions {
 }
 
 async function fetchTts(text: string, opts: SpeakOptions, signal?: AbortSignal): Promise<Blob> {
-  const res = await fetch(apiPath('/api/speech/tts'), {
+  const res = await fetch(href('/api/speech/tts'), {
     method: 'POST',
     credentials: 'same-origin',
     headers: { 'content-type': 'application/json' },
@@ -70,7 +70,7 @@ export async function speak(
 }
 
 export async function speakCard(cardId: string, signal?: AbortSignal): Promise<void> {
-  const res = await fetch(apiPath(`/api/cards/${encodeURIComponent(cardId)}/audio`), {
+  const res = await fetch(href(`/api/cards/${encodeURIComponent(cardId)}/audio`), {
     credentials: 'same-origin',
     signal,
   })
@@ -95,7 +95,12 @@ export interface Speaker {
 
 export function createSpeaker(opts: SpeakOptions = {}, onError?: (err: Error) => void): Speaker {
   const state = speakerState()
-  const report = (e: unknown) => onError?.(e instanceof Error ? e : new Error(String(e)))
+  const report = (e: unknown) => {
+    const err = e instanceof Error ? e : new Error(String(e))
+    if (onError) onError(err)
+    else
+      void import('./toast.svelte').then((m) => m.toast(`Playback failed: ${err.message}`, 'error'))
+  }
   const started = runLoop(state, report)
   return speakerApi(state, started, opts)
 }
@@ -161,9 +166,7 @@ export function speakable(text: string): string {
 function pushText(state: SpeakerState, opts: SpeakOptions, text: string): void {
   const t = speakable(text)
   if (state.cancelled || state.closed || !t) return
-  const audio = fetchTts(t, opts)
-  audio.catch(() => {})
-  state.queue.push({ text: t, audio })
+  state.queue.push({ text: t, audio: fetchTts(t, opts) })
   signal(state)
 }
 
@@ -176,6 +179,7 @@ async function closeSpeaker(state: SpeakerState, started: Promise<void>): Promis
 function cancelSpeaker(state: SpeakerState): void {
   state.cancelled = true
   state.closed = true
+  for (const item of state.queue) item.audio.catch(() => {})
   state.queue.length = 0
   signal(state)
   stopAudio()
@@ -186,7 +190,7 @@ export async function transcribe(blob: Blob, language?: string): Promise<string>
   const name = blob.type.includes('wav') ? 'clip.wav' : 'clip.webm'
   fd.set('file', blob, name)
   if (language) fd.set('language', language)
-  const res = await fetch(apiPath('/api/speech/asr'), {
+  const res = await fetch(href('/api/speech/asr'), {
     method: 'POST',
     credentials: 'same-origin',
     body: fd,

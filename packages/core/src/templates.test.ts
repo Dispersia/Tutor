@@ -1,10 +1,5 @@
 import { expect, test } from 'bun:test'
-import {
-  CARD_TEMPLATES,
-  TEMPLATE_BY_KIND,
-  templateForExercise,
-  templatesForCard,
-} from './templates'
+import { CARD_TEMPLATES, templateForExercise } from './templates'
 
 test('the five built-in templates cover the practice functions', () => {
   expect(CARD_TEMPLATES.map((t) => t.kind)).toEqual([
@@ -14,8 +9,9 @@ test('the five built-in templates cover the practice functions', () => {
     'sentence',
     'grammar',
   ])
+  const byKind = new Map(CARD_TEMPLATES.map((t) => [t.kind, t]))
   for (const t of CARD_TEMPLATES) {
-    expect(TEMPLATE_BY_KIND[t.kind]).toBe(t)
+    expect(byKind.get(t.kind)).toBe(t)
     expect(t.fields.length).toBeGreaterThan(0)
     expect(t.exercises.length).toBeGreaterThan(0)
   }
@@ -38,17 +34,4 @@ test('templateForExercise maps exercise ids to their template', () => {
   expect(templateForExercise('grammar_cloze')?.kind).toBe('grammar')
   expect(templateForExercise('multiple_choice')?.kind).toBe('vocab')
   expect(templateForExercise('nope')).toBeUndefined()
-})
-
-test('templatesForCard reads the card payload, language-agnostically', () => {
-  const word = templatesForCard({ payload: {} }).map((t) => t.kind)
-  expect(word).toContain('vocab')
-  expect(word).not.toContain('sentence')
-  expect(word).not.toContain('grammar')
-
-  const sentence = templatesForCard({ payload: { tokens: ['我', '喝', '茶'] } }).map((t) => t.kind)
-  expect(sentence).toContain('sentence')
-
-  const grammar = templatesForCard({ payload: { answer: 'soy', rule: 'ser' } }).map((t) => t.kind)
-  expect(grammar).toContain('grammar')
 })

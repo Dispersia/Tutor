@@ -19,7 +19,9 @@
     <span class="text-xs text-ink-400">{sets.length} saved</span>
   </div>
   <div class="mt-3 flex gap-2">
+    <label class="sr-only" for="loadout-name">Loadout name</label>
     <input
+      id="loadout-name"
       class="field flex-1"
       placeholder="Set name (e.g. Ranged)"
       bind:value={name}

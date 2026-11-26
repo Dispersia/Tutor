@@ -11,6 +11,7 @@ import { bumpDailyExtra, readStudyPrefs, type StudyPrefs } from '../../services/
 import { type ActionDef } from '../../game/skills'
 import { selectStudyCardId } from '../../game/srs'
 import { quietState } from '../../services/quiet'
+import { cardNeedsAudio } from '../../services/audio'
 import {
   knownWordsFor,
   loadLearnerData,
@@ -70,7 +71,7 @@ async function nextHandler(c: Context<AppEnv>) {
   if (gate.error) return c.json(gate.error.body, gate.error.status)
   const deck = resolveDeck(deps, user, body, gate.action, prefs)
   if (deck.error) return c.json(deck.error.body, deck.error.status)
-  return resolveAndServe(c, { deps, user, body, prefs, deckId: deck.deckId, action: gate.action })
+  return resolveAndServe(c, { deps, user, body, prefs, deckId: deck.deckId })
 }
 
 interface NextCall {
@@ -79,15 +80,12 @@ interface NextCall {
   body: NextBody
   prefs: StudyPrefs
   deckId?: DeckId
-  action?: ActionDef
 }
 
 async function resolveAndServe(c: Context<AppEnv>, call: NextCall) {
   const served = resolveTarget(call.deps, call.user, call.body, call.deckId)
   if (served.error) return c.json(served.error.body, served.error.status)
-  if (!served.card) {
-    return c.json({ instance: null, action: null, done: true, budget: served.budget })
-  }
+  if (!served.card) return c.json(nextResponse(null, null))
   return serveCard(c, {
     deps: call.deps,
     user: call.user,
@@ -96,8 +94,11 @@ async function resolveAndServe(c: Context<AppEnv>, call: NextCall) {
     data: served.data,
     card: served.card,
     lessonId: served.lessonId,
-    action: call.action,
   })
+}
+
+function nextResponse(instance: ExerciseInstance | null, lessonId: string | null) {
+  return { instance, done: instance === null, lessonId }
 }
 
 function resolveDeck(
@@ -224,7 +225,6 @@ interface ServeCardReq {
   data: LoadedCards
   card: ServerCard
   lessonId?: string
-  action?: ActionDef
 }
 
 async function serveCard(c: Context<AppEnv>, req: ServeCardReq) {
@@ -240,8 +240,8 @@ async function serveCard(c: Context<AppEnv>, req: ServeCardReq) {
   const instance = await serveDrill(drillRequest({ ...req, card }, ctx))
   if (typeof instance === 'string') return c.json({ error: instance }, 409)
   noteIssued(req.user.id, instance)
-  if (instance.exerciseId === 'type_listen') enqueueListen(req.deps, req.user, card)
-  return c.json({ instance, action: actionSummary(req.action), lessonId: req.lessonId })
+  if (cardNeedsAudio(card)) enqueueListen(req.deps, req.user, card)
+  return c.json(nextResponse(instance, req.lessonId ?? null))
 }
 
 function fillTeaching(req: ServeCardReq): void {
@@ -298,17 +298,6 @@ function metWords(deps: Deps, user: SessionUser, data: LoadedCards, card: Card):
 
 function enqueueListen(deps: Deps, user: SessionUser, card: Card): void {
   deps.audio?.enqueue([{ userId: user.id, text: card.back, language: card.targetLang }])
-}
-
-function actionSummary(action?: ActionDef) {
-  if (!action) return null
-  return {
-    id: action.id,
-    skillId: action.skillId,
-    xp: action.xp,
-    produces: action.produces ?? [],
-    consumes: action.consumes ?? [],
-  }
 }
 
 interface DrillRequest {

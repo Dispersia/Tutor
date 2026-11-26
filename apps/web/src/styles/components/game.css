@@ -13,12 +13,6 @@
     font-size: 1.6rem;
     line-height: 1;
   }
-  .medal--lg {
-    width: 4rem;
-    height: 4rem;
-    border-radius: 16px;
-    font-size: 2rem;
-  }
   .medal__lvl {
     position: absolute;
     right: -0.55rem;

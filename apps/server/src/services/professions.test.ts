@@ -8,7 +8,6 @@ import {
   getItemCount,
   listEquipment,
   listGearInstances,
-  listGatherLog,
   listRigStates,
   listTalents,
 } from '../db/repo'
@@ -378,7 +377,11 @@ test('every powered drill is written to the completion log', () => {
   const t0 = 3_000_000_000_000
   completeAction(db, bus, user.id, { actionId: 'mine-copper', now: t0 })
   completeAction(db, bus, user.id, { actionId: 'mine-copper', now: t0 + 1_000 })
-  const log = listGatherLog(db, user.id, 'mine-copper')
+  const log = sqlite
+    .query(
+      'select completions from gather_log where user_id = ? and action_id = ? order by created_at',
+    )
+    .all(user.id, 'mine-copper') as { completions: number }[]
   expect(log.map((r) => r.completions)).toEqual([1, 2])
   sqlite.close()
 })

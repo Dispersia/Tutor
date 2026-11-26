@@ -8,7 +8,6 @@ export function registerHealth(app: App) {
     return c.json({
       ok: true,
       name: 'tutor',
-      phase: 3,
       openrouter: Boolean(deps.serverKey),
       registrationOpen: deps.allowRegistration || countUsers(deps.db) === 0,
       speech,

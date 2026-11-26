@@ -10,13 +10,11 @@ import {
   getItemCount,
 } from '../db/repo'
 import { EventBus } from '../events'
-import { MONSTER_BY_ID } from '../game/combat'
 import {
   combatResolve,
   equipItem,
   foodThreshold,
   loadPlayerCombat,
-  monsterState,
   startEncounter,
   unequipItem,
 } from './index'
@@ -27,17 +25,6 @@ function setup() {
   const user = createUser(db, { username: 'alice', passwordHash: 'x' })
   return { db, bus, user, sqlite }
 }
-
-test('every monster is fightable — no per-monster skill or gear gate', () => {
-  const { db, user, sqlite } = setup()
-  for (const m of MONSTER_BY_ID.values()) {
-    const state = monsterState(db, user.id, m)
-    expect(state.unlocked).toBe(true)
-    expect(state.missing).toEqual([])
-    expect(state.equipMissing).toBeNull()
-  }
-  sqlite.close()
-})
 
 test('a fight: hits damage the monster, a kill grants drops + XP', () => {
   const { db, bus, user, sqlite } = setup()

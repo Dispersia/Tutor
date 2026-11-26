@@ -8,7 +8,6 @@ import {
 } from '../../deck/settings'
 import type { Db } from '../client'
 import {
-  attempts,
   cards,
   decks,
   lessonProgress,
@@ -93,9 +92,11 @@ export function updateDeckSettings(
   db: Db,
   deckId: DeckId,
   patch: Partial<DeckSettings>,
+  userId?: UserId,
 ): DeckSettings | undefined {
   const row = db.select().from(decks).where(eq(decks.id, deckId)).get()
   if (!row) return undefined
+  if (userId && row.userId !== userId) return undefined
   const merged = mergeDeckSettings(parseDeckSettings(row.settingsJson), patch)
   db.update(decks)
     .set({ settingsJson: JSON.stringify(merged) })
@@ -104,9 +105,10 @@ export function updateDeckSettings(
   return merged
 }
 
-export function clearDeckBuilds(db: Db): number {
+export function clearDeckBuilds(db: Db, userId?: UserId): number {
   let cleared = 0
   for (const row of db.select().from(decks).all()) {
+    if (userId && row.userId !== userId) continue
     const settings = parseDeckSettings(row.settingsJson)
     if (!settings.building) continue
     db.update(decks)
@@ -118,7 +120,13 @@ export function clearDeckBuilds(db: Db): number {
   return cleared
 }
 
-export function deleteDeck(db: Db, deckId: DeckId): void {
+function ownsDeck(db: Db, deckId: DeckId, userId: UserId): boolean {
+  const row = db.select({ userId: decks.userId }).from(decks).where(eq(decks.id, deckId)).get()
+  return row?.userId === userId
+}
+
+export function deleteDeck(db: Db, deckId: DeckId, userId?: UserId): void {
+  if (userId && !ownsDeck(db, deckId, userId)) return
   inTransaction(db, (tx) => {
     deleteCardHistory(tx, cardIdsOf(tx, deckId))
     tx.delete(lessonProgress)
@@ -161,7 +169,6 @@ function deleteCardHistory(db: Db, cardIds: CardId[]): void {
     db.delete(srs).where(inArray(srs.cardId, slice)).run()
     db.delete(srsReviews).where(inArray(srsReviews.cardId, slice)).run()
     db.delete(reviews).where(inArray(reviews.cardId, slice)).run()
-    db.delete(attempts).where(inArray(attempts.cardId, slice)).run()
   }
 }
 

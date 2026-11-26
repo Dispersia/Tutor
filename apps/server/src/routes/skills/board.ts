@@ -37,7 +37,6 @@ import {
 } from '../../services'
 import type { Deps } from '../../context'
 
-export type SkillView = ReturnType<typeof skillView>
 export type Board = ReturnType<typeof boardSkills>
 
 interface BoardData extends PlayerCtx {
@@ -116,10 +115,24 @@ function recipeView(a: ActionDef, choiceId: string | undefined) {
 function rigView(a: ActionDef, d: BoardData, rig: RigState | undefined) {
   if (!rig) return null
   const xpPerCraft = a.id === 'distill' ? distillPerCraft(d.db, d.userId) : undefined
-  return idleView(rig, a, d.now, d.bonuses.yield(a.id) + d.bonuses.double(a.id), xpPerCraft)
+  const yieldBonus = d.bonuses.yield(a.id) + d.bonuses.double(a.id)
+  return {
+    ...idleView(rig, a, d.now, yieldBonus, xpPerCraft),
+    produceMultiplier: produceMultiplier(a, d, rig.choice || undefined, yieldBonus),
+  }
 }
 
-export function currentEffect(kind: ModKind, b: Bonuses, actionId: string): number {
+function produceMultiplier(
+  a: ActionDef,
+  d: BoardData,
+  choiceId: string | undefined,
+  yieldBonus: number,
+): number {
+  const level = d.byAction.get(a.id)?.level ?? 1
+  return actionOdds(a, choiceId, level) * (1 + yieldBonus)
+}
+
+function currentEffect(kind: ModKind, b: Bonuses, actionId: string): number {
   switch (kind) {
     case 'yield':
       return b.yield(actionId)

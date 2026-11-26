@@ -31,7 +31,3 @@ export function imeFor(
   }
   return engine
 }
-
-export function hasIme(lang: string | null | undefined, opts: ImeOptions = {}): boolean {
-  return Boolean(imeFor(lang, opts))
-}

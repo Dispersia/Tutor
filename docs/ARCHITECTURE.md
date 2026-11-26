@@ -24,11 +24,12 @@ services/   use cases: orchestrate game rules + repo queries; multi-write ones a
 db/         schema/ (drizzle tables by domain), repo/ (every SQL query), migrate, client
 game/       the rules of the world — pure: no database, no HTTP
 exercises/  one file per drill under defs/, plus the registry
-deck/       deck building: the LLM planner, growth, the lexicon, Anki import glue, readings, pitch
-text/       shared text utilities: normalisers, reading keys, Zhuyin, furigana, the lexicon
+deck/       deck building: the LLM planner, growth, the lexicon, readings, pitch
+text/       shared text utilities: normalisers, reading keys, Zhuyin, furigana, the lexicon, the frequency lists
 ime/        reverse-index lookups for the in-app IME (Zhuyin → hanzi, kana → kanji)
-llm/ audio/ speech/ pronunciation/ push/ anki/ frequency/   integrations
-seed/       the curated starter decks — a test fixture, not runtime code
+llm/ audio/ speech/ pronunciation/ push/ frequency/   integrations
+deckFixture.ts   test-only: the two fixture decks the practice and combat suites
+                 exercise. No curated decks ship; every deck comes from the planner.
 ```
 
 **Layer direction:** `routes → services → db → game`, never backwards.
@@ -50,9 +51,9 @@ Conventions:
   a subscriber never sees a write that did not happen.
 - **One error shape.** Routes answer errors with `fail(c, status, message)` from
   `routes/errors.ts` (`{ error }`), and a missing OpenRouter key with `needKey`.
-- **One helper per text job.** Normalising, reading keys and language names live
-  in `text/` and `llm/prompts.ts` (`langName`); calls to the speech gateway go
-  through `withGateway` (`speech/gateway.ts`). Do not write a local copy.
+- **One helper per text job.** Normalising and reading keys live in `text/`;
+  language display names are `langName` in `llm/prompts.ts`. Calls to the speech
+  gateway go through `withGateway` (`speech/gateway.ts`). Do not write a local copy.
 - **Equipment is its instances.** `gear_instances` is the only record of owned
   gear; `getItemCount`/`listInventory`/`addItems` handle that in one place
   (`db/repo/game.ts`). Use `spendableCount` when something is to be *spent*:
@@ -91,6 +92,7 @@ lib/resource.svelte.ts                 cachedResource(path): seed from cache, th
 lib/skills/store.svelte.ts             the one shared skills board (useSkills())
 lib/clock.svelte.ts                    the one shared ticker
 lib/haptics.svelte.ts                  key-press vibration intensity (per user)
+lib/tapGuard.svelte.ts                 swallows taps for a beat after the IME closes
 styles/                               tokens, base, components/<family>.css, animations
 ```
 

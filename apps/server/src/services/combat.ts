@@ -11,7 +11,14 @@ import {
 import type { Db } from '../db/client'
 import { atomic } from '../db/repo/helpers'
 import type { EventBus } from '../events'
-import { MONSTER_BY_ID, playerMaxHp, playerPower, type MonsterDef } from '../game/combat'
+import {
+  clampFoodThreshold,
+  FOOD_THRESHOLD_DEFAULT,
+  MONSTER_BY_ID,
+  playerMaxHp,
+  playerPower,
+  type MonsterDef,
+} from '../game/combat'
 import {
   activeSetBonuses,
   addStats,
@@ -33,7 +40,6 @@ import {
   type GearStats,
   type ItemDef,
   type SkillId,
-  type UnlockReq,
 } from '../game/skills'
 import { accountBandBonuses, enchantOf } from './bands'
 import { consumeItems } from './items'
@@ -78,16 +84,7 @@ export function combatLevel(db: Db, userId: UserId, levels?: Map<string, number>
 }
 
 export function loadoutSetBonuses(db: Db, userId: UserId): ActiveSetBonus[] {
-  return activeSetBonuses(armourCounts(db, userId))
-}
-
-function armourCounts(db: Db, userId: UserId): Partial<Record<ArmourType, number>> {
-  const counts: Partial<Record<ArmourType, number>> = {}
-  for (const row of listEquipment(db, userId)) {
-    const item = ITEM_BY_ID.get(row.itemId)
-    if (item?.armourType) counts[item.armourType] = (counts[item.armourType] ?? 0) + 1
-  }
-  return counts
+  return activeSetBonuses(loadout(db, userId).armourCounts)
 }
 
 export function loadPlayerCombat(
@@ -137,9 +134,17 @@ function pieceTotals(db: Db, userId: UserId, row: EquipmentRow, item: ItemDef, r
   if (def) stats = { ...stats, [def.stat]: stats[def.stat] + def.value }
   return {
     stats,
-    power: instance?.power ?? item.power ?? 0,
-    armour: instance?.armour ?? item.armour ?? 0,
+    power: numberOr(instance?.power, item.power, 0),
+    armour: numberOr(instance?.armour, item.armour, 0),
   }
+}
+
+function numberOr(
+  first: number | null | undefined,
+  second: number | null | undefined,
+  fallback: number,
+): number {
+  return first ?? second ?? fallback
 }
 
 interface Assembly {
@@ -204,28 +209,19 @@ function passives(
   }
 }
 
-export function monsterState(
-  _db: Db,
-  _userId: UserId,
-  _m: MonsterDef,
-): { unlocked: boolean; missing: UnlockReq[]; equipMissing: { slot: string; tag: string } | null } {
-  return { unlocked: true, missing: [], equipMissing: null }
-}
+export const DEFEAT_HP = 1
 
 export function currentHp(db: Db, userId: UserId, maxHp: number): number {
   const stored = getPlayerHp(db, userId)
   if (stored == null) return maxHp
-  return Math.max(1, Math.min(stored, maxHp))
+  return Math.max(DEFEAT_HP, Math.min(stored, maxHp))
 }
-
-export const DEFEAT_HP = 1
-
-const DEFAULT_FOOD_THRESHOLD = 0.5
 
 export function foodThreshold(db: Db, userId: UserId): number {
   const raw = getUserSetting(db, userId, 'foodThreshold')
   const n = raw ? Number(raw) : NaN
-  return Number.isFinite(n) && n > 0 && n <= 100 ? n / 100 : DEFAULT_FOOD_THRESHOLD
+  const percent = Number.isFinite(n) ? clampFoodThreshold(n) : FOOD_THRESHOLD_DEFAULT
+  return percent / 100
 }
 
 function bestConsumable(
@@ -253,7 +249,7 @@ export function bestFood(db: Db, userId: UserId): ItemDef | undefined {
   return bestConsumable(db, userId, (i) => i.heal)
 }
 
-export function bestPotion(db: Db, userId: UserId): ItemDef | undefined {
+function bestPotion(db: Db, userId: UserId): ItemDef | undefined {
   return bestConsumable(db, userId, (i) => (i.buff ? i.buff.value : undefined))
 }
 
@@ -280,7 +276,7 @@ function drinkBestPotion(db: Db, bus: EventBus, userId: UserId, maxHp: number): 
   }
 }
 
-export interface EncounterStart {
+interface EncounterStart {
   monsterId: string
   monsterHp: number
   monsterMaxHp: number
@@ -293,18 +289,11 @@ export interface EncounterStart {
 
 export type StartResult =
   | { ok: true; monster: MonsterDef; encounter: EncounterStart; drank: Drank }
-  | {
-      ok: false
-      error: string
-      missing?: UnlockReq[]
-      equipMissing?: { slot: string; tag: string }
-    }
+  | { ok: false; error: string }
 
 function startEncounterTx(db: Db, bus: EventBus, userId: UserId, monsterId: string): StartResult {
   const m = MONSTER_BY_ID.get(monsterId)
   if (!m) return { ok: false, error: 'unknown monster' }
-  const locked = lockResult(db, userId, m)
-  if (locked) return locked
   if (getEncounter(db, userId))
     return { ok: false, error: 'finish or flee the current fight first' }
   const pc = loadPlayerCombat(db, userId, loadProgress(db, userId).levels)
@@ -327,17 +316,6 @@ function startOk(
     monster: m,
     encounter: startView(monsterId, m, potion, startHp),
     drank: potion.drank,
-  }
-}
-
-function lockResult(db: Db, userId: UserId, m: MonsterDef): StartResult | undefined {
-  const state = monsterState(db, userId, m)
-  if (state.unlocked) return undefined
-  return {
-    ok: false,
-    error: 'locked',
-    missing: state.missing,
-    equipMissing: state.equipMissing ?? undefined,
   }
 }
 

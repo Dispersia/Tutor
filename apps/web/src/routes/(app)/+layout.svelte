@@ -7,6 +7,7 @@
   import { href, stripBase } from '#lib/paths'
   import { htmlLang } from '#lib/lang'
   import { startRigAlerts } from '#lib/rigAlerts'
+  import { tapGuard } from '#lib/tapGuard.svelte'
   import { reportTimezone } from '#lib/timezone'
   import Icon from '#lib/components/Icon.svelte'
   import ToastHost from '#lib/components/ToastHost.svelte'
@@ -77,7 +78,7 @@
 <div class="flex min-h-dvh flex-col lg:pl-64">
   <aside
     class="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex lg:w-64 lg:flex-col lg:border-r lg:border-ink-700/70 lg:bg-ink-950/70 lg:backdrop-blur-xl"
-    aria-label="Primary"
+    aria-label="Sidebar"
   >
     <div class="px-5 pt-6 pb-5">
       <a
@@ -175,7 +176,6 @@
         <button
           type="button"
           onclick={() => (open = !open)}
-          aria-haspopup="menu"
           aria-expanded={open}
           aria-label="Account menu"
           class="display grid h-11 w-11 shrink-0 place-items-center rounded-[10px] border text-sm font-bold transition-colors {open ||
@@ -194,7 +194,7 @@
             onclick={() => (open = false)}
             class="fixed inset-0 z-20 cursor-default"
           ></button>
-          <div class="rise panel absolute right-0 z-30 mt-2 w-56" role="menu">
+          <div class="rise panel absolute right-0 z-30 mt-2 w-56">
             <div class="border-b border-ink-700 px-3 py-2.5">
               <div class="display truncate text-sm text-ink-100">{session.user?.handle}</div>
               <div class="truncate text-xs text-ink-400">@{session.user?.username}</div>
@@ -219,7 +219,6 @@
               {@const on = active.startsWith(m.href)}
               <a
                 href={href(m.href)}
-                role="menuitem"
                 aria-current={on ? 'page' : undefined}
                 class="flex min-h-11 items-center gap-3 px-3 py-2.5 text-sm transition-colors hover:bg-ink-800 {on
                   ? 'text-seal-300'
@@ -232,7 +231,6 @@
             <button
               type="button"
               onclick={signOut}
-              role="menuitem"
               class="flex min-h-11 w-full items-center gap-3 border-t border-ink-700 px-3 py-2.5 text-left text-sm text-ember-300 transition-colors hover:bg-ink-800"
             >
               <Icon name="logout" size={16} cls="text-ember-400" />
@@ -273,3 +271,7 @@
 </div>
 
 <ToastHost />
+
+{#if tapGuard.active}
+  <div class="fixed inset-0 z-[60]" aria-hidden="true"></div>
+{/if}

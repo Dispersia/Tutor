@@ -99,8 +99,6 @@ export interface Stats {
   quietUntil?: number
 }
 
-export const listDecks = () => api<{ decks: Deck[] }>('/api/decks')
-
 export const createPathDeck = (body: { targetLang: string; sourceLang?: string; name?: string }) =>
   api<BuiltDeck>('/api/decks', {
     method: 'POST',
@@ -127,7 +125,7 @@ export const backfillPitch = (deckId: string, opts: { force?: boolean } = {}) =>
     ...(opts.force ? { body: JSON.stringify({ force: true }) } : {}),
   })
 
-export interface CardIssue {
+interface CardIssue {
   cardId: string
   type: string
   front: string
@@ -241,8 +239,4 @@ export const gradeSpeak = (form: FormData) =>
     stats: Stats
   }>('/api/practice/speak', { method: 'POST', body: form, signal: gradeSignal() })
 
-export interface WordFeedback {
-  text: string
-  ok: boolean
-  tip?: string
-}
+export type { WordFeedback } from '@tutor/core'

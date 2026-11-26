@@ -15,12 +15,7 @@ export function scriptPrefsFor(deps: Deps, card: ServerCard): ScriptPrefs {
   return { variant: deck?.settings?.variant, readingScript: deck?.settings?.readingScript }
 }
 
-export function showReadingsFor(
-  deps: Deps,
-  userId: UserId,
-  card: ServerCard,
-  prefs: StudyPrefs,
-): boolean {
+function showReadingsFor(deps: Deps, userId: UserId, card: ServerCard, prefs: StudyPrefs): boolean {
   const deck = card.deckId ? getDeck(deps.db, card.deckId) : undefined
   return deck?.settings?.showReadings ?? showsReadings(prefs, card.targetLang)
 }

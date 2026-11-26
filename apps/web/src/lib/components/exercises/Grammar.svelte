@@ -48,7 +48,12 @@
     </div>
   {:else}
     <form onsubmit={submit} class="space-y-4">
-      <ImeInput bind:value={answer} lang={answerLang} placeholder="Type the correct form…" />
+      <ImeInput
+        bind:value={answer}
+        lang={answerLang}
+        disabled={busy}
+        placeholder="Type the correct form…"
+      />
       <button
         type="submit"
         disabled={busy || !answer.trim()}

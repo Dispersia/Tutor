@@ -15,6 +15,7 @@
   import RigList from '#lib/components/home/RigList.svelte'
   import BankStrip from '#lib/components/home/BankStrip.svelte'
   import ConfirmDialog from '#lib/components/ConfirmDialog.svelte'
+  import Spinner from '#lib/components/Spinner.svelte'
 
   const progress = cachedResource<Stats>('/api/stats', {
     auto: false,
@@ -81,10 +82,10 @@
       </p>
     </div>
     <div class="shrink-0 text-center">
-      <div class="seal h-14 w-14" aria-label="Account level {stats?.level ?? 1}">
+      <div class="seal h-14 w-14" role="img" aria-label="Account level {stats?.level ?? 1}">
         <span class="display text-xl leading-none font-bold">{stats?.level ?? 1}</span>
       </div>
-      <p class="seal__label" aria-hidden="true">Level</p>
+      <p class="seal__label" aria-hidden="true">Account</p>
     </div>
   </div>
 </header>
@@ -94,6 +95,10 @@
     <p class="banner__text flex-1">Couldn't load your progress — {progress.error}</p>
     <button type="button" class="btn btn-ghost px-3 py-2 text-xs" onclick={load}>Retry</button>
   </div>
+{:else if !stats}
+  <p class="banner mt-3 flex items-center gap-2" style={accentStyle(ACCENT.azure)}>
+    <Spinner size={16} label="Loading your progress" /> Loading…
+  </p>
 {:else}
   <div class="lg:grid lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] lg:gap-5">
     <ActivityPanel {days} today={stats?.activity?.today} goal={stats?.dailyGoal} />

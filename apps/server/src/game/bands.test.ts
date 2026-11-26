@@ -1,8 +1,15 @@
 import { expect, test } from 'bun:test'
 import { openDb } from '../db/client'
-import { addItems, createUser, getActionXp, getItemCount, listGearInstances } from '../db/repo'
+import {
+  addGearPiece,
+  addItems,
+  createUser,
+  getActionXp,
+  getItemCount,
+  listGearInstances,
+} from '../db/repo'
 import { EventBus } from '../events'
-import { BANDS, bandXpToLevel } from './bands'
+import { BANDS, bandXpForLevel } from './bands'
 import { MONSTER_BY_ID } from './combat'
 import {
   ACTIONS,
@@ -12,12 +19,13 @@ import {
   DISTILL_XP_PER_VALUE,
   ENCHANTS,
   ITEM_BY_ID,
+  actionOdds,
   itemValue,
+  skillLevelInfo,
   skillXpForLevel,
 } from './skills'
 import {
   actionState,
-  actionSuccessChance,
   applyEnchant,
   awardActionXp,
   accountBandBonuses,
@@ -25,7 +33,6 @@ import {
   bandLevelMap,
   bandView,
   completeAction,
-  craftGearInstance,
   distillItem,
   enchantOf,
   loadPlayerCombat,
@@ -37,6 +44,12 @@ import {
 function xpForLevel(level: number): number {
   let total = 0
   for (let i = 1; i < level; i++) total += skillXpForLevel(i)
+  return total
+}
+
+function bandXpToLevel(level: number): number {
+  let total = 0
+  for (let i = 1; i < level; i++) total += bandXpForLevel(i)
   return total
 }
 
@@ -105,7 +118,7 @@ test('salvage yields the band reagent; Distill yields essence (§13.5.3.2)', () 
   const helm = ITEM_BY_ID.get('bronze_helm')!
   expect(bandForItem(helm)?.reagent).toBe('bronze_reagent')
 
-  const id = craftGearInstance(db, user.id, helm)
+  const id = addGearPiece(db, user.id, helm)
   const res = salvageGear(db, bus, user.id, id)
   expect(res.ok).toBe(true)
   expect(res.materials?.some((m) => m.item === 'bronze_reagent')).toBe(true)
@@ -131,7 +144,7 @@ test('Distill burns an item for Enchanting XP by value, and yields its essence (
 
 test('an enchant fits the slot, needs its level and reagents, and grants no XP (§13.5.3.2)', () => {
   const { db, bus, user, sqlite } = setup()
-  const piece = craftGearInstance(db, user.id, ITEM_BY_ID.get('iron_sword')!)
+  const piece = addGearPiece(db, user.id, ITEM_BY_ID.get('iron_sword')!)
 
   expect(applyEnchant(db, bus, user.id, piece, { enchantId: 'chest:stamina' }).ok).toBe(false)
   expect(applyEnchant(db, bus, user.id, piece, { enchantId: 'mainHand:strength' }).ok).toBe(false)
@@ -219,11 +232,13 @@ test('prospecting is ONE action — you choose the ore (§13.5.3.1)', () => {
 test('one level lifts every ore: the odds are per choice, the level is shared (§13.5.3.1)', () => {
   const { db, bus, user, sqlite } = setup()
   const a = ACTION_BY_ID.get('prospect')!
-  expect(actionSuccessChance(db, user.id, a, 'copper')).toBeCloseTo(0.4)
-  expect(actionSuccessChance(db, user.id, a, 'mythril')).toBeCloseTo(0.5)
+  const level = () => skillLevelInfo(getActionXp(db, user.id, a.id)).level
+  const chance = (choiceId: string) => actionOdds(a, choiceId, level())
+  expect(chance('copper')).toBeCloseTo(0.4)
+  expect(chance('mythril')).toBeCloseTo(0.5)
   awardActionXp(db, bus, user.id, { actionId: 'prospect', amount: xpForLevel(11) })
-  expect(actionSuccessChance(db, user.id, a, 'copper')).toBeCloseTo(0.4 + 0.03 * 10)
-  expect(actionSuccessChance(db, user.id, a, 'mythril')).toBeCloseTo(0.5 + 0.03 * 10)
+  expect(chance('copper')).toBeCloseTo(0.4 + 0.03 * 10)
+  expect(chance('mythril')).toBeCloseTo(0.5 + 0.03 * 10)
   sqlite.close()
 })
 

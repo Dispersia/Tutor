@@ -16,7 +16,7 @@ function rig(over: Partial<IdleRigDTO> = {}): IdleRigDTO {
     runProgress: 0.04,
     maxed: false,
     intervalSec: 20,
-    yieldBonus: 0,
+    produceMultiplier: 1,
     xpPerCraft: 0.9,
     produces: [{ item: 'ore', count: 1 }],
     consumes: [],
@@ -37,9 +37,9 @@ test('rigGatheredTotal counts from the recorded run start, not the run capacity'
   expect(rigGatheredTotal(r, now)).toEqual({ ore: 3 })
 })
 
-test('rigGatheredTotal applies the yield bonus', () => {
+test('rigGatheredTotal applies the produce multiplier', () => {
   const now = 1_000_000
-  const r = rig({ runEndsAt: now + 540_000, runSec: 600, yieldBonus: 0.5 })
+  const r = rig({ runEndsAt: now + 540_000, runSec: 600, produceMultiplier: 1.5 })
   expect(rigGatheredTotal(r, now)).toEqual({ ore: 4 })
 })
 

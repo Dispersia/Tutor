@@ -138,7 +138,7 @@ export function unseenParts(card: PlannedCard, known: ReadonlySet<string>): Unse
   }
 }
 
-export function hasUnseen(parts: UnseenParts): boolean {
+function hasUnseen(parts: UnseenParts): boolean {
   return parts.words.length > 0 || parts.distractors.length > 0
 }
 

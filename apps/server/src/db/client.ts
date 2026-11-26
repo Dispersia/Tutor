@@ -19,4 +19,3 @@ export function openDb(path: string) {
 }
 
 export type Db = ReturnType<typeof openDb>['db']
-export type Sqlite = ReturnType<typeof openDb>['sqlite']

@@ -38,8 +38,6 @@ export function registerSpeech(app: App) {
   app.post('/api/speech/unload', (c) => unloadHandler(c))
   app.post('/api/speech/tts', (c) => proxyToSpeech(c, '/v1/tts'))
   app.post('/api/speech/asr', (c) => proxyToSpeech(c, '/v1/asr'))
-  app.post('/api/speech/align', (c) => proxyToSpeech(c, '/v1/align'))
-  app.post('/api/speech/assess', (c) => proxyToSpeech(c, '/v1/assess'))
 }
 
 async function healthHandler(c: Context<AppEnv>) {

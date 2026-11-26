@@ -9,9 +9,10 @@ import { knownWords } from '../../services'
 import { makeAssessor, type AssessFn } from '../../pronunciation/assess'
 import { actionGate } from './action'
 import { exerciseCtx } from './exerciseCtx'
+import { wasIssued } from './issued'
 import { judgeFor } from './judge'
-import { finalizeReview, recordAttempt, uncountedOutcome } from './record'
-import { fail, failWith } from '../errors'
+import { addReviewRow, finalizeReview, uncountedOutcome } from './record'
+import { fail, failWith, NOT_ISSUED_MESSAGE } from '../errors'
 
 interface SpokenFields {
   cardId: CardId
@@ -38,6 +39,7 @@ async function speakHandler(c: Context<AppEnv>) {
   if (!card) return fail(c, 404, 'card not found')
   const def = fields.exerciseId ? registry.get(fields.exerciseId) : undefined
   if (!def?.gradeAudio) return fail(c, 400, 'exercise does not support audio grading')
+  if (!wasIssued(user.id, card.id, def.id)) return fail(c, 409, NOT_ISSUED_MESSAGE)
   const gate = actionGate(deps, user.id, { actionId: fields.actionId, choiceId: fields.choiceId })
   if (gate.error) return failWith(c, gate.error)
   return gradeSpoken({ c, deps, user, card, def, fields, file })
@@ -96,7 +98,7 @@ async function speakCtx(call: SpeakCall): Promise<ExerciseContext> {
 
 function settleSpoken(call: SpeakCall, result: GradeResult, xp: number) {
   const { deps, user, card, def, fields } = call
-  recordAttempt(deps, {
+  addReviewRow(deps, {
     userId: user.id,
     card,
     exerciseId: def.id,

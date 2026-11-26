@@ -2,7 +2,7 @@ import { toUserId } from '../../ids'
 import type { Context } from 'hono'
 import { deleteUser, deleteUserAuthSessions, listUsers } from '../../db/repo'
 import type { App, AppEnv } from '../../context'
-import { currentUser } from './session'
+import { adminOnly } from '../guards'
 import { fail } from '../errors'
 
 export function registerAuthAdmin(app: App) {
@@ -11,16 +11,15 @@ export function registerAuthAdmin(app: App) {
 }
 
 function listUsersHandler(c: Context<AppEnv>) {
-  const user = currentUser(c)
-  if (!user) return fail(c, 401, 'unauthorized')
-  if (user.role !== 'admin') return fail(c, 403, 'forbidden')
+  const denied = adminOnly(c)
+  if (denied) return denied
   return c.json({ users: listUsers(c.get('deps').db) })
 }
 
 function deleteUserHandler(c: Context<AppEnv>) {
-  const user = currentUser(c)
-  if (!user) return fail(c, 401, 'unauthorized')
-  if (user.role !== 'admin') return fail(c, 403, 'forbidden')
+  const denied = adminOnly(c)
+  if (denied) return denied
+  const user = c.get('user')!
   const target = toUserId(String(c.req.param('id')))
   if (target === user.id) return fail(c, 400, 'cannot delete yourself')
   deleteUserAuthSessions(c.get('deps').db, target)

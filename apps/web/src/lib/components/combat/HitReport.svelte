@@ -2,6 +2,7 @@
   import { href } from '#lib/paths'
   import { ACCENT } from '#lib/theme'
   import Icon from '#lib/components/Icon.svelte'
+  import { itemName } from './itemName'
   import type { HitResult } from '#lib/combat'
   import type { ItemDTO, SkillsResponse } from '#lib/skills'
 
@@ -13,7 +14,7 @@
 
   let { hit, skillMap, itemMap }: Props = $props()
 
-  const name = (id: string) => itemMap.get(id)?.name ?? id
+  const name = (id: string) => itemName(itemMap, id)
 </script>
 
 <div class="mb-3 flex flex-wrap gap-2">

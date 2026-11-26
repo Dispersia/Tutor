@@ -2,7 +2,7 @@ import { api } from './api'
 import type { Grade, Instance, Stats } from './exercises'
 import type { GearStats, ActiveSetBonusDTO } from './skills'
 
-export interface DropDef {
+interface DropDef {
   item: string
   chance: number
   min: number
@@ -18,11 +18,7 @@ export interface MonsterDTO {
   hp: number
   damage: number
   xp: number
-  deckLevel: string
   drops: DropDef[]
-  unlocked: boolean
-  missing: { skill: string; level: number }[]
-  equipMissing: { slot: string; tag: string } | null
 }
 
 export interface EncounterDTO {
@@ -41,7 +37,7 @@ export interface EncounterDTO {
   totalDamage: number
 }
 
-export interface CombatPlayerDTO {
+interface CombatPlayerDTO {
   skill: string
   combatStyle: string
   maxHp: number
@@ -91,8 +87,6 @@ export interface HitResult {
   ate: { item: string; heal: number; playerHp: number } | null
   talentUnlocked: number | null
 }
-
-export const getCombat = () => api<CombatResponse>('/api/combat')
 
 export const startFight = (monsterId: string) =>
   api<{

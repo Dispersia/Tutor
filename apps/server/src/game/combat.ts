@@ -14,7 +14,6 @@ export interface MonsterDef {
   hp: number
   damage: number
   xp: number
-  deckLevel: string
   drops: DropDef[]
 }
 
@@ -28,7 +27,6 @@ export const MONSTERS: MonsterDef[] = [
     hp: 15,
     damage: 2,
     xp: 8,
-    deckLevel: 'hsk1',
     drops: [
       { item: 'bones', chance: 1, min: 1, max: 1 },
       { item: 'slime_goo', chance: 0.6, min: 1, max: 2 },
@@ -43,7 +41,6 @@ export const MONSTERS: MonsterDef[] = [
     hp: 30,
     damage: 3,
     xp: 12,
-    deckLevel: 'hsk1',
     drops: [
       { item: 'bones', chance: 1, min: 1, max: 2 },
       { item: 'coins', chance: 0.8, min: 5, max: 15 },
@@ -59,7 +56,6 @@ export const MONSTERS: MonsterDef[] = [
     hp: 55,
     damage: 6,
     xp: 18,
-    deckLevel: 'hsk1',
     drops: [
       { item: 'hide', chance: 1, min: 1, max: 2 },
       { item: 'bones', chance: 0.7, min: 1, max: 1 },
@@ -75,7 +71,6 @@ export const MONSTERS: MonsterDef[] = [
     hp: 95,
     damage: 10,
     xp: 26,
-    deckLevel: 'n5',
     drops: [
       { item: 'bones', chance: 1, min: 2, max: 4 },
       { item: 'iron_ore', chance: 0.5, min: 1, max: 2 },
@@ -92,7 +87,6 @@ export const MONSTERS: MonsterDef[] = [
     hp: 150,
     damage: 14,
     xp: 40,
-    deckLevel: 'n5',
     drops: [
       { item: 'air_rune', chance: 0.9, min: 1, max: 3 },
       { item: 'uncut_gem', chance: 0.4, min: 1, max: 1 },
@@ -109,7 +103,6 @@ export const MONSTERS: MonsterDef[] = [
     hp: 280,
     damage: 22,
     xp: 90,
-    deckLevel: 'hsk1',
     drops: [
       { item: 'bones', chance: 1, min: 3, max: 6 },
       { item: 'cut_gem', chance: 0.5, min: 1, max: 2 },
@@ -157,4 +150,12 @@ export function rollDrops(
     if (count > 0) out.push({ item: d.item, count })
   }
   return out
+}
+
+export const FOOD_THRESHOLD_DEFAULT = 50
+const FOOD_THRESHOLD_MIN = 10
+const FOOD_THRESHOLD_MAX = 90
+
+export function clampFoodThreshold(n: number): number {
+  return Math.min(FOOD_THRESHOLD_MAX, Math.max(FOOD_THRESHOLD_MIN, n))
 }

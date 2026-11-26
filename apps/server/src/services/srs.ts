@@ -37,7 +37,7 @@ export interface ReviewSchedule {
   lapses: number
 }
 
-export function desiredRetention(db: Db, userId: UserId): number {
+function desiredRetention(db: Db, userId: UserId): number {
   const raw = Number(getUserSetting(db, userId, 'desiredRetention') ?? 90)
   const pct = Number.isFinite(raw) ? Math.min(97, Math.max(70, Math.round(raw))) : 90
   return pct / 100
@@ -83,10 +83,10 @@ function recordReviewTx(
   db: Db,
   bus: EventBus,
   userId: UserId,
-  req: { cardId: CardId; score: number; correct: boolean; source?: string },
+  req: { cardId: CardId; score: number; correct: boolean; source?: string; now?: number },
 ): ReviewSchedule {
   const prev = prevStateOf(getSrs(db, userId, req.cardId))
-  const now = Date.now()
+  const now = req.now ?? Date.now()
   const rating = ratingFromScore(req.score, req.correct)
   const next = advance(db, userId, prev, rating, now)
   saveSchedule(db, userId, req.cardId, next.state, now)
@@ -199,10 +199,16 @@ export interface LoadedCards {
   srs: Map<CardId, FsrsState>
 }
 
-export function knownWords(db: Db, userId: UserId, loaded?: LoadedCards): Set<string> {
+export function knownWords(
+  db: Db,
+  userId: UserId,
+  targetLang?: string,
+  loaded?: LoadedCards,
+): Set<string> {
   const srsMap = loaded?.srs ?? srsStateMap(db, userId)
   const known = new Set<string>()
   for (const c of loaded?.cards ?? listCards(db, userId)) {
+    if (targetLang && c.targetLang !== targetLang) continue
     if (isLearned(srsMap.get(c.id))) known.add(c.back)
   }
   return known
@@ -214,12 +220,7 @@ export function knownWordsFor(
   targetLang: string,
   loaded?: LoadedCards,
 ): Set<string> {
-  const srsMap = loaded?.srs ?? srsStateMap(db, userId)
-  const known = new Set<string>()
-  for (const c of loaded?.cards ?? listCards(db, userId)) {
-    if (c.targetLang === targetLang && isLearned(srsMap.get(c.id))) known.add(c.back)
-  }
-  return known
+  return knownWords(db, userId, targetLang, loaded)
 }
 
 export interface StudyBudget {
@@ -294,8 +295,7 @@ export interface SrsStats {
   budget: StudyBudget
 }
 
-export function srsStats(db: Db, userId: UserId): SrsStats {
-  const now = Date.now()
+export function srsStats(db: Db, userId: UserId, now: number = Date.now()): SrsStats {
   const cards = listCards(db, userId)
   const map = srsStateMap(db, userId)
   const ids = cards.map((c) => c.id)

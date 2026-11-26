@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { bopomofo } from './bopomofo'
-import { BACKSPACE, SPACE, type ImeEngine, type ImeState } from './types'
+import { BACKSPACE, ENTER, SPACE, type ImeEngine, type ImeState } from './types'
 
 function type(engine: ImeEngine, keys: string): ImeState {
   return [...keys].reduce((state, key) => engine.press(state, key), engine.initial())
@@ -22,10 +22,35 @@ describe('bopomofo', () => {
     expect(type(bopomofo, 'ㄋㄧˇ' + BACKSPACE + BACKSPACE).preedit).toBe('ㄋ')
   })
 
-  test('space and enter commit the top candidate', () => {
+  test('space marks the first tone instead of committing', () => {
+    expect(type(bopomofo, 'ㄇㄚ' + SPACE).preedit).toBe('ㄇㄚˉ')
+  })
+
+  test('enter commits the top candidate', () => {
     const state: ImeState = { ...type(bopomofo, 'ㄨㄛㄏㄣㄏㄠ'), candidates: ['我很好'] }
-    expect(bopomofo.press(state, SPACE).value).toBe('我很好')
-    expect(bopomofo.press(state, SPACE).preedit).toBe('')
+    expect(bopomofo.press(state, ENTER).value).toBe('我很好')
+    expect(bopomofo.press(state, ENTER).preedit).toBe('')
+  })
+
+  test('punctuation commits the candidate and appends', () => {
+    const state: ImeState = { ...type(bopomofo, 'ㄋㄧˇㄏㄠˇ'), candidates: ['你好'] }
+    expect(bopomofo.press(state, '。').value).toBe('你好。')
+  })
+
+  test('the symbols page leads with the number row', () => {
+    expect(bopomofo.symbols?.[0]?.slice(0, 10)).toEqual([
+      '1',
+      '2',
+      '3',
+      '4',
+      '5',
+      '6',
+      '7',
+      '8',
+      '9',
+      '0',
+    ])
+    expect(bopomofo.letters).toBe('ㄅㄆ')
   })
 
   test('finish falls back to the raw reading when there is no candidate', () => {

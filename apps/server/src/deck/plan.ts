@@ -102,7 +102,7 @@ export const DECK_SCHEMA = {
   additionalProperties: false,
 }
 
-export const CHAT_CARD_SCHEMA = {
+const CHAT_CARD_SCHEMA = {
   type: 'object',
   properties: {
     targetLang: { type: 'string' },
@@ -304,7 +304,7 @@ export interface ChatCardPlan {
 
 export type ChatPlanner = (req: ChatCardRequest) => Promise<ChatCardPlan>
 
-export function normalizeChatPlan(raw: unknown, targetLang?: string): ChatCardPlan {
+function normalizeChatPlan(raw: unknown, targetLang?: string): ChatCardPlan {
   const lang = (raw as { targetLang?: unknown } | undefined)?.targetLang
   return {
     targetLang: typeof lang === 'string' && lang.trim() ? lang.trim().toLowerCase() : undefined,

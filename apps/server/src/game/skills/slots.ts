@@ -1,4 +1,4 @@
-import type { CombatStyle, Slot } from './types'
+import type { CombatStyle, SkillId, Slot } from './types'
 
 export const SLOTS: { id: Slot; label: string; icon: string; family: Slot[] }[] = [
   { id: 'head', label: 'Head', icon: '⛑️', family: ['head'] },
@@ -20,8 +20,18 @@ export function slotFamily(slot: Slot): Slot[] {
   return SLOTS.find((s) => s.id === slot)?.family ?? [slot]
 }
 
-export function combatStyleForTags(tags: string[] | undefined): CombatStyle {
+export function combatStyleForSkill(skill: SkillId): CombatStyle {
+  if (skill === 'ranged') return 'ranged'
+  if (skill === 'magic') return 'magic'
+  return 'melee'
+}
+
+export function weaponSkill(tags: string[] | undefined): SkillId {
   if (tags?.includes('bow')) return 'ranged'
   if (tags?.includes('staff')) return 'magic'
-  return 'melee'
+  return 'strength'
+}
+
+export function combatStyleForTags(tags: string[] | undefined): CombatStyle {
+  return combatStyleForSkill(weaponSkill(tags))
 }

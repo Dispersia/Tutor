@@ -46,7 +46,9 @@
 
   onMount(() => {
     const timer = setInterval(() => {
-      if (decks.some((d) => d.settings?.building)) reload().catch(() => {})
+      if (decks.some((d) => d.settings?.building)) {
+        reload().catch((e) => (error = (e as Error).message))
+      }
     }, 4000)
     return () => clearInterval(timer)
   })
@@ -147,7 +149,7 @@
     </div>
     {#if stats}
       <div class="shrink-0 text-center">
-        <div class="seal h-14 w-14" aria-label="Cards due for review">
+        <div class="seal h-14 w-14" role="img" aria-label="Cards due for review">
           <span class="display text-lg leading-none font-bold">{stats.due}</span>
         </div>
         <p class="seal__label" aria-hidden="true">Due</p>

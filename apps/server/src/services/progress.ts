@@ -7,6 +7,7 @@ import {
   ACTION_BY_ID,
   actionLevelInfo,
   actionsForSkill,
+  skillLevelOf as meanSkillLevel,
   type ActionDef,
   type SkillId,
 } from '../game/skills'
@@ -16,15 +17,6 @@ export function actionLevelMap(db: Db, userId: UserId): Map<string, number> {
   return new Map(
     listActionProgress(db, userId).map((r) => [r.actionId, actionLevelInfo(r.xp).level]),
   )
-}
-
-export function actionLevelOf(
-  db: Db,
-  userId: UserId,
-  actionId: string,
-  levels?: Map<string, number>,
-): number {
-  return (levels ?? actionLevelMap(db, userId)).get(actionId) ?? 1
 }
 
 export interface ProgressCtx {
@@ -43,11 +35,7 @@ export function skillLevelOf(
   skillId: SkillId,
   levels?: Map<string, number>,
 ): number {
-  const acts = actionsForSkill(skillId)
-  if (!acts.length) return 1
-  const map = levels ?? actionLevelMap(db, userId)
-  const total = acts.reduce((n, a) => n + (map.get(a.id) ?? 1), 0)
-  return Math.round(total / acts.length)
+  return meanSkillLevel(skillId, levels ?? actionLevelMap(db, userId))
 }
 
 export function primaryActionId(skillId: SkillId): string {

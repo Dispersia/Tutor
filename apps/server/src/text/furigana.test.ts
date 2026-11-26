@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { FREQUENCY_JA } from '../seed/frequency-ja'
+import { FREQUENCY_JA } from './frequency-ja'
 import { furiganaSegments } from './furigana'
 
 const render = (word: string, reading: string) =>

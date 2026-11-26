@@ -6,6 +6,12 @@ const ROWS = [
   ['z', 'x', 'c', 'v', 'b', 'n', 'm'],
 ]
 
+const SYMBOL_ROWS = [
+  ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
+  ['.', ',', '?', '!', '¿', '¡', "'", '"', '-', ':'],
+  ['/', ';', '(', ')', '&', '%', '$', '#', '@', '*'],
+]
+
 const SHIFT: Record<string, string> = {}
 for (const ch of 'abcdefghijklmnopqrstuvwxyz') SHIFT[ch] = ch.toUpperCase()
 
@@ -21,8 +27,10 @@ export const latin: ImeEngine = {
   id: 'latin',
   language: 'en',
   label: 'English',
+  letters: 'ABC',
   columns: 10,
   rows: ROWS,
+  symbols: SYMBOL_ROWS,
   shift: SHIFT,
   initial: emptyState,
   press,

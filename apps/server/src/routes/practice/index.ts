@@ -13,5 +13,5 @@ export function registerPractice(app: App) {
   registerStudyMore(app)
 }
 
-export { learnerOf, type SessionUser, pickNextExercise, pickReviewCard, readingMap } from './select'
-export { exerciseCtx, showReadingsFor } from './exerciseCtx'
+export { type SessionUser, pickNextExercise, pickReviewCard, studyDeckId } from './select'
+export { exerciseCtx } from './exerciseCtx'

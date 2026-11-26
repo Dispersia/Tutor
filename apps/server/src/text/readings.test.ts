@@ -4,6 +4,7 @@ import {
   displayReading,
   hasReadingScript,
   readingKey,
+  readingsFor,
   storedReadings,
   withReading,
 } from './readings'
@@ -97,4 +98,17 @@ test('displayReading: kana, Zhuyin (pinyin converted), else the first reading', 
   expect(displayReading({ targetLang: 'yue', readings: { reading: 'nei5' } })).toBe('')
   expect(displayReading({ targetLang: 'ko', readings: { reading: '', x: 'an' } })).toBe('')
   expect(displayReading({ targetLang: 'ko', readings: {} })).toBe('')
+})
+
+test('readingsFor stores Zhuyin for Mandarin and kana for Japanese', () => {
+  expect(readingsFor('zh', 'nǐ hǎo')).toEqual({ zhuyin: 'ㄋㄧˇ ㄏㄠˇ' })
+  expect(readingsFor('ja', 'taberu', 'たべる')).toEqual({ kana: 'たべる' })
+  expect(readingsFor('ja', 'taberu')).toEqual({ kana: 'taberu' })
+})
+
+test('readingsFor stores nothing rather than an empty or unreadable reading', () => {
+  expect(readingsFor('zh', '')).toEqual({})
+  expect(readingsFor('ja', '', '')).toEqual({})
+  expect(readingsFor('zh', 'ni3 hao3')).toEqual({})
+  expect(readingsFor('zh', 'Nǐ hǎo!')).toEqual({ zhuyin: 'ㄋㄧˇ ㄏㄠˇ' })
 })

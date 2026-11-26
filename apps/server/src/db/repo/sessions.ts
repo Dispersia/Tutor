@@ -21,7 +21,6 @@ export function createSession(db: Db, userId: UserId, s: NewSession = {}) {
     lang: s.lang ?? null,
     title: s.title ?? null,
     startedAt: now(),
-    endedAt: null,
   }
   db.insert(sessions).values(row).run()
   return row

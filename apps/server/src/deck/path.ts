@@ -1,12 +1,12 @@
 import type { CharacterVariant, Fetcher } from '../frequency/source'
 import { fetchFrequencyWords } from '../frequency/source'
 import { langName } from '../llm/prompts'
-import { FREQUENCY_JA } from '../seed/frequency-ja'
+import { FREQUENCY_JA } from '../text/frequency-ja'
 import { FREQUENCY } from '../text/lexicon'
 import { MAX_DECK_WORDS } from './instruction'
 import { lexiconOrder } from './lexicon'
 
-export const PATH_KIND = 'path'
+const PATH_KIND = 'path'
 export const PATH_BATCH = 10
 export const PATH_AHEAD = 3
 

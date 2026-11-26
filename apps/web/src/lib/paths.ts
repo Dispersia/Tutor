@@ -5,10 +5,6 @@ export function href(path: string): string {
   return `${base}${path}`
 }
 
-export function apiPath(path: string): string {
-  return `${base}${path}`
-}
-
 export function stripBase(pathname: string): string {
   return base && pathname.startsWith(base) ? pathname.slice(base.length) || '/' : pathname
 }

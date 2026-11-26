@@ -144,23 +144,18 @@
     transform: translateY(2px);
     box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.05);
   }
-  .cell--press:disabled,
-  .cell--off {
+  .cell--press:disabled {
     cursor: not-allowed;
     border-color: var(--color-ink-700);
     background: var(--color-ink-850);
     box-shadow: none;
   }
   .cell--press:disabled::before,
-  .cell--press:disabled::after,
-  .cell--off::before,
-  .cell--off::after {
+  .cell--press:disabled::after {
     background: color-mix(in oklab, var(--color-ink-400) 20%, transparent);
   }
   .cell--press:disabled .cell__glyph,
-  .cell--off .cell__glyph,
-  .cell--press:disabled .cell__reading,
-  .cell--off .cell__reading {
+  .cell--press:disabled .cell__reading {
     color: var(--color-ink-400);
   }
 }

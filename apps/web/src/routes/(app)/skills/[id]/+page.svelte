@@ -26,6 +26,7 @@
   import TalentRail from '#lib/components/skill/TalentRail.svelte'
   import ActionList from '#lib/components/skill/ActionList.svelte'
   import ConfirmDialog from '#lib/components/ConfirmDialog.svelte'
+  import Spinner from '#lib/components/Spinner.svelte'
 
   const id = $derived(page.params.id)
   const profession = cachedResource<SkillPageResponse>(() =>
@@ -94,7 +95,7 @@
     distillNote = ''
     try {
       const res = await distillGear(itemId)
-      distillNote = `+${res.xp} Enchanting XP · +1 ${res.essence.replace('_', ' ')}`
+      distillNote = `+${res.xp} Enchanting XP · +1 ${res.essence.replaceAll('_', ' ')}`
       await load()
     } catch (e) {
       profession.error = (e as Error).message
@@ -212,7 +213,9 @@
 {/if}
 
 {#if profession.loading}
-  <p class="mt-4 text-sm text-ink-400">Loading…</p>
+  <p class="banner mt-4 flex items-center gap-2" style={accentStyle(ACCENT.azure)}>
+    <Spinner size={16} label="Loading this profession" /> Loading…
+  </p>
 {:else if skill}
   <header class="mt-3 border-b border-ink-700 pb-4 mb-4" style={accentStyle(accent)}>
     <div class="flex items-start justify-between gap-4">
@@ -223,6 +226,7 @@
       <div class="shrink-0 text-center">
         <div
           class="tile grid h-14 w-14 place-items-center"
+          role="img"
           aria-label="Level {skill.level} of 100, the average of {skill.actions.length} actions"
         >
           <span class="display text-xl leading-none font-bold" style="color: {accent}"
@@ -296,7 +300,7 @@
       <div class="h-4"></div>
     </div>
   </div>
-{:else}
+{:else if !profession.error}
   <p class="mt-4 text-sm text-ink-400">Profession not found.</p>
 {/if}
 

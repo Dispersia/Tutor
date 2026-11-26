@@ -6,7 +6,6 @@ import {
   extendRig,
   liveRigCount,
   newRig,
-  replayRig,
   rigIntervalSec,
   rigRunFill,
   rigRunFull,
@@ -180,10 +179,10 @@ describe('settleRig: stock and yield', () => {
     expect(bank.get('copper_ore')).toBe(0)
   })
 
-  test('yield and double fold into the run as expected value', () => {
+  test('yield folds into the run as expected value', () => {
     const powered = extendRig(newRig(), 0)
     const plain = settleRig(powered, ORE, new Map(), 600_000)
-    const rich = settleRig(powered, { ...ORE, yieldBonus: 1, doubleBonus: 0 }, new Map(), 600_000)
+    const rich = settleRig(powered, { ...ORE, yieldBonus: 1 }, new Map(), 600_000)
     expect(rich.produced.copper_ore).toBeGreaterThan(plain.produced.copper_ore!)
     expect(rich.produced.copper_ore).toBeCloseTo(plain.produced.copper_ore! * 2, 0)
   })
@@ -196,44 +195,6 @@ describe('settleRig: stock and yield', () => {
 
     expect(settleRig(newRig(), ORE, new Map(), 10 ** 9).crafted).toBe(0)
     expect(settleRig(extendRig(newRig(), 0), BAR, new Map(), 1_000_000).crafted).toBe(0)
-  })
-})
-
-describe('determinism', () => {
-  test('the completion log alone reconstructs the bank', () => {
-    const times = [0, 2_000, 5_000, 20_000, 61_000]
-    let live = newRig()
-    const liveTotal: Record<string, number> = {}
-    for (const t of times) {
-      const settled = settleRig(live, ORE, new Map(), t)
-      liveTotal.copper_ore = (liveTotal.copper_ore ?? 0) + (settled.produced.copper_ore ?? 0)
-      live = extendRig(settled.state, t)
-    }
-    const tail = settleRig(live, ORE, new Map(), 900_000)
-    liveTotal.copper_ore = (liveTotal.copper_ore ?? 0) + (tail.produced.copper_ore ?? 0)
-
-    const replayed = replayRig(times, ORE, 900_000)
-    expect(replayed.produced.copper_ore).toBe(liveTotal.copper_ore)
-    expect(replayed.state.completions).toBe(times.length)
-  })
-
-  test('replay is order-independent over the log', () => {
-    const a = replayRig([0, 5_000, 9_000], ORE, 600_000)
-    const b = replayRig([9_000, 0, 5_000], ORE, 600_000)
-    expect(a.produced).toEqual(b.produced)
-  })
-
-  test('the log alone also reconstructs the crafts (so passive XP replays)', () => {
-    const times = [0, 2_000, 5_000, 20_000, 61_000]
-    let live = newRig()
-    let crafted = 0
-    for (const t of times) {
-      const settled = settleRig(live, ORE, new Map(), t)
-      crafted += settled.crafted
-      live = extendRig(settled.state, t)
-    }
-    crafted += settleRig(live, ORE, new Map(), 900_000).crafted
-    expect(replayRig(times, ORE, 900_000).crafted).toBe(crafted)
   })
 })
 

@@ -1,4 +1,4 @@
-import { apiPath } from './paths'
+import { href } from './paths'
 
 export interface StreamCallbacks {
   onSession?: (id: string) => void
@@ -23,7 +23,7 @@ export async function streamChat(
 }
 
 async function postChat(body: ChatBody, signal?: AbortSignal): Promise<Response> {
-  const res = await fetch(apiPath('/api/chat'), {
+  const res = await fetch(href('/api/chat'), {
     method: 'POST',
     credentials: 'same-origin',
     headers: { 'content-type': 'application/json' },

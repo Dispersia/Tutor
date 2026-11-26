@@ -40,7 +40,7 @@ class SkillsStore extends Resource<SkillsResponse> {
 
 export type { SkillsStore }
 
-export const skillsStore = new SkillsStore()
+const skillsStore = new SkillsStore()
 
 export function useSkills(): SkillsStore {
   skillsStore.reseed()

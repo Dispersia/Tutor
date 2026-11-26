@@ -4,6 +4,7 @@
   import type { PitchContour } from '#lib/types'
   import { Recorder, micSupported, MIN_CLIP_MS } from '#lib/recorder'
   import { stopAudio, transcribe } from '#lib/speech'
+  import { MIC_NO_SPEECH, MIC_TOO_QUICK, micUnavailable } from '#lib/components/micCopy'
   import { ACCENT } from '#lib/theme'
   import CharCell from '../CharCell.svelte'
   import Icon from '../Icon.svelte'
@@ -64,18 +65,18 @@
       await recorder.start()
       recording = true
     } catch (e) {
-      err = `Mic unavailable (needs HTTPS). ${(e as Error).message}`
+      err = micUnavailable(e)
     }
   }
 
   async function finishRecording() {
     const take = await recorder.stop()
     if (take.durationMs < MIN_CLIP_MS) {
-      err = 'That was too quick — hold the mic and speak.'
+      err = MIC_TOO_QUICK
       return
     }
     if (!take.blob) {
-      err = "Didn't catch that — try again."
+      err = MIC_NO_SPEECH
       return
     }
     await transcribeToAnswer(take.blob)
@@ -86,7 +87,7 @@
     try {
       const text = await transcribe(blob, language)
       if (text.trim()) answer = text.trim()
-      else err = "Didn't catch that — try again."
+      else err = MIC_NO_SPEECH
     } catch (e) {
       err = (e as Error).message
     } finally {
@@ -115,6 +116,7 @@
     bind:value={answer}
     lang={answerLang}
     rows={2}
+    disabled={busy}
     placeholder="Write or say a sentence…"
     onkeydown={onKeydown}
   />

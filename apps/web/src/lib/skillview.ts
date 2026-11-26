@@ -8,6 +8,64 @@ import type {
   TalentOption,
 } from './skills'
 import type { ModKind } from './types'
+import { CATEGORY, type SkillCategory } from './theme'
+import { fmtInterval, rigGainedSince, rigSecondsLeft } from './idle'
+
+export const EMBLEM: Record<SkillCategory, string> = {
+  gathering: '⛏️',
+  artisan: '🔨',
+  support: '🧭',
+  combat: '⚔️',
+}
+
+export const compact = (n: number): string =>
+  n >= 10_000 ? `${(n / 1000).toFixed(n >= 100_000 ? 0 : 1)}k` : n.toLocaleString()
+
+export interface RunningRig {
+  id: string
+  name: string
+  accent: string
+  gained: number
+  actionId: string
+  left: number
+  rate: string
+  count: number
+}
+
+export function runningRigs(skills: SkillDTO[], fetchedAt: number, now: number): RunningRig[] {
+  const out: RunningRig[] = []
+  for (const s of skills) {
+    const rig = runningIn(s, fetchedAt, now)
+    if (rig) out.push(rig)
+  }
+  return out.sort((a, b) => a.left - b.left)
+}
+
+function runningIn(s: SkillDTO, fetchedAt: number, now: number): RunningRig | undefined {
+  const active = s.actions.filter((a) => a.idle?.active)
+  if (!active.length) return undefined
+  const soonest = active.reduce((min, a) =>
+    rigSecondsLeft(a.idle!, now) < rigSecondsLeft(min.idle!, now) ? a : min,
+  )
+  return {
+    id: s.id,
+    name: s.name,
+    accent: CATEGORY[s.category].accent,
+    gained: fetchedAt ? gainedSince(active, fetchedAt, now) : 0,
+    actionId: soonest.id,
+    left: rigSecondsLeft(soonest.idle!, now),
+    rate: fmtInterval(soonest.idle!.intervalSec),
+    count: active.length,
+  }
+}
+
+function gainedSince(actions: ActionDTO[], fetchedAt: number, now: number): number {
+  let gained = 0
+  for (const a of actions) {
+    for (const n of Object.values(rigGainedSince(a.idle!, fetchedAt, now))) gained += n
+  }
+  return gained
+}
 
 export const EFFECT_LABEL: Record<ModKind, string> = {
   yield: 'yield',
@@ -20,7 +78,7 @@ export const EFFECT_LABEL: Record<ModKind, string> = {
   hp: 'HP',
 }
 
-export function bandGate(a: ActionDTO): string {
+function bandGate(a: ActionDTO): string {
   const missing = a.missingBands ?? []
   if (missing.length) return missing.map((b) => `${b.name} ${b.level}`).join(', ')
   if (a.band && a.band.current < a.band.level) return `${a.band.name} ${a.band.level}`

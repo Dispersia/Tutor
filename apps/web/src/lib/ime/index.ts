@@ -1,6 +1,2 @@
 export * from './types'
 export * from './registry'
-export { hangul } from './hangul'
-export { kana } from './kana'
-export { bopomofo } from './bopomofo'
-export { latin } from './latin'

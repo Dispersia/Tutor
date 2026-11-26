@@ -9,6 +9,9 @@ import {
   listGearInstances,
   setEquipment,
   setGearInstanceEnchant,
+  spareGearPieceId,
+  spareGearPieces,
+  wornGearIds,
 } from '../db/repo'
 import type { Db } from '../db/client'
 import { atomic } from '../db/repo/helpers'
@@ -21,13 +24,11 @@ import {
   type MissingRequirement,
 } from '../game/gear'
 import {
-  DISTILL_XP_PER_VALUE,
   ENCHANT_BY_ID,
   ITEM_BY_ID,
   SKILL_BY_ID,
   essenceFamily,
   essenceId,
-  itemValue,
   slotFamily,
   type ArmourType,
   type Cost,
@@ -38,7 +39,7 @@ import {
   type Slot,
 } from '../game/skills'
 import { bandForItem, parseEnchants } from './bands'
-import { spareGearPiece } from './gearInstances'
+import { distillXp } from './distill'
 import { consumeItems } from './items'
 import { awardActionXp, skillLevelOf } from './progress'
 
@@ -66,7 +67,7 @@ export function requirementView(missing: MissingRequirement[]): GearRequirementV
 }
 
 export function gearView(db: Db, userId: UserId, levels?: Map<string, number>): GearInstanceView[] {
-  const worn = wornSet(db, userId)
+  const worn = wornGearIds(db, userId)
   const levelOf = (skill: SkillId) => skillLevelOf(db, userId, skill, levels)
   return listGearInstances(db, userId).map((row) => instanceView(row, worn, levelOf))
 }
@@ -100,13 +101,6 @@ function requirementsOf(item: ItemDef | undefined, levelOf: (skill: SkillId) => 
     requirements: itemRequirements(item),
     missing: requirementView(meetsRequirements(item, levelOf).missing),
   }
-}
-
-function wornSet(db: Db, userId: UserId): Set<GearInstanceId> {
-  const ids = listEquipment(db, userId)
-    .map((e) => e.instanceId)
-    .filter((id): id is GearInstanceId => Boolean(id))
-  return new Set(ids)
 }
 
 function equipItemTx(
@@ -160,7 +154,7 @@ function resolveInstance(
   const given = instanceId ? getGearInstance(db, userId, instanceId) : undefined
   if (given) return given.itemId === item.id ? { instance: given } : { error: 'wrong item' }
   if (countGearPieces(db, userId, item.id) < 1) return { error: 'not in your bank' }
-  const spare = spareGearPiece(db, userId, item.id)
+  const spare = spareGearPieceId(db, userId, item.id)
   const instance = spare ? getGearInstance(db, userId, spare) : undefined
   return instance ? { instance } : { error: 'every piece is already worn' }
 }
@@ -252,7 +246,7 @@ function distillItemTx(
   if (getItemCount(db, userId, itemId) < n) return { ok: false, error: 'not in your bank' }
   if (item.slot && spareCount(db, userId, itemId) < n) return STILL_WORN
   consumeItems(db, bus, userId, [{ item: itemId, count: n }])
-  const xp = Math.max(1, Math.round(itemValue(item) * DISTILL_XP_PER_VALUE)) * n
+  const xp = distillXp(item) * n
   awardActionXp(db, bus, userId, { actionId: 'distill', amount: xp })
   const essence = essenceId(essenceFamily(item))
   grantMaterials(db, bus, userId, [{ item: essence, count: n }])
@@ -264,8 +258,7 @@ export const distillItem = atomic(distillItemTx)
 const STILL_WORN = { ok: false, error: 'unequip it first' }
 
 function spareCount(db: Db, userId: UserId, itemId: string): number {
-  const worn = wornSet(db, userId)
-  return listGearInstances(db, userId).filter((g) => g.itemId === itemId && !worn.has(g.id)).length
+  return spareGearPieces(db, userId, itemId).length
 }
 
 function applyEnchantTx(

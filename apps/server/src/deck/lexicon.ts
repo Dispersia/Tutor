@@ -71,10 +71,6 @@ export function lexiconHints(lang: string, words: string[]): Record<string, Lexi
   return out
 }
 
-export function lexiconEntry(lang: string, word: string): LexiconEntry | undefined {
-  return loadLexicon(lang)?.get(word)
-}
-
 function hintOf(entry: LexiconEntry | undefined): LexiconHint | undefined {
   if (!entry) return undefined
   const hint: LexiconHint = {}

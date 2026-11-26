@@ -40,9 +40,6 @@ if (!deckRow) throw new Error(`deck not found: ${deckId}`)
 
 const userId = deckRow.userId
 const settings = JSON.parse(deckRow.settingsJson || '{}') as Record<string, unknown>
-const words = (settings.words as string[] | undefined) ?? []
-if (words.length === 0) throw new Error('deck has no stored word list to rebuild from')
-console.log(`deck "${deckRow.name}" (${deckId}) — ${words.length} words`)
 
 const view = curriculumView(db, userId).find((d) => d.deckId === deckId)
 let keptComplete = 0
@@ -65,6 +62,11 @@ const oldExamples = realCards.filter(
   (c) => typeof c.payload?.template === 'string' && c.payload.template !== 'vocab',
 )
 console.log(`real deck: ${stepByWord.size} vocab cards, ${oldExamples.length} old examples`)
+
+const storedWords = (settings.words as string[] | undefined) ?? []
+const words = storedWords.length > 0 ? storedWords : [...stepByWord.keys()]
+if (words.length === 0) throw new Error('deck has no word list and no vocab cards to rebuild from')
+console.log(`deck "${deckRow.name}" (${deckId}) — ${words.length} words`)
 
 const key = await decryptSecret(
   getUserSetting(db, userId, 'openrouter_key') || undefined,
@@ -165,7 +167,6 @@ for (const c of oldExamples) {
   sqlite.run('delete from srs where card_id = ?', [c.id])
   sqlite.run('delete from srs_reviews where card_id = ?', [c.id])
   sqlite.run('delete from reviews where card_id = ?', [c.id])
-  sqlite.run('delete from attempts where card_id = ?', [c.id])
   sqlite.run('delete from cards where id = ?', [c.id])
 }
 for (const e of pending) {

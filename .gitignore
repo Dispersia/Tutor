@@ -29,6 +29,7 @@ deploy/*.key
 !.env.example
 
 # misc
+tmp/
 *.log
 .DS_Store
 __pycache__/

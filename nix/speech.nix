@@ -10,7 +10,6 @@ let
     "mlx-community/whisper-large-v3-turbo-asr-fp16"
     "mlx-community/VoxCPM2-8bit"
     "mlx-community/Qwen3-ForcedAligner-0.6B-8bit"
-    "mlx-community/silero-vad"
   ];
 
   fetch = pkgs.writeShellApplication {

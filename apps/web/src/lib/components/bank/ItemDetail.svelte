@@ -1,6 +1,7 @@
 <script lang="ts">
   import { accentStyle, tierAccent } from '#lib/theme'
   import { href } from '#lib/paths'
+  import { focusTrap } from '#lib/focusTrap'
   import type { ItemDetailDTO, ItemDTO } from '#lib/skills'
   import Spinner from '#lib/components/Spinner.svelte'
 
@@ -10,13 +11,15 @@
     detail: ItemDetailDTO | null
     loading: boolean
     error: string
+    queueError: string
     queued: boolean
     busy: boolean
     onToggle: () => void
     onClose: () => void
   }
 
-  let { item, count, detail, loading, error, queued, busy, onToggle, onClose }: Props = $props()
+  let { item, count, detail, loading, error, queueError, queued, busy, onToggle, onClose }: Props =
+    $props()
 
   const view = $derived(detail?.item ?? item)
   const essence = $derived(detail?.essence ?? null)
@@ -40,6 +43,8 @@
     role="dialog"
     aria-modal="true"
     aria-label={view.name}
+    tabindex="-1"
+    use:focusTrap
   >
     <header class="flex items-start justify-between gap-3 border-b border-ink-800 pb-3">
       <div class="flex min-w-0 items-start gap-3">
@@ -130,6 +135,9 @@
     {/if}
 
     {#if distillable}
+      {#if queueError}
+        <p class="mt-3 text-xs text-red-400" role="alert">{queueError}</p>
+      {/if}
       <div class="mt-4 flex items-center justify-between gap-3 border-t border-ink-800 pt-3">
         <p class="text-xs text-ink-400">
           {queued ? 'This item is in the Distill queue.' : 'Queue this item for the Distill rig.'}

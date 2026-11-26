@@ -17,8 +17,8 @@ import {
   listMessages,
   listSessions,
   otherBacks,
-  setRole,
   setSetting,
+  setUserSetting,
   updateDeckSettings,
 } from './repo'
 
@@ -42,7 +42,7 @@ test('users: create, lookup, per-user roles', () => {
   expect(getUserByUsername(db, 'alice')?.id).toBe(a.id)
 
   expect(getRoles(db, a.id, { ...defaults })).toEqual(defaults)
-  setRole(db, a.id, { ...defaults }, 'judge', 'qwen/z')
+  setUserSetting(db, a.id, 'roles', JSON.stringify({ ...defaults, judge: 'qwen/z' }))
   expect(getRoles(db, a.id, { ...defaults }).judge).toBe('qwen/z')
   expect(getRoles(db, b.id, { ...defaults }).judge).toBe('j')
   sqlite.close()
@@ -154,5 +154,35 @@ test('a member only sees the cards in their own decks', async () => {
   expect(repo.listCards(db).length).toBe(2)
   repo.deleteUser(db, a.id)
   expect(repo.listCards(db).length).toBe(0)
+  sqlite.close()
+})
+
+test('deck and card writes are scoped to their owner', async () => {
+  const { openDb } = await import('./client')
+  const repo = await import('./repo')
+  const { db, sqlite } = openDb(':memory:')
+  const a = repo.createUser(db, { username: 'a', passwordHash: 'x' })
+  const b = repo.createUser(db, { username: 'b', passwordHash: 'x' })
+  const deck = repo.createDeck(db, a.id, { name: 'd', sourceLang: 'en', targetLang: 'zh' })
+  const card = repo.addCard(db, a.id, {
+    deckId: deck.id,
+    sourceLang: 'en',
+    targetLang: 'zh',
+    front: 'f',
+    back: 'b',
+  })
+
+  expect(repo.updateDeckSettings(db, deck.id, { showReadings: true }, b.id)).toBeUndefined()
+  expect(repo.getDeck(db, deck.id)!.settings.showReadings).toBeUndefined()
+  repo.updateCard(db, card.id, { front: 'hacked' }, b.id)
+  expect(repo.getCard(db, card.id, a.id)!.front).toBe('f')
+  repo.deleteDeck(db, deck.id, b.id)
+  expect(repo.getDeck(db, deck.id)).toBeDefined()
+
+  expect(repo.updateDeckSettings(db, deck.id, { showReadings: true }, a.id)).toBeDefined()
+  repo.updateCard(db, card.id, { front: 'mine' }, a.id)
+  expect(repo.getCard(db, card.id, a.id)!.front).toBe('mine')
+  repo.deleteDeck(db, deck.id, a.id)
+  expect(repo.getDeck(db, deck.id)).toBeUndefined()
   sqlite.close()
 })

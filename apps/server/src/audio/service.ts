@@ -67,7 +67,7 @@ async function postTts(url: string, req: TtsRequest): Promise<Uint8Array> {
   return new Uint8Array(await res.arrayBuffer())
 }
 
-export interface AudioJob {
+interface AudioJob {
   userId: UserId
   text: string
   language: string
@@ -76,7 +76,7 @@ export interface AudioJob {
 
 export const AUDIO_BACKFILL_KEY = 'audio.backfill'
 
-export interface AudioStatus {
+interface AudioStatus {
   pending: number
   running: boolean
   current: string | null

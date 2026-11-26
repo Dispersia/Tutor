@@ -51,7 +51,7 @@ async function patchDeckHandler(c: Context<AppEnv>) {
   if (!getDeck(deps.db, deckId, user.id)) return fail(c, 404, 'not found')
   const patch = readSettings(await jsonBody(c))
   const settings = Object.keys(patch).length
-    ? updateDeckSettings(deps.db, deckId, patch)
+    ? updateDeckSettings(deps.db, deckId, patch, user.id)
     : undefined
   return c.json({
     deck: deckView(getDeck(deps.db, deckId)!),

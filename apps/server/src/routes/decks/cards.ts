@@ -101,7 +101,7 @@ async function patchCardHandler(c: Context<AppEnv>) {
   const cardId = toCardId(String(c.req.param('cardId')))
   const card = getCard(deps.db, cardId, user.id)
   if (!card || card.deckId !== String(c.req.param('id'))) return fail(c, 404, 'not found')
-  updateCard(deps.db, cardId, cardPatch(card.metadata, await jsonBody(c)))
+  updateCard(deps.db, cardId, cardPatch(card.metadata, await jsonBody(c)), user.id)
   return c.json({ card: getCard(deps.db, cardId, user.id) })
 }
 

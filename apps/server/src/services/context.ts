@@ -42,6 +42,6 @@ export function loadPlayerCtx(db: Db, bus: EventBus, userId: UserId, now = Date.
   }
 }
 
-export function actionLevels(byAction: Map<string, ActionProgress>): Map<string, number> {
+function actionLevels(byAction: Map<string, ActionProgress>): Map<string, number> {
   return new Map([...byAction].map(([id, p]) => [id, p.level]))
 }

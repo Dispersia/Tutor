@@ -35,7 +35,7 @@ export function enchantOf(instance: { enchantJson: string }): EnchantDef | undef
   return id ? ENCHANT_BY_ID.get(id) : undefined
 }
 
-export function bandXpMap(db: Db, userId: UserId): Map<BandId, number> {
+function bandXpMap(db: Db, userId: UserId): Map<BandId, number> {
   const out = new Map<BandId, number>()
   for (const row of listActionProgress(db, userId)) {
     const action = ACTION_BY_ID.get(row.actionId)

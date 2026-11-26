@@ -40,6 +40,15 @@ export function storedReadings(src: ReadingSource): Record<string, string> {
   return zhuyin ? { zhuyin } : {}
 }
 
+export function readingsFor(
+  targetLang: string,
+  reading: string,
+  kana?: string,
+): Record<string, string> {
+  const native = targetLang === 'ja' ? kana || reading : reading
+  return storedReadings({ targetLang, reading: native })
+}
+
 export function withReading(
   readings: Record<string, string>,
   src: ReadingSource,

@@ -29,6 +29,8 @@ export function failWith(c: Context<AppEnv>, err: GuardError) {
   return c.json(err.body, err.status)
 }
 
+export const NOT_ISSUED_MESSAGE = 'that drill was not the one you were given — load the next card'
+
 export const NO_KEY_MESSAGE = 'No OpenRouter key — add one in Settings.'
 
 export function needKey(c: Context<AppEnv>) {

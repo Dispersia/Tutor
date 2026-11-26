@@ -2,7 +2,15 @@ import { BACKSPACE, CLEAR, ENTER, SPACE, emptyState, type ImeEngine, type ImeSta
 
 const SYMBOLS = 'ㄅㄆㄇㄈㄉㄊㄋㄌㄍㄎㄏㄐㄑㄒㄓㄔㄕㄖㄗㄘㄙㄧㄨㄩㄚㄛㄜㄝㄞㄟㄠㄡㄢㄣㄤㄥㄦ'
 
-const TONES = 'ˊˇˋ˙'
+const TONES = 'ˊˇˋ˙ˉ'
+
+const SYMBOL_ROWS = [
+  ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-'],
+  ['，', '。', '、', '？', '！', '：', '；', '（', '）', '「', '」'],
+  ['…', '·', '～', '《', '》', '【', '】', '％', '＃', '＆', '＊'],
+]
+
+const SYMBOL_KEYS = SYMBOL_ROWS.flat()
 
 const ROWS = [
   ['ㄅ', 'ㄉ', 'ˇ', 'ˋ', 'ㄓ', 'ˊ', '˙', 'ㄚ', 'ㄞ', 'ㄢ', 'ㄦ'],
@@ -79,10 +87,17 @@ function commit(state: ImeState): ImeState {
   return { ...state, value: state.value + top(state), preedit: '', candidates: [] }
 }
 
+function insert(state: ImeState, ch: string): ImeState {
+  const done = commit(state)
+  return { ...done, value: done.value + ch }
+}
+
 function press(state: ImeState, key: string): ImeState {
   if (key === BACKSPACE) return back(state)
   if (key === CLEAR) return { ...state, preedit: '', candidates: [] }
-  if (key === ENTER || key === SPACE) return commit(state)
+  if (key === SPACE) return tone(state, 'ˉ')
+  if (key === ENTER) return commit(state)
+  if (SYMBOL_KEYS.includes(key)) return insert(state, key)
   if (TONES.includes(key)) return tone(state, key)
   if (SYMBOLS.includes(key)) return symbol(state, key)
   return state
@@ -92,8 +107,10 @@ export const bopomofo: ImeEngine = {
   id: 'bopomofo',
   language: 'zh',
   label: '注音',
+  letters: 'ㄅㄆ',
   columns: 11,
   rows: ROWS,
+  symbols: SYMBOL_ROWS,
   physical: PHYSICAL,
   initial: emptyState,
   press,

@@ -8,7 +8,7 @@ import { listCards, upsertSrs } from './db/repo'
 import type { Role } from './env'
 import { EventBus } from './events'
 import { OpenRouter } from './llm/openrouter'
-import { seedStarterDecks } from './seed/service'
+import { createFixtureDecks } from './deckFixture'
 import { SpeechSupervisor } from './speech/supervisor'
 
 const defaults: Record<Role, string> = {
@@ -56,7 +56,7 @@ async function signup(app: App, db: Db, username = 'alice') {
   const res = await app.request('/api/auth/register', json({ username, password: 'password123' }))
   const cookie = res.headers.getSetCookie()[0]!.split(';')[0]!
   const { user } = (await res.json()) as { user: { id: UserId } }
-  seedStarterDecks(db, user.id)
+  createFixtureDecks(db, user.id)
   const now = Date.now()
   for (const c of listCards(db, user.id)) {
     upsertSrs(db, user.id, c.id, {
@@ -106,7 +106,7 @@ test('GET /api/combat lists monsters, player stats and any encounter', async () 
   const { app, db, sqlite } = makeApp()
   const cookie = await signup(app, db)
   const body = (await (await app.request('/api/combat', auth(cookie))).json()) as {
-    monsters: { id: string; unlocked: boolean }[]
+    monsters: { id: string; level: number }[]
     player: { maxHp: number; armour: number; weaponPower: number }
     encounter: unknown
   }
@@ -125,7 +125,7 @@ test('starting a fight with no review cards is refused', async () => {
   )
   const cookie = res.headers.getSetCookie()[0]!.split(';')[0]!
   const { user } = (await res.json()) as { user: { id: UserId } }
-  seedStarterDecks(db, user.id)
+  createFixtureDecks(db, user.id)
 
   const start = await app.request('/api/combat/start', auth(cookie, json({ monsterId: 'slime' })))
   expect(start.status).toBe(409)
@@ -140,7 +140,7 @@ test('starting an unknown monster is refused', async () => {
   const { app, db, sqlite } = makeApp()
   const cookie = await signup(app, db)
   const res = await app.request('/api/combat/start', auth(cookie, json({ monsterId: 'nope' })))
-  expect(res.status).toBe(403)
+  expect(res.status).toBe(404)
   sqlite.close()
 })
 

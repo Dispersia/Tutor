@@ -63,4 +63,13 @@ describe('hangul', () => {
     expect(hangul.physical?.k).toBe('ㅏ')
     expect(hangul.shift?.['ㅂ']).toBe('ㅃ')
   })
+
+  test('punctuation commits the syllable and appends', () => {
+    expect(type(hangul, 'ㄱㅏ.').value).toBe('가.')
+  })
+
+  test('the symbols page leads with the number row', () => {
+    expect(hangul.symbols?.[0]).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'])
+    expect(hangul.letters).toBe('한글')
+  })
 })

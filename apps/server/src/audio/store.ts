@@ -18,11 +18,11 @@ function sha1(...parts: string[]): string {
   return createHash('sha1').update(parts.join('\u0000')).digest('hex')
 }
 
-export function audioDir(dataDir: string): string {
+function audioDir(dataDir: string): string {
   return join(dataDir, 'audio')
 }
 
-export function clipPath(dataDir: string, hash: string): string {
+function clipPath(dataDir: string, hash: string): string {
   return join(audioDir(dataDir), `${hash}.wav`)
 }
 
@@ -50,7 +50,7 @@ export function writeClip(
   const path = clipPath(dataDir, hash)
   mkdirSync(dirname(path), { recursive: true })
   writeFileSync(path, bytes)
-  const size = { bytes: bytes.length, mime: 'audio/wav', seconds: null }
+  const size = { bytes: bytes.length, mime: 'audio/wav' }
   db.insert(audioBlobs)
     .values({ hash, userId, path, ...size, createdAt: Date.now() })
     .onConflictDoNothing()

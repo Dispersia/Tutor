@@ -1,4 +1,4 @@
-import { apiPath } from './paths'
+import { href } from './paths'
 import { clearCache, peekCached, writeCache } from './cache'
 
 export class ApiError extends Error {
@@ -54,7 +54,7 @@ async function runRequest<T>(path: string, init: RequestInit, gen: number | null
   }
   let res: Response
   try {
-    res = await fetch(apiPath(path), { credentials: 'same-origin', ...init, headers })
+    res = await fetch(href(path), { credentials: 'same-origin', ...init, headers })
   } catch (err) {
     const cached = gen === null ? undefined : peekCached<T>(path)
     if (cached !== undefined) return cached

@@ -90,7 +90,7 @@ export const SYNERGY: Record<SkillId, SynergyDef> = {
   },
 }
 
-export function synergyDescription(skillId: SkillId): string {
+function synergyDescription(skillId: SkillId): string {
   const syn = SYNERGY[skillId]
   const owner = SKILL_BY_ID.get(skillId)?.name ?? skillId
   const per = Math.round(syn.value * 1000) / 10

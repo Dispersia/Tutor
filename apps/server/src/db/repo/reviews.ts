@@ -59,10 +59,10 @@ export interface DailyReviewCounts {
 }
 
 export function dailyReviewCounts(db: Db, userId: UserId, since: number): DailyReviewCounts {
-  return { newCards: newToday(db, userId, since), reviews: gradedCount(db, userId, since) }
+  return { newCards: cardsGradedSince(db, userId, since), reviews: gradedCount(db, userId, since) }
 }
 
-function newToday(db: Db, userId: UserId, since: number): number {
+export function cardsGradedSince(db: Db, userId: UserId, since: number): number {
   return db
     .select({ cardId: reviews.cardId })
     .from(reviews)
@@ -103,19 +103,4 @@ export function reviewsByDay(
     .groupBy(day)
     .all()
     .map((r) => ({ day: r.day, count: Number(r.count) }))
-}
-
-export function cardsGradedSince(db: Db, userId: UserId, since: number): number {
-  const row = db
-    .select({ n: sql<number>`count(distinct ${reviews.cardId})` })
-    .from(reviews)
-    .where(
-      and(
-        eq(reviews.userId, userId),
-        ne(reviews.exerciseId, 'introduce'),
-        gte(reviews.createdAt, since),
-      ),
-    )
-    .get()
-  return Number(row?.n ?? 0)
 }

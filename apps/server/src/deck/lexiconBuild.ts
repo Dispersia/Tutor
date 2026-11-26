@@ -3,7 +3,7 @@ import type { ChatMessage, OpenRouter, ReasoningEffort } from '../llm/openrouter
 import { listCards, listDecks } from '../db/repo'
 import { FREQUENCY } from '../text/lexicon'
 import { hasReadingScript, zhuyinFromPinyin } from '../text/readings'
-import { FREQUENCY_JA } from '../seed/frequency-ja'
+import { FREQUENCY_JA } from '../text/frequency-ja'
 import type { Lexicon, LexiconEntry } from './lexicon'
 
 export interface WordInfo {
@@ -118,7 +118,7 @@ export function wordsMissingMeanings(lex: Lexicon, limit: number): string[] {
     .map(([word]) => word)
 }
 
-export const MEANING_SCHEMA = {
+const MEANING_SCHEMA = {
   type: 'object',
   properties: {
     entries: {
@@ -137,7 +137,7 @@ export const MEANING_SCHEMA = {
 
 const MEANING_SYSTEM = `You write the meaning of one word for a language learner. For each word give its most common everyday meaning in English, separated with " / " when it has several common senses. Give only the meaning: no pronunciation, no part-of-speech label, no example, no notes. Return only the JSON.`
 
-export function meaningMessages(lang: string, words: string[]): ChatMessage[] {
+function meaningMessages(lang: string, words: string[]): ChatMessage[] {
   return [
     { role: 'system', content: MEANING_SYSTEM },
     { role: 'user', content: `Language: ${lang}\nWords: ${words.join(' ')}` },

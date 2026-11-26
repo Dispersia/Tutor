@@ -48,6 +48,14 @@ const ROWS = [
   ['ㅋ', 'ㅌ', 'ㅊ', 'ㅍ', 'ㅠ', 'ㅜ', 'ㅡ'],
 ]
 
+const SYMBOL_ROWS = [
+  ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
+  ['.', ',', '?', '!', '·', '…', '~', '(', ')', ':'],
+  ['/', ';', '"', "'", '%', '&', '+', '=', '@', '#'],
+]
+
+const SYMBOL_KEYS = SYMBOL_ROWS.flat()
+
 const SHIFT: Record<string, string> = {
   ㅂ: 'ㅃ',
   ㅈ: 'ㅉ',
@@ -205,6 +213,9 @@ function press(state: ImeState, key: string): ImeState {
   if (key === CLEAR) return keep(state, '')
   if (key === SPACE) return { ...state, value: state.value + state.preedit + ' ', preedit: '' }
   if (key === ENTER) return { ...state, value: state.value + state.preedit, preedit: '' }
+  if (SYMBOL_KEYS.includes(key)) {
+    return { ...state, value: state.value + state.preedit + key, preedit: '', candidates: [] }
+  }
   if (isConsonant(key)) return consonant(state, key)
   if (isVowel(key)) return vowel(state, key)
   return state
@@ -214,8 +225,10 @@ export const hangul: ImeEngine = {
   id: 'hangul',
   language: 'ko',
   label: '한글',
+  letters: '한글',
   columns: 10,
   rows: ROWS,
+  symbols: SYMBOL_ROWS,
   shift: SHIFT,
   physical: PHYSICAL,
   initial: emptyState,

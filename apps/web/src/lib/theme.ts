@@ -16,19 +16,14 @@ export const CATEGORY: Record<SkillCategory, CategoryStyle> = {
 export const ACCENT = {
   seal: 'oklch(0.71 0.15 285)',
   gold: 'oklch(0.85 0.13 93)',
-  xp: 'oklch(0.85 0.13 93)',
   jade: 'oklch(0.77 0.12 165)',
   green: 'oklch(0.77 0.12 165)',
-  health: 'oklch(0.77 0.12 165)',
-  player: 'oklch(0.77 0.12 165)',
   brass: 'oklch(0.79 0.125 78)',
-  streak: 'oklch(0.79 0.125 78)',
   azure: 'oklch(0.76 0.11 240)',
   arcane: 'oklch(0.76 0.11 240)',
   level: 'oklch(0.76 0.11 240)',
   violet: 'oklch(0.74 0.12 305)',
   ember: 'oklch(0.71 0.15 25)',
-  warn: 'oklch(0.79 0.125 78)',
   ink: 'oklch(0.585 0.032 280)',
 } as const
 
@@ -43,7 +38,7 @@ export const accentStyle = (color: string) => `--accent: ${color}`
 export const categoryAccent = (cat: string): string =>
   CATEGORY[cat as SkillCategory]?.accent ?? ACCENT.azure
 
-export const TIER: Record<string, string> = {
+const TIER: Record<string, string> = {
   raw: 'oklch(0.71 0.026 280)',
   refined: 'oklch(0.76 0.11 240)',
   equipment: 'oklch(0.85 0.13 93)',
@@ -54,7 +49,7 @@ export const TIER: Record<string, string> = {
 
 export const tierAccent = (tier?: string | null): string => TIER[tier ?? 'other'] ?? TIER.other!
 
-export const QUALITY: Record<string, string> = {
+const QUALITY: Record<string, string> = {
   common: 'oklch(0.76 0.024 280)',
   uncommon: 'oklch(0.73 0.12 145)',
   rare: 'oklch(0.7 0.12 250)',

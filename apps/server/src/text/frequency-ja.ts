@@ -1,4 +1,4 @@
-export type JaPos =
+type JaPos =
   'pron' | 'noun' | 'verb' | 'adj' | 'nadj' | 'adv' | 'part' | 'qword' | 'num' | 'copula' | 'conj'
 
 export interface JaFreqWord {

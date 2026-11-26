@@ -54,15 +54,3 @@ export function getRoles(
     return { ...defaults }
   }
 }
-
-export function setRole(
-  db: Db,
-  userId: UserId,
-  defaults: Record<Role, string>,
-  role: Role,
-  model: string,
-): Record<Role, string> {
-  const next = { ...getRoles(db, userId, defaults), [role]: model }
-  setUserSetting(db, userId, 'roles', JSON.stringify(next))
-  return next
-}
