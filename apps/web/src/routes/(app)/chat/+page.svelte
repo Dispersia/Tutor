@@ -14,7 +14,7 @@
   import { typingAttrs } from '#lib/lang'
   import { autoGrow } from '#lib/grow'
   import type { ChatSession, Message } from '#lib/types'
-  import { speechOpts } from '#lib/voices'
+  import { langName, speechOpts } from '#lib/voices'
   import { cachedResource } from '#lib/resource.svelte'
 
   const threadPath = (id: string) => `/api/sessions/${id}`
@@ -312,7 +312,7 @@
 <div class="border-b border-ink-700 pt-4 pb-4 lg:mx-auto lg:max-w-3xl">
   <h1 class="display text-3xl text-ink-100">Talk to your Tutor</h1>
   <p class="sub mt-1.5">
-    {lang ? lang.toUpperCase() : 'EN'} · replies are spoken
+    {langName(lang) || 'EN'} · replies are spoken
     {#if speaking}<span class="text-jade-400">· speaking…</span>{/if}
   </p>
   {#if speechNote}

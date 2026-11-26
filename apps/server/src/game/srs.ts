@@ -278,40 +278,41 @@ export function isLearned(state: FsrsState | undefined): boolean {
   return Boolean(state && state.state === 'review' && state.intervalDays >= 1)
 }
 
+export type CardPickMode = 'study' | 'combat'
+
 export function selectCardId<T extends string>(
   cardIds: T[],
   srs: Map<string, FsrsState>,
   now: number,
+  mode: CardPickMode = 'study',
 ): T | undefined {
   if (cardIds.length === 0) return undefined
-  const due = cardIds.filter((id) => {
+  const due = dueIds(cardIds, srs, now)
+  if (due.length) return soonestDue(due, srs)
+  const fresh = cardIds.find((id) => !srs.has(id))
+  if (fresh !== undefined) return fresh
+  return mode === 'combat' ? longestWaiting(cardIds, srs) : undefined
+}
+
+function dueIds<T extends string>(cardIds: T[], srs: Map<string, FsrsState>, now: number): T[] {
+  return cardIds.filter((id) => {
     const s = srs.get(id)
     return s ? isDue(s, now) : false
   })
-  if (due.length) return due.sort((a, b) => (srs.get(a)!.dueAt ?? 0) - (srs.get(b)!.dueAt ?? 0))[0]
-  const fresh = cardIds.filter((id) => !srs.has(id))
-  if (fresh.length) return fresh[0]
+}
+
+function soonestDue<T extends string>(cardIds: T[], srs: Map<string, FsrsState>): T {
+  return cardIds.slice().sort((a, b) => dueOf(srs, a) - dueOf(srs, b))[0]!
+}
+
+function longestWaiting<T extends string>(cardIds: T[], srs: Map<string, FsrsState>): T {
   return cardIds
     .slice()
-    .sort((a, b) => lastSeen(srs, a) - lastSeen(srs, b) || dueOf(srs, a) - dueOf(srs, b))[0]
+    .sort((a, b) => lastSeen(srs, a) - lastSeen(srs, b) || dueOf(srs, a) - dueOf(srs, b))[0]!
 }
 
 const lastSeen = (srs: Map<string, FsrsState>, id: string): number => srs.get(id)?.lastReviewAt ?? 0
 const dueOf = (srs: Map<string, FsrsState>, id: string): number => srs.get(id)?.dueAt ?? 0
-
-export function selectStudyCardId<T extends string>(
-  cardIds: T[],
-  srs: Map<string, FsrsState>,
-  now: number,
-): T | undefined {
-  if (cardIds.length === 0) return undefined
-  const due = cardIds.filter((id) => {
-    const s = srs.get(id)
-    return s ? isDue(s, now) : false
-  })
-  if (due.length) return due.sort((a, b) => (srs.get(a)!.dueAt ?? 0) - (srs.get(b)!.dueAt ?? 0))[0]
-  return cardIds.find((id) => !srs.has(id))
-}
 
 export function countDue(cardIds: string[], srs: Map<string, FsrsState>, now: number): number {
   return cardIds.filter((id) => {

@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { idleProduces, rigYields } from '@tutor/core'
 import {
   IDLE,
   MAX_LIVE_RIGS,
@@ -185,6 +186,23 @@ describe('settleRig: stock and yield', () => {
     const rich = settleRig(powered, { ...ORE, yieldBonus: 1 }, new Map(), 600_000)
     expect(rich.produced.copper_ore).toBeGreaterThan(plain.produced.copper_ore!)
     expect(rich.produced.copper_ore).toBeCloseTo(plain.produced.copper_ore! * 2, 0)
+  })
+
+  test('the client extrapolation agrees with the settle it is read from', () => {
+    const recipe: RigRecipe = {
+      produces: [{ item: 'copper_ore', count: 1 }],
+      yieldBonus: 1,
+      itemBonus: { copper_ore: 0.5 },
+      successChance: 0.6,
+    }
+    const powered = extendRig(newRig(), 0)
+    const now = powered.runEndsAt - 1
+    const settle = settleRig(powered, recipe, new Map(), now)
+    const interval = rigIntervalSec(powered.completions, recipe.tier ?? 1)
+    const crafts = powered.crafts + (now - powered.settledAt) / 1000 / interval
+    const client = idleProduces(crafts, rigYields(recipe.produces!, recipe, powered.remainder))
+    expect(client.produced).toEqual(settle.produced)
+    expect(client.remainder).toEqual(settle.state.remainder)
   })
 
   test('reports the crafts the run completed on its own (the passive-XP basis)', () => {

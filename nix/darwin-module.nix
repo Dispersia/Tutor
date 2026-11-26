@@ -79,7 +79,7 @@ in
     environmentFile = mkOption {
       type = types.nullOr types.path;
       default = null;
-      example = "/Users/dispersias/.config/tutor/env";
+      example = "/Users/<you>/.config/tutor/env";
       description = "File with OPENROUTER_API_KEY and TUTOR_SECRET (sourced before launch).";
     };
 

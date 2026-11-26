@@ -1,4 +1,13 @@
-import { IDLE, rigIntervalSec, rigRunFill, rigRunFull, rigRunGainSec, rigRunSec } from '@tutor/core'
+import {
+  IDLE,
+  idleProduces,
+  rigIntervalSec,
+  rigRunFill,
+  rigRunFull,
+  rigRunGainSec,
+  rigRunSec,
+  rigYields,
+} from '@tutor/core'
 import { ACTIONS, SKILL_BY_ID, type ActionDef, type Cost } from './skills'
 
 export { IDLE, rigIntervalSec, rigRunFill, rigRunFull, rigRunGainSec, rigRunSec }
@@ -181,16 +190,13 @@ function emitProduced(
   bank: BankView,
   next: RigState,
 ): void {
-  const bonus = (recipe.successChance ?? 1) * (1 + (recipe.yieldBonus ?? 0))
-  for (const p of recipe.produces ?? []) {
-    const carried = next.remainder[p.item] ?? 0
-    const raw = done * p.count * (bonus + (recipe.itemBonus?.[p.item] ?? 0)) + carried
-    const n = Math.floor(raw)
-    next.remainder[p.item] = raw - n
-    if (n <= 0) continue
-    bankAdd(bank, p.item, n)
-    out.produced[p.item] = (out.produced[p.item] ?? 0) + n
+  const yields = rigYields(recipe.produces ?? [], recipe, next.remainder)
+  const { produced, remainder } = idleProduces(done, yields)
+  for (const [item, n] of Object.entries(produced)) {
+    bankAdd(bank, item, n)
+    out.produced[item] = (out.produced[item] ?? 0) + n
   }
+  Object.assign(next.remainder, remainder)
 }
 
 export const MAX_LIVE_RIGS = 2

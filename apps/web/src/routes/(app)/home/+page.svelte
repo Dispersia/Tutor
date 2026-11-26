@@ -6,7 +6,7 @@
   import { session } from '#lib/session.svelte'
   import { activeDeckOf, loadActiveDeck } from '#lib/activeDeck.svelte'
   import { ACCENT, accentStyle } from '#lib/theme'
-  import { LANG_NAMES } from '#lib/voices'
+  import { langName } from '#lib/voices'
   import { htmlLang } from '#lib/lang'
   import { cachedResource } from '#lib/resource.svelte'
   import { bankSummary, levelLabelFor, rigRows, xpToGoal, type RigRow } from '#lib/homeview'
@@ -77,7 +77,7 @@
     <div class="min-w-0">
       <h1 class="display min-w-0 truncate text-3xl text-ink-100">{session.user?.handle}</h1>
       <p class="sub mt-2">
-        {LANG_NAMES[lang] ?? lang} · {levelLabel}{#if deckName}
+        {langName(lang)} · {levelLabel}{#if deckName}
           · studying <span lang={htmlLang(lang)}>{deckName}</span>{/if}
       </p>
     </div>
@@ -92,7 +92,7 @@
 
 {#if progress.error}
   <div class="banner mt-3" style={accentStyle(ACCENT.brass)} role="alert">
-    <p class="banner__text flex-1">Couldn't load your progress — {progress.error}</p>
+    <p class="banner__text flex-1">Couldn’t load your progress — {progress.error}</p>
     <button type="button" class="btn btn-ghost px-3 py-2 text-xs" onclick={load}>Retry</button>
   </div>
 {:else if !stats}

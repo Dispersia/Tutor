@@ -36,6 +36,7 @@
   let hit = $state<HitResult | null>(null)
   let drank = $state<{ item: string; buff: { kind: string; value: number } } | null>(null)
   let foodThreshold = $state(50)
+  let foodNote = $state('')
   let pendingFlee = $state(false)
   let busy = $state(false)
   let timerStarted = $state(false)
@@ -66,12 +67,16 @@
 
   async function loadFoodThreshold() {
     const cached = peekCached<{ foodThreshold?: number }>('/api/settings')
-    const threshold =
-      cached?.foodThreshold ??
-      (await api<{ foodThreshold?: number }>('/api/settings')
-        .then((s) => s.foodThreshold)
-        .catch(() => undefined))
-    if (threshold !== undefined) foodThreshold = threshold
+    if (cached?.foodThreshold !== undefined) {
+      foodThreshold = cached.foodThreshold
+      return
+    }
+    try {
+      const s = await api<{ foodThreshold?: number }>('/api/settings')
+      if (s.foodThreshold !== undefined) foodThreshold = s.foodThreshold
+    } catch {
+      foodNote = 'Settings didn’t load — using the default.'
+    }
   }
 
   $effect(() => {
@@ -231,7 +236,7 @@
             class="seal h-14 w-14"
             style="--seal-accent: {ACCENT.ember}"
             role="img"
-            aria-label="Your hit points"
+            aria-label="Your hit points {encounter?.playerHp ?? data.player.hp}"
           >
             <span class="display text-lg leading-none font-bold"
               >{encounter?.playerHp ?? data.player.hp}</span
@@ -284,6 +289,9 @@
           <span class="chip" style="--accent: {ACCENT.violet}">{set.name} {set.pieces}</span>
         {/each}
         <span class="text-xs text-ink-400">auto-eat under {foodThreshold}%</span>
+        {#if foodNote}
+          <span class="text-xs text-ink-500">· {foodNote}</span>
+        {/if}
       </div>
     {/if}
   </div>

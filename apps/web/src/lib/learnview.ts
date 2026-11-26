@@ -1,18 +1,11 @@
 import type { CurriculumDeck } from './curriculum'
 import type { SkillsResponse } from './skills'
 import { ACCENT } from './theme'
+import { langName } from './voices'
 
-export const LANGUAGES = [
-  { code: 'zh', label: 'Mandarin Chinese' },
-  { code: 'ja', label: 'Japanese' },
-  { code: 'ko', label: 'Korean' },
-  { code: 'es', label: 'Spanish' },
-  { code: 'fr', label: 'French' },
-  { code: 'de', label: 'German' },
-  { code: 'it', label: 'Italian' },
-  { code: 'pt', label: 'Portuguese' },
-  { code: 'ru', label: 'Russian' },
-] as const
+const LANGUAGE_CODES = ['zh', 'ja', 'ko', 'es', 'fr', 'de', 'it', 'pt', 'ru'] as const
+
+export const LANGUAGES = LANGUAGE_CODES.map((code) => ({ code, label: langName(code) }))
 
 const rank = (level: string | null): number => (level === 'zhfreq' ? 0 : level === 'jafreq' ? 1 : 2)
 

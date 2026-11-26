@@ -33,6 +33,7 @@ import {
 import type { Bonuses } from '../game/modifiers'
 import {
   ITEM_BY_ID,
+  canonicalSlot,
   combatStyleForTags,
   weaponSkill,
   type ArmourType,
@@ -101,7 +102,7 @@ export function loadPlayerCombat(
 
 function loadout(db: Db, userId: UserId): Loadout {
   const eq = listEquipment(db, userId)
-  const weapon = eq.find((e) => e.slot === 'mainHand' || e.slot === 'weapon')
+  const weapon = eq.find((e) => canonicalSlot(e.slot) === 'mainHand')
   const weaponItem = weapon ? ITEM_BY_ID.get(weapon.itemId) : undefined
   return {
     skill: weaponSkill(weaponItem?.tags),
@@ -144,7 +145,7 @@ function numberOr(
   second: number | null | undefined,
   fallback: number,
 ): number {
-  return first ?? second ?? fallback
+  return first || second || fallback
 }
 
 interface Assembly {

@@ -110,7 +110,7 @@ export function fillGrammarTeaching(
   if (filling.has(card.id)) return
   filling.add(card.id)
   void ensureGrammarTeaching(db, userId, card, planner, knownWords)
-    .catch(() => {})
+    .catch((err) => console.warn('[grammar] teaching fill failed:', (err as Error).message))
     .finally(() => filling.delete(card.id))
 }
 

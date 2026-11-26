@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+import { BAND_BY_ID } from './bands'
 import { applyYield, computeBonuses } from './modifiers'
 import {
   ACTIONS,
@@ -8,8 +9,9 @@ import {
   SKILLS,
   SKILL_BY_ID,
   actionLevelInfo,
-  actionRequiredLevel,
   actionsForSkill,
+  bandLevelRequired,
+  type ActionDef,
   missingUnlocks,
   skillLevelInfo,
   skillXpForLevel,
@@ -247,13 +249,19 @@ test('items expose equipment slots + tags', () => {
 })
 
 test('actions are listed in progression order: level required, then tier', () => {
+  const requirementLevel = (a: ActionDef): number =>
+    (a.requires ?? []).reduce((n, r) => Math.max(n, r.level), 1)
+  const key = (a: ActionDef): number => {
+    const tier = a.band ? (BAND_BY_ID.get(a.band)?.tier ?? 1) : 0
+    return tier * 1000 + (a.band ? bandLevelRequired(a) : requirementLevel(a))
+  }
   for (const s of SKILLS) {
     const acts = actionsForSkill(s.id)
     for (let i = 1; i < acts.length; i++) {
       const prev = acts[i - 1]!
       const cur = acts[i]!
-      const prevKey = actionRequiredLevel(prev)
-      const curKey = actionRequiredLevel(cur)
+      const prevKey = key(prev)
+      const curKey = key(cur)
       expect(curKey).toBeGreaterThanOrEqual(prevKey)
       if (curKey === prevKey) expect(cur.tier).toBeGreaterThanOrEqual(prev.tier)
     }

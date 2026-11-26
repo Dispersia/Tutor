@@ -24,9 +24,11 @@ import {
   rigRunFull,
   rigRunSec,
   settleRig,
+  type RigRecipe,
   type RigSettle,
   type RigState,
 } from '../game/idle'
+import { rigYields, type RigYield } from '@tutor/core'
 import {
   ACTION_BY_ID,
   actionConsumes,
@@ -54,9 +56,9 @@ export interface IdleRigView {
   runProgress: number
   maxed: boolean
   intervalSec: number
-  produceMultiplier: number
+  crafts: number
   xpPerCraft: number
-  produces: Cost[]
+  produces: RigYield[]
   consumes: Cost[]
   choice: string
 }
@@ -74,17 +76,17 @@ export function idleView(
   rig: RigState,
   action: ActionDef,
   now: number,
-  yieldBonus: number,
+  recipe: RigRecipe,
   xpPerCraft: number = IDLE.xpPerCraft,
 ): IdleRigView {
   return {
     actionId: action.id,
     completions: rig.completions,
     ...rigClock(rig, action, now),
-    produceMultiplier: 1 + yieldBonus,
+    crafts: rig.crafts,
     xpPerCraft,
-    produces: actionExpected(action, rig.choice || undefined),
-    consumes: actionConsumes(action, rig.choice || undefined),
+    produces: rigYields(recipe.produces ?? [], recipe, rig.remainder),
+    consumes: recipe.consumes ?? [],
     choice: rig.choice ?? '',
   }
 }
@@ -182,7 +184,7 @@ interface Outcome {
 }
 
 function recipeOutcome(ctx: SettleCtx, rig: RigState, action: ActionDef): Outcome {
-  const recipe = recipeOf(action, rig.choice || undefined, ctx.progress)
+  const recipe = rigRecipe(action, rig.choice || undefined, ctx.progress)
   const settle = settleRig(rig, recipe, ctx.bank, ctx.now)
   return { settle, xp: wholeXp(settle.state, settle.crafted) }
 }
@@ -214,7 +216,11 @@ function wholeXp(state: RigState, crafted: number): number {
   return whole
 }
 
-function recipeOf(action: ActionDef, choiceId: string | undefined, progress: ProgressCtx) {
+export function rigRecipe(
+  action: ActionDef,
+  choiceId: string | undefined,
+  progress: ProgressCtx,
+): RigRecipe {
   const { bonuses, levels } = progress
   return {
     produces: actionExpected(action, choiceId),
@@ -371,13 +377,12 @@ function drillResult(
   powered: RigState | null,
   stoppedRig: DrillRigResult['stoppedRig'],
 ): DrillRigResult {
-  const bonus = req.report.progress.bonuses
-  const yieldBonus = bonus.yield(req.action.id) + bonus.double(req.action.id)
   const perCraft = req.action.id === 'distill' ? distillPerCraft(req.db, req.userId) : undefined
+  const recipe = rigRecipe(req.action, powered?.choice || undefined, req.report.progress)
   return {
     gained: mergeCosts(req.report.gained, strike.gained),
     consumed: mergeCosts(req.report.spent, strike.spent),
-    idle: powered ? idleView(powered, req.action, req.now, yieldBonus, perCraft) : null,
+    idle: powered ? idleView(powered, req.action, req.now, recipe, perCraft) : null,
     xp: req.settledXp,
     rigsRunning: liveRigCount(req.report.rigs, req.now),
     maxLiveRigs: MAX_LIVE_RIGS,

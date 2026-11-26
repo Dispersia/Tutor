@@ -96,4 +96,10 @@
     animation: none;
     opacity: 1;
   }
+  .recording {
+    animation: none;
+  }
+  .rise {
+    animation: none;
+  }
 }

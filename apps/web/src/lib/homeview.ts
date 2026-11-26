@@ -11,13 +11,16 @@ const LEVEL_LABELS: Record<string, string> = {
   hsk1: 'HSK 1',
   n5: 'JLPT N5',
   zhfreq: 'Frequency 1k',
+  jafreq: 'Frequency 1k',
 }
 
 export function levelLabelFor(lang: string, level: string | null | undefined): string {
-  if (lang === 'ja') return 'JLPT N5'
   const label = LEVEL_LABELS[level ?? '']
-  if (lang === 'zh') return label && label !== 'JLPT N5' ? label : 'HSK 1'
-  return label ?? 'Frequency 1k'
+  const wrongScript = lang === 'zh' && label === 'JLPT N5'
+  if (label && !wrongScript) return label
+  if (lang === 'zh') return 'HSK 1'
+  if (lang === 'ja') return 'JLPT N5'
+  return 'Frequency 1k'
 }
 
 export function xpToGoal(stats: Stats | null): number {

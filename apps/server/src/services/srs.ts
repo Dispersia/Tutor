@@ -199,7 +199,7 @@ export interface LoadedCards {
   srs: Map<CardId, FsrsState>
 }
 
-export function knownWords(
+function knownWords(
   db: Db,
   userId: UserId,
   targetLang?: string,

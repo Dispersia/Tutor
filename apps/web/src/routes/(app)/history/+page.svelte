@@ -5,6 +5,7 @@
   import type { ChatSession } from '#lib/types'
   import Spinner from '#lib/components/Spinner.svelte'
   import { cachedResource } from '#lib/resource.svelte'
+  import { langName } from '#lib/voices'
 
   const list = cachedResource<{ sessions: ChatSession[] }>('/api/sessions')
   const sessions = $derived(list.data?.sessions ?? [])
@@ -52,7 +53,7 @@
           </div>
           <div class="mt-1.5">
             <span class="chip" style={accentStyle(kindAccent(s.kind))}>
-              {s.kind}{s.lang ? ` · ${s.lang.toUpperCase()}` : ''}
+              {s.kind}{s.lang ? ` · ${langName(s.lang)}` : ''}
             </span>
           </div>
         </a>

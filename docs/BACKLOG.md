@@ -42,6 +42,12 @@ returned 6.18 GB).
    places it has produced plumbing rather than clarity (`combatResolve.ts`,
    `practice/next.ts`). Raising it to 30–40 with a complexity limit is a policy
    change, so it was not made.
+4. **Two "levels" and only one is visible.** `stats.level` is the global-XP level
+   from `game/levels.ts`: it is stored, it emits `level.up` (which nothing
+   subscribes to) and it travels as `leveledUp` on a graded drill (which the web
+   ignores). Everything the member sees is the **account level**, the mean of
+   their skill levels. Either surface the XP level (a header badge plus a
+   level-up toast) or delete it, the event and the field. `srv/services/overview.ts`
 
 ## 3. Bugs
 
@@ -58,6 +64,11 @@ returned 6.18 GB).
   playback (chat replies, "hear it" on a card) is not graded. If a language
   rejects often, record the word three times in one take and cut out the middle
   one with the aligner (not built).
+- **`wasIssued` still fails open with no record.** The guard refuses an expired or
+  wrong drill, but a member with *no* issued drill on record (a fresh process, or
+  a second server instance) can have any card graded: the issued list is process
+  memory. Closing it needs the issued drills in the database, keyed by member and
+  card, which costs a write per drill. `srv/routes/practice/issued.ts`
 - **`equipment.instance_id` is still nullable** in the schema, though nothing
   writes null any more.
 - **Chat sessions are never closed.** `sessions.ended_at` was write-only and was
@@ -129,7 +140,10 @@ returned 6.18 GB).
    through nine single-use interfaces.
 2. **Quality gates**: nothing lints or tests the Python; ESLint is not type-aware
    (no `no-floating-promises`); there is no pre-commit hook. (`knip` is a real
-   gate now — `bun run verify` fails on unused files, exports or dependencies.)
+   gate now — `bun run verify` fails on unused files, exports or dependencies —
+   but it cannot see test-only exports in `apps/server`, because that workspace
+   lists `src/**/*.test.ts` as entry points and `services/index.ts` re-exports
+   everything. `listSrsReviews` and `awaitDeckBuild` only survive for tests.)
 3. **Docs**: `design/tutor/` is a static prototype with an older palette than the
    shipped one — archive or delete it. `.impeccable/design.json` (design-tool
    state) is tracked while `.impeccable/review/` is ignored.

@@ -38,7 +38,7 @@ function deleteDeckHandler(c: Context<AppEnv>) {
   const deck = getDeck(deps.db, deckId)
   if (!deck) return fail(c, 404, 'not found')
   if (user.role !== 'admin' && deck.userId !== user.id) {
-    return fail(c, 403, 'Only the admin or the deck’s creator can delete a shared deck.')
+    return fail(c, 403, 'only the admin or the deck creator can delete a shared deck')
   }
   deleteDeck(deps.db, deckId)
   return c.json({ ok: true, deckId })

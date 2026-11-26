@@ -1,3 +1,4 @@
+import type { RigYield } from '@tutor/core'
 import type { ModKind } from '../types'
 
 interface Cost {
@@ -78,9 +79,9 @@ export interface IdleRigDTO {
   runProgress: number
   maxed: boolean
   intervalSec: number
-  produceMultiplier: number
+  crafts: number
   xpPerCraft: number
-  produces: Cost[]
+  produces: RigYield[]
   consumes: Cost[]
 }
 

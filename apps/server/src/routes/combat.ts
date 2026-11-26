@@ -20,7 +20,7 @@ import {
   loadLearnerData,
   loadPlayerCombat,
   loadProgress,
-  knownWords,
+  knownWordsFor,
   startEncounter,
   summary,
   type LoadedCards,
@@ -45,22 +45,19 @@ type MonsterRow = NonNullable<ReturnType<typeof getEncounter>>
 
 interface DrillEnv {
   prefs: StudyPrefs
-  known: Set<string>
   data: LoadedCards
 }
 
 function drillEnv(deps: Deps, userId: UserId): DrillEnv {
-  const data = loadLearnerData(deps.db, userId)
   return {
     prefs: readStudyPrefs(deps.db, userId),
-    known: knownWords(deps.db, userId, undefined, data),
-    data,
+    data: loadLearnerData(deps.db, userId),
   }
 }
 
 function drillContext(deps: Deps, user: SessionUser, card: ServerCard, env: DrillEnv) {
   return exerciseCtx(deps, user, card, {
-    known: env.known,
+    known: knownWordsFor(deps.db, user.id, card.targetLang, env.data),
     prefs: env.prefs,
     readings: readingMap(deps.db, user.id, card.targetLang, env.data.cards),
     distractors: 3,
@@ -163,7 +160,7 @@ async function startCombat(c: Context<AppEnv>) {
   const monsterId = str(await jsonBody(c), 'monsterId')
   if (!monsterId) return fail(c, 400, 'monsterId required')
   if (countReviewCards(deps, user.id) === 0) {
-    return fail(c, 409, 'Review some cards in Practice before you fight.')
+    return fail(c, 409, 'review some cards in practice before you fight')
   }
   const res = startEncounter(deps.db, deps.events, user.id, monsterId)
   if (!res.ok) return fail(c, startStatus(res.error), res.error)
@@ -183,7 +180,7 @@ async function beginFight(
   const drill = await buildDrill(deps, user, drillEnv(deps, user.id))
   if (!drill) {
     clearEncounter(deps.db, user.id)
-    return fail(c, 409, 'No review cards available for this fight.')
+    return fail(c, 409, 'no review cards for this fight')
   }
   return c.json({
     monster: res.monster,

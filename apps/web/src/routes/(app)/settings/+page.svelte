@@ -61,6 +61,8 @@
   let speechError = $state('')
   let settingsReady = $state(false)
   let goalReady = $state(false)
+  let settingsFailed = $state(false)
+  let goalFailed = $state(false)
   let pendingUser = $state<PublicUser | null>(null)
 
   const isAdmin = $derived(session.user?.role === 'admin')
@@ -93,21 +95,42 @@
   const settings = cachedResource<SettingsPayload>('/api/settings', { auto: false })
   if (settings.data) applySettings(settings.data)
 
-  onMount(async () => {
+  onMount(() => {
     handle = session.user?.handle ?? ''
-    if ((await settings.refresh()) && settings.data) applySettings(settings.data)
-    else error = settings.error
+    void loadSettings()
+    void loadGoal()
     void loadModels()
     void loadExercises()
     void refreshSpeech()
-    void getStats()
-      .then((s) => {
-        dailyGoal = s.dailyGoal
-        goalReady = true
-      })
-      .catch((e) => (error = (e as Error).message))
     if (isAdmin) void loadUsers()
   })
+
+  async function loadSettings() {
+    settingsFailed = false
+    if ((await settings.refresh()) && settings.data) {
+      applySettings(settings.data)
+      return
+    }
+    settingsFailed = true
+    error = settings.error || 'Couldn’t load your settings.'
+  }
+
+  async function loadGoal() {
+    goalFailed = false
+    try {
+      dailyGoal = (await getStats()).dailyGoal
+      goalReady = true
+    } catch (e) {
+      goalFailed = true
+      error = (e as Error).message
+    }
+  }
+
+  async function retry() {
+    error = ''
+    note = ''
+    await Promise.all([loadSettings(), loadGoal()])
+  }
 
   async function loadModels() {
     modelsLoading = true
@@ -296,6 +319,13 @@
   <p class="banner mb-3" style="--accent: {ACCENT.jade}" role="status">{note}</p>
 {/if}
 
+{#snippet loadFailed(message: string)}
+  <p class="mb-5 panel flex items-center justify-between gap-3 p-4 text-xs text-ink-400">
+    <span>{message}</span>
+    <button type="button" class="btn btn-ghost px-2 py-1 text-xs" onclick={retry}>Retry</button>
+  </p>
+{/snippet}
+
 <div class="lg:columns-2 lg:gap-10 xl:gap-16 [&>section]:break-inside-avoid">
   <OpenRouterKey {keyStatus} bind:keyInput onSave={saveKey} />
 
@@ -329,6 +359,7 @@
       bind:value={dailyGoal}
       onSave={() => saveScalar({ dailyGoal: Number(dailyGoal) }, 'Daily goal saved.')}
     />
+  {:else if goalFailed}{@render loadFailed('Couldn’t load your daily goal.')}
   {:else}
     <p class="mb-5 panel flex items-center gap-2 p-4 text-xs text-ink-400">
       <Spinner size={14} label="Loading your daily goal" /> Loading…
@@ -348,6 +379,7 @@
       onSave={() =>
         saveScalar({ desiredRetention: Number(desiredRetention) }, 'Desired retention saved.')}
     />
+  {:else if settingsFailed}{@render loadFailed('Couldn’t load your review settings.')}
   {:else}
     <p class="mb-5 panel flex items-center gap-2 p-4 text-xs text-ink-400">
       <Spinner size={14} label="Loading spaced repetition" /> Loading…
@@ -369,6 +401,7 @@
       onSave={() =>
         saveScalar({ foodThreshold: Number(foodThreshold) }, 'Combat auto-eat threshold saved.')}
     />
+  {:else if settingsFailed}{@render loadFailed('Couldn’t load your combat settings.')}
   {:else}
     <p class="mb-5 panel flex items-center gap-2 p-4 text-xs text-ink-400">
       <Spinner size={14} label="Loading combat settings" /> Loading…

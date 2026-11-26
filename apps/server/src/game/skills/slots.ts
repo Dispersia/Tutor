@@ -20,6 +20,12 @@ export function slotFamily(slot: Slot): Slot[] {
   return SLOTS.find((s) => s.id === slot)?.family ?? [slot]
 }
 
+const SLOT_ALIASES: Record<string, Slot> = { weapon: 'mainHand', body: 'chest' }
+
+export function canonicalSlot(slot: string): Slot {
+  return (SLOT_ALIASES[slot] ?? slot) as Slot
+}
+
 export function combatStyleForSkill(skill: SkillId): CombatStyle {
   if (skill === 'ranged') return 'ranged'
   if (skill === 'magic') return 'magic'

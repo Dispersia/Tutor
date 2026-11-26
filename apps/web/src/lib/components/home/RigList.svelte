@@ -57,7 +57,14 @@
               <span class="truncate">{r.yields || '—'}</span>
               <span class="shrink-0 tabular-nums">{fmtClock(r.left)} left</span>
             </div>
-            <div class="bar mt-1.5 h-1" role="progressbar" aria-label="Rig run remaining">
+            <div
+              class="bar mt-1.5 h-1"
+              role="progressbar"
+              aria-label="Rig run remaining"
+              aria-valuenow={Math.round(r.runPct * 100)}
+              aria-valuemin="0"
+              aria-valuemax="100"
+            >
               <i style="width: {r.runPct * 100}%; background: {r.category.accent}"></i>
             </div>
           </div>

@@ -14,6 +14,7 @@ import {
   ACTION_BY_ID,
   ACTIONS,
   ENCHANT_BY_ID,
+  bandLevelRequired,
   type ActionDef,
   type EnchantDef,
   type ItemDef,
@@ -87,7 +88,7 @@ export function bandView(db: Db, userId: UserId, actionXp?: ActionXp): BandView[
 function bandViewOf(band: BandDef, xp: number): BandView {
   const info = bandLevelInfo(xp)
   const gear = ACTIONS.filter((a) => a.band === band.id)
-  const locked = gear.filter((a) => (a.bandLevel ?? 1) > info.level)
+  const locked = gear.filter((a) => bandLevelRequired(a) > info.level)
   return {
     id: band.id,
     name: band.name,
@@ -115,8 +116,8 @@ function bandLabels(band: BandDef, level: number) {
 
 function nextUnlock(locked: ActionDef[]): { level: number; name: string } | null {
   if (!locked.length) return null
-  const next = locked.reduce((m, a) => ((a.bandLevel ?? 1) < (m.bandLevel ?? 1) ? a : m))
-  return { level: next.bandLevel ?? 1, name: next.name }
+  const next = locked.reduce((m, a) => (bandLevelRequired(a) < bandLevelRequired(m) ? a : m))
+  return { level: bandLevelRequired(next), name: next.name }
 }
 
 export function accountBandBonuses(db: Db, userId: UserId): BandBonuses {

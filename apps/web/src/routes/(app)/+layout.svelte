@@ -33,7 +33,7 @@
 
   const tabs = [
     { href: '/home', label: 'Home', icon: 'home' },
-    { href: '/skills', label: 'Skills', icon: 'skills' },
+    { href: '/skills', label: 'Skills', icon: 'sword' },
     { href: '/learn', label: 'Learn', icon: 'learn' },
   ]
   const account = [

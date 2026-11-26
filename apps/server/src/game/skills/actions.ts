@@ -7,11 +7,7 @@ export function bandLevelRequired(action: ActionDef): number {
   return action.bandLevel ?? 1
 }
 
-export function actionRequiredLevel(action: ActionDef): number {
-  if (action.band) {
-    const band = BAND_BY_ID.get(action.band)
-    if (band) return band.tier * 1000 + bandLevelRequired(action)
-  }
+function requirementLevel(action: ActionDef): number {
   return (action.requires ?? []).reduce((n, r) => Math.max(n, r.level), 1)
 }
 
@@ -25,8 +21,13 @@ const bySkill = new Map<SkillId, ActionDef[]>()
 
 function sortedActions(skillId: SkillId): ActionDef[] {
   return ACTIONS.filter((a) => a.skillId === skillId).sort(
-    (a, b) => actionRequiredLevel(a) - actionRequiredLevel(b) || a.tier - b.tier,
+    (a, b) => progressionKey(a) - progressionKey(b) || a.tier - b.tier,
   )
+}
+
+function progressionKey(action: ActionDef): number {
+  const band = action.band ? BAND_BY_ID.get(action.band) : undefined
+  return band ? band.tier * 1000 + bandLevelRequired(action) : requirementLevel(action)
 }
 
 export function skillLevelOf(skillId: SkillId, levels: Map<string, number>): number {

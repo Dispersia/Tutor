@@ -3,15 +3,15 @@ import type { ServerCard } from '../../db/repo'
 import type { Card, ExerciseContext, ExerciseDef, ExerciseInstance } from '@tutor/core'
 import type { Context } from 'hono'
 import type { App, AppEnv, Deps } from '../../context'
-import { getCard, getDeck, introducedCardIds, listDecks, type PublicUser } from '../../db/repo'
+import { getCard, getDeck, introducedCardIds, type PublicUser } from '../../db/repo'
 import { INTRODUCE_ID, registry } from '../../exercises'
 import { fillGrammarTeaching, needsGrammarTeaching } from '../../deck/grammarExamples'
 import { plannerFor } from '../../deck/planner'
 import { bumpDailyExtra, readStudyPrefs, type StudyPrefs } from '../../services/study'
 import { type ActionDef } from '../../game/skills'
-import { selectStudyCardId } from '../../game/srs'
+import { selectCardId } from '../../game/srs'
 import { quietState } from '../../services/quiet'
-import { cardNeedsAudio } from '../../services/audio'
+import { isUtterance } from '../../exercises/payload'
 import {
   knownWordsFor,
   loadLearnerData,
@@ -29,8 +29,10 @@ import {
   pickNextExercise,
   pickStudyCard,
   resolveLesson,
+  studyDeckId,
 } from './select'
 import { idField, jsonBody, str } from '../body'
+import { fail } from '../errors'
 
 interface NextBody extends ActionRequest {
   deckId?: DeckId
@@ -109,8 +111,10 @@ function resolveDeck(
   prefs: StudyPrefs,
 ): { deckId?: DeckId; error?: GuardError } {
   if (body.lessonId) return lessonDeck(deps, user.id, body.lessonId)
-  const fromAction = deckForAction(deps, user.id, action)
-  if (fromAction) return { deckId: fromAction }
+  if (action) {
+    const deckId = studyDeckId(deps, user.id, prefs)
+    if (deckId) return { deckId }
+  }
   if (body.deckId) return { deckId: body.deckId }
   if (prefs.activeDeckId && getDeck(deps.db, prefs.activeDeckId, user.id)) {
     return { deckId: prefs.activeDeckId }
@@ -127,11 +131,6 @@ function lessonDeck(
   return lesson
     ? { deckId: lesson.deckId }
     : { error: { status: 404, body: { error: 'unknown lesson' } } }
-}
-
-function deckForAction(deps: Deps, userId: UserId, action?: ActionDef): DeckId | undefined {
-  if (!action?.deckLevel) return undefined
-  return listDecks(deps.db, userId).find((d) => d.level === action.deckLevel)?.id
 }
 
 function resolveTarget(
@@ -201,7 +200,7 @@ function budgetForDeck(
 ): StudyBudget {
   const budget = studyBudget(deps.db, userId, opts.now, data)
   if (opts.targeted) return budget
-  const next = selectStudyCardId(deckIds, data.srs, opts.now)
+  const next = selectCardId(deckIds, data.srs, opts.now)
   if (next === undefined) return budget
   const blocked = data.srs.has(next)
     ? !(budget.reviewsUnlimited || budget.reviewsRemaining > 0)
@@ -238,9 +237,9 @@ async function serveCard(c: Context<AppEnv>, req: ServeCardReq) {
     prefs: req.prefs,
   })
   const instance = await serveDrill(drillRequest({ ...req, card }, ctx))
-  if (typeof instance === 'string') return c.json({ error: instance }, 409)
+  if (typeof instance === 'string') return fail(c, 409, instance)
   noteIssued(req.user.id, instance)
-  if (cardNeedsAudio(card)) enqueueListen(req.deps, req.user, card)
+  if (isUtterance(card)) enqueueListen(req.deps, req.user, card)
   return c.json(nextResponse(instance, req.lessonId ?? null))
 }
 
@@ -253,7 +252,7 @@ function fillTeaching(req: ServeCardReq): void {
     .then((planner) => {
       if (planner) fillGrammarTeaching(req.deps.db, req.user.id, card, planner, known)
     })
-    .catch(() => {})
+    .catch((err) => console.warn('[grammar] teaching fill failed:', (err as Error).message))
 }
 
 function drillRequest(req: ServeCardReq, ctx: ExerciseContext): DrillRequest {

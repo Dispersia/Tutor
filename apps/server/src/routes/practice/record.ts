@@ -3,8 +3,10 @@ import type { ServerCard } from '../../db/repo'
 import type { ExerciseDef, GradeResult } from '@tutor/core'
 import type { Deps } from '../../context'
 import { addReview } from '../../db/repo'
+import { inTransaction } from '../../db/repo/helpers'
 import { maybeAutoGrow } from '../../deck/autoGrow'
 import { REINFORCE_LAPSES, reinforceLapsedCard } from '../../deck/reinforce'
+import { INTRODUCE_ID } from '../../exercises'
 import { NEW_STATE } from '../../game/srs'
 import { readStudyPrefs } from '../../services/study'
 import {
@@ -25,7 +27,7 @@ export interface ReviewOutcome {
   stats: ReturnType<typeof summary>
 }
 
-export interface AttemptInput {
+interface AttemptInput {
   userId: UserId
   card: ServerCard
   exerciseId: string
@@ -33,7 +35,7 @@ export interface AttemptInput {
   latencyMs?: number
 }
 
-export function addReviewRow(deps: Deps, input: AttemptInput): void {
+function addReviewRow(deps: Deps, input: AttemptInput): void {
   addReview(deps.db, {
     cardId: input.card.id,
     userId: input.userId,
@@ -67,22 +69,54 @@ export interface FinalizeInput {
   lessonId?: string
 }
 
-export function finalizeReview(deps: Deps, input: FinalizeInput): ReviewOutcome {
+export function recordGrade(deps: Deps, input: FinalizeInput): ReviewOutcome {
+  const settled = inTransaction(deps.db, (tx) => writeGrade({ ...deps, db: tx }, input))
+  if (input.def.id !== INTRODUCE_ID) runFollowUps(deps, input, settled.lapses)
+  return settled.outcome
+}
+
+function writeGrade(deps: Deps, input: FinalizeInput): Settled {
+  addReviewRow(deps, attemptOf(input))
+  return input.def.id === INTRODUCE_ID
+    ? { outcome: uncountedOutcome(deps, input.userId, input.result), lapses: 0 }
+    : finalizeWrites(deps, input)
+}
+
+function attemptOf(input: FinalizeInput): AttemptInput {
+  return {
+    userId: input.userId,
+    card: input.card,
+    exerciseId: input.def.id,
+    result: input.result,
+    latencyMs: input.latencyMs,
+  }
+}
+
+function runFollowUps(deps: Deps, input: FinalizeInput, lapses: number): void {
+  maybeReinforce(deps, input, lapses)
+  maybeAutoGrow(deps, input.userId, input.card)
+}
+
+interface Settled {
+  outcome: ReviewOutcome
+  lapses: number
+}
+
+function finalizeWrites(deps: Deps, input: FinalizeInput): Settled {
   const { userId, result } = input
   const leveledUp = awardReviewXp(deps, userId, input)
   touchActivity(deps.db, deps.events, userId)
   emitCompleted(deps, input)
   const skill = settleAction(deps, userId, input.actionId, result, input.choiceId)
   const srs = reviewSchedule(deps, userId, input)
-  maybeReinforce(deps, input, srs.lapses)
-  maybeAutoGrow(deps, userId, input.card)
-  return {
+  const outcome: ReviewOutcome = {
     result: { ...result, xp: input.xp, leveledUp },
     skill,
     srs,
     lessonCompleted: lessonDone(deps, input, srs),
     stats: summary(deps.db, userId),
   }
+  return { outcome, lapses: srs.lapses }
 }
 
 function awardReviewXp(deps: Deps, userId: UserId, input: FinalizeInput): boolean {
@@ -116,7 +150,9 @@ function maybeReinforce(deps: Deps, input: FinalizeInput, lapses: number): void 
   if (input.card.payload?.template !== 'vocab') return
   if (lapses < REINFORCE_LAPSES) return
   if (!readStudyPrefs(deps.db, input.userId).autoReinforce) return
-  void reinforceLapsedCard(deps, input.userId, input.card.id).catch(() => {})
+  void reinforceLapsedCard(deps, input.userId, input.card.id).catch((err) =>
+    console.warn('[reinforce] auto-reinforce failed:', (err as Error).message),
+  )
 }
 
 function lessonDone(

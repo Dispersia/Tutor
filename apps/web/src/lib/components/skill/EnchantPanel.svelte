@@ -1,7 +1,7 @@
 <script lang="ts">
   import { accentStyle } from '#lib/theme'
   import { focusTrap } from '#lib/focusTrap'
-  import { itemName as itemNameOf } from '#lib/components/combat/itemName'
+  import { itemIcon as itemIconOf, itemName as itemNameOf } from '#lib/components/combat/itemName'
   import type { EnchantDTO, EquippedDTO, GearInstanceDTO, GearSetDTO, ItemDTO } from '#lib/skills'
 
   interface Props {
@@ -72,6 +72,7 @@
   }
 
   const itemName = (id: string) => itemNameOf(itemMap, id)
+  const itemIcon = (id: string) => itemIconOf(itemMap, id)
 
   function candidateIds(e: EnchantDTO): string[] {
     const family = SLOT_FAMILY[e.slot] ?? [e.slot]
@@ -243,12 +244,11 @@
         </p>
         <ul class="mt-2 flex flex-col gap-2">
           {#each candidates as g (g.id)}
-            {@const item = itemMap.get(g.itemId)}
             <li class="flex items-center justify-between gap-2 border-b border-ink-800 pb-2">
               <div class="min-w-0">
                 <p class="truncate text-sm text-ink-100">
-                  {item?.icon ?? '◆'}
-                  {item?.name ?? g.itemId}
+                  {itemIcon(g.itemId) || '◆'}
+                  {itemName(g.itemId)}
                 </p>
                 <p class="text-[11px] text-ink-400">
                   {g.quality} · {g.slot} · {sourcesFor(g)}

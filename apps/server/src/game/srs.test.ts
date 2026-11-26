@@ -20,7 +20,6 @@ import {
   sameDayStability,
   schedule,
   selectCardId,
-  selectStudyCardId,
   type FsrsState,
 } from './srs'
 
@@ -185,12 +184,13 @@ test('selectCardId prefers overdue, then new, then soonest due', () => {
     ['b', state(now + 5 * DAY)],
     ['c', state(now + DAY)],
   ])
-  expect(selectCardId(['b', 'c'], all, now)).toBe('c')
+  expect(selectCardId(['b', 'c'], all, now)).toBeUndefined()
+  expect(selectCardId(['b', 'c'], all, now, 'combat')).toBe('c')
 
   expect(selectCardId([], all, now)).toBeUndefined()
 })
 
-test('selectStudyCardId never serves a card ahead of its due date', () => {
+test('selectCardId never serves a study card ahead of its due date', () => {
   const state = (dueAt: number, s: FsrsState['state'] = 'review'): FsrsState => ({
     ...NEW_STATE,
     state: s,
@@ -198,24 +198,24 @@ test('selectStudyCardId never serves a card ahead of its due date', () => {
   })
 
   const future = new Map<string, FsrsState>([['a', state(now + DAY)]])
-  expect(selectStudyCardId(['a'], future, now)).toBeUndefined()
+  expect(selectCardId(['a'], future, now)).toBeUndefined()
 
   const soon = new Map<string, FsrsState>([
     ['a', { ...state(now + 10 * MIN_MS, 'learning'), step: 1 }],
   ])
-  expect(selectStudyCardId(['a'], soon, now)).toBeUndefined()
+  expect(selectCardId(['a'], soon, now)).toBeUndefined()
 
   const dueStep = new Map<string, FsrsState>([['a', { ...state(now - 1, 'learning'), step: 1 }]])
-  expect(selectStudyCardId(['a'], dueStep, now)).toBe('a')
+  expect(selectCardId(['a'], dueStep, now)).toBe('a')
 
   const mixed = new Map<string, FsrsState>([
     ['a', state(now + DAY)],
     ['b', state(now - 1)],
     ['c', state(now + 2 * DAY)],
   ])
-  expect(selectStudyCardId(['a', 'b', 'c', 'd'], mixed, now)).toBe('b')
-  expect(selectStudyCardId(['a', 'c', 'd'], mixed, now)).toBe('d')
-  expect(selectStudyCardId(['a', 'c'], mixed, now)).toBeUndefined()
+  expect(selectCardId(['a', 'b', 'c', 'd'], mixed, now)).toBe('b')
+  expect(selectCardId(['a', 'c', 'd'], mixed, now)).toBe('d')
+  expect(selectCardId(['a', 'c'], mixed, now)).toBeUndefined()
 })
 
 test('countDue / countNew', () => {
@@ -260,8 +260,8 @@ describe('early reviews (combat drills ahead of the schedule)', () => {
       ['a', { ...review, dueAt: 5 * DAY, lastReviewAt: 100 }],
       ['b', { ...review, dueAt: 9 * DAY, lastReviewAt: 50 }],
     ])
-    expect(selectCardId(['a', 'b'], srs, DAY)).toBe('b')
+    expect(selectCardId(['a', 'b'], srs, DAY, 'combat')).toBe('b')
     srs.set('b', { ...srs.get('b')!, lastReviewAt: DAY })
-    expect(selectCardId(['a', 'b'], srs, DAY)).toBe('a')
+    expect(selectCardId(['a', 'b'], srs, DAY, 'combat')).toBe('a')
   })
 })

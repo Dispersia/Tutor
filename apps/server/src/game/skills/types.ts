@@ -128,7 +128,6 @@ export interface ActionDef {
   description: string
   tier: number
   xp: number
-  deckLevel?: string
   minScore?: number
   requires?: UnlockReq[]
   band?: BandId

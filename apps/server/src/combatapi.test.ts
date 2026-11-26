@@ -1,10 +1,17 @@
-import type { UserId } from './ids'
+import { toCardId, type UserId } from './ids'
 import { expect, test } from 'bun:test'
 import { createApp } from './app'
 import type { App, Deps } from './context'
 import { openDb } from './db/client'
 import type { Db } from './db/client'
-import { listCards, upsertSrs } from './db/repo'
+import {
+  dailyReviewCounts,
+  getSrs,
+  listCards,
+  listSrsReviews,
+  listUsers,
+  upsertSrs,
+} from './db/repo'
 import type { Role } from './env'
 import { EventBus } from './events'
 import { OpenRouter } from './llm/openrouter'
@@ -359,5 +366,96 @@ test('leaving a fight clears the encounter with no rewards', async () => {
     inventory: { itemId: string; count: number }[]
   }
   expect(skills.inventory.find((i) => i.itemId === 'bones')?.count ?? 0).toBe(0)
+  sqlite.close()
+})
+
+test('a combat hit writes no SRS row and no review row', async () => {
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
+  const userId = listUsers(db)[0]!.id
+
+  const start = (await (
+    await app.request('/api/combat/start', auth(cookie, json({ monsterId: 'slime' })))
+  ).json()) as { instance: Instance }
+  const cardId = toCardId(start.instance.cardId)
+  const before = getSrs(db, userId, cardId)
+
+  const res = await app.request(
+    '/api/combat/hit',
+    auth(
+      cookie,
+      json({
+        exerciseId: start.instance.exerciseId,
+        cardId: start.instance.cardId,
+        answer: 'definitely-wrong',
+      }),
+    ),
+  )
+  expect(res.status).toBe(200)
+
+  expect(dailyReviewCounts(db, userId, 0).reviews).toBe(0)
+  expect(listSrsReviews(db, userId).length).toBe(0)
+  expect(getSrs(db, userId, cardId)?.dueAt).toBe(before?.dueAt)
+  sqlite.close()
+})
+
+test('a combat drill only ever serves cards from the selected deck', async () => {
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
+  const decks = (await (await app.request('/api/decks', auth(cookie))).json()) as {
+    decks: { id: string; level: string }[]
+  }
+  const japanese = decks.decks.find((d) => d.level === 'jafreq')!
+  await app.request(
+    '/api/settings',
+    auth(cookie, { ...json({ study: { activeDeckId: japanese.id } }), method: 'PUT' }),
+  )
+  const cards = (await (
+    await app.request(`/api/decks/${japanese.id}/cards`, auth(cookie))
+  ).json()) as { cards: { id: string }[] }
+  const inDeck = new Set(cards.cards.map((c) => c.id))
+
+  const start = (await (
+    await app.request('/api/combat/start', auth(cookie, json({ monsterId: 'slime' })))
+  ).json()) as { instance: Instance }
+  expect(inDeck.has(start.instance.cardId)).toBe(true)
+
+  for (let i = 0; i < 6; i++) {
+    const board = (await (await app.request('/api/combat', auth(cookie))).json()) as {
+      instance: Instance | null
+    }
+    expect(board.instance).toBeTruthy()
+    expect(inDeck.has(board.instance!.cardId)).toBe(true)
+  }
+  sqlite.close()
+})
+
+test('a combat hit is refused when the exercise does not fit the card', async () => {
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
+  const start = (await (
+    await app.request('/api/combat/start', auth(cookie, json({ monsterId: 'slime' })))
+  ).json()) as { instance: Instance }
+
+  const res = await app.request(
+    '/api/combat/hit',
+    auth(cookie, json({ exerciseId: 'grammar_cloze', cardId: start.instance.cardId, answer: 'x' })),
+  )
+  expect(res.status).toBe(400)
+  sqlite.close()
+})
+
+test('a combat hit is refused for a drill the member was not given', async () => {
+  const { app, db, sqlite } = makeApp()
+  const cookie = await signup(app, db)
+  const start = (await (
+    await app.request('/api/combat/start', auth(cookie, json({ monsterId: 'slime' })))
+  ).json()) as { instance: Instance }
+
+  const res = await app.request(
+    '/api/combat/hit',
+    auth(cookie, json({ exerciseId: 'introduce', cardId: start.instance.cardId, answer: 'x' })),
+  )
+  expect(res.status).toBe(409)
   sqlite.close()
 })

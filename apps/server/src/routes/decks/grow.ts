@@ -2,7 +2,7 @@ import { toDeckId, type UserId, type DeckId } from '../../ids'
 import type { Context } from 'hono'
 import type { App, AppEnv, Deps } from '../../context'
 import { getDeck } from '../../db/repo'
-import { growDeck, isDeckBuilding, startDeckGrowth } from '../../deck/generate'
+import { claimDeck, growDeck, releaseDeck, startDeckGrowth } from '../../deck/generate'
 import { plannerFor, reviewerFor } from '../../deck/planner'
 import type { Planner } from '../../deck/plan'
 import type { Reviewer } from '../../deck/review'
@@ -29,8 +29,6 @@ interface GrowReq {
   reviewer?: Reviewer
 }
 
-const growing = new Set<DeckId>()
-
 export function registerDeckGrow(app: App) {
   app.post('/api/decks/:id/grow', (c) => growHandler(c))
 }
@@ -41,10 +39,7 @@ async function growHandler(c: Context<AppEnv>) {
   const deckId = toDeckId(String(c.req.param('id')))
   if (!getDeck(deps.db, deckId, user.id)) return fail(c, 404, 'not found')
   const body = growBody(await jsonBody(c))
-  if (growing.has(deckId) || isDeckBuilding(deckId)) {
-    return fail(c, 409, 'This deck is already being built.')
-  }
-  growing.add(deckId)
+  if (!claimDeck(deckId)) return fail(c, 409, 'deck is already being built')
   try {
     const planner = await plannerFor(deps, user.id)
     if (!planner) return needKey(c)
@@ -52,7 +47,7 @@ async function growHandler(c: Context<AppEnv>) {
     const req = { c, deps, deckId, body, planner, reviewer }
     return await (body.all ? finishDeck(req) : growOnce(req))
   } finally {
-    growing.delete(deckId)
+    releaseDeck(deckId)
   }
 }
 

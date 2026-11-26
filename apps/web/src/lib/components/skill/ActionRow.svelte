@@ -226,7 +226,14 @@
               </button>
             {/if}
           </div>
-          <div class="bar mt-1 h-1" role="progressbar" aria-label="Rig run filled toward the cap">
+          <div
+            class="bar mt-1 h-1"
+            role="progressbar"
+            aria-label="Rig run filled toward the cap"
+            aria-valuenow={Math.round(a.idle.runProgress * 100)}
+            aria-valuemin="0"
+            aria-valuemax="100"
+          >
             {#if a.idle.active}
               <i style="width: {a.idle.runProgress * 100}%; background: {accent}"></i>
             {/if}

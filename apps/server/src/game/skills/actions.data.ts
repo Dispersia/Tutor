@@ -22,7 +22,6 @@ function bandGear(
   itemId: string,
   count: number,
   bandLevel: number,
-  deckLevel = 'zhfreq',
 ): ActionDef {
   const band = BAND_BY_ID.get(bandId)!
   return A({
@@ -32,7 +31,6 @@ function bandGear(
     description: `Needs ${band.name} ${bandLevel}.`,
     tier: band.tier,
     xp: craftXp(count, band.tier, bandLevel),
-    deckLevel,
     band: bandId,
     bandLevel,
     consumes: [{ item: material, count }],
@@ -46,9 +44,7 @@ const forgePlate = (
   itemId: string,
   count: number,
   bandLevel: number,
-  deckLevel = 'zhfreq',
-): ActionDef =>
-  bandGear('smithing', 'Forge', `${bandId}_bar`, id, bandId, itemId, count, bandLevel, deckLevel)
+): ActionDef => bandGear('smithing', 'Forge', `${bandId}_bar`, id, bandId, itemId, count, bandLevel)
 
 const sewLeather = (
   id: string,
@@ -56,9 +52,7 @@ const sewLeather = (
   itemId: string,
   count: number,
   bandLevel: number,
-  deckLevel = 'zhfreq',
-): ActionDef =>
-  bandGear('leatherworking', 'Sew', 'leather', id, bandId, itemId, count, bandLevel, deckLevel)
+): ActionDef => bandGear('leatherworking', 'Sew', 'leather', id, bandId, itemId, count, bandLevel)
 
 const sewCloth = (
   id: string,
@@ -66,9 +60,7 @@ const sewCloth = (
   itemId: string,
   count: number,
   bandLevel: number,
-  deckLevel = 'zhfreq',
-): ActionDef =>
-  bandGear('tailoring', 'Sew', 'cloth', id, bandId, itemId, count, bandLevel, deckLevel)
+): ActionDef => bandGear('tailoring', 'Sew', 'cloth', id, bandId, itemId, count, bandLevel)
 
 export const ACTIONS: ActionDef[] = [
   A({
@@ -78,7 +70,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Common ore.',
     tier: 1,
     xp: 8,
-    deckLevel: 'zhfreq',
     produces: [{ item: 'copper_ore', count: 1 }],
   }),
   A({
@@ -88,7 +79,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Common ore. Smelt with copper.',
     tier: 1,
     xp: 8,
-    deckLevel: 'zhfreq',
     produces: [{ item: 'tin_ore', count: 1 }],
   }),
   A({
@@ -98,7 +88,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'For Runecrafting.',
     tier: 1,
     xp: 6,
-    deckLevel: 'jafreq',
     produces: [{ item: 'rune_essence', count: 1 }],
   }),
   A({
@@ -108,7 +97,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Needs Mining 5.',
     tier: 2,
     xp: 12,
-    deckLevel: 'zhfreq',
     requires: [{ skill: 'mining', level: 5 }],
     produces: [{ item: 'iron_ore', count: 1 }],
   }),
@@ -119,7 +107,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Needs Mining 15.',
     tier: 3,
     xp: 16,
-    deckLevel: 'zhfreq',
     requires: [{ skill: 'mining', level: 15 }],
     produces: [{ item: 'coal', count: 1 }],
   }),
@@ -131,7 +118,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Basic logs.',
     tier: 1,
     xp: 8,
-    deckLevel: 'zhfreq',
     produces: [{ item: 'oak_log', count: 1 }],
   }),
   A({
@@ -141,7 +127,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Needs Woodcutting 5.',
     tier: 2,
     xp: 12,
-    deckLevel: 'jafreq',
     requires: [{ skill: 'woodcutting', level: 5 }],
     produces: [{ item: 'willow_log', count: 1 }],
   }),
@@ -152,7 +137,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Needs Woodcutting 15.',
     tier: 3,
     xp: 16,
-    deckLevel: 'zhfreq',
     requires: [{ skill: 'woodcutting', level: 15 }],
     produces: [{ item: 'maple_log', count: 1 }],
   }),
@@ -164,7 +148,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Basic fish.',
     tier: 1,
     xp: 8,
-    deckLevel: 'zhfreq',
     produces: [{ item: 'raw_shrimp', count: 1 }],
   }),
   A({
@@ -174,7 +157,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Needs Fishing 5.',
     tier: 2,
     xp: 12,
-    deckLevel: 'jafreq',
     requires: [{ skill: 'fishing', level: 5 }],
     produces: [{ item: 'raw_trout', count: 1 }],
   }),
@@ -185,7 +167,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Needs Fishing 15.',
     tier: 3,
     xp: 16,
-    deckLevel: 'zhfreq',
     requires: [{ skill: 'fishing', level: 15 }],
     produces: [{ item: 'raw_lobster', count: 1 }],
   }),
@@ -197,7 +178,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'A basic herb.',
     tier: 1,
     xp: 8,
-    deckLevel: 'zhfreq',
     produces: [{ item: 'guam', count: 1 }],
   }),
   A({
@@ -207,7 +187,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Needs Farming 5.',
     tier: 2,
     xp: 12,
-    deckLevel: 'jafreq',
     requires: [{ skill: 'farming', level: 5 }],
     produces: [{ item: 'tarromin', count: 1 }],
   }),
@@ -218,7 +197,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Needs Farming 15.',
     tier: 3,
     xp: 16,
-    deckLevel: 'zhfreq',
     requires: [{ skill: 'farming', level: 15 }],
     produces: [{ item: 'harralander', count: 1 }],
   }),
@@ -229,7 +207,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Wool for Tailoring.',
     tier: 1,
     xp: 8,
-    deckLevel: 'zhfreq',
     produces: [{ item: 'wool', count: 1 }],
   }),
   A({
@@ -239,7 +216,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Needs Farming 20.',
     tier: 3,
     xp: 18,
-    deckLevel: 'jafreq',
     requires: [{ skill: 'farming', level: 20 }],
     produces: [{ item: 'silk', count: 1 }],
   }),
@@ -251,7 +227,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Copper + tin.',
     tier: 1,
     xp: 10,
-    deckLevel: 'zhfreq',
     band: 'bronze',
     bandLevel: 1,
     consumes: [
@@ -267,7 +242,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Needs Bronze 40.',
     tier: 2,
     xp: 14,
-    deckLevel: 'zhfreq',
     band: 'iron',
     bandLevel: 1,
     consumes: [{ item: 'iron_ore', count: 2 }],
@@ -280,7 +254,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Needs Iron 40.',
     tier: 3,
     xp: 20,
-    deckLevel: 'jafreq',
     band: 'steel',
     bandLevel: 1,
     consumes: [
@@ -296,7 +269,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'A starter weapon.',
     tier: 1,
     xp: 12,
-    deckLevel: 'zhfreq',
     band: 'bronze',
     bandLevel: 3,
     consumes: [{ item: 'bronze_bar', count: 12 }],
@@ -309,7 +281,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Needs Iron 3.',
     tier: 2,
     xp: 22,
-    deckLevel: 'zhfreq',
     band: 'iron',
     bandLevel: 3,
     consumes: [{ item: 'iron_bar', count: 20 }],
@@ -322,7 +293,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Needs Steel 24.',
     tier: 3,
     xp: 82,
-    deckLevel: 'jafreq',
     band: 'steel',
     bandLevel: 24,
     consumes: [{ item: 'steel_bar', count: 40 }],
@@ -370,7 +340,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Basic food.',
     tier: 1,
     xp: 8,
-    deckLevel: 'zhfreq',
     consumes: [{ item: 'raw_shrimp', count: 1 }],
     produces: [{ item: 'cooked_shrimp', count: 1 }],
   }),
@@ -381,7 +350,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Needs Cooking 5.',
     tier: 2,
     xp: 12,
-    deckLevel: 'jafreq',
     requires: [{ skill: 'cooking', level: 5 }],
     consumes: [{ item: 'raw_trout', count: 1 }],
     produces: [{ item: 'cooked_trout', count: 1 }],
@@ -393,7 +361,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Needs Cooking 15.',
     tier: 3,
     xp: 16,
-    deckLevel: 'zhfreq',
     requires: [{ skill: 'cooking', level: 15 }],
     consumes: [{ item: 'raw_lobster', count: 1 }],
     produces: [{ item: 'cooked_lobster', count: 1 }],
@@ -406,7 +373,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Guam + vial.',
     tier: 1,
     xp: 12,
-    deckLevel: 'zhfreq',
     consumes: [
       { item: 'guam', count: 2 },
       { item: 'vial', count: 2 },
@@ -420,7 +386,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Needs Herblore 10.',
     tier: 2,
     xp: 16,
-    deckLevel: 'jafreq',
     requires: [{ skill: 'herblore', level: 10 }],
     consumes: [
       { item: 'tarromin', count: 2 },
@@ -436,7 +401,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'A starter bow.',
     tier: 1,
     xp: 12,
-    deckLevel: 'zhfreq',
     band: 'oak',
     bandLevel: 3,
     consumes: [{ item: 'oak_log', count: 12 }],
@@ -449,7 +413,6 @@ export const ACTIONS: ActionDef[] = [
     description: '15 arrows per log.',
     tier: 1,
     xp: 10,
-    deckLevel: 'jafreq',
     band: 'oak',
     bandLevel: 1,
     consumes: [{ item: 'oak_log', count: 1 }],
@@ -462,7 +425,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Needs Willow 3.',
     tier: 2,
     xp: 26,
-    deckLevel: 'zhfreq',
     band: 'willow',
     bandLevel: 3,
     consumes: [{ item: 'willow_log', count: 24 }],
@@ -475,7 +437,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'A weapon for Magic.',
     tier: 1,
     xp: 12,
-    deckLevel: 'jafreq',
     band: 'oak',
     bandLevel: 3,
     consumes: [{ item: 'oak_log', count: 12 }],
@@ -488,7 +449,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Needs Willow 3.',
     tier: 2,
     xp: 22,
-    deckLevel: 'zhfreq',
     band: 'willow',
     bandLevel: 3,
     consumes: [{ item: 'willow_log', count: 20 }],
@@ -502,7 +462,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'From essence.',
     tier: 1,
     xp: 8,
-    deckLevel: 'zhfreq',
     consumes: [{ item: 'rune_essence', count: 2 }],
     produces: [{ item: 'air_rune', count: 1 }],
   }),
@@ -513,7 +472,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Needs Runecrafting 5.',
     tier: 2,
     xp: 12,
-    deckLevel: 'jafreq',
     requires: [{ skill: 'runecrafting', level: 5 }],
     consumes: [{ item: 'rune_essence', count: 2 }],
     produces: [{ item: 'water_rune', count: 1 }],
@@ -525,7 +483,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Needs Runecrafting 20.',
     tier: 3,
     xp: 20,
-    deckLevel: 'zhfreq',
     requires: [{ skill: 'runecrafting', level: 20 }],
     consumes: [{ item: 'rune_essence', count: 3 }],
     produces: [{ item: 'nature_rune', count: 1 }],
@@ -538,7 +495,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'For Herblore.',
     tier: 1,
     xp: 8,
-    deckLevel: 'zhfreq',
     produces: [{ item: 'vial', count: 1 }],
   }),
   A({
@@ -548,7 +504,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Uncut → cut.',
     tier: 2,
     xp: 12,
-    deckLevel: 'jafreq',
     consumes: [{ item: 'uncut_gem', count: 2 }],
     produces: [{ item: 'cut_gem', count: 1 }],
   }),
@@ -559,7 +514,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Crush an ore you hold — may find nothing.',
     tier: 1,
     xp: 12,
-    deckLevel: 'zhfreq',
     choices: [
       ...GEM_TIERS.map((t) => ({
         id: t.ore.replace('_ore', ''),
@@ -587,7 +541,6 @@ export const ACTIONS: ActionDef[] = [
       description: `Cut any rough ${t.word.toLowerCase()} gem.`,
       tier: t.tier,
       xp: 10 + 4 * t.tier,
-      deckLevel: 'zhfreq',
       band: t.band,
       bandLevel: 3,
       choices: GEM_TYPES.map((g) => ({
@@ -605,7 +558,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Hide → leather.',
     tier: 1,
     xp: 10,
-    deckLevel: 'zhfreq',
     consumes: [{ item: 'hide', count: 2 }],
     produces: [{ item: 'leather', count: 1 }],
   }),
@@ -616,7 +568,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Light armour.',
     tier: 2,
     xp: 14,
-    deckLevel: 'zhfreq',
     requires: [{ skill: 'jewelcrafting', level: 5 }],
     consumes: [{ item: 'leather', count: 14 }],
     produces: [{ item: 'leather_body', count: 1 }],
@@ -629,7 +580,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Hide → leather.',
     tier: 1,
     xp: 10,
-    deckLevel: 'zhfreq',
     band: 'leather',
     bandLevel: 1,
     consumes: [{ item: 'hide', count: 2 }],
@@ -657,7 +607,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Wool → cloth.',
     tier: 1,
     xp: 10,
-    deckLevel: 'zhfreq',
     band: 'cloth',
     bandLevel: 1,
     consumes: [{ item: 'wool', count: 2 }],
@@ -685,7 +634,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'A handful of coins.',
     tier: 1,
     xp: 8,
-    deckLevel: 'zhfreq',
     produces: [{ item: 'coins', count: 10 }],
   }),
   A({
@@ -695,7 +643,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Needs Thieving 10.',
     tier: 2,
     xp: 16,
-    deckLevel: 'jafreq',
     requires: [{ skill: 'thieving', level: 10 }],
     produces: [{ item: 'uncut_gem', count: 1 }],
   }),
@@ -707,7 +654,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Trains every profession a little.',
     tier: 1,
     xp: 10,
-    deckLevel: 'zhfreq',
     produces: [{ item: 'grace', count: 1 }],
   }),
 
@@ -718,7 +664,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Requires a melee weapon.',
     tier: 1,
     xp: 14,
-    deckLevel: 'zhfreq',
     equip: { slot: 'mainHand', tag: 'melee' },
     produces: [{ item: 'bones', count: 1 }],
   }),
@@ -729,7 +674,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Requires a melee weapon.',
     tier: 1,
     xp: 14,
-    deckLevel: 'zhfreq',
     equip: { slot: 'mainHand', tag: 'melee' },
     produces: [{ item: 'bones', count: 1 }],
   }),
@@ -740,7 +684,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Requires a bow; uses 3 arrows.',
     tier: 1,
     xp: 16,
-    deckLevel: 'zhfreq',
     equip: { slot: 'mainHand', tag: 'bow' },
     consumes: [{ item: 'arrow', count: 5 }],
     produces: [{ item: 'hide', count: 1 }],
@@ -752,7 +695,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Uses 2 air runes.',
     tier: 1,
     xp: 18,
-    deckLevel: 'jafreq',
     consumes: [{ item: 'air_rune', count: 4 }],
     produces: [{ item: 'uncut_gem', count: 1 }],
   }),
@@ -764,7 +706,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Needs Mining 25.',
     tier: 4,
     xp: 22,
-    deckLevel: 'zhfreq',
     requires: [{ skill: 'mining', level: 25 }],
     produces: [{ item: 'mythril_ore', count: 1 }],
   }),
@@ -775,7 +716,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Needs Mining 40.',
     tier: 5,
     xp: 30,
-    deckLevel: 'jafreq',
     requires: [{ skill: 'mining', level: 40 }],
     produces: [{ item: 'adamant_ore', count: 1 }],
   }),
@@ -786,7 +726,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Needs Steel 40 and Mining 20.',
     tier: 4,
     xp: 26,
-    deckLevel: 'jafreq',
     band: 'mythril',
     bandLevel: 1,
     requires: [{ skill: 'mining', level: 20 }],
@@ -803,7 +742,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Needs Mythril 40 and Mining 35.',
     tier: 5,
     xp: 34,
-    deckLevel: 'zhfreq',
     band: 'adamant',
     bandLevel: 1,
     requires: [{ skill: 'mining', level: 35 }],
@@ -820,7 +758,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Needs Mythril 3 and Mining 20.',
     tier: 4,
     xp: 39,
-    deckLevel: 'zhfreq',
     band: 'mythril',
     bandLevel: 3,
     requires: [{ skill: 'mining', level: 20 }],
@@ -834,7 +771,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Needs Adamant 24 and Mining 35.',
     tier: 5,
     xp: 90,
-    deckLevel: 'jafreq',
     band: 'adamant',
     bandLevel: 24,
     requires: [{ skill: 'mining', level: 35 }],
@@ -848,7 +784,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Needs Steel 18.',
     tier: 3,
     xp: 38,
-    deckLevel: 'jafreq',
     band: 'steel',
     bandLevel: 18,
     consumes: [{ item: 'steel_bar', count: 20 }],
@@ -861,7 +796,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Needs Mythril 18 and Mining 20.',
     tier: 4,
     xp: 58,
-    deckLevel: 'zhfreq',
     band: 'mythril',
     bandLevel: 18,
     requires: [{ skill: 'mining', level: 20 }],
@@ -875,7 +809,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Needs Woodcutting 30.',
     tier: 4,
     xp: 22,
-    deckLevel: 'jafreq',
     requires: [{ skill: 'woodcutting', level: 30 }],
     produces: [{ item: 'yew_log', count: 1 }],
   }),
@@ -886,7 +819,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Needs Yew 3 and Woodcutting 30.',
     tier: 3,
     xp: 58,
-    deckLevel: 'zhfreq',
     band: 'yew',
     bandLevel: 3,
     requires: [{ skill: 'woodcutting', level: 30 }],
@@ -900,7 +832,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Needs Farming 30.',
     tier: 4,
     xp: 22,
-    deckLevel: 'jafreq',
     requires: [{ skill: 'farming', level: 30 }],
     produces: [{ item: 'ranarr', count: 1 }],
   }),
@@ -911,7 +842,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Needs Herblore 20 and Farming 25.',
     tier: 4,
     xp: 30,
-    deckLevel: 'jafreq',
     requires: [
       { skill: 'herblore', level: 20 },
       { skill: 'farming', level: 25 },
@@ -930,7 +860,6 @@ export const ACTIONS: ActionDef[] = [
       description: `Set a ${t.word.toLowerCase()} gem into a band.`,
       tier: t.tier,
       xp: 12 + 4 * t.tier,
-      deckLevel: 'zhfreq',
       band: t.band,
       bandLevel: 3,
       choices: GEM_TYPES.map((g) => ({
@@ -951,7 +880,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Break a cut gem into dust.',
     tier: 1,
     xp: 8,
-    deckLevel: 'zhfreq',
     choices: GEM_TYPES.flatMap((g) =>
       GEM_TIERS.map((t) => ({
         id: `${g.id}${t.tier}`,
@@ -968,7 +896,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Needs Copper 14.',
     tier: 1,
     xp: 22,
-    deckLevel: 'zhfreq',
     band: 'copper',
     bandLevel: 14,
     consumes: [
@@ -984,7 +911,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Needs Sapphire 8.',
     tier: 2,
     xp: 18,
-    deckLevel: 'zhfreq',
     band: 'sapphire',
     bandLevel: 8,
     consumes: [
@@ -1000,7 +926,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Needs Sapphire 6.',
     tier: 2,
     xp: 20,
-    deckLevel: 'jafreq',
     band: 'sapphire',
     bandLevel: 6,
     consumes: [
@@ -1016,7 +941,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Break an item down to learn from it.',
     tier: 1,
     xp: 10,
-    deckLevel: 'zhfreq',
   }),
   A({
     id: 'enchant-amulet',
@@ -1025,7 +949,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Needs Sapphire 12.',
     tier: 2,
     xp: 20,
-    deckLevel: 'jafreq',
     band: 'sapphire',
     bandLevel: 12,
     consumes: [
@@ -1042,7 +965,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Needs Mystic 1.',
     tier: 3,
     xp: 26,
-    deckLevel: 'zhfreq',
     band: 'mystic',
     bandLevel: 1,
     consumes: [
@@ -1058,7 +980,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Needs Mythril 3.',
     tier: 4,
     xp: 34,
-    deckLevel: 'zhfreq',
     band: 'mythril',
     bandLevel: 3,
     consumes: [
@@ -1074,7 +995,6 @@ export const ACTIONS: ActionDef[] = [
     description: 'Needs Arcane 6.',
     tier: 3,
     xp: 26,
-    deckLevel: 'jafreq',
     band: 'arcane',
     bandLevel: 6,
     consumes: [

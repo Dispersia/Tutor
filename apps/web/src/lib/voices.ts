@@ -1,7 +1,7 @@
 import { randomVoice } from '@tutor/core'
 
-export const LANG_NAMES: Record<string, string> = {
-  zh: 'Mandarin',
+const LANG_NAMES: Record<string, string> = {
+  zh: 'Mandarin Chinese',
   yue: 'Cantonese',
   ja: 'Japanese',
   ko: 'Korean',
@@ -12,6 +12,10 @@ export const LANG_NAMES: Record<string, string> = {
   it: 'Italian',
   pt: 'Portuguese',
   ru: 'Russian',
+}
+
+export function langName(code: string | null | undefined): string {
+  return code ? (LANG_NAMES[code] ?? code) : ''
 }
 
 export function speechOpts(lang: string | null | undefined): {

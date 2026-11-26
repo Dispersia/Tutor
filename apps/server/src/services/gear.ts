@@ -27,6 +27,7 @@ import {
   ENCHANT_BY_ID,
   ITEM_BY_ID,
   SKILL_BY_ID,
+  canonicalSlot,
   essenceFamily,
   essenceId,
   slotFamily,
@@ -160,8 +161,7 @@ function resolveInstance(
 }
 
 export function unequipItem(db: Db, userId: UserId, slot: string): void {
-  const normalized = slot === 'weapon' ? 'mainHand' : slot === 'body' ? 'chest' : slot
-  setEquipment(db, userId, normalized, null)
+  setEquipment(db, userId, canonicalSlot(slot), null)
 }
 
 function discardGearTx(

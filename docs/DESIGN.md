@@ -701,12 +701,12 @@ preferred reading is a 合音 (contraction) the ministry lists as a secondary
 reading — 這 as ㄓㄟˋ rather than ㄓㄜˋ — the ministry's primary reading wins, so
 an isolated character reads the same as it does inside a word. The deck builder
 overrides the generator's reading for a `zh` deck, except where the word came
-with its own reading (an Anki import) — that is the source deck's authority.
+with its own reading in its source list — that is the source's authority.
 Only Traditional characters have entries: Zhuyin is a Taiwan script, so a
 Simplified or pinyin deck keeps the generator's reading.
 
-Cards come from: a curated starter deck, LLM generation ("give me 20 HSK-1
-food words"), or manual entry.
+Cards come from: the path planner (a real frequency list, one new word per step),
+the generator from a written instruction, or manual entry.
 
 **Listening audio is pre-recorded, sentence-only.** A listening card plays
 files, not a fresh TTS call: when an utterance card is created (or on the first
@@ -775,7 +775,7 @@ support a card only when it is an utterance (`isUtterance` in
 played or spoken on its own does not tell the learner what it means. The card type
 carries this: a "sentence" the planner segmented as one token is a word, so
 `storedTemplate` (`deck/plan.ts`) stores it as a `vocab` card and migration
-`0025_single_word_cards_are_vocab.sql` relabels the starter decks' short words
+`0025_single_word_cards_are_vocab.sql` relabels the single-word cards it found
 (네, 謝謝). Word cards keep the text drills and `converse`. Free
 production waits for a base: `converse` is offered only once the member has met a
 sentence card in that language or knows enough words there to attempt one
@@ -811,26 +811,24 @@ users(id, username UNIQUE, password_hash, handle, role /*admin|user*/,
 auth_sessions(id /*sha256(token)*/, user_id, created_at, expires_at, user_agent)
 user_settings(user_id, key, value, PRIMARY KEY(user_id,key))
 decks(id, user_id, name, source_lang, target_lang, level, description)
-cards(id, deck_id, user_id, type, source_lang, target_lang, front, back,
+cards(id, deck_id, type, source_lang, target_lang, front, back,
       readings_json, tags_json, payload_json, metadata_json, origin, created_at)
 reviews(id, card_id, user_id, exercise_id, score, latency_ms, detail_json,
         audio_ref, created_at)                 -- one row per attempt
 sessions(id, user_id, deck_id, kind /*chat|voice|mixed*/, lang,
-         title, started_at, ended_at)
+         title, started_at)
 messages(id, session_id, role, text, audio_ref, model, tokens_in, tokens_out,
          cost_usd, created_at)                 -- PERMANENT history
-attempts(id, session_id, card_id, user_id, exercise_id, answer_json,
-         grade_json, score, created_at)
 xp_events(id, user_id, amount, reason, source_id, created_at)  -- append-only
 stats(user_id, xp_total, level, streak_days, last_active_day, daily_goal,
       updated_at)                              -- cached/derived
 settings(key, value)                           -- server-global (registration, etc.)
-audio_blobs(hash, user_id, path, bytes, mime, seconds, created_at)  -- files on disk
+audio_blobs(hash, user_id, path, bytes, mime, created_at)  -- files on disk
 ```
 
 Notes:
 
-- **History is append-only** for `messages`, `reviews`, `attempts`, `xp_events`.
+- **History is append-only** for `messages`, `reviews` and `xp_events`.
   XP total = `SUM(xp_events.amount)`; `stats` is a cache we can rebuild.
 - **Audio** is stored as files under `$TUTOR_DATA_DIR/audio/<sha1>.wav`, referenced
   by hash — keeps the DB small and lets us prune old audio independently.
@@ -1469,10 +1467,10 @@ graduation — is ours (`apps/server/src/game/srs.ts`).
    │  schedule()    │ │  lapses, intervalDays, dueAt, lastRating   │
    └─────────┬──────┘ └────────────────────────────────────────────┘
              │
-   dueAt + intervalDays ──► selectStudyCardId() (overdue → new → done)
+   dueAt + intervalDays ──► selectCardId() (overdue → new → done)
 ```
 
-- **A sitting opens on a few new words.** `selectStudyCardId()` puts the due backlog
+- **A sitting opens on a few new words.** `selectCardId()` puts the due backlog
   first, which is right in the middle of a sitting but feels like grinding at the
   start. So practice warms up: while fewer than **3 cards have been graded in the
   last 30 minutes** (i.e. the sitting is young), the next card is a new one —
@@ -1497,8 +1495,9 @@ graduation — is ours (`apps/server/src/game/srs.ts`).
   rather than the soonest scheduled card. Reaching past a review card's due date
   looked harmless but was a trap: a same-day review of a card that is not yet due
   leaves the due date untouched (`schedule`), so the "soonest card" fallback handed
-  back the very same card forever (the "This is not that." loop). Combat keeps
-  `selectCardId`, whose fallback gives every hit a card to fight with: when
+  back the very same card forever (the "This is not that." loop). Combat calls the
+  same `selectCardId` with mode `'combat'`, whose fallback gives every hit a card
+  to fight with: when
   nothing is due it serves the card that has waited **longest since its last
   review**, so a fight rotates through the deck instead of drilling one card. A
   review card that **is** due is always rescheduled, even inside 24h of an early
@@ -1584,8 +1583,8 @@ curated lists, and the model fills the meanings still missing, in rank order. A
 path deck then stores only its `cursor` into that order, so the words are written
 down once and every lookup is a map access: the planner is handed the correct
 reading and meaning as `hints` (§10.3) and growth reads the order straight from
-the lexicon. A deck imported from Anki, which brings its own words, keeps them in
-its settings.
+the lexicon. A deck built from a written instruction keeps its own words in its
+settings instead of a cursor.
 
 The path itself walks **one word per step**, so a step can only ever introduce a
 single new thing:

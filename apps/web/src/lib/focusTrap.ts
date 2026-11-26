@@ -24,15 +24,21 @@ function keepInside(node: HTMLElement, e: KeyboardEvent): void {
   target.focus()
 }
 
+let traps: HTMLElement[] = []
+
 export function focusTrap(node: HTMLElement) {
   const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null
-  const onKeydown = (e: KeyboardEvent) => keepInside(node, e)
   if (!node.hasAttribute('tabindex')) node.tabIndex = -1
   node.focus({ preventScroll: true })
+  traps.push(node)
+  const onKeydown = (e: KeyboardEvent) => {
+    if (traps.at(-1) === node) keepInside(node, e)
+  }
   document.addEventListener('keydown', onKeydown)
   return {
     destroy() {
       document.removeEventListener('keydown', onKeydown)
+      traps = traps.filter((open) => open !== node)
       if (opener?.isConnected) opener.focus({ preventScroll: true })
     },
   }

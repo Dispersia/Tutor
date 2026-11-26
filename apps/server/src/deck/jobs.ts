@@ -6,7 +6,7 @@ import { fillDeck, type FillDeckOptions } from './build'
 import type { DeckContext } from './context'
 import { trackDeckJob } from './builds'
 
-export { awaitDeckBuild, isDeckBuilding, trackDeckJob } from './builds'
+export { awaitDeckBuild, claimDeck, releaseDeck, trackDeckJob } from './builds'
 
 export interface StartDeckBuildRequest {
   ctx: DeckContext

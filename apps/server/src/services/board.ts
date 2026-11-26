@@ -47,7 +47,7 @@ export function skillSummaries(db: Db, userId: UserId, byAction?: Map<string, Ac
     const progress = acts.length
       ? rows.reduce((n, r) => n + (r?.progress ?? 0), 0) / acts.length
       : 0
-    return { skillId: s.id, xp, level, intoLevel: 0, forNext: 0, progress }
+    return { skillId: s.id, xp, level, progress }
   })
 }
 

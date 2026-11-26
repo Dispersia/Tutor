@@ -22,9 +22,9 @@ import {
   shiftDay,
   streakFromDays,
   summary,
-  todayDay,
   weekStart,
 } from './index'
+import { userDay } from './clock'
 
 test('streakFromDays counts consecutive days ending today or yesterday', () => {
   const today = '2026-11-12'
@@ -109,7 +109,7 @@ test('touchActivity sets the streak and emits streak.updated', () => {
   const streak = touchActivity(db, bus, user.id)
   expect(streak).toBe(1)
   expect(streakEvent).toBe(1)
-  expect(getStats(db, user.id).lastActiveDay).toBe(todayDay())
+  expect(getStats(db, user.id).lastActiveDay).toBe(userDay(db, user.id))
 
   const s = summary(db, user.id)
   expect(s.xp).toBe(10)

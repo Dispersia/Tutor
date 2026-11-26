@@ -76,13 +76,9 @@ export function lessonCardsOf(cards: ReturnType<typeof listCards>, showReadings 
     id: c.id,
     front: c.front,
     back: c.back,
-    reading: showReadings ? cardDisplayReading(c) : '',
+    reading: showReadings ? displayReading(c) : '',
     step: typeof c.payload?.step === 'number' ? c.payload.step : undefined,
   }))
-}
-
-function cardDisplayReading(c: { targetLang: string; readings: Record<string, string> }): string {
-  return displayReading(c)
 }
 
 export function checkLessonCompletion(

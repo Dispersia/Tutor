@@ -47,17 +47,49 @@ export interface RigProduce {
   count: number
 }
 
-export function craftsToItems(
-  done: number,
+export interface RigYield {
+  item: string
+  count: number
+  multiplier: number
+  remainder: number
+}
+
+export interface RigProduceBonus {
+  successChance?: number
+  yieldBonus?: number
+  itemBonus?: Record<string, number>
+}
+
+export interface RigProduceResult {
+  produced: Record<string, number>
+  remainder: Record<string, number>
+}
+
+export function rigYields(
   produces: readonly RigProduce[],
-  bonus: number,
-): Record<string, number> {
-  const out: Record<string, number> = {}
-  for (const p of produces) {
-    const n = Math.floor(done * p.count * bonus)
-    if (n > 0) out[p.item] = n
+  bonus: RigProduceBonus,
+  remainder: Readonly<Record<string, number>>,
+): RigYield[] {
+  const rate = (bonus.successChance ?? 1) * (1 + (bonus.yieldBonus ?? 0))
+  return produces.map((p) => ({
+    item: p.item,
+    count: p.count,
+    multiplier: rate + (bonus.itemBonus?.[p.item] ?? 0),
+    remainder: remainder[p.item] ?? 0,
+  }))
+}
+
+export function idleProduces(crafts: number, yields: readonly RigYield[]): RigProduceResult {
+  const done = Math.floor(crafts)
+  const produced: Record<string, number> = {}
+  const remainder: Record<string, number> = {}
+  for (const y of yields) {
+    const raw = done * y.count * y.multiplier + y.remainder
+    const n = Math.floor(raw)
+    remainder[y.item] = raw - n
+    if (n > 0) produced[y.item] = n
   }
-  return out
+  return { produced, remainder }
 }
 
 export function formatInterval(sec: number): string {

@@ -1,4 +1,4 @@
-import { craftsToItems, formatInterval } from '@tutor/core'
+import { formatInterval, idleProduces } from '@tutor/core'
 import type { IdleRigDTO, SkillDTO } from './skills'
 
 export const fmtInterval = formatInterval
@@ -9,11 +9,9 @@ export function rigGainedSince(
   now: number,
 ): Record<string, number> {
   if (!rig?.active) return {}
-  const end = Math.min(now, rig.runEndsAt)
-  const dt = (end - since) / 1000
+  const dt = (Math.min(now, rig.runEndsAt) - since) / 1000
   if (dt <= 0 || rig.intervalSec <= 0) return {}
-  const multiplier = rig.produceMultiplier
-  return craftsToItems(dt / rig.intervalSec, rig.produces, multiplier)
+  return idleProduces(rig.crafts + dt / rig.intervalSec, rig.produces).produced
 }
 
 function rigRunStartMs(rig: { runEndsAt: number; runStartedAt: number; runSec: number }): number {
@@ -30,7 +28,9 @@ export function rigRunLengthSec(rig: {
 
 export function rigGatheredTotal(rig: IdleRigDTO | null, now: number): Record<string, number> {
   if (!rig?.active) return {}
-  return rigGainedSince(rig, rigRunStartMs(rig), now)
+  const dt = (Math.min(now, rig.runEndsAt) - rigRunStartMs(rig)) / 1000
+  if (dt <= 0 || rig.intervalSec <= 0) return {}
+  return idleProduces(dt / rig.intervalSec, rig.produces).produced
 }
 
 export function rigSecondsLeft(rig: IdleRigDTO | null, now: number): number {

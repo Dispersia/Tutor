@@ -3,7 +3,7 @@
   import { typingAttrs } from '#lib/lang'
   import { haptics } from '#lib/haptics.svelte'
   import { tapGuard } from '#lib/tapGuard.svelte'
-  import { BACKSPACE, ENTER, SPACE, display, imeFor, type ImeState } from '#lib/ime'
+  import { BACKSPACE, ENTER, SPACE, display, emptyState, imeFor, type ImeState } from '#lib/ime'
   import ImeKeyboard from './ImeKeyboard.svelte'
 
   let {
@@ -28,7 +28,6 @@
 
   const engine = $derived(imeFor(lang, { variant }))
   const attrs = $derived(typingAttrs(lang, { enter }))
-  const EMPTY: ImeState = { value: '', preedit: '', buffer: '', candidates: [] }
   let store = $state<{ id: string; ime: ImeState } | null>(null)
   let touch = $state(false)
   let enabled = $state(true)
@@ -38,7 +37,7 @@
   let wasOpen = false
   let field = $state<HTMLElement | null>(null)
   const composition = $derived(
-    engine && store?.id === engine.id ? store.ime : (engine?.initial() ?? EMPTY),
+    engine && store?.id === engine.id ? store.ime : (engine?.initial() ?? emptyState()),
   )
   const on = $derived(Boolean(engine) && enabled)
   const driven = $derived(Boolean(engine && enabled && (showKeys || Boolean(engine.physical))))

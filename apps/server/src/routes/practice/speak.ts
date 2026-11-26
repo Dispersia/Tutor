@@ -5,13 +5,14 @@ import type { Context } from 'hono'
 import type { App, AppEnv, Deps } from '../../context'
 import { getCard, type PublicUser } from '../../db/repo'
 import { registry } from '../../exercises'
-import { knownWords, loadLearnerData, type LoadedCards } from '../../services'
+import { knownWordsFor, loadLearnerData, type LoadedCards } from '../../services'
 import { makeAssessor, type AssessFn } from '../../pronunciation/assess'
 import { actionGate } from './action'
 import { exerciseCtx } from './exerciseCtx'
+import { readingMap } from './select'
 import { wasIssued } from './issued'
 import { judgeFor } from './judge'
-import { addReviewRow, finalizeReview, uncountedOutcome } from './record'
+import { recordGrade, uncountedOutcome } from './record'
 import { fail, failWith, NOT_ISSUED_MESSAGE } from '../errors'
 
 interface SpokenFields {
@@ -93,7 +94,9 @@ async function speakCtx(call: SpeakCall): Promise<ExerciseContext> {
   const assess: AssessFn = deps.assess ?? makeAssessor(deps, card.targetLang)
   return {
     ...exerciseCtx(deps, user, card, {
-      known: knownWords(deps.db, user.id, undefined, call.data),
+      known: knownWordsFor(deps.db, user.id, card.targetLang, call.data),
+      readings: readingMap(deps.db, user.id, card.targetLang, call.data.cards),
+      distractors: 3,
     }),
     assess,
     judge: await judgeFor(c, card),
@@ -101,15 +104,7 @@ async function speakCtx(call: SpeakCall): Promise<ExerciseContext> {
 }
 
 function settleSpoken(call: SpeakCall, result: GradeResult, xp: number) {
-  const { deps, user, card, def, fields } = call
-  addReviewRow(deps, {
-    userId: user.id,
-    card,
-    exerciseId: def.id,
-    result,
-    latencyMs: fields.latencyMs,
-  })
-  return finalizeReview(deps, finalizeArgs(call, result, xp))
+  return recordGrade(call.deps, finalizeArgs(call, result, xp))
 }
 
 function finalizeArgs(call: SpeakCall, result: GradeResult, xp: number) {

@@ -12,7 +12,7 @@ import {
 } from '../../db/repo'
 import { INTRODUCE_ID, registry } from '../../exercises'
 import { buildLessons } from '../../game/curriculum'
-import { selectCardId, selectStudyCardId, type FsrsState } from '../../game/srs'
+import { selectCardId, type FsrsState } from '../../game/srs'
 import { displayReading } from '../../text/readings'
 import { lessonCardsOf, parseLessonId } from '../../services/curriculum'
 import { readStudyPrefs, type StudyPrefs } from '../../services/study'
@@ -57,7 +57,7 @@ export function pickStudyCard(
     if (id) return getCard(deps.db, id, userId)
   }
 
-  const id = selectStudyCardId(ids, srs, now)
+  const id = selectCardId(ids, srs, now)
   return id ? getCard(deps.db, id, userId) : undefined
 }
 
@@ -82,7 +82,7 @@ export function pickReviewCard(
     : listCards(deps.db, userId, deckId)
   const ids = cards.filter((c) => srs.has(c.id)).map((c) => c.id)
   if (ids.length === 0) return undefined
-  const id = selectCardId(ids, srs, Date.now())
+  const id = selectCardId(ids, srs, Date.now(), 'combat')
   return id ? getCard(deps.db, id, userId) : undefined
 }
 

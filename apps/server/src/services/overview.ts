@@ -15,10 +15,6 @@ import { accountLevel } from './board'
 import { dayOf, userDay, userOffsetMin } from './clock'
 import { aggregateBonuses } from './progress'
 
-export function todayDay(offsetMin = 0, ts: number = Date.now()): string {
-  return dayOf(ts, offsetMin)
-}
-
 function activeDays(db: Db, userId: UserId): string[] {
   return xpByDay(db, userId, userOffsetMin(db, userId))
     .map((r) => r.day)
