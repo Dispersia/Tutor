@@ -1625,6 +1625,13 @@ Latin transliteration — the UI shows:
 - Japanese → **furigana**, i.e. the kana split into ruby segments over the kanji
   (`text/furigana.ts`): 食べる → 食[た]べる, お茶 → お茶[ちゃ].
 
+A Japanese reading comes from the deck's **dictionary**, not the model: at build time
+each card's kana is the dictionary reading of its word, and a sentence card's kana is
+the dictionary readings of its `payload.tokens` joined (`kanaFromWords` in
+`text/readings.ts`, applied by `applyDictionaryReading`). The same dictionary supplies
+the ruby for every option of a drill, so a sentence like これは何ですか shows
+何[なに] rather than a model-invented reading.
+
 No pinyin or romaji is stored or shown; the Latin source is used only to derive the
 native reading at seed time. Grading accepts the characters or the native reading.
 The rule is enforced everywhere text is generated too: every LLM call (chat, judge,
@@ -1812,7 +1819,25 @@ keyboard, automatically.
   stop the suggestions. **Tones are optional**: a toneless reading is split into
   syllables by the Zhuyin grammar, so ㄨㄛㄏㄣㄏㄠ converts too. Candidates are
   ranked by the curated frequency lists (`text/lexicon.ts`,
-  `text/frequency-ja.ts`) and the deck's own lexicon.
+  `text/frequency-ja.ts`) and the deck's own lexicon. **A reading that is itself a
+  known word stays kana** — あなた is offered as あなた, not 貴方, and これ as これ,
+  not 此れ — and the raw kana is always offered as a candidate, so a learner is
+  never forced into a kanji they did not mean. A Japanese sentence keeps offering
+  the whole-sentence conversion first and then the **variants of one word** after
+  it (あなたはにほん → あなたは日本, あなたは二本, あなたはにほん), as full-sentence
+  candidates the picker replaces the composition with; the word varied is the last
+  one with any alternatives, so a trailing particle still lets the word before it
+  be re-picked, and a lone particle offers nothing but kana.
+- **Japanese conversion can be a real mozc server** (`apps/server/src/ime/mozc.ts`).
+  When `TUTOR_MOZC_SERVER` and `TUTOR_MOZC_HELPER` point at a locally built
+  `mozc_server` and `mozc_emacs_helper`, the server spawns both and drives the
+  conversion over the helper's line-based S-expression protocol, so Japanese
+  candidates are mozc's own (にほんへいきます → 日本へ行きます, with mozc's
+  per-segment choices). mozc builds for macOS with its own `--config=oss_macos`
+  Bazel target; the only change is that the macOS server registers its Mach port
+  with `bootstrap_register` instead of the launchd-only `bootstrap_check_in`, so
+  it runs as a plain child process. With neither variable set, the built-in
+  converter above is used.
 - **Why not bundle librime/mozc as WASM.** mozc has no browser build, librime's
   WASM port needs a multi-MB schema the PWA would have to fetch, and libhangul
   composition is algorithmic anyway. The app's own dictionaries are already
@@ -1820,7 +1845,8 @@ keyboard, automatically.
   asset and no client bundle.
 - **Not forced.** The keyboard opens by default on a touch device; *Use the
   system keyboard* hands the field back to the OS (and a small link brings it
-  back). On a fine-pointer device it stays closed until asked for.
+  back). On a fine-pointer device it stays closed until asked for — tapping the
+  field itself asks for it, as does the link.
 - **A physical keyboard converts too.** Each engine carries a `physical` keymap —
   2-beolsik for Korean, the standard Zhuyin layout for Chinese, romaji for
   Japanese — so typing on a hardware keyboard runs through the same engine with

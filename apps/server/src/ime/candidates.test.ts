@@ -32,6 +32,29 @@ describe('ime candidates', () => {
     expect(imeCandidates('ja', 'わたしは')[0]).toBe('私は')
   })
 
+  test('a word written in kana stays kana', () => {
+    expect(imeCandidates('ja', 'あなた')[0]).toBe('あなた')
+    expect(imeCandidates('ja', 'これ')[0]).toBe('これ')
+    expect(imeCandidates('ja', 'です')[0]).toBe('です')
+  })
+
+  test('the kana reading is always offered', () => {
+    expect(imeCandidates('ja', 'にほんご')).toContain('にほんご')
+    expect(imeCandidates('ja', 'わたし')).toContain('わたし')
+  })
+
+  test('a sentence offers variants of the last word', () => {
+    expect(imeCandidates('ja', 'あなたはにほん')[0]).toBe('あなたは日本')
+    expect(imeCandidates('ja', 'あなたはにほん')).toContain('あなたは二本')
+    expect(imeCandidates('ja', 'あなたはにほん')).toContain('あなたはにほん')
+  })
+
+  test('a lone particle stays kana', () => {
+    expect(imeCandidates('ja', 'は')).toEqual(['は'])
+    expect(imeCandidates('ja', 'を')).toEqual(['を'])
+    expect(imeCandidates('ja', 'に')).toEqual(['に'])
+  })
+
   test('a kana sentence keeps converting after a particle', () => {
     expect(imeCandidates('ja', 'わたしはがくせい')[0]).toBe('私は学生')
   })

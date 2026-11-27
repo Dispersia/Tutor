@@ -92,6 +92,11 @@
     tapGuard.arm()
   }
 
+  function open() {
+    if (!engine || disabled || showKeys) return
+    showKeys = true
+  }
+
   function press(key: string) {
     const current = engine
     if (!current || disabled) return
@@ -166,6 +171,7 @@
     value={display(composition)}
     bind:this={field}
     onkeydown={onPhysical}
+    onclick={open}
     class="field text-lg"
     aria-label={placeholder}
     {placeholder}

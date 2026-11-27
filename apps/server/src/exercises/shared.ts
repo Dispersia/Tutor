@@ -1,8 +1,9 @@
-import { pitchOf, type ExerciseContext } from '@tutor/core'
+import { pitchOf, type Card, type ExerciseContext } from '@tutor/core'
 import { langName } from '../llm/prompts'
-import { furiganaSegments } from '../text/furigana'
+import { furiganaWords, type FuriganaSegment } from '../text/furigana'
 import { bareText } from '../text/normalize'
 import { displayReading as nativeReading } from '../text/readings'
+import { payloadTokens } from './payload'
 
 export const BLANK = '___'
 
@@ -39,18 +40,35 @@ export const displayReading = (ctx: ExerciseContext): string =>
 export const distinctReading = (text: string, reading: string): string =>
   reading && bareText(reading) !== bareText(text) ? reading : ''
 
-export const furiganaFor = (lang: string, word: string, reading: string) =>
-  lang === 'ja' ? furiganaSegments(word, reading) : undefined
-
 export const gradingReading = (ctx: ExerciseContext): string => nativeReading(ctx.card)
+
+const cardTokens = (card: Card): string[] => {
+  const tokens = payloadTokens(card)
+  return tokens.length >= 2 ? tokens : [card.back]
+}
+
+const dictionaryReading = (ctx: ExerciseContext, word: string): string =>
+  ctx.readings?.[word] ?? (word === ctx.card.back ? displayReading(ctx) : '')
+
+export const furiganaTokens = (
+  ctx: ExerciseContext,
+  text: string,
+  tokens: readonly string[],
+): FuriganaSegment[] | undefined =>
+  ctx.card.targetLang === 'ja'
+    ? furiganaWords(text, tokens, (word) => ctx.readings?.[word] ?? '')
+    : undefined
+
+const cardFurigana = (ctx: ExerciseContext): FuriganaSegment[] | undefined =>
+  ctx.card.targetLang === 'ja'
+    ? furiganaWords(ctx.card.back, cardTokens(ctx.card), (word) => dictionaryReading(ctx, word))
+    : undefined
 
 export const wordView = (ctx: ExerciseContext) => ({
   word: ctx.card.back,
   reading: displayReading(ctx),
   readingLang: ctx.card.targetLang,
-  furigana: readingsShown(ctx)
-    ? furiganaFor(ctx.card.targetLang, ctx.card.back, displayReading(ctx))
-    : undefined,
+  furigana: readingsShown(ctx) ? cardFurigana(ctx) : undefined,
   pitch:
     readingsShown(ctx) && ctx.card.targetLang === 'ja' ? pitchOf(ctx.card.metadata) : undefined,
 })

@@ -3,6 +3,7 @@ import { FREQUENCY } from './lexicon'
 import {
   displayReading,
   hasReadingScript,
+  kanaFromWords,
   readingKey,
   readingsFor,
   storedReadings,
@@ -104,6 +105,18 @@ test('readingsFor stores Zhuyin for Mandarin and kana for Japanese', () => {
   expect(readingsFor('zh', 'nǐ hǎo')).toEqual({ zhuyin: 'ㄋㄧˇ ㄏㄠˇ' })
   expect(readingsFor('ja', 'taberu', 'たべる')).toEqual({ kana: 'たべる' })
   expect(readingsFor('ja', 'taberu')).toEqual({ kana: 'taberu' })
+})
+
+test('kanaFromWords joins the dictionary reading of every word', () => {
+  const readings: Record<string, string> = { 何: 'なに', 食べる: 'たべる' }
+  expect(kanaFromWords(['これ', 'は', '何', 'です', 'か'], (w) => readings[w])).toBe(
+    'これはなにですか',
+  )
+  expect(kanaFromWords(['食べる'], (w) => readings[w])).toBe('たべる')
+})
+
+test('kanaFromWords gives up when a kanji word has no dictionary reading', () => {
+  expect(kanaFromWords(['漢字', 'です'], () => undefined)).toBeUndefined()
 })
 
 test('readingsFor stores nothing rather than an empty or unreadable reading', () => {

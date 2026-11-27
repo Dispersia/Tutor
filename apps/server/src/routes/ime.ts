@@ -1,6 +1,7 @@
 import type { Context } from 'hono'
 import type { App, AppEnv } from '../context'
 import { imeCandidates } from '../ime/candidates'
+import { mozcAvailable, mozcCandidates } from '../ime/mozc'
 import { jsonBody, str } from './body'
 import { fail } from './errors'
 
@@ -12,6 +13,10 @@ async function candidates(c: Context<AppEnv>) {
   const keys = str(body, 'keys') ?? ''
   if (!lang) return fail(c, 400, 'lang required')
   if (keys.length > MAX_KEYS) return fail(c, 400, 'keys too long')
+  if (lang === 'ja' && mozcAvailable()) {
+    const mozc = await mozcCandidates(keys).catch(() => [])
+    if (mozc.length) return c.json({ candidates: mozc })
+  }
   return c.json({ candidates: imeCandidates(lang, keys) })
 }
 

@@ -59,6 +59,21 @@ export function withReading(
   return { ...next, ...storedReadings(src) }
 }
 
+const KANA_ONLY = /^[\u3040-\u309f\u30a0-\u30ffー]+$/
+
+export function kanaFromWords(
+  words: readonly string[],
+  readingOf: (word: string) => string | undefined,
+): string | undefined {
+  const parts: string[] = []
+  for (const word of words) {
+    const reading = readingOf(word) ?? (KANA_ONLY.test(word) ? word : undefined)
+    if (reading === undefined) return undefined
+    parts.push(reading)
+  }
+  return parts.length > 0 ? parts.join('') : undefined
+}
+
 export function zhuyinFromPinyin(reading: string): string | undefined {
   const cleaned = reading.replace(/[^\p{L}\p{M}\p{N}\s'’]/gu, ' ')
   const zhuyin = pinyinToZhuyin(cleaned)

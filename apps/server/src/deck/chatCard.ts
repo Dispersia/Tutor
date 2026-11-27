@@ -183,8 +183,8 @@ function persistChatCard(
 
 function chatCard(deck: Deck, userId: UserId, card: PlannedCard, step: number) {
   const settings = deck.settings
-  applyDictionaryPitch(deck.targetLang, settings.pitchAccent, [card])
   applyDictionaryReading(deck.targetLang, settings.readingScript, settings.hints, [card])
+  applyDictionaryPitch(deck.targetLang, settings.pitchAccent, [card])
   return chatRow(deck, userId, card, step)
 }
 

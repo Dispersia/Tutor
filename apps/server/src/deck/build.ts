@@ -312,8 +312,8 @@ interface PersistReq {
 
 function persistBatch(req: PersistReq) {
   const { ctx, planned, state } = req
-  applyDictionaryPitch(ctx.targetLang, ctx.pitchAccent, planned)
   applyDictionaryReading(ctx.targetLang, ctx.readingScript, ctx.hints, planned)
+  applyDictionaryPitch(ctx.targetLang, ctx.pitchAccent, planned)
   return persistCards(
     req.db,
     req.userId,

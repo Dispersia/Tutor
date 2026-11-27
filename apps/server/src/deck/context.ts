@@ -7,8 +7,9 @@ import type { PlannedCard, Planner } from './plan'
 import { storedTemplate } from './plan'
 import type { Reviewer } from './review'
 import { kanjiumContour } from './kanjium'
+import { loadLexicon } from './lexicon'
 import { mandarinSentenceZhuyin, mandarinZhuyin } from './mandarin'
-import { storedReadings } from '../text/readings'
+import { kanaFromWords, storedReadings } from '../text/readings'
 import { wordKey } from '../text/normalize'
 
 export interface BuildDeckOptions {
@@ -96,6 +97,7 @@ export function applyDictionaryReading(
   hints: Record<string, { reading?: string; meaning?: string }> | undefined,
   planned: PlannedCard[],
 ): void {
+  if (targetLang === 'ja') return applyJapaneseReading(hints, planned)
   if (targetLang !== 'zh' || readingScript === 'pinyin') return
   for (const card of planned) {
     if (hints?.[card.back]?.reading) continue
@@ -103,6 +105,29 @@ export function applyDictionaryReading(
     if (word) card.reading = word
     else if (!card.reading) card.reading = mandarinSentenceZhuyin(card.back)
   }
+}
+
+function applyJapaneseReading(
+  hints: Record<string, { reading?: string; meaning?: string }> | undefined,
+  planned: PlannedCard[],
+): void {
+  const lexicon = loadLexicon('ja')
+  if (!lexicon) return
+  const readingOf = (word: string) => hints?.[word]?.reading ?? lexicon.get(word)?.reading
+  for (const card of planned) {
+    const words = cardWords(card)
+    if (!words) continue
+    const reading = kanaFromWords(words, readingOf)
+    if (reading) card.reading = reading
+  }
+}
+
+function cardWords(card: PlannedCard): string[] | undefined {
+  if (card.template === 'sentence') {
+    const tokens = stringsOf(card.payload?.tokens)
+    return tokens.length > 0 ? tokens : undefined
+  }
+  return card.template === 'vocab' ? [card.back] : undefined
 }
 
 export function maxStep(cards: { payload: Record<string, unknown> }[]): number {

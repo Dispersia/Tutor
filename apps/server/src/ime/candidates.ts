@@ -177,6 +177,10 @@ function greedyZh(index: ImeIndex, query: string, lang: string): string {
   return out.join('')
 }
 
+function knownWord(lang: string, word: string): boolean {
+  return curatedRank(lang).has(word) || loadLexicon(lang)?.get(word)?.rank !== undefined
+}
+
 function bestJa(
   index: ImeIndex,
   query: string,
@@ -185,25 +189,67 @@ function bestJa(
 ): { word: string; length: number } {
   const max = Math.min(MAX_SEGMENT, query.length - at)
   for (let length = max; length >= 2; length--) {
-    const words = lookupWords(index, query.slice(at, at + length))
+    const reading = query.slice(at, at + length)
+    if (knownWord(lang, reading)) return { word: reading, length }
+    const words = lookupWords(index, reading)
     if (words?.length) return { word: sorted(words, lang)[0]!, length }
   }
   return { word: query[at]!, length: 1 }
 }
 
-function greedyJa(index: ImeIndex, query: string, lang: string): string {
-  const out: string[] = []
+interface JaSegment {
+  word: string
+  reading: string
+  length: number
+}
+
+function jaSegments(index: ImeIndex, query: string, lang: string): JaSegment[] {
+  const out: JaSegment[] = []
   let at = 0
   while (at < query.length) {
     const match = bestJa(index, query, at, lang)
-    out.push(match.word)
+    out.push({ ...match, reading: query.slice(at, at + match.length) })
     at += match.length
   }
-  return out.join('')
+  return out
 }
 
-function convert(index: ImeIndex, lang: string, query: string): string {
-  return lang === 'ja' ? greedyJa(index, query, lang) : greedyZh(index, query, lang)
+function jaOptions(index: ImeIndex, segments: JaSegment[], lang: string): string[] {
+  for (let at = segments.length - 1; at >= 0; at--) {
+    const options = segmentOptions(index, segments, at, lang)
+    if (options.length) return options
+  }
+  return []
+}
+
+function joinJa(segments: JaSegment[], from: number, to: number): string {
+  return segments
+    .slice(from, to)
+    .map((s) => s.word)
+    .join('')
+}
+
+function segmentOptions(
+  index: ImeIndex,
+  segments: JaSegment[],
+  at: number,
+  lang: string,
+): string[] {
+  const segment = segments[at]!
+  if (segment.reading.length < 2) return []
+  const before = joinJa(segments, 0, at)
+  const after = joinJa(segments, at + 1, segments.length)
+  const out = sorted(lookupWords(index, segment.reading) ?? [], lang).map(
+    (word) => before + word + after,
+  )
+  if (segment.word !== segment.reading) out.push(before + segment.reading + after)
+  return out
+}
+
+function jaCandidates(index: ImeIndex, query: string, lang: string): string[] {
+  const segments = jaSegments(index, query, lang)
+  const list = [segments.map((s) => s.word).join(''), ...jaOptions(index, segments, lang), query]
+  return [...new Set(list)].slice(0, LIMIT)
 }
 
 export function imeCandidates(lang: string, keys: string): string[] {
@@ -211,8 +257,9 @@ export function imeCandidates(lang: string, keys: string): string[] {
   if (!index) return []
   const query = keys.replace(/\s+/g, ' ').trim()
   if (!query) return []
-  const list = [convert(index, lang, query)]
-  const whole = lang === 'zh' ? segmentZhuyin(query).join(' ') : query
+  if (lang === 'ja') return jaCandidates(index, query, lang)
+  const list = [greedyZh(index, query, lang)]
+  const whole = segmentZhuyin(query).join(' ')
   const exact = lookupWords(index, whole)
   if (exact?.length) list.push(...sorted(exact, lang).slice(0, LIMIT))
   return [...new Set(list)].slice(0, LIMIT)

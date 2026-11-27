@@ -454,6 +454,42 @@ test('multiple_choice swaps the closest word in a Japanese sentence', async () =
   expect(choices).toContain('本日は月曜日です')
 })
 
+test('multiple_choice furigana comes from the word readings, not the sentence kana', async () => {
+  const def = registry.get('multiple_choice')!
+  const c: ExerciseContext = {
+    ...ctx({
+      targetLang: 'ja',
+      type: 'phrase',
+      front: 'What is this?',
+      back: 'これは何ですか。',
+      readings: { kana: 'これはなんですか' },
+      payload: {
+        tokens: ['これ', 'は', '何', 'です', 'か'],
+        gloss: 'What is this?',
+        distractors: ['あなた', '私'],
+      },
+    }),
+    readings: {
+      これ: 'これ',
+      は: 'は',
+      何: 'なに',
+      です: 'です',
+      か: 'か',
+      あなた: 'あなた',
+      私: 'わたし',
+    },
+  }
+  const inst = await def.generate(c)
+  const choices = inst.data.choices as string[]
+  const furigana = inst.data.choiceFurigana as ({ base: string; ruby?: string }[] | undefined)[]
+  const render = (segs: { base: string; ruby?: string }[] | undefined) =>
+    (segs ?? []).map((s) => (s.ruby ? `${s.base}[${s.ruby}]` : s.base)).join('')
+  expect(render(furigana[choices.indexOf('これは何ですか。')])).toBe('これは何[なに]ですか。')
+  expect(render(furigana[choices.findIndex((choice) => choice.includes('私'))])).toBe(
+    'これ私[わたし]何[なに]ですか',
+  )
+})
+
 test('type_listen exposes audio text', async () => {
   const def = registry.get('type_listen')!
   const c = ctx()

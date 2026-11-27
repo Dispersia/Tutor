@@ -11,6 +11,27 @@ interface Cursor {
 const KANJI = /[\u4e00-\u9fff]/
 const KANA = /[\u3040-\u309f\u30a0-\u30ff\u30fc]/
 
+export type ReadingLookup = (word: string) => string | undefined
+
+export function furiganaWords(
+  text: string,
+  words: readonly string[],
+  readingOf: ReadingLookup,
+): FuriganaSegment[] {
+  const segments: FuriganaSegment[] = []
+  let at = 0
+  for (const word of words) {
+    if (!word) continue
+    const index = text.indexOf(word, at)
+    if (index < 0) continue
+    if (index > at) segments.push({ base: text.slice(at, index) })
+    segments.push(...furiganaSegments(word, readingOf(word) ?? ''))
+    at = index + word.length
+  }
+  if (at < text.length) segments.push({ base: text.slice(at) })
+  return segments
+}
+
 export function furiganaSegments(word: string, reading: string): FuriganaSegment[] {
   if (!word) return []
   if (!reading || !KANJI.test(word)) return [{ base: word }]
