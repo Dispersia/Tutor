@@ -11,7 +11,7 @@ class ActiveDeckState {
 export const activeDeck = new ActiveDeckState()
 
 export function activeDeckOf(): Deck | undefined {
-  return activeDeck.decks.find((d) => d.id === activeDeck.id) ?? activeDeck.decks[0]
+  return activeDeck.decks.find((d) => d.id === activeDeck.id)
 }
 
 export async function loadActiveDeck(): Promise<void> {

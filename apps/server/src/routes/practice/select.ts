@@ -10,6 +10,7 @@ import {
   listCards,
   listDecks,
 } from '../../db/repo'
+import { loadLexicon } from '../../deck/lexicon'
 import { INTRODUCE_ID, registry } from '../../exercises'
 import { buildLessons } from '../../game/curriculum'
 import { selectCardId, type FsrsState } from '../../game/srs'
@@ -34,10 +35,9 @@ export function learnerOf(user: SessionUser, targetLang: string): Learner {
 }
 
 export function studyDeckId(deps: Deps, userId: UserId, prefs?: StudyPrefs): DeckId | undefined {
-  const decks = listDecks(deps.db, userId)
   const activeId = (prefs ?? readStudyPrefs(deps.db, userId)).activeDeckId
-  const active = activeId ? decks.find((d) => d.id === activeId) : undefined
-  return (active ?? decks[0])?.id
+  if (!activeId) return undefined
+  return getDeck(deps.db, activeId, userId) ? activeId : undefined
 }
 
 const SITTING_GAP_MS = 30 * 60_000
@@ -96,6 +96,9 @@ export function readingMap(
   for (const c of cards ?? listCards(db, userId)) {
     if (c.targetLang !== targetLang) continue
     map[c.back] = displayReading(c)
+  }
+  for (const [word, entry] of loadLexicon(targetLang) ?? []) {
+    if (entry.reading && !map[word]) map[word] = entry.reading
   }
   return map
 }

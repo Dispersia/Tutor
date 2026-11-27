@@ -8,7 +8,6 @@ import { INTRODUCE_ID, registry } from '../../exercises'
 import { fillGrammarTeaching, needsGrammarTeaching } from '../../deck/grammarExamples'
 import { plannerFor } from '../../deck/planner'
 import { bumpDailyExtra, readStudyPrefs, type StudyPrefs } from '../../services/study'
-import { type ActionDef } from '../../game/skills'
 import { selectCardId } from '../../game/srs'
 import { quietState } from '../../services/quiet'
 import { isUtterance } from '../../exercises/payload'
@@ -29,7 +28,6 @@ import {
   pickNextExercise,
   pickStudyCard,
   resolveLesson,
-  studyDeckId,
 } from './select'
 import { idField, jsonBody, str } from '../body'
 import { fail } from '../errors'
@@ -71,7 +69,7 @@ async function nextHandler(c: Context<AppEnv>) {
   const prefs = readStudyPrefs(deps.db, user.id)
   const gate = actionGate(deps, user.id, body)
   if (gate.error) return c.json(gate.error.body, gate.error.status)
-  const deck = resolveDeck(deps, user, body, gate.action, prefs)
+  const deck = resolveDeck(deps, user, body, prefs)
   if (deck.error) return c.json(deck.error.body, deck.error.status)
   return resolveAndServe(c, { deps, user, body, prefs, deckId: deck.deckId })
 }
@@ -107,14 +105,9 @@ function resolveDeck(
   deps: Deps,
   user: PublicUser,
   body: NextBody,
-  action: ActionDef | undefined,
   prefs: StudyPrefs,
 ): { deckId?: DeckId; error?: GuardError } {
   if (body.lessonId) return lessonDeck(deps, user.id, body.lessonId)
-  if (action) {
-    const deckId = studyDeckId(deps, user.id, prefs)
-    if (deckId) return { deckId }
-  }
   if (body.deckId) return { deckId: body.deckId }
   if (prefs.activeDeckId && getDeck(deps.db, prefs.activeDeckId, user.id)) {
     return { deckId: prefs.activeDeckId }

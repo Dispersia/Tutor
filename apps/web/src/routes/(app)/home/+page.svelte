@@ -52,8 +52,8 @@
     board.patch({ skills: res.skills, rigs: res.rigs, items: res.items, inventory: res.inventory })
   }
 
-  const lang = $derived(activeDeckOf()?.targetLang ?? 'zh')
-  const deckName = $derived(activeDeckOf()?.name)
+  const active = $derived(activeDeckOf())
+  const lang = $derived(active?.targetLang ?? 'zh')
   const levelLabel = $derived(levelLabelFor(lang, session.user?.level))
   const toGoal = $derived(xpToGoal(stats))
   const days = $derived(stats?.activity?.days ?? [])
@@ -77,8 +77,12 @@
     <div class="min-w-0">
       <h1 class="display min-w-0 truncate text-3xl text-ink-100">{session.user?.handle}</h1>
       <p class="sub mt-2">
-        {langName(lang)} · {levelLabel}{#if deckName}
-          · studying <span lang={htmlLang(lang)}>{deckName}</span>{/if}
+        {#if active}
+          {langName(lang)} · {levelLabel} · studying
+          <span lang={htmlLang(lang)}>{active.name}</span>
+        {:else}
+          All paths · {levelLabel}
+        {/if}
       </p>
     </div>
     <div class="shrink-0 text-center">
